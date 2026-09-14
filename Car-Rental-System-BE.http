@@ -1,0 +1,13 @@
+@Car_Rental_System_BE_HostAddress = http://localhost:3000
+
+### Root redirect to Swagger
+GET {{Car_Rental_System_BE_HostAddress}}/
+Accept: application/json
+
+### Home endpoint (redirects to Swagger UI)
+GET {{Car_Rental_System_BE_HostAddress}}/home
+Accept: application/json
+
+### Home status endpoint
+GET {{Car_Rental_System_BE_HostAddress}}/home/status
+Accept: application/json
