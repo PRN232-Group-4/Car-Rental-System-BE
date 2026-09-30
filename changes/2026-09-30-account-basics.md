@@ -12,3 +12,4 @@
 
 ## Deployment fix
 - Disabled the startup migration hosted service. Railway now starts against an existing PostgreSQL schema and does not read or validate `docs/db/Init.sql`.
+- Removed Redis connection-string logging; startup diagnostics now report only ping latency.

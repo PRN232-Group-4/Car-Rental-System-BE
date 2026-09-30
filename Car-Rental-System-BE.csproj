@@ -15,7 +15,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Remove="src\**\*.cs" />
+    <Compile Remove="src\VehicleRental.Application\**\*.cs" />
+    <Compile Remove="src\VehicleRental.Domain\**\*.cs" />
+    <Compile Remove="src\VehicleRental.Infrastructure\**\*.cs" />
     <ProjectReference Include="src\VehicleRental.Application\VehicleRental.Application.csproj" />
     <ProjectReference Include="src\VehicleRental.Infrastructure\VehicleRental.Infrastructure.csproj" />
   </ItemGroup>
