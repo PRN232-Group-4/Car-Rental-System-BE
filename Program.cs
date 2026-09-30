@@ -33,9 +33,6 @@ builder.Services.AddOptions<BrevoOptions>()
     .Bind(builder.Configuration.GetSection(BrevoOptions.SectionName))
     .ValidateDataAnnotations()
     .ValidateOnStart();
-builder.Services.AddOptions<DatabaseMigrationOptions>()
-    .Bind(builder.Configuration.GetSection(DatabaseMigrationOptions.SectionName))
-    .ValidateOnStart();
 builder.Services.AddOptions<RentalSessionOptions>()
     .Bind(builder.Configuration.GetSection(RentalSessionOptions.SectionName))
     .ValidateDataAnnotations()
@@ -61,7 +58,6 @@ builder.Services.AddScoped<IAccountRepository, NpgsqlAccountRepository>();
 builder.Services.AddScoped<IRegistrationWorkflow, RedisRegistrationWorkflow>();
 builder.Services.AddScoped<IPasswordResetWorkflow, RedisPasswordResetWorkflow>();
 builder.Services.AddSingleton<IImageStorage, CloudinaryImageStorage>();
-builder.Services.AddHostedService<DatabaseMigrationHostedService>();
 builder.Services.AddHostedService<RedisConnectionHostedService>();
 builder.Services.AddSingleton<RedisTicketStore>();
 builder.Services.AddSingleton<IPostConfigureOptions<CookieAuthenticationOptions>, ConfigureCookieTicketStore>();

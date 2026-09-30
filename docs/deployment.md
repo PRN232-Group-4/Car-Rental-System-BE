@@ -2,7 +2,7 @@
 
 Railway dùng `Dockerfile` và probe `/health` theo `railway.toml`. Tạo service API, PostgreSQL và Redis; đặt các biến `DATABASE_URL` (hoặc `ConnectionStrings__RentalDatabase`), `REDIS_URL` (hoặc `Redis__ConnectionString`), `Brevo__ApiKey`, `Brevo__SenderEmail`, `Brevo__SenderName`, `ASPNETCORE_ENVIRONMENT=Production`. Railway cấp `PORT`; Docker entrypoint bind đúng port đó.
 
-GitHub secret: `RAILWAY_TOKEN`; repository variable: `RAILWAY_SERVICE_NAME`. Release qua push `main`; rollback bằng Railway deployment trước đó hoặc redeploy commit trước. Migration chạy lúc app khởi động và có checksum/history. Với DB đang tồn tại từ trước runner, backup rồi dùng `Database__BaselineExistingSchema=true` đúng một lần sau khi đối chiếu schema; không bật cờ này thường trực.
+GitHub secret: `RAILWAY_TOKEN`; repository variable: `RAILWAY_SERVICE_NAME`. Release qua push `main`; rollback bằng Railway deployment trước đó hoặc redeploy commit trước. Migration không chạy lúc app khởi động; tạo hoặc cập nhật schema PostgreSQL có kiểm soát trước khi deploy.
 
 ## Chạy và xem connection log bằng CLI
 

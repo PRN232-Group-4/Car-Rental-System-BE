@@ -16,7 +16,6 @@
 
   <ItemGroup>
     <Compile Remove="src\**\*.cs" />
-    <Content Include="docs\db\Init.sql" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <ProjectReference Include="src\VehicleRental.Application\VehicleRental.Application.csproj" />
     <ProjectReference Include="src\VehicleRental.Infrastructure\VehicleRental.Infrastructure.csproj" />
   </ItemGroup>

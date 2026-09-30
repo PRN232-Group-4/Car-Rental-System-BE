@@ -11,4 +11,4 @@
 - Distributed request rate limiting, CSRF protection, password-change audit logs, RBAC policies, customer license workflow, and integration tests remain pending.
 
 ## Deployment fix
-- Marked `docs/db/Init.sql` for publish output as well as normal build output, so the database migration hosted service can run in the Railway runtime container.
+- Disabled the startup migration hosted service. Railway now starts against an existing PostgreSQL schema and does not read or validate `docs/db/Init.sql`.
