@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
@@ -7,7 +6,6 @@ namespace Car_Rental_System_BE.Infrastructure;
 
 public sealed class RedisConnectionHostedService(
     IConnectionMultiplexer redis,
-    IConfiguration configuration,
     ILogger<RedisConnectionHostedService> logger) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -15,8 +13,7 @@ public sealed class RedisConnectionHostedService(
         try
         {
             var latency = await redis.GetDatabase().PingAsync();
-            logger.LogInformation("Redis connection established to {RedisEndpoint}; ping {LatencyMs} ms.",
-                configuration["Redis:ConnectionString"] ?? configuration["REDIS_URL"] ?? "configured endpoint", latency.TotalMilliseconds);
+            logger.LogInformation("Redis connection established; ping {LatencyMs} ms.", latency.TotalMilliseconds);
         }
         catch (RedisConnectionException exception)
         {

@@ -2,7 +2,7 @@
 
 | ID | Tên | Milestone | Priority | Status | Spec | Change gần nhất |
 |---|---|---|---|---|---|---|
-| Bootstrap | Docs, architecture, Docker, CI | M0 | P0 | In progress | NFR-001..008 | 2026-09-30-bootstrap |
+| Bootstrap | Docs, architecture, Docker, CI | M0 | P0 | In progress | NFR-001..008 | 2026-09-30-account-basics |
 | FR-001 | Đăng ký OTP | M2 | P0 | In progress | FR-001 | 2026-09-30-account-basics |
 | FR-002 | Verify/resend OTP | M2 | P0 | In progress | FR-002 | 2026-09-30-account-basics |
 | FR-003 | Cookie Redis session | M2 | P0 | In progress | FR-003 | 2026-09-30-account-basics |

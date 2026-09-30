@@ -9,3 +9,7 @@
 
 ## Known gaps
 - Distributed request rate limiting, CSRF protection, password-change audit logs, RBAC policies, customer license workflow, and integration tests remain pending.
+
+## Deployment fix
+- Disabled the startup migration hosted service. Railway now starts against an existing PostgreSQL schema and does not read or validate `docs/db/Init.sql`.
+- Removed Redis connection-string logging; startup diagnostics now report only ping latency.
