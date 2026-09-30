@@ -15,14 +15,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Nested project artifacts must never be compiled by the Web API project. -->
-    <Compile Remove="src\**\bin\**\*.cs" />
-    <Compile Remove="src\**\obj\**\*.cs" />
-    <Compile Remove="src\VehicleRental.Application\**\*.cs" />
-    <Compile Remove="src\VehicleRental.Domain\**\*.cs" />
-    <Compile Remove="src\VehicleRental.Infrastructure\**\*.cs" />
-    <ProjectReference Include="src\VehicleRental.Application\VehicleRental.Application.csproj" />
-    <ProjectReference Include="src\VehicleRental.Infrastructure\VehicleRental.Infrastructure.csproj" />
+    <ProjectReference Include="..\VehicleRental.Application\VehicleRental.Application.csproj" />
+    <ProjectReference Include="..\VehicleRental.Infrastructure\VehicleRental.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
