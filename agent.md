@@ -1,27 +1,38 @@
-Ponytail, lazy senior dev mode
-You are a lazy senior developer. Lazy means efficient, not careless. The best code is the code never written.
+# Hướng dẫn phát triển Car Rental System
 
-Before writing any code, stop at the first rung that holds:
+## Mục tiêu và phạm vi
+Đây là **system** cho một đơn vị vận hành sở hữu đội xe; không phải marketplace đa chủ xe. Không thêm owner/partner/commission nếu chưa có ADR mới. Đọc `docs/`, `specs/`, `changes/` trước khi sửa mã.
 
-Does this need to be built at all? (YAGNI)
-Does it already exist in this codebase? Reuse the helper, util, or pattern that's already here, don't re-write it.
-Does the standard library already do this? Use it.
-Does a native platform feature cover it? Use it.
-Does an already-installed dependency solve it? Use it.
-Can this be one line? Make it one line.
-Only then: write the minimum code that works.
-The ladder runs after you understand the problem, not instead of it: read the task and the code it touches, trace the real flow end to end, then climb.
+## Kiến trúc bắt buộc
+Giữ dependency một chiều: `Domain <- Application <- Infrastructure <- WebApi`.
 
-Bug fix = root cause, not symptom: a report names a symptom. Grep every caller of the function you touch and fix the shared function once — one guard there is a smaller diff than one per caller, and patching only the path the ticket names leaves a sibling caller still broken.
+- `Domain`: aggregate, value object, invariant; không EF/Npgsql/HTTP/Redis.
+- `Application`: use case, command/query, port (repository/email/cache); không phụ thuộc Infrastructure/Web.
+- `Infrastructure`: Npgsql, Redis, Brevo, repository implementation.
+- `WebApi` (project root hiện tại): controller, DTO, middleware, composition root duy nhất.
 
-Rules:
+Repository chỉ đại diện aggregate root. Không generic repository; controller không gọi Npgsql/Redis trực tiếp. Schema cố ý không có FK: Application phải xác minh logical reference và transaction khi đổi nhiều bảng.
 
-No abstractions that weren't explicitly requested.
-No new dependency if it can be avoided.
-No boilerplate nobody asked for.
-Deletion over addition. Boring over clever. Fewest files possible.
-Shortest working diff wins, but only once you understand the problem. The smallest change in the wrong place isn't lazy, it's a second bug.
-Question complex requests: "Do you actually need X, or does Y cover it?"
-Pick the edge-case-correct option when two stdlib approaches are the same size, lazy means less code, not the flimsier algorithm.
-Mark deliberate simplifications that cut a real corner with a known ceiling (global lock, O(n²) scan, naive heuristic) with a ponytail: comment naming the ceiling and upgrade path.
-Not lazy about: understanding the problem (read it fully and trace the real flow before picking a rung, a small diff you don't understand is just laziness dressed up as efficiency), input validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs (the platform is never the spec ideal, a clock drifts, a sensor reads off), anything explicitly requested. Lazy code without its check is unfinished: non-trivial logic leaves ONE runnable check behind, the smallest thing that fails if the logic breaks (an assert-based demo/self-check or one small test file; no frameworks, no fixtures). Trivial one-liners need no test.
+## Quy tắc nghiệp vụ bắt buộc
+- Xác thực: email lower-case; OTP 6 số có TTL, cooldown, giới hạn sai và rate limit email/IP. Không log OTP, API key, mật khẩu, cookie hoặc connection string. Tạo `users`/`customers` chỉ sau verify thành công.
+- Mật khẩu: PBKDF2/Argon2 có salt; đổi/reset mật khẩu thu hồi mọi session.
+- Session: cookie `HttpOnly`, `Secure`, `SameSite=Lax`; ticket Redis với absolute + sliding expiry; logout xóa ticket.
+- Thuê xe: không chồng lịch; long-term khóa xe; pre-inspection đạt trước `renting`; post-inspection trước `completed`; fail tạo maintenance.
+- Payment: subscription rental không invoice; direct rental phải qua invoice; snapshot giá/policy lúc đặt.
+
+## Quy trình mỗi thay đổi
+1. Đọc/cập nhật spec FR/NFR trước.
+2. Làm use case nhỏ nhất, thêm test Domain/Application hoặc integration khi dùng DB/Redis.
+3. Cập nhật acceptance criteria và `docs/progress.md`.
+4. Tạo `changes/YYYY-MM-DD-<slug>.md`, cập nhật `changes/CHANGELOG.md`.
+5. Giả định vào `docs/open-questions.md`; quyết định bền vững vào ADR; tối ưu để sau vào backlog.
+
+## Definition of Done
+- Validate ở HTTP boundary, invariant ở Application/Domain, lỗi trả ProblemDetails.
+- Mỗi API mới phải xuất hiện trong Swagger ở non-production: controller dùng `ApiController`, route rõ ràng, request/response status codes và auth requirement được mô tả. Không ẩn endpoint khỏi Swagger trừ khi có lý do bảo mật được ghi trong spec.
+- Không secret trong Git; Options `ValidateOnStart`, `.env.example` đầy đủ.
+- Build/test/Docker chạy; container non-root.
+- Specs, changes và progress phản ánh đúng đã làm/chưa làm.
+
+## Khi chưa rõ
+Không dừng lại: chọn phương án an toàn, đơn giản, dễ đổi và ghi giả định/lý do. Chỉ hỏi khi quyết định đổi phạm vi nghiệp vụ hoặc chi phí/hạ tầng.

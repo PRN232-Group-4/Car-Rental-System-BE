@@ -1,0 +1,9 @@
+.git
+.github
+bin
+obj
+.env
+**/bin
+**/obj
+changes
+specs
