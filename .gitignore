@@ -6,6 +6,9 @@
 # dotenv files
 .env
 
+# Environment-specific application settings may contain credentials.
+appsettings*.json
+
 # Local agent instructions and generated agent state
 /.agent/
 /.agents/

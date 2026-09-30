@@ -11,3 +11,44 @@ Accept: application/json
 ### Home status endpoint
 GET {{Car_Rental_System_BE_HostAddress}}/home/status
 Accept: application/json
+
+### Start registration
+POST {{Car_Rental_System_BE_HostAddress}}/api/account/registrations
+Content-Type: application/json
+
+{
+  "email": "customer@example.com",
+  "fullName": "Example Customer",
+  "password": "a-secure-password"
+}
+
+### Verify registration (replace OTP)
+POST {{Car_Rental_System_BE_HostAddress}}/api/account/registrations/verify
+Content-Type: application/json
+
+{
+  "email": "customer@example.com",
+  "otp": "123456"
+}
+
+### Local login (stores secure cookie)
+POST {{Car_Rental_System_BE_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "customer@example.com",
+  "password": "a-secure-password",
+  "rememberMe": false
+}
+
+### Current profile (requires cookie from login)
+GET {{Car_Rental_System_BE_HostAddress}}/api/account/profile
+Accept: application/json
+
+### Start password reset (always returns 202)
+POST {{Car_Rental_System_BE_HostAddress}}/api/account/password-resets
+Content-Type: application/json
+
+{
+  "email": "customer@example.com"
+}

@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using Car_Rental_System_BE.Application.Registration;
+using Car_Rental_System_BE.Application.Accounts;
 using Car_Rental_System_BE.Domain.Users;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
@@ -37,6 +38,27 @@ public sealed class RedisRegistrationWorkflow(
         await emailSender.SendOtpAsync(email, payload.FullName, otp, ct);
     }
 
+    public async Task ResendAsync(string emailInput, string ipAddress, CancellationToken ct)
+    {
+        var email = emailInput.Trim().ToLowerInvariant();
+        var key = Prefix + email;
+        var value = await _cache.StringGetAsync(key);
+        if (!value.HasValue)
+            throw new RegistrationException("Không có yêu cầu đăng ký đang chờ xác thực.", StatusCodes.Status400BadRequest);
+
+        var pending = JsonSerializer.Deserialize<PendingRegistration>(value!)!;
+        if (pending.ResendAfter > DateTimeOffset.UtcNow)
+            throw new RegistrationException("Vui lòng chờ trước khi gửi lại OTP.", StatusCodes.Status429TooManyRequests);
+
+        var otp = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
+        var ttl = await _cache.KeyTimeToLiveAsync(key);
+        if (ttl is null || ttl <= TimeSpan.Zero)
+            throw new RegistrationException("OTP không tồn tại hoặc đã hết hạn.", StatusCodes.Status400BadRequest);
+        var updated = pending with { OtpHash = HashOtp(otp), Attempts = 0, ResendAfter = DateTimeOffset.UtcNow.AddSeconds(_options.ResendCooldownSeconds), IpAddress = ipAddress };
+        await _cache.StringSetAsync(key, JsonSerializer.Serialize(updated), ttl);
+        await emailSender.SendOtpAsync(email, updated.FullName, otp, ct);
+    }
+
     public async Task VerifyAsync(VerifyRegistration command, CancellationToken ct)
     {
         var email = command.Email.Trim().ToLowerInvariant();
@@ -60,12 +82,7 @@ public sealed class RedisRegistrationWorkflow(
     }
 
     private static string HashOtp(string otp) => Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(otp)));
-    private static string HashPassword(string password)
-    {
-        var salt = RandomNumberGenerator.GetBytes(16);
-        var hash = Rfc2898DeriveBytes.Pbkdf2(password, salt, 210000, HashAlgorithmName.SHA512, 32);
-        return $"v1$210000${Convert.ToBase64String(salt)}${Convert.ToBase64String(hash)}";
-    }
+    private static string HashPassword(string password) => PasswordHash.Create(password);
     private sealed record PendingRegistration(string FullName, string PasswordHash, string OtpHash, int Attempts, DateTimeOffset ResendAfter, string IpAddress);
 }
 

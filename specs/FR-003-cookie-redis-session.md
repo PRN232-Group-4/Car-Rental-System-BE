@@ -7,5 +7,5 @@ Cookie chỉ mang session key; ticket nằm Redis, HttpOnly/Secure/SameSite=Lax,
 ## Acceptance criteria
 - [x] Redis `ITicketStore` được đăng ký.
 - [x] Google OAuth tạo/đảm bảo customer và dùng cookie ticket Redis.
-- [ ] Login/logout, absolute expiry và revoke-all session.
+- [x] Login/logout, absolute expiry cấu hình được (mặc định 24 giờ) và revoke-all session.
 - [ ] CSRF cho endpoint state-changing cookie-auth.

@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.Infrastructure;
 using Car_Rental_System_BE.Infrastructure.Authentication;
 using Car_Rental_System_BE.Application.Registration;
+using Car_Rental_System_BE.Application.Accounts;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Npgsql;
@@ -35,6 +36,10 @@ builder.Services.AddOptions<BrevoOptions>()
 builder.Services.AddOptions<DatabaseMigrationOptions>()
     .Bind(builder.Configuration.GetSection(DatabaseMigrationOptions.SectionName))
     .ValidateOnStart();
+builder.Services.AddOptions<RentalSessionOptions>()
+    .Bind(builder.Configuration.GetSection(RentalSessionOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 builder.Services.Configure<GoogleAuthOptions>(builder.Configuration.GetSection(GoogleAuthOptions.SectionName));
 builder.Services.Configure<CloudinaryOptions>(builder.Configuration.GetSection(CloudinaryOptions.SectionName));
 
@@ -52,7 +57,9 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 });
 builder.Services.AddHttpClient<IBrevoEmailSender, BrevoEmailSender>();
 builder.Services.AddScoped<IUserRepository, NpgsqlUserRepository>();
+builder.Services.AddScoped<IAccountRepository, NpgsqlAccountRepository>();
 builder.Services.AddScoped<IRegistrationWorkflow, RedisRegistrationWorkflow>();
+builder.Services.AddScoped<IPasswordResetWorkflow, RedisPasswordResetWorkflow>();
 builder.Services.AddSingleton<IImageStorage, CloudinaryImageStorage>();
 builder.Services.AddHostedService<DatabaseMigrationHostedService>();
 builder.Services.AddHostedService<RedisConnectionHostedService>();

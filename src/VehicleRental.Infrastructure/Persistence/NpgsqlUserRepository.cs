@@ -22,6 +22,7 @@ public sealed class NpgsqlUserRepository(NpgsqlDataSource dataSource) : IUserRep
         var userId = (int)(await command.ExecuteScalarAsync(ct))!;
         await using var customer = new NpgsqlCommand("INSERT INTO customers (user_id) VALUES ($1)", connection, transaction);
         customer.Parameters.AddWithValue(userId); await customer.ExecuteNonQueryAsync(ct);
+        await EnsureCustomerRoleAsync(connection, transaction, userId, ct);
         await transaction.CommitAsync(ct);
     }
 
@@ -36,6 +37,7 @@ public sealed class NpgsqlUserRepository(NpgsqlDataSource dataSource) : IUserRep
         await using var customer = new NpgsqlCommand("INSERT INTO customers (user_id) SELECT $1 WHERE NOT EXISTS (SELECT 1 FROM customers WHERE user_id = $1)", connection, transaction);
         customer.Parameters.AddWithValue(userId);
         await customer.ExecuteNonQueryAsync(ct);
+        await EnsureCustomerRoleAsync(connection, transaction, userId, ct);
         await transaction.CommitAsync(ct);
     }
 
@@ -51,5 +53,14 @@ public sealed class NpgsqlUserRepository(NpgsqlDataSource dataSource) : IUserRep
         await using var command = new NpgsqlCommand("INSERT INTO users (email, fullname, password_hash) VALUES ($1, $2, NULL) RETURNING id", connection, transaction);
         command.Parameters.AddWithValue(email); command.Parameters.AddWithValue(fullName);
         return (int)(await command.ExecuteScalarAsync(ct))!;
+    }
+
+    private static async Task EnsureCustomerRoleAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int userId, CancellationToken ct)
+    {
+        await using var role = new NpgsqlCommand("INSERT INTO roles (name) SELECT 'Customer' WHERE NOT EXISTS (SELECT 1 FROM roles WHERE name = 'Customer')", connection, transaction);
+        await role.ExecuteNonQueryAsync(ct);
+        await using var membership = new NpgsqlCommand("INSERT INTO user_roles (user_id, role_id) SELECT $1, id FROM roles WHERE name = 'Customer' AND NOT EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = $1 AND ur.role_id = roles.id)", connection, transaction);
+        membership.Parameters.AddWithValue(userId);
+        await membership.ExecuteNonQueryAsync(ct);
     }
 }
