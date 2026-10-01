@@ -25,5 +25,5 @@ public sealed class ExternalAuthController(IOptions<GoogleAuthOptions> google) :
     [Authorize(AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme)]
     [HttpGet("google/complete")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public IActionResult GoogleComplete() => Ok(new { email = User.FindFirstValue(ClaimTypes.Email), message = "Google sign-in successful." });
+    public IActionResult GoogleComplete() => Ok(new { email = User.FindFirstValue(ClaimTypes.Email) });
 }

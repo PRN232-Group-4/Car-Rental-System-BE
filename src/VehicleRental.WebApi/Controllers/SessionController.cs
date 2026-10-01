@@ -50,4 +50,4 @@ public sealed class SessionController(IAccountRepository accounts, RedisTicketSt
     }
 }
 
-public sealed record LoginRequest([property: Required, EmailAddress] string Email, [property: Required, StringLength(128, MinimumLength = 12)] string Password, bool RememberMe = false);
+public sealed record LoginRequest([param: Required, EmailAddress] string Email, [param: Required, StringLength(128, MinimumLength = 6)] string Password, bool RememberMe = false);
