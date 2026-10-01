@@ -18,6 +18,7 @@ Hoàn tiền/cọc được ghi thành payment `type='refund'` trong ledger, tr�
 - [x] Approval + audit ledger (`payments` + `reviewed_by`/`reviewed_at`)
 - [x] Hoàn cọc tự động sau post-inspection đạt, chỉ khi invoice đã thanh toán
 - [x] Chỉ refund `requested` mới được duyệt/từ chối
+- [x] Integration test (no over-refund, approval/audit, hoàn cọc sau post-inspection)
 - [ ] Payout PayOS thực tế khi có payout key
 
 ## Thay đổi

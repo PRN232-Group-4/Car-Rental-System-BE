@@ -1,4 +1,5 @@
 # Changelog
+- 2026-10-01 — [Test project cho invoice/payment/subscription](2026-10-01-test-project.md)
 - 2026-10-01 — [Invoice API, refund approval và subscription-plan delete](2026-10-01-invoice-payment-subscription.md)
 - 2026-10-01 — [PayOS payment scaffold](2026-10-01-payos-payment-scaffold.md)
 - 2026-10-01 — [Core catalog and rental APIs](2026-10-01-core-rental-apis.md)

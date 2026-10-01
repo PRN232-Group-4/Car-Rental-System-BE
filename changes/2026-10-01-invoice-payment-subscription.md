@@ -15,12 +15,12 @@
 ## Chưa làm
 
 - Payout PayOS thực tế cho refund (hiện ghi ledger trạng thái `paid`).
-- Integration test DB (NFR-007 chưa có test project).
+- End-to-end HTTP/auth.
 
 ## Test
 
 - `dotnet build Car-Rental-System-BE.sln --no-restore` xanh, 0 warning/error.
-- Chưa có integration test do repo chưa có test project.
+- `tests/VehicleRental.Tests` (xUnit) phủ FR-019..022 trên PostgreSQL thật — xem `changes/2026-10-01-test-project.md`.
 
 ## Quyết định/giả định
 

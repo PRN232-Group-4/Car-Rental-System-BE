@@ -19,6 +19,7 @@ Payment của direct rental bắt buộc gắn `invoice_id` (`ck_payments_invoic
 - [x] Webhook sai chữ ký trả 400; lệch amount bị từ chối
 - [x] Invoice chuyển `paid` sau webhook hợp lệ
 - [x] Trả 503 khi PayOS chưa cấu hình
+- [x] Integration test (idempotent webhook, invoice chuyển `paid`)
 - [ ] Payout worker chủ động gửi tiền hoàn (hiện chỉ ghi ledger)
 
 ## Thay đổi

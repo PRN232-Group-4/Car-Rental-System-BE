@@ -21,7 +21,7 @@ Chỉ direct rental (`rentals.is_subscription = false`) mới có hóa đơn. In
 - [x] `invoice_number` unique (`ux_invoices_number`), định dạng `INV-yyyyMMdd-{rentalId}`
 - [x] Application trả 400 trước khi chạm trigger khi rental là subscription
 - [x] Invoice amount bao gồm cọc
-- [ ] Integration test khi chạm hạ tầng
+- [x] Integration test khi chạm hạ tầng
 
 ## Thay đổi
 - `changes/2026-10-01-invoice-payment-subscription.md`

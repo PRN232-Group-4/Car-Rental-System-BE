@@ -20,7 +20,7 @@ CRUD `subscription_plans`. Validate ở HTTP boundary: `price >= 0.01`, `duratio
 - [x] Validate duration/hours/price
 - [x] Plan inactive không mua mới (`BuyPlanAsync` lọc `is_active=true`)
 - [x] DELETE giữ logical reference bằng soft-delete khi plan đã được dùng
-- [ ] Integration test khi chạm hạ tầng
+- [x] Integration test khi chạm hạ tầng
 
 ## Thay đổi
 - `changes/2026-10-01-core-rental-apis.md`
