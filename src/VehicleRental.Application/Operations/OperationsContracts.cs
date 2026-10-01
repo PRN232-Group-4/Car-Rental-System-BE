@@ -36,7 +36,9 @@ public interface IOperationsRepository
     Task AssignAsync(int rentalId, int? driverStaffId, CancellationToken ct);
     Task<Inspection> AddInspectionAsync(int rentalId, int staffId, string type, bool isOk, decimal? odometer, decimal? fuel, string? notes, string? images, CancellationToken ct);
     Task<IReadOnlyList<SubscriptionPlan>> ListPlansAsync(bool activeOnly, CancellationToken ct);
+    Task<SubscriptionPlan?> GetPlanAsync(int id, CancellationToken ct);
     Task<SubscriptionPlan> SavePlanAsync(int? id, SubscriptionPlan plan, CancellationToken ct);
+    Task DeletePlanAsync(int id, CancellationToken ct);
     Task<int> BuyPlanAsync(string email, int planId, CancellationToken ct);
     Task<Maintenance> SaveMaintenanceAsync(int? id, Maintenance maintenance, CancellationToken ct);
     Task<object> DashboardAsync(DateTime? from, DateTime? to, CancellationToken ct);

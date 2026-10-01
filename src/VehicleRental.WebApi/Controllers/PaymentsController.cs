@@ -57,7 +57,49 @@ public sealed class PaymentsController(IPaymentRepository payments, IPaymentGate
         return Accepted(result);
     }
 
+    [Authorize]
+    [HttpGet("invoices")]
+    [ProducesResponseType<IReadOnlyList<InvoiceSummary>>(StatusCodes.Status200OK)]
+    public Task<IReadOnlyList<InvoiceSummary>> Invoices(CancellationToken ct) => payments.ListInvoicesAsync(Scope(), ct);
+
+    [Authorize]
+    [HttpGet("invoices/{invoiceId:int}")]
+    [ProducesResponseType<InvoiceSummary>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Invoice(int invoiceId, CancellationToken ct) => await payments.GetInvoiceAsync(invoiceId, Scope(), ct) is { } x ? Ok(x) : NotFound();
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpPost("rentals/{rentalId:int}/invoice")]
+    [ProducesResponseType<InvoiceSummary>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CreateInvoice(int rentalId, CancellationToken ct)
+    {
+        var invoice = await payments.CreateInvoiceForRentalAsync(rentalId, ct);
+        return Created($"api/invoices/{invoice.Id}", invoice);
+    }
+
+    [Authorize]
+    [HttpGet("payments")]
+    [ProducesResponseType<IReadOnlyList<PaymentSummary>>(StatusCodes.Status200OK)]
+    public Task<IReadOnlyList<PaymentSummary>> Payments([FromQuery] int? invoiceId, CancellationToken ct) => payments.ListPaymentsAsync(Scope(), invoiceId, ct);
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("payments/refunds/{refundId:int}/approve")]
+    [ProducesResponseType<PaymentSummary>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ApproveRefund(int refundId, CancellationToken ct) => Ok(await payments.ReviewRefundAsync(refundId, true, Email(), ct));
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("payments/refunds/{refundId:int}/reject")]
+    [ProducesResponseType<PaymentSummary>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RejectRefund(int refundId, CancellationToken ct) => Ok(await payments.ReviewRefundAsync(refundId, false, Email(), ct));
+
     private string Email() => User.FindFirstValue(ClaimTypes.Email) ?? throw new UnauthorizedAccessException();
+    private string? Scope() => User.IsInRole("Admin") || User.IsInRole("Staff") ? null : Email();
 }
 
 public sealed record RefundRequest([property: Range(1, double.MaxValue)] decimal Amount);

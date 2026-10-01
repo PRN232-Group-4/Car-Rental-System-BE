@@ -21,8 +21,8 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__RentalDatabase: Host=db;Port=5432;Database=car_rental;Username=postgres;Password=postgres
       Redis__ConnectionString: redis:6379
-      Brevo__ApiKey: ${BREVO_API_KEY:?Set BREVO_API_KEY in your environment}
-      Brevo__SenderEmail: ${BREVO_SENDER_EMAIL:?Set BREVO_SENDER_EMAIL in your environment}
+      Brevo__ApiKey: ${BREVO_API_KEY:-replace-with-brevo-api-key}
+      Brevo__SenderEmail: ${BREVO_SENDER_EMAIL:-noreply@your-domain.example}
       Brevo__SenderName: ${BREVO_SENDER_NAME:-Vehicle Rental}
     ports:
       - "3000:8080"

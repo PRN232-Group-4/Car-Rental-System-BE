@@ -297,6 +297,8 @@ CREATE TABLE payments (
     method                   VARCHAR(255),
     provider_reference       VARCHAR(255),
     paid_at                  TIMESTAMP,
+    reviewed_by              VARCHAR(255),       -- audit: ai duyệt yêu cầu hoàn tiền
+    reviewed_at              TIMESTAMP,
     created_at               TIMESTAMP NOT NULL DEFAULT now(),
     CONSTRAINT ck_payments_invoice_rule CHECK (
         (is_subscription_payment AND invoice_id IS NULL)
