@@ -23,7 +23,7 @@ public sealed class StaffController(IStaffRepository staff) : ControllerBase
     public async Task<IActionResult> Get(int id, CancellationToken ct)
     {
         var result = await staff.FindByIdAsync(id, ct);
-        return result is null ? NotFound() : Ok(result);
+        return result is null ? Problem("Staff member was not found.", statusCode: StatusCodes.Status404NotFound) : Ok(result);
     }
 
     [HttpGet("drivers")]
@@ -58,7 +58,7 @@ public sealed class StaffController(IStaffRepository staff) : ControllerBase
         var error = ValidateDriver(request.IsDriver, request.LicenseNumber, request.LicenseExpiryDate, request.LicenseIssueDate);
         if (error is not null) return LicenseValidationProblem(error);
         try { return Ok(await staff.UpdateAsync(id, request.ToCommand(), ct)); }
-        catch (StaffNotFoundException) { return NotFound(); }
+        catch (StaffNotFoundException) { return Problem("Staff member was not found.", statusCode: StatusCodes.Status404NotFound); }
         catch (OrganizationReferenceNotFoundException exception) { return Problem(exception.Message, statusCode: StatusCodes.Status400BadRequest); }
     }
 
@@ -68,7 +68,7 @@ public sealed class StaffController(IStaffRepository staff) : ControllerBase
     public async Task<IActionResult> Deactivate(int id, CancellationToken ct)
     {
         try { await staff.DeactivateAsync(id, ct); return NoContent(); }
-        catch (StaffNotFoundException) { return NotFound(); }
+        catch (StaffNotFoundException) { return Problem("Staff member was not found.", statusCode: StatusCodes.Status404NotFound); }
     }
 
     private static string? ValidateDriver(bool isDriver, string? licenseNumber, DateOnly? expiry, DateOnly? issue)
@@ -88,35 +88,35 @@ public sealed class StaffController(IStaffRepository staff) : ControllerBase
 }
 
 public sealed record CreateStaffRequest(
-    [property: Required, EmailAddress] string Email,
-    [property: Required, StringLength(120, MinimumLength = 2)] string FullName,
-    [property: Required, StringLength(128, MinimumLength = 12)] string Password,
-    [property: StringLength(30)] string? Phone,
-    [property: Range(1, int.MaxValue)] int? DepartmentId,
-    [property: Range(1, int.MaxValue)] int? FacilityId,
+    [param: Required, EmailAddress] string Email,
+    [param: Required, StringLength(120, MinimumLength = 2)] string FullName,
+    [param: Required, StringLength(128, MinimumLength = 6)] string Password,
+    [param: StringLength(30)] string? Phone,
+    [param: Range(1, int.MaxValue)] int? DepartmentId,
+    [param: Range(1, int.MaxValue)] int? FacilityId,
     DateOnly? HiredDate,
     bool IsDriver,
-    [property: StringLength(255)] string? LicenseNumber,
-    [property: StringLength(255)] string? LicenseType,
+    [param: StringLength(255)] string? LicenseNumber,
+    [param: StringLength(255)] string? LicenseType,
     DateOnly? LicenseIssueDate,
     DateOnly? LicenseExpiryDate,
-    [property: Url, StringLength(255)] string? LicenseImageUrl)
+    [param: Url, StringLength(255)] string? LicenseImageUrl)
 {
     public CreateStaff ToCommand() => new(Email.Trim().ToLowerInvariant(), FullName.Trim(), Password, Phone?.Trim(), DepartmentId, FacilityId, HiredDate, IsDriver, LicenseNumber?.Trim(), LicenseType?.Trim(), LicenseIssueDate, LicenseExpiryDate, LicenseImageUrl?.Trim());
 }
 
 public sealed record UpdateStaffRequest(
-    [property: Required, StringLength(120, MinimumLength = 2)] string FullName,
-    [property: StringLength(30)] string? Phone,
-    [property: Range(1, int.MaxValue)] int? DepartmentId,
-    [property: Range(1, int.MaxValue)] int? FacilityId,
+    [param: Required, StringLength(120, MinimumLength = 2)] string FullName,
+    [param: StringLength(30)] string? Phone,
+    [param: Range(1, int.MaxValue)] int? DepartmentId,
+    [param: Range(1, int.MaxValue)] int? FacilityId,
     DateOnly? HiredDate,
     bool IsDriver,
-    [property: StringLength(255)] string? LicenseNumber,
-    [property: StringLength(255)] string? LicenseType,
+    [param: StringLength(255)] string? LicenseNumber,
+    [param: StringLength(255)] string? LicenseType,
     DateOnly? LicenseIssueDate,
     DateOnly? LicenseExpiryDate,
-    [property: Url, StringLength(255)] string? LicenseImageUrl)
+    [param: Url, StringLength(255)] string? LicenseImageUrl)
 {
     public UpdateStaff ToCommand() => new(FullName.Trim(), Phone?.Trim(), DepartmentId, FacilityId, HiredDate, IsDriver, LicenseNumber?.Trim(), LicenseType?.Trim(), LicenseIssueDate, LicenseExpiryDate, LicenseImageUrl?.Trim());
 }
