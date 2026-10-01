@@ -36,10 +36,21 @@ public sealed class PostgresFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        await DataSource.DisposeAsync();
-        await using var connection = new NpgsqlConnection(AdminConnectionString);
-        await connection.OpenAsync();
-        await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS {_database} WITH (FORCE)", connection);
-        await drop.ExecuteNonQueryAsync();
+        if (DataSource is not null)
+        {
+            await DataSource.DisposeAsync();
+        }
+
+        try
+        {
+            await using var connection = new NpgsqlConnection(AdminConnectionString);
+            await connection.OpenAsync();
+            await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS {_database} WITH (FORCE)", connection);
+            await drop.ExecuteNonQueryAsync();
+        }
+        catch
+        {
+            // Best effort cleanup during teardown (e.g. if the server is unreachable)
+        }
     }
 }
