@@ -45,8 +45,10 @@ public sealed class OperationsController(IOperationsRepository store) : Controll
     [Authorize(Roles="Admin,Staff")] [HttpPost("rentals/{id:int}/status/{status}")] public Task<Rental> Status(int id,string status,CancellationToken ct)=>store.ChangeRentalStatusAsync(id,status,ct);
 
     [HttpGet("subscription-plans")] public Task<IReadOnlyList<SubscriptionPlan>> Plans([FromQuery]bool all,CancellationToken ct)=>store.ListPlansAsync(!all,ct);
+    [HttpGet("subscription-plans/{id:int}")] public async Task<IActionResult> Plan(int id,CancellationToken ct)=>await store.GetPlanAsync(id,ct) is { } x?Ok(x):NotFound();
     [Authorize(Roles="Admin,Staff")] [HttpPost("subscription-plans")] public async Task<IActionResult> AddPlan(PlanRequest x,CancellationToken ct){var p=await store.SavePlanAsync(null,x.ToModel(),ct);return Created($"api/subscription-plans/{p.Id}",p);}
     [Authorize(Roles="Admin,Staff")] [HttpPut("subscription-plans/{id:int}")] public Task<SubscriptionPlan> EditPlan(int id,PlanRequest x,CancellationToken ct)=>store.SavePlanAsync(id,x.ToModel(),ct);
+    [Authorize(Roles="Admin")] [HttpDelete("subscription-plans/{id:int}")] public async Task<IActionResult> DeletePlan(int id,CancellationToken ct){await store.DeletePlanAsync(id,ct);return NoContent();}
     [Authorize] [HttpPost("subscription-plans/{id:int}/purchase")] public async Task<IActionResult> Purchase(int id,CancellationToken ct)=>Created("api/customer-subscriptions",new { id=await store.BuyPlanAsync(Email(),id,ct) });
     [Authorize(Roles="Admin,Staff,Maintenance")] [HttpPost("maintenance")] public async Task<IActionResult> AddMaintenance(MaintenanceRequest x,CancellationToken ct){var m=await store.SaveMaintenanceAsync(null,x.ToModel(),ct);return Created($"api/maintenance/{m.Id}",m);}
     [Authorize(Roles="Admin,Staff,Maintenance")] [HttpPut("maintenance/{id:int}")] public Task<Maintenance> EditMaintenance(int id,MaintenanceRequest x,CancellationToken ct)=>store.SaveMaintenanceAsync(id,x.ToModel(),ct);
