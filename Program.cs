@@ -2,6 +2,13 @@ using Car_Rental_System_BE.Infrastructure;
 using Car_Rental_System_BE.Infrastructure.Authentication;
 using Car_Rental_System_BE.Application.Registration;
 using Car_Rental_System_BE.Application.Accounts;
+<<<<<<< Updated upstream:Program.cs
+=======
+using Car_Rental_System_BE.Application.Organization;
+using Car_Rental_System_BE.Application.Operations;
+using Car_Rental_System_BE.Application.Payments;
+using Car_Rental_System_BE.Infrastructure.Payments;
+>>>>>>> Stashed changes:src/VehicleRental.WebApi/Program.cs
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Npgsql;
@@ -39,6 +46,7 @@ builder.Services.AddOptions<RentalSessionOptions>()
     .ValidateOnStart();
 builder.Services.Configure<GoogleAuthOptions>(builder.Configuration.GetSection(GoogleAuthOptions.SectionName));
 builder.Services.Configure<CloudinaryOptions>(builder.Configuration.GetSection(CloudinaryOptions.SectionName));
+builder.Services.Configure<PayOsOptions>(builder.Configuration.GetSection(PayOsOptions.SectionName));
 
 var connectionString = builder.Configuration.GetConnectionString("RentalDatabase") ?? builder.Configuration["DATABASE_URL"];
 if (!string.IsNullOrWhiteSpace(connectionString))
@@ -53,8 +61,15 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
     return ConnectionMultiplexer.Connect(ToRedisConfiguration(redisConnection));
 });
 builder.Services.AddHttpClient<IBrevoEmailSender, BrevoEmailSender>();
+builder.Services.AddHttpClient<IPaymentGateway, PayOsPaymentGateway>(client => client.BaseAddress = new Uri("https://api-merchant.payos.vn/"));
 builder.Services.AddScoped<IUserRepository, NpgsqlUserRepository>();
 builder.Services.AddScoped<IAccountRepository, NpgsqlAccountRepository>();
+<<<<<<< Updated upstream:Program.cs
+=======
+builder.Services.AddScoped<IStaffRepository, NpgsqlStaffRepository>();
+builder.Services.AddScoped<IOperationsRepository, NpgsqlOperationsRepository>();
+builder.Services.AddScoped<IPaymentRepository, NpgsqlPaymentRepository>();
+>>>>>>> Stashed changes:src/VehicleRental.WebApi/Program.cs
 builder.Services.AddScoped<IRegistrationWorkflow, RedisRegistrationWorkflow>();
 builder.Services.AddScoped<IPasswordResetWorkflow, RedisPasswordResetWorkflow>();
 builder.Services.AddSingleton<IImageStorage, CloudinaryImageStorage>();
@@ -117,7 +132,18 @@ if (!app.Environment.IsProduction())
     app.UseSwaggerUI();
 }
 
-app.UseExceptionHandler();
+app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
+{
+    var exception = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+    var status = exception switch
+    {
+        KeyNotFoundException => StatusCodes.Status404NotFound,
+        ArgumentException or InvalidOperationException => StatusCodes.Status400BadRequest,
+        _ => StatusCodes.Status500InternalServerError
+    };
+    var detail = status == StatusCodes.Status500InternalServerError ? "An unexpected server error occurred." : exception?.Message;
+    await Results.Problem(detail, statusCode: status).ExecuteAsync(context);
+}));
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
