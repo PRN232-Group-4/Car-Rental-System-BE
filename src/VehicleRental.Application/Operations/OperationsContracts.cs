@@ -1,0 +1,43 @@
+namespace Car_Rental_System_BE.Application.Operations;
+
+public sealed record OrganizationUnit(int Id, string Name, string? Address = null);
+public sealed record VehicleType(int Id, string Name, string? FuelType);
+public sealed record Vehicle(int Id, int VehicleTypeId, string VehicleType, int? FacilityId, string? Facility, string Status, string? Brand, string? Model, string? Color, int? YearOfManufacture, decimal? HourlyPrice, decimal? LongtermPrice, string? Description, string? MainImageUrl, string? Location);
+public sealed record VehiclePage(IReadOnlyList<Vehicle> Items, int Page, int PageSize, int TotalCount);
+public sealed record RentalPolicy(int Id, int? VehicleTypeId, string Name, decimal VatRate, decimal OvertimeFeeRate, decimal DepositPercentage, bool IsActive);
+public sealed record Rental(int Id, int CustomerId, int VehicleId, string RentalType, string Status, bool IsSubscription, decimal VatPrice, decimal DepositPrice, decimal OvertimePrice, decimal TotalPrice, DateTime? StartTime, DateTime? EndTime);
+public sealed record Inspection(int Id, int RentalId, string Type, bool? IsOk, decimal? OdometerKm, decimal? FuelBatteryLevel, string? DamageNotes, string? ImageUrls, DateTime? InspectedAt);
+public sealed record SubscriptionPlan(int Id, string Name, string? Description, decimal Price, int DurationDays, decimal? IncludedHours, bool IsActive);
+public sealed record Maintenance(int Id, int VehicleId, string? Status, string? MaintenanceType, DateOnly? ScheduledDate, bool? IsSafe, string? Description, decimal? Cost);
+public sealed record CustomerLicense(string? Number, string? Type, DateOnly? IssueDate, DateOnly? ExpiryDate, string? ImageUrl, string Status);
+
+public interface IOperationsRepository
+{
+    Task<CustomerLicense?> GetLicenseAsync(string email, CancellationToken ct);
+    Task<CustomerLicense> SaveLicenseAsync(string email, CustomerLicense license, CancellationToken ct);
+    Task<CustomerLicense> ReviewLicenseAsync(int customerId, string status, CancellationToken ct);
+    Task<IReadOnlyList<OrganizationUnit>> ListDepartmentsAsync(CancellationToken ct);
+    Task<OrganizationUnit> SaveDepartmentAsync(int? id, string name, CancellationToken ct);
+    Task DeleteDepartmentAsync(int id, CancellationToken ct);
+    Task<IReadOnlyList<OrganizationUnit>> ListFacilitiesAsync(CancellationToken ct);
+    Task<OrganizationUnit> SaveFacilityAsync(int? id, string name, string? address, CancellationToken ct);
+    Task DeleteFacilityAsync(int id, CancellationToken ct);
+    Task<IReadOnlyList<VehicleType>> ListVehicleTypesAsync(CancellationToken ct);
+    Task<VehicleType> SaveVehicleTypeAsync(int? id, string name, string? fuelType, CancellationToken ct);
+    Task DeleteVehicleTypeAsync(int id, CancellationToken ct);
+    Task<VehiclePage> SearchVehiclesAsync(int? typeId, int? facilityId, string? status, DateTime? from, DateTime? to, int page, int pageSize, CancellationToken ct);
+    Task<Vehicle?> GetVehicleAsync(int id, CancellationToken ct);
+    Task<Vehicle> SaveVehicleAsync(int? id, Vehicle vehicle, CancellationToken ct);
+    Task<RentalPolicy> SavePolicyAsync(int? id, RentalPolicy policy, CancellationToken ct);
+    Task<IReadOnlyList<RentalPolicy>> ListPoliciesAsync(CancellationToken ct);
+    Task<Rental> CreateRentalAsync(string email, int vehicleId, int? policyId, string rentalType, DateTime start, DateTime end, bool subscription, int? subscriptionId, bool hasDriver, CancellationToken ct);
+    Task<Rental?> GetRentalAsync(int id, CancellationToken ct);
+    Task<Rental> ChangeRentalStatusAsync(int id, string status, CancellationToken ct);
+    Task AssignAsync(int rentalId, int? driverStaffId, CancellationToken ct);
+    Task<Inspection> AddInspectionAsync(int rentalId, int staffId, string type, bool isOk, decimal? odometer, decimal? fuel, string? notes, string? images, CancellationToken ct);
+    Task<IReadOnlyList<SubscriptionPlan>> ListPlansAsync(bool activeOnly, CancellationToken ct);
+    Task<SubscriptionPlan> SavePlanAsync(int? id, SubscriptionPlan plan, CancellationToken ct);
+    Task<int> BuyPlanAsync(string email, int planId, CancellationToken ct);
+    Task<Maintenance> SaveMaintenanceAsync(int? id, Maintenance maintenance, CancellationToken ct);
+    Task<object> DashboardAsync(DateTime? from, DateTime? to, CancellationToken ct);
+}
