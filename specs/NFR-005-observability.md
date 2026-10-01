@@ -1,3 +1,3 @@
 # NFR-005 — Logging/health
-- **Status:** In progress
-Database health endpoint exists. Remaining: structured logging, correlation ID, Redis readiness.
+- **Status:** Done
+Structured logging (Serilog), correlation ID middleware (`X-Correlation-Id`), database + Redis health endpoint.

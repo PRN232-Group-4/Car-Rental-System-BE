@@ -9,5 +9,5 @@ Test project `tests/VehicleRental.Tests` (xUnit). Chiến lược: invariant c�
 - [x] Unit test xác thực chữ ký webhook PayOS
 - [x] Unit test validation DTO ở HTTP boundary
 - [ ] Coverage threshold
-- [ ] Architecture test cho chiều phụ thuộc `Domain <- Application <- Infrastructure <- WebApi`
+- [x] Architecture test cho chiều phụ thuộc `Domain <- Application <- Infrastructure <- WebApi`
 - [ ] End-to-end HTTP (WebApplicationFactory + Redis + auth)

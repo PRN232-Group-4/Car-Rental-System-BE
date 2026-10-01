@@ -1,3 +1,5 @@
+using Serilog;
+using Car_Rental_System_BE;
 using Car_Rental_System_BE.Infrastructure;
 using Car_Rental_System_BE.Infrastructure.Authentication;
 using Car_Rental_System_BE.Application.Registration;
@@ -16,12 +18,9 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Logging.ClearProviders();
-builder.Logging.AddSimpleConsole(options =>
-{
-    options.TimestampFormat = "yyyy-MM-dd HH:mm:ss ";
-    options.SingleLine = true;
-});
+builder.Host.UseSerilog((context, _, configuration) =>
+    configuration.ReadFrom.Configuration(context.Configuration)
+        .Enrich.FromLogContext());
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -126,6 +125,8 @@ if (!app.Environment.IsProduction())
     app.UseSwaggerUI();
 }
 
+app.UseMiddleware<CorrelationIdMiddleware>();
+
 app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 {
     var exception = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
@@ -144,7 +145,7 @@ app.UseAuthorization();
 
 // Route root / to Swagger UI
 app.MapGet("/", () => Results.Redirect(app.Environment.IsProduction() ? "/health" : "/swagger"));
-app.MapGet("/health", async (NpgsqlDataSource? dataSource, CancellationToken cancellationToken) =>
+app.MapGet("/health", async (NpgsqlDataSource? dataSource, IConnectionMultiplexer redis, CancellationToken cancellationToken) =>
 {
     if (dataSource is null)
         return Results.Problem("ConnectionStrings:RentalDatabase is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
@@ -152,12 +153,22 @@ app.MapGet("/health", async (NpgsqlDataSource? dataSource, CancellationToken can
     try
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        return Results.Ok(new { status = "Healthy" });
     }
     catch (NpgsqlException)
     {
         return Results.Problem("Database is unavailable.", statusCode: StatusCodes.Status503ServiceUnavailable);
     }
+
+    try
+    {
+        await redis.GetDatabase().PingAsync();
+    }
+    catch (RedisException)
+    {
+        return Results.Problem("Redis is unavailable.", statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    return Results.Ok(new { status = "Healthy" });
 });
 
 app.MapControllers();
