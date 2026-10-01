@@ -2,6 +2,7 @@ using Car_Rental_System_BE.Infrastructure;
 using Car_Rental_System_BE.Infrastructure.Authentication;
 using Car_Rental_System_BE.Application.Registration;
 using Car_Rental_System_BE.Application.Accounts;
+using Car_Rental_System_BE.Application.Organization;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Npgsql;
@@ -55,6 +56,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 builder.Services.AddHttpClient<IBrevoEmailSender, BrevoEmailSender>();
 builder.Services.AddScoped<IUserRepository, NpgsqlUserRepository>();
 builder.Services.AddScoped<IAccountRepository, NpgsqlAccountRepository>();
+builder.Services.AddScoped<IStaffRepository, NpgsqlStaffRepository>();
 builder.Services.AddScoped<IRegistrationWorkflow, RedisRegistrationWorkflow>();
 builder.Services.AddScoped<IPasswordResetWorkflow, RedisPasswordResetWorkflow>();
 builder.Services.AddSingleton<IImageStorage, CloudinaryImageStorage>();

@@ -1,4 +1,6 @@
 # Changelog
+- 2026-09-30 — [Staff repository registered in DI](2026-09-30-staff-repository-di.md)
+- 2026-09-30 — [WebApi project moved into src/](2026-09-30-webapi-project-layout.md)
 - 2026-09-30 — [Account basic APIs](2026-09-30-account-basics.md)
 - 2026-09-30 — [Google OAuth and Cloudinary media storage](2026-09-30-google-cloudinary.md)
 - 2026-09-30 — [Startup URLs and Swagger contract](2026-09-30-swagger-startup.md)
