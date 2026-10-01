@@ -46,4 +46,80 @@ public sealed class NpgsqlPaymentRepository(NpgsqlDataSource dataSource) : IPaym
         add.Parameters.AddWithValue(rental); add.Parameters.AddWithValue(invoice); add.Parameters.AddWithValue(customer); add.Parameters.AddWithValue(amount); var id = (int)(await add.ExecuteScalarAsync(ct))!;
         await tx.CommitAsync(ct); return new(id, invoice, amount, "requested", null);
     }
+
+    public async Task<IReadOnlyList<InvoiceSummary>> ListInvoicesAsync(string? email, CancellationToken ct)
+    {
+        await using var c = dataSource.CreateCommand("SELECT i.id,i.rental_id,i.invoice_number,i.amount,i.vat_amount,i.status,i.issued_at,i.due_at FROM invoices i JOIN rentals r ON r.id=i.rental_id JOIN customers cu ON cu.id=r.customer_id JOIN users u ON u.id=cu.user_id WHERE ($1::text IS NULL OR u.email=$1) ORDER BY i.id DESC");
+        c.Parameters.AddWithValue((object?)email ?? DBNull.Value);
+        await using var r = await c.ExecuteReaderAsync(ct);
+        var items = new List<InvoiceSummary>();
+        while (await r.ReadAsync(ct)) items.Add(ReadInvoice(r));
+        return items;
+    }
+
+    public async Task<InvoiceSummary?> GetInvoiceAsync(int invoiceId, string? email, CancellationToken ct)
+    {
+        await using var c = dataSource.CreateCommand("SELECT i.id,i.rental_id,i.invoice_number,i.amount,i.vat_amount,i.status,i.issued_at,i.due_at FROM invoices i JOIN rentals r ON r.id=i.rental_id JOIN customers cu ON cu.id=r.customer_id JOIN users u ON u.id=cu.user_id WHERE i.id=$2 AND ($1::text IS NULL OR u.email=$1)");
+        c.Parameters.AddWithValue((object?)email ?? DBNull.Value); c.Parameters.AddWithValue(invoiceId);
+        await using var r = await c.ExecuteReaderAsync(ct);
+        return await r.ReadAsync(ct) ? ReadInvoice(r) : null;
+    }
+
+    public async Task<InvoiceSummary> CreateInvoiceForRentalAsync(int rentalId, CancellationToken ct)
+    {
+        await using var cn = await dataSource.OpenConnectionAsync(ct); await using var tx = await cn.BeginTransactionAsync(ct);
+        await using (var existing = new NpgsqlCommand("SELECT id FROM invoices WHERE rental_id=$1", cn, tx))
+        {
+            existing.Parameters.AddWithValue(rentalId);
+            if (await existing.ExecuteScalarAsync(ct) is int existingId) { await tx.CommitAsync(ct); return (await GetInvoiceAsync(existingId, null, ct))!; }
+        }
+        await using var rental = new NpgsqlCommand("SELECT is_subscription,total_price,vat_price,deposit_price FROM rentals WHERE id=$1 FOR UPDATE", cn, tx);
+        rental.Parameters.AddWithValue(rentalId);
+        decimal amount, vat;
+        await using (var r = await rental.ExecuteReaderAsync(ct))
+        {
+            if (!await r.ReadAsync(ct)) throw new KeyNotFoundException();
+            if (r.GetBoolean(0)) throw new InvalidOperationException("Subscription rentals must not have invoices.");
+            amount = r.GetDecimal(1) + r.GetDecimal(3); vat = r.GetDecimal(2);
+        }
+        await using var insert = new NpgsqlCommand("INSERT INTO invoices(rental_id,invoice_number,amount,vat_amount) VALUES($1,$2,$3,$4) RETURNING id", cn, tx);
+        insert.Parameters.AddWithValue(rentalId); insert.Parameters.AddWithValue($"INV-{DateTime.UtcNow:yyyyMMdd}-{rentalId}"); insert.Parameters.AddWithValue(amount); insert.Parameters.AddWithValue(vat);
+        var id = (int)(await insert.ExecuteScalarAsync(ct))!;
+        await tx.CommitAsync(ct); return (await GetInvoiceAsync(id, null, ct))!;
+    }
+
+    public async Task<IReadOnlyList<PaymentSummary>> ListPaymentsAsync(string? email, int? invoiceId, CancellationToken ct)
+    {
+        await using var c = dataSource.CreateCommand("SELECT p.id,p.rental_id,p.invoice_id,p.type,p.amount,p.status,p.method,p.provider_reference,p.paid_at,p.created_at FROM payments p JOIN customers cu ON cu.id=p.customer_id JOIN users u ON u.id=cu.user_id WHERE ($1::text IS NULL OR u.email=$1) AND ($2::int IS NULL OR p.invoice_id=$2) ORDER BY p.id DESC");
+        c.Parameters.AddWithValue((object?)email ?? DBNull.Value); c.Parameters.AddWithValue((object?)invoiceId ?? DBNull.Value);
+        await using var r = await c.ExecuteReaderAsync(ct);
+        var items = new List<PaymentSummary>();
+        while (await r.ReadAsync(ct)) items.Add(ReadPayment(r));
+        return items;
+    }
+
+    public async Task<PaymentSummary> ReviewRefundAsync(int refundId, bool approve, string reviewer, CancellationToken ct)
+    {
+        await using var cn = await dataSource.OpenConnectionAsync(ct); await using var tx = await cn.BeginTransactionAsync(ct);
+        await using (var check = new NpgsqlCommand("SELECT type,status FROM payments WHERE id=$1 FOR UPDATE", cn, tx))
+        {
+            check.Parameters.AddWithValue(refundId);
+            await using var r = await check.ExecuteReaderAsync(ct);
+            if (!await r.ReadAsync(ct)) throw new KeyNotFoundException();
+            if (r.GetString(0) != "refund" || r.GetString(1) != "requested") throw new InvalidOperationException("Only a requested refund can be reviewed.");
+        }
+        await using var update = new NpgsqlCommand((approve
+            ? "UPDATE payments SET status='paid',paid_at=now(),reviewed_by=$2,reviewed_at=now()"
+            : "UPDATE payments SET status='rejected',reviewed_by=$2,reviewed_at=now()")
+            + " WHERE id=$1 RETURNING id,rental_id,invoice_id,type,amount,status,method,provider_reference,paid_at,created_at", cn, tx);
+        update.Parameters.AddWithValue(refundId); update.Parameters.AddWithValue(reviewer);
+        await using var ur = await update.ExecuteReaderAsync(ct);
+        if (!await ur.ReadAsync(ct)) throw new KeyNotFoundException();
+        var summary = ReadPayment(ur);
+        await ur.CloseAsync(); await tx.CommitAsync(ct);
+        return summary;
+    }
+
+    private static InvoiceSummary ReadInvoice(NpgsqlDataReader r) => new(r.GetInt32(0), r.GetInt32(1), r.GetString(2), r.GetDecimal(3), r.GetDecimal(4), r.GetString(5), r.GetDateTime(6), r.IsDBNull(7) ? null : r.GetDateTime(7));
+    private static PaymentSummary ReadPayment(NpgsqlDataReader r) => new(r.GetInt32(0), r.GetInt32(1), r.IsDBNull(2) ? null : r.GetInt32(2), r.IsDBNull(3) ? null : r.GetString(3), r.GetDecimal(4), r.GetString(5), r.IsDBNull(6) ? null : r.GetString(6), r.IsDBNull(7) ? null : r.GetString(7), r.IsDBNull(8) ? null : r.GetDateTime(8), r.GetDateTime(9));
 }

@@ -21,8 +21,8 @@ public sealed class PaymentsController(IPaymentRepository payments, IPaymentGate
     {
         if (!gateway.IsConfigured) return Problem("PayOS is not configured yet.", statusCode: StatusCodes.Status503ServiceUnavailable);
         var invoice = await payments.GetInvoiceForCustomerAsync(invoiceId, Email(), ct);
-        if (invoice is null) return NotFound();
-        if (invoice.Status == "paid") return Conflict("Invoice is already paid.");
+        if (invoice is null) return Problem("Invoice was not found.", statusCode: StatusCodes.Status404NotFound);
+        if (invoice.Status == "paid") return Problem("Invoice is already paid.", statusCode: StatusCodes.Status409Conflict);
         var description = $"Rental {invoice.InvoiceNumber}";
         var result = await gateway.CreateCheckoutAsync(new(invoice.InvoiceId, invoice.Amount, description[..Math.Min(25, description.Length)], options.Value.ReturnUrl, options.Value.CancelUrl), ct);
         return Ok(result);
@@ -42,7 +42,7 @@ public sealed class PaymentsController(IPaymentRepository payments, IPaymentGate
         signedData["reference"] = request.Data.Reference;
         signedData["paymentLinkId"] = request.Data.PaymentLinkId;
         var webhook = new PayOsWebhook(request.Data.OrderCode, request.Data.Amount, request.Data.Reference ?? request.Data.PaymentLinkId, request.Data.Code, request.Signature, signedData);
-        if (!gateway.VerifyWebhook(webhook)) return BadRequest("Invalid PayOS signature.");
+        if (!gateway.VerifyWebhook(webhook)) return Problem("Invalid PayOS signature.", statusCode: StatusCodes.Status400BadRequest);
         if (request.Code == "00" && request.Success && request.Data.Code == "00") await payments.CompleteInvoiceAsync((int)request.Data.OrderCode, request.Data.Amount, request.Data.Reference ?? request.Data.PaymentLinkId, ct);
         return NoContent();
     }
@@ -57,11 +57,53 @@ public sealed class PaymentsController(IPaymentRepository payments, IPaymentGate
         return Accepted(result);
     }
 
+    [Authorize]
+    [HttpGet("invoices")]
+    [ProducesResponseType<IReadOnlyList<InvoiceSummary>>(StatusCodes.Status200OK)]
+    public Task<IReadOnlyList<InvoiceSummary>> Invoices(CancellationToken ct) => payments.ListInvoicesAsync(Scope(), ct);
+
+    [Authorize]
+    [HttpGet("invoices/{invoiceId:int}")]
+    [ProducesResponseType<InvoiceSummary>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Invoice(int invoiceId, CancellationToken ct) => await payments.GetInvoiceAsync(invoiceId, Scope(), ct) is { } x ? Ok(x) : Problem("Invoice was not found.", statusCode: StatusCodes.Status404NotFound);
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpPost("rentals/{rentalId:int}/invoice")]
+    [ProducesResponseType<InvoiceSummary>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CreateInvoice(int rentalId, CancellationToken ct)
+    {
+        var invoice = await payments.CreateInvoiceForRentalAsync(rentalId, ct);
+        return Created($"api/invoices/{invoice.Id}", invoice);
+    }
+
+    [Authorize]
+    [HttpGet("payments")]
+    [ProducesResponseType<IReadOnlyList<PaymentSummary>>(StatusCodes.Status200OK)]
+    public Task<IReadOnlyList<PaymentSummary>> Payments([FromQuery] int? invoiceId, CancellationToken ct) => payments.ListPaymentsAsync(Scope(), invoiceId, ct);
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("payments/refunds/{refundId:int}/approve")]
+    [ProducesResponseType<PaymentSummary>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ApproveRefund(int refundId, CancellationToken ct) => Ok(await payments.ReviewRefundAsync(refundId, true, Email(), ct));
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("payments/refunds/{refundId:int}/reject")]
+    [ProducesResponseType<PaymentSummary>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RejectRefund(int refundId, CancellationToken ct) => Ok(await payments.ReviewRefundAsync(refundId, false, Email(), ct));
+
     private string Email() => User.FindFirstValue(ClaimTypes.Email) ?? throw new UnauthorizedAccessException();
+    private string? Scope() => User.IsInRole("Admin") || User.IsInRole("Staff") ? null : Email();
 }
 
-public sealed record RefundRequest([property: Range(1, double.MaxValue)] decimal Amount);
-public sealed record PayOsWebhookRequest(string Code, bool Success, PayOsWebhookData Data, [property: Required] string Signature);
+public sealed record RefundRequest([param: Range(1, double.MaxValue)] decimal Amount);
+public sealed record PayOsWebhookRequest(string Code, bool Success, PayOsWebhookData Data, [param: Required] string Signature);
 public sealed class PayOsWebhookData
 {
     public long OrderCode { get; init; }

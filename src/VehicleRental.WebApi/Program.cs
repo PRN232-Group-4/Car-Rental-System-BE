@@ -14,6 +14,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using System.Security.Claims;
+using Car_Rental_System_BE.Responses;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
@@ -24,9 +25,9 @@ builder.Logging.AddSimpleConsole(options =>
 });
 
 // Add services to the container.
-builder.Services.AddControllers();
+builder.Services.AddControllers(options => options.Filters.Add<ApiSuccessResponseFilter>());
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options => options.OperationFilter<ApiSuccessResponseOperationFilter>());
 
 builder.Services.AddProblemDetails();
 builder.Services.AddOptions<RegistrationOptions>()
@@ -152,7 +153,7 @@ app.MapGet("/health", async (NpgsqlDataSource? dataSource, CancellationToken can
     try
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        return Results.Ok(new { status = "Healthy" });
+        return Results.Ok(ApiSuccessResponse.Create(new { status = "Healthy" }, "Service is healthy."));
     }
     catch (NpgsqlException)
     {
