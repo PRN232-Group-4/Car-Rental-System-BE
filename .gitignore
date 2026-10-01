@@ -5,6 +5,7 @@
 
 # dotenv files
 .env
+.codegraph
 
 # Environment-specific application settings may contain credentials.
 appsettings*.json

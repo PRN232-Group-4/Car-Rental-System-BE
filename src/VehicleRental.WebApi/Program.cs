@@ -2,13 +2,10 @@ using Car_Rental_System_BE.Infrastructure;
 using Car_Rental_System_BE.Infrastructure.Authentication;
 using Car_Rental_System_BE.Application.Registration;
 using Car_Rental_System_BE.Application.Accounts;
-<<<<<<< Updated upstream:Program.cs
-=======
 using Car_Rental_System_BE.Application.Organization;
 using Car_Rental_System_BE.Application.Operations;
 using Car_Rental_System_BE.Application.Payments;
 using Car_Rental_System_BE.Infrastructure.Payments;
->>>>>>> Stashed changes:src/VehicleRental.WebApi/Program.cs
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Npgsql;
@@ -64,12 +61,9 @@ builder.Services.AddHttpClient<IBrevoEmailSender, BrevoEmailSender>();
 builder.Services.AddHttpClient<IPaymentGateway, PayOsPaymentGateway>(client => client.BaseAddress = new Uri("https://api-merchant.payos.vn/"));
 builder.Services.AddScoped<IUserRepository, NpgsqlUserRepository>();
 builder.Services.AddScoped<IAccountRepository, NpgsqlAccountRepository>();
-<<<<<<< Updated upstream:Program.cs
-=======
 builder.Services.AddScoped<IStaffRepository, NpgsqlStaffRepository>();
 builder.Services.AddScoped<IOperationsRepository, NpgsqlOperationsRepository>();
 builder.Services.AddScoped<IPaymentRepository, NpgsqlPaymentRepository>();
->>>>>>> Stashed changes:src/VehicleRental.WebApi/Program.cs
 builder.Services.AddScoped<IRegistrationWorkflow, RedisRegistrationWorkflow>();
 builder.Services.AddScoped<IPasswordResetWorkflow, RedisPasswordResetWorkflow>();
 builder.Services.AddSingleton<IImageStorage, CloudinaryImageStorage>();
