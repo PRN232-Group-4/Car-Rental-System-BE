@@ -1,4 +1,6 @@
 # Changelog
+- 2026-10-01 — [PayOS payment scaffold](2026-10-01-payos-payment-scaffold.md)
+- 2026-10-01 — [Core catalog and rental APIs](2026-10-01-core-rental-apis.md)
 - 2026-09-30 — [Staff repository registered in DI](2026-09-30-staff-repository-di.md)
 - 2026-09-30 — [WebApi project moved into src/](2026-09-30-webapi-project-layout.md)
 - 2026-09-30 — [Account basic APIs](2026-09-30-account-basics.md)
