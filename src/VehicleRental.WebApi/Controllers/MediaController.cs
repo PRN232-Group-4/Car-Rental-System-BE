@@ -25,4 +25,18 @@ public sealed class MediaController(IImageStorage images, IUserRepository users)
         await users.UpdateAvatarAsync(email, image.SecureUrl, ct);
         return Ok(image);
     }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpPost("vehicle")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UploadVehicleImage(IFormFile? file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0 || file.Length > 10 * 1024 * 1024 || !file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            return Problem("Vehicle image must be an image no larger than 10 MB.", statusCode: StatusCodes.Status400BadRequest);
+        await using var content = file.OpenReadStream();
+        var image = await images.UploadAsync(content, file.FileName, "vehicles", ct);
+        return Ok(image);
+    }
 }

@@ -105,7 +105,13 @@ if (googleAuthentication.Enabled)
         };
     });
 }
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("RequireAdmin", policy => policy.RequireRole("Admin"));
+    options.AddPolicy("RequireStaff", policy => policy.RequireRole("Admin", "Staff"));
+    options.AddPolicy("RequireMaintenance", policy => policy.RequireRole("Admin", "Staff", "Maintenance"));
+    options.AddPolicy("RequireCustomer", policy => policy.RequireRole("Customer"));
+});
 
 var app = builder.Build();
 

@@ -2,13 +2,18 @@ namespace Car_Rental_System_BE.Application.Operations;
 
 public sealed record OrganizationUnit(int Id, string Name, string? Address = null);
 public sealed record VehicleType(int Id, string Name, string? FuelType);
-public sealed record Vehicle(int Id, int VehicleTypeId, string VehicleType, int? FacilityId, string? Facility, string Status, string? Brand, string? Model, string? Color, int? YearOfManufacture, decimal? HourlyPrice, decimal? LongtermPrice, string? Description, string? MainImageUrl, string? Location);
+public sealed record VehicleDetail(
+    int? SeatCount = null, string? Transmission = null, decimal? TrunkCapacity = null,
+    string? BikeType = null, bool? HasStorageBox = null,
+    string? BatteryCapacity = null, string? ChargingType = null, string? ChargingTimeHours = null, decimal? MaxRangeKm = null, string? BatteryType = null,
+    IReadOnlyList<string>? GalleryImages = null);
+public sealed record Vehicle(int Id, int VehicleTypeId, string VehicleType, int? FacilityId, string? Facility, string Status, string? Brand, string? Model, string? Color, int? YearOfManufacture, decimal? HourlyPrice, decimal? LongtermPrice, string? Description, string? MainImageUrl, string? Location, VehicleDetail? Detail = null);
 public sealed record VehiclePage(IReadOnlyList<Vehicle> Items, int Page, int PageSize, int TotalCount);
 public sealed record RentalPolicy(int Id, int? VehicleTypeId, string Name, decimal VatRate, decimal OvertimeFeeRate, decimal DepositPercentage, bool IsActive);
 public sealed record Rental(int Id, int CustomerId, int VehicleId, string RentalType, string Status, bool IsSubscription, decimal VatPrice, decimal DepositPrice, decimal OvertimePrice, decimal TotalPrice, DateTime? StartTime, DateTime? EndTime);
 public sealed record Inspection(int Id, int RentalId, string Type, bool? IsOk, decimal? OdometerKm, decimal? FuelBatteryLevel, string? DamageNotes, string? ImageUrls, DateTime? InspectedAt);
 public sealed record SubscriptionPlan(int Id, string Name, string? Description, decimal Price, int DurationDays, decimal? IncludedHours, bool IsActive);
-public sealed record Maintenance(int Id, int VehicleId, string? Status, string? MaintenanceType, DateOnly? ScheduledDate, bool? IsSafe, string? Description, decimal? Cost);
+public sealed record Maintenance(int Id, int VehicleId, int? FacilityId, int? AssignedStaffId, string? Status, string? MaintenanceType, DateOnly? ScheduledDate, bool? IsSafe, string? Description, decimal? Cost);
 public sealed record CustomerLicense(string? Number, string? Type, DateOnly? IssueDate, DateOnly? ExpiryDate, string? ImageUrl, string Status);
 
 public interface IOperationsRepository
@@ -41,5 +46,6 @@ public interface IOperationsRepository
     Task DeletePlanAsync(int id, CancellationToken ct);
     Task<int> BuyPlanAsync(string email, int planId, CancellationToken ct);
     Task<Maintenance> SaveMaintenanceAsync(int? id, Maintenance maintenance, CancellationToken ct);
+    Task<IReadOnlyList<Maintenance>> ListMaintenanceAsync(int? vehicleId, string? status, CancellationToken ct);
     Task<object> DashboardAsync(DateTime? from, DateTime? to, CancellationToken ct);
 }
