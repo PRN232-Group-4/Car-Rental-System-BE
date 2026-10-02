@@ -48,7 +48,12 @@ builder.Services.Configure<PayOsOptions>(builder.Configuration.GetSection(PayOsO
 
 var connectionString = builder.Configuration.GetConnectionString("RentalDatabase") ?? builder.Configuration["DATABASE_URL"];
 if (!string.IsNullOrWhiteSpace(connectionString))
+{
     builder.Services.AddSingleton<NpgsqlDataSource>(_ => NpgsqlDataSource.Create(ToNpgsqlConnectionString(connectionString)));
+    builder.Services.AddOptions<DatabaseMigrationOptions>()
+        .Bind(builder.Configuration.GetSection(DatabaseMigrationOptions.SectionName));
+    builder.Services.AddHostedService<DatabaseMigrationHostedService>();
+}
 
 var redisConnection = builder.Configuration["Redis:ConnectionString"] ?? builder.Configuration["REDIS_URL"];
 if (string.IsNullOrWhiteSpace(redisConnection))
