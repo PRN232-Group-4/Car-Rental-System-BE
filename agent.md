@@ -30,6 +30,7 @@ Repository chỉ đại diện aggregate root. Không generic repository; contro
 ## Definition of Done
 - Validate ở HTTP boundary, invariant ở Application/Domain, lỗi trả ProblemDetails.
 - Mỗi API mới phải xuất hiện trong Swagger ở non-production: controller dùng `ApiController`, route rõ ràng, request/response status codes và auth requirement được mô tả. Không ẩn endpoint khỏi Swagger trừ khi có lý do bảo mật được ghi trong spec.
+- Mỗi API mới phải trả success message đúng ngữ cảnh nghiệp vụ, không dùng message chung chung. Bổ sung mapping `Controller.Action` tương ứng trong `src/VehicleRental.WebApi/Responses/ApiSuccessResponseFilter.cs` và kiểm tra message phản ánh đúng hành động (ví dụ: tạo, cập nhật, phê duyệt, hủy hoặc truy xuất).
 - Không secret trong Git; Options `ValidateOnStart`, `.env.example` đầy đủ.
 - Build/test/Docker chạy; container non-root.
 - Specs, changes và progress phản ánh đúng đã làm/chưa làm.

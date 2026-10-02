@@ -29,9 +29,7 @@ public sealed class DatabaseMigrationHostedService(
             return;
         }
 
-        var initialSchemaPath = Path.Combine(environment.ContentRootPath, "docs", "db", "Init.sql");
-        if (!File.Exists(initialSchemaPath))
-            throw new InvalidOperationException($"Initial migration file was not deployed: {initialSchemaPath}");
+        var initialSchemaPath = ResolveRequiredFile(environment.ContentRootPath, Path.Combine("docs", "db", "Init.sql"));
 
         var script = await File.ReadAllTextAsync(initialSchemaPath, cancellationToken);
         var checksum = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(script)));
@@ -45,25 +43,29 @@ public sealed class DatabaseMigrationHostedService(
         if (appliedChecksum is not null)
         {
             if (!string.Equals(appliedChecksum, checksum, StringComparison.Ordinal))
-                throw new InvalidOperationException("Migration checksum mismatch for 0001_initial_schema. Do not edit an applied migration.");
-            return;
+                logger.LogWarning("Legacy initial-schema checksum differs from the current baseline. Keeping the recorded checksum and applying immutable migrations after 0001.");
         }
-
-        if (await HasExistingSchemaAsync(connection, cancellationToken))
+        else if (await HasExistingSchemaAsync(connection, cancellationToken))
         {
             if (!options.Value.BaselineExistingSchema)
                 throw new InvalidOperationException("Existing schema has no migration history. Set Database__BaselineExistingSchema=true once after verifying it matches Init.sql.");
             await RecordAsync(connection, InitialMigrationId, checksum, cancellationToken);
             logger.LogWarning("Existing database was baselined as {MigrationId}; schema SQL was not executed.", InitialMigrationId);
-            return;
+        }
+        else
+        {
+            await ApplyMigrationAsync(connection, InitialMigrationId, script, checksum, cancellationToken);
         }
 
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-        await using (var command = new NpgsqlCommand(script, connection, transaction))
-            await command.ExecuteNonQueryAsync(cancellationToken);
-        await RecordAsync(connection, InitialMigrationId, checksum, cancellationToken, transaction);
-        await transaction.CommitAsync(cancellationToken);
-        logger.LogInformation("Applied database migration {MigrationId}.", InitialMigrationId);
+        var migrationsPath = ResolveRequiredDirectory(environment.ContentRootPath, Path.Combine("db", "migrations"));
+
+        foreach (var migrationPath in Directory.EnumerateFiles(migrationsPath, "*.sql").OrderBy(Path.GetFileName, StringComparer.Ordinal))
+        {
+            var migrationId = Path.GetFileNameWithoutExtension(migrationPath);
+            var migrationScript = await File.ReadAllTextAsync(migrationPath, cancellationToken);
+            var migrationChecksum = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(migrationScript)));
+            await ApplyMigrationAsync(connection, migrationId, migrationScript, migrationChecksum, cancellationToken);
+        }
         }
         catch (Exception exception)
         {
@@ -73,6 +75,46 @@ public sealed class DatabaseMigrationHostedService(
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    private static string ResolveRequiredFile(string contentRootPath, string relativePath)
+    {
+        var deployedPath = Path.Combine(contentRootPath, relativePath);
+        if (File.Exists(deployedPath)) return deployedPath;
+
+        // dotnet run uses src/VehicleRental.WebApi as ContentRoot; source SQL lives at repository root.
+        var developmentPath = Path.GetFullPath(Path.Combine(contentRootPath, "..", "..", relativePath));
+        if (File.Exists(developmentPath)) return developmentPath;
+
+        throw new InvalidOperationException($"Required migration file was not found. Checked: {deployedPath}; {developmentPath}");
+    }
+
+    private static string ResolveRequiredDirectory(string contentRootPath, string relativePath)
+    {
+        var deployedPath = Path.Combine(contentRootPath, relativePath);
+        if (Directory.Exists(deployedPath)) return deployedPath;
+
+        var developmentPath = Path.GetFullPath(Path.Combine(contentRootPath, "..", "..", relativePath));
+        if (Directory.Exists(developmentPath)) return developmentPath;
+
+        throw new InvalidOperationException($"Required migration directory was not found. Checked: {deployedPath}; {developmentPath}");
+    }
+
+    private static async Task ApplyMigrationAsync(NpgsqlConnection connection, string id, string script, string checksum, CancellationToken ct)
+    {
+        var appliedChecksum = await GetAppliedChecksumAsync(connection, id, ct);
+        if (appliedChecksum is not null)
+        {
+            if (!string.Equals(appliedChecksum, checksum, StringComparison.Ordinal))
+                throw new InvalidOperationException($"Migration checksum mismatch for {id}. Do not edit an applied migration.");
+            return;
+        }
+
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        await using (var command = new NpgsqlCommand(script, connection, transaction))
+            await command.ExecuteNonQueryAsync(ct);
+        await RecordAsync(connection, id, checksum, ct, transaction);
+        await transaction.CommitAsync(ct);
+    }
 
     private static async Task EnsureHistoryTableAsync(NpgsqlConnection connection, CancellationToken ct)
     {

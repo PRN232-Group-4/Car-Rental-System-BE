@@ -11,6 +11,7 @@ public sealed record Vehicle(int Id, int VehicleTypeId, string VehicleType, int?
 public sealed record VehiclePage(IReadOnlyList<Vehicle> Items, int Page, int PageSize, int TotalCount);
 public sealed record RentalPolicy(int Id, int? VehicleTypeId, string Name, decimal VatRate, decimal OvertimeFeeRate, decimal DepositPercentage, bool IsActive);
 public sealed record Rental(int Id, int CustomerId, int VehicleId, string RentalType, string Status, bool IsSubscription, decimal VatPrice, decimal DepositPrice, decimal OvertimePrice, decimal TotalPrice, DateTime? StartTime, DateTime? EndTime);
+public sealed record DriverScheduleEntry(int AssignmentId, int RentalId, int VehicleId, int DriverStaffId, string DriverName, DateTime StartTime, DateTime EndTime, string RentalStatus);
 public sealed record Inspection(int Id, int RentalId, string Type, bool? IsOk, decimal? OdometerKm, decimal? FuelBatteryLevel, string? DamageNotes, string? ImageUrls, DateTime? InspectedAt);
 public sealed record SubscriptionPlan(int Id, string Name, string? Description, decimal Price, int DurationDays, decimal? IncludedHours, bool IsActive);
 public sealed record Maintenance(int Id, int VehicleId, int? FacilityId, int? AssignedStaffId, string? Status, string? MaintenanceType, DateOnly? ScheduledDate, bool? IsSafe, string? Description, decimal? Cost);
@@ -33,12 +34,13 @@ public interface IOperationsRepository
     Task<VehiclePage> SearchVehiclesAsync(int? typeId, int? facilityId, string? status, DateTime? from, DateTime? to, int page, int pageSize, CancellationToken ct);
     Task<Vehicle?> GetVehicleAsync(int id, CancellationToken ct);
     Task<Vehicle> SaveVehicleAsync(int? id, Vehicle vehicle, CancellationToken ct);
-    Task<RentalPolicy> SavePolicyAsync(int? id, RentalPolicy policy, CancellationToken ct);
+    Task<RentalPolicy> CreatePolicyAsync(RentalPolicy policy, CancellationToken ct);
     Task<IReadOnlyList<RentalPolicy>> ListPoliciesAsync(CancellationToken ct);
     Task<Rental> CreateRentalAsync(string email, int vehicleId, int? policyId, string rentalType, DateTime start, DateTime end, bool subscription, int? subscriptionId, bool hasDriver, CancellationToken ct);
     Task<Rental?> GetRentalAsync(int id, CancellationToken ct);
     Task<Rental> ChangeRentalStatusAsync(int id, string status, CancellationToken ct);
-    Task AssignAsync(int rentalId, int? driverStaffId, CancellationToken ct);
+    Task AssignAsync(int rentalId, int? driverStaffId, string assignedByEmail, CancellationToken ct);
+    Task<IReadOnlyList<DriverScheduleEntry>> ListDriverScheduleAsync(int? driverStaffId, DateTime from, DateTime to, CancellationToken ct);
     Task<Inspection> AddInspectionAsync(int rentalId, int staffId, string type, bool isOk, decimal? odometer, decimal? fuel, string? notes, string? images, CancellationToken ct);
     Task<IReadOnlyList<SubscriptionPlan>> ListPlansAsync(bool activeOnly, CancellationToken ct);
     Task<SubscriptionPlan?> GetPlanAsync(int id, CancellationToken ct);
