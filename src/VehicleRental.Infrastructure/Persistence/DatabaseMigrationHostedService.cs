@@ -32,7 +32,7 @@ public sealed class DatabaseMigrationHostedService(
         var initialSchemaPath = ResolveRequiredFile(environment.ContentRootPath, Path.Combine("docs", "db", "Init.sql"));
 
         var script = await File.ReadAllTextAsync(initialSchemaPath, cancellationToken);
-        var checksum = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(script)));
+        var checksum = CalculateChecksum(script);
         try
         {
             await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -63,7 +63,7 @@ public sealed class DatabaseMigrationHostedService(
         {
             var migrationId = Path.GetFileNameWithoutExtension(migrationPath);
             var migrationScript = await File.ReadAllTextAsync(migrationPath, cancellationToken);
-            var migrationChecksum = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(migrationScript)));
+            var migrationChecksum = CalculateChecksum(migrationScript);
             await ApplyMigrationAsync(connection, migrationId, migrationScript, migrationChecksum, cancellationToken);
         }
         }
@@ -99,13 +99,27 @@ public sealed class DatabaseMigrationHostedService(
         throw new InvalidOperationException($"Required migration directory was not found. Checked: {deployedPath}; {developmentPath}");
     }
 
+    private static string CalculateChecksum(string script) => Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(NormalizeLineEndings(script))));
+
+    private static bool MatchesLegacyWindowsChecksum(string appliedChecksum, string script)
+    {
+        var windowsScript = NormalizeLineEndings(script).Replace("\n", "\r\n", StringComparison.Ordinal);
+        var windowsChecksum = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(windowsScript)));
+        return string.Equals(appliedChecksum, windowsChecksum, StringComparison.Ordinal);
+    }
+
+    private static string NormalizeLineEndings(string script) => script.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\r", "\n", StringComparison.Ordinal);
+
     private static async Task ApplyMigrationAsync(NpgsqlConnection connection, string id, string script, string checksum, CancellationToken ct)
     {
         var appliedChecksum = await GetAppliedChecksumAsync(connection, id, ct);
         if (appliedChecksum is not null)
         {
             if (!string.Equals(appliedChecksum, checksum, StringComparison.Ordinal))
+            {
+                if (MatchesLegacyWindowsChecksum(appliedChecksum, script)) return;
                 throw new InvalidOperationException($"Migration checksum mismatch for {id}. Do not edit an applied migration.");
+            }
             return;
         }
 

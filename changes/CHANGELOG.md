@@ -1,4 +1,5 @@
 # Changelog
+- 2026-10-02 — [Cross-platform migration checksum](2026-10-02-cross-platform-migration-checksum.md)
 - 2026-10-02 — [Legacy initial-migration checksum compatibility](2026-10-02-legacy-initial-migration-checksum.md)
 - 2026-10-02 — [Local migration-path resolution](2026-10-02-local-migration-path.md)
 - 2026-10-02 — [Immutable rental-policy configuration](2026-10-02-immutable-rental-policies.md)
