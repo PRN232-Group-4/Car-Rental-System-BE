@@ -102,7 +102,7 @@ public sealed class PaymentsController(IPaymentRepository payments, IPaymentGate
     private string? Scope() => User.IsInRole("Admin") || User.IsInRole("Staff") ? null : Email();
 }
 
-public sealed record RefundRequest([param: Range(1, double.MaxValue)] decimal Amount);
+public sealed record RefundRequest([property: Range(1, double.MaxValue)] decimal Amount);
 public sealed record PayOsWebhookRequest(string Code, bool Success, PayOsWebhookData Data, [param: Required] string Signature);
 public sealed class PayOsWebhookData
 {
