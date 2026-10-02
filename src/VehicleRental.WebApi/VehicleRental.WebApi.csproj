@@ -19,4 +19,9 @@
     <ProjectReference Include="..\VehicleRental.Infrastructure\VehicleRental.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\..\docs\db\Init.sql" Link="docs\db\Init.sql" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\db\migrations\*.sql" Link="db\migrations\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
