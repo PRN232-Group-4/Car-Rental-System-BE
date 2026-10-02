@@ -48,7 +48,12 @@ builder.Services.Configure<PayOsOptions>(builder.Configuration.GetSection(PayOsO
 
 var connectionString = builder.Configuration.GetConnectionString("RentalDatabase") ?? builder.Configuration["DATABASE_URL"];
 if (!string.IsNullOrWhiteSpace(connectionString))
+{
     builder.Services.AddSingleton<NpgsqlDataSource>(_ => NpgsqlDataSource.Create(ToNpgsqlConnectionString(connectionString)));
+    builder.Services.AddOptions<DatabaseMigrationOptions>()
+        .Bind(builder.Configuration.GetSection(DatabaseMigrationOptions.SectionName));
+    builder.Services.AddHostedService<DatabaseMigrationHostedService>();
+}
 
 var redisConnection = builder.Configuration["Redis:ConnectionString"] ?? builder.Configuration["REDIS_URL"];
 if (string.IsNullOrWhiteSpace(redisConnection))
@@ -105,7 +110,13 @@ if (googleAuthentication.Enabled)
         };
     });
 }
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("RequireAdmin", policy => policy.RequireRole("Admin"));
+    options.AddPolicy("RequireStaff", policy => policy.RequireRole("Admin", "Staff"));
+    options.AddPolicy("RequireMaintenance", policy => policy.RequireRole("Admin", "Staff", "Maintenance"));
+    options.AddPolicy("RequireCustomer", policy => policy.RequireRole("Customer"));
+});
 
 var app = builder.Build();
 
