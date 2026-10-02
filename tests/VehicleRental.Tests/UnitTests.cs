@@ -1,10 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using Car_Rental_System_BE.Application.Payments;
 using Car_Rental_System_BE.Controllers;
 using Car_Rental_System_BE.Infrastructure.Payments;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -51,6 +53,24 @@ public sealed class UnitTests
         var results = new List<ValidationResult>();
 
         Assert.False(Validator.TryValidateObject(request, new ValidationContext(request), results, validateAllProperties: true));
+    }
+
+    [Fact]
+    public void Rental_policy_management_allows_manager_role()
+    {
+        var endpoints = new[] { "Policies", "AddPolicy", "Assign", "DriverSchedule" };
+
+        foreach (var endpoint in endpoints)
+        {
+            var method = typeof(OperationsController).GetMethod(endpoint, BindingFlags.Instance | BindingFlags.Public)!;
+            var authorization = method.GetCustomAttribute<AuthorizeAttribute>();
+
+            Assert.NotNull(authorization);
+            Assert.Contains("Manager", authorization!.Roles!.Split(','));
+            Assert.Contains("Admin", authorization.Roles!.Split(','));
+        }
+
+        Assert.Null(typeof(OperationsController).GetMethod("EditPolicy", BindingFlags.Instance | BindingFlags.Public));
     }
 
     private static string Sign(string checksumKey, IReadOnlyDictionary<string, object?> data)

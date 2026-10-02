@@ -1,4 +1,9 @@
 # Changelog
+- 2026-10-02 — [Legacy initial-migration checksum compatibility](2026-10-02-legacy-initial-migration-checksum.md)
+- 2026-10-02 — [Local migration-path resolution](2026-10-02-local-migration-path.md)
+- 2026-10-02 — [Immutable rental-policy configuration](2026-10-02-immutable-rental-policies.md)
+- 2026-10-02 — [Driver scheduling and inspected-rental assignment](2026-10-02-driver-scheduling-assignment.md)
+- 2026-10-02 — [Manager rental-policy access](2026-10-02-manager-rental-policy-access.md)
 - 2026-10-01 — [Contextual success-response messages](2026-10-01-contextual-success-messages.md)
 - 2026-10-01 — [Test project cho invoice/payment/subscription](2026-10-01-test-project.md)
 - 2026-10-01 — [Invoice API, refund approval và subscription-plan delete](2026-10-01-invoice-payment-subscription.md)
