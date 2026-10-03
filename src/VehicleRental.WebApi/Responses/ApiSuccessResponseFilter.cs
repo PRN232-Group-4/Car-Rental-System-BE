@@ -23,6 +23,10 @@ public sealed class ApiSuccessResponseFilter : IAsyncResultFilter
         {
             case ObjectResult objectResult:
                 objectResult.Value = ApiSuccessResponse.Create(objectResult.Value, message);
+                // The envelope now replaces the action's value, so the declared action type no
+                // longer matches. Leaving it set makes typed actions (e.g. Task<VehiclePage>)
+                // fail with InvalidCastException while serializing the response.
+                objectResult.DeclaredType = null;
                 break;
             case JsonResult jsonResult:
                 jsonResult.Value = ApiSuccessResponse.Create(jsonResult.Value, message);

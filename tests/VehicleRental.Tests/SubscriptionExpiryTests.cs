@@ -14,7 +14,8 @@ public sealed class SubscriptionExpiryTests(PostgresFixture db) : IClassFixture<
         var plan = await Seed.PlanAsync(db.DataSource, durationDays: 1);
         var subscription = await _operations.BuyPlanAsync(email, plan, CancellationToken.None);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        await Seed.ScalarAsync(db.DataSource, "UPDATE customer_subscriptions SET end_date=$1 WHERE id=$2", today.AddDays(-1), subscription);
+        // ck_cs_dates requires end_date >= start_date, so backdate the whole range.
+        await Seed.ScalarAsync(db.DataSource, "UPDATE customer_subscriptions SET start_date=$1,end_date=$2 WHERE id=$3", today.AddDays(-3), today.AddDays(-1), subscription);
 
         Assert.Equal(1, await _operations.ExpireSubscriptionsAsync(today, CancellationToken.None));
         Assert.Equal("expired", (string)(await Seed.ScalarAsync(db.DataSource, "SELECT status FROM customer_subscriptions WHERE id=$1", subscription))!);
