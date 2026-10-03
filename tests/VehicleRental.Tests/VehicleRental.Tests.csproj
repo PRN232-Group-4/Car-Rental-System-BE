@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <None Include="..\..\docs\db\Init.sql" Link="docs\db\Init.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\db\migrations\*.sql" Link="db\migrations\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

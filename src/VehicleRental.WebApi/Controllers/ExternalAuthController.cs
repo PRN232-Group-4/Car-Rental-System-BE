@@ -34,7 +34,7 @@ public sealed class ExternalAuthController(IOptions<GoogleAuthOptions> google, I
         if (string.IsNullOrWhiteSpace(email)) return Unauthorized();
         var account = await accounts.FindByEmailAsync(email, ct);
         if (account is null) return Unauthorized();
-        var refresh = await refreshTokens.CreateAsync(account.Email, false, ct);
+        var refresh = await refreshTokens.CreateAsync(account.Email, false, ct, account.AuthorizationVersion);
         AuthCookies.Write(Response, jwtTokens.CreateAccessToken(account, refresh.SessionId), refresh.Token, refresh.ExpiresUtc, jwtTokens.AccessTokenLifetime);
         await HttpContext.SignOutAsync("External");
         return Ok(new { email = account.Email });

@@ -14,7 +14,7 @@ public sealed class TokenOptions
 }
 
 public sealed record RefreshTokenIssue(string Token, string SessionId, DateTimeOffset ExpiresUtc);
-public sealed record RefreshTokenRotation(string Email, bool RememberMe, RefreshTokenIssue Issue);
+public sealed record RefreshTokenRotation(string Email, bool RememberMe, RefreshTokenIssue Issue, int AuthorizationVersion);
 
 /// <summary>
 /// Stores only a SHA-256 digest of each refresh-token secret. The token itself is sent once,
@@ -26,8 +26,8 @@ public sealed class RedisRefreshTokenStore(IConnectionMultiplexer redis, Microso
     private readonly IDatabase _cache = redis.GetDatabase();
     private readonly TokenOptions _options = options.Value;
 
-    public Task<RefreshTokenIssue> CreateAsync(string email, bool rememberMe, CancellationToken ct) =>
-        CreateNewAsync(email.Trim().ToLowerInvariant(), rememberMe, ct);
+    public Task<RefreshTokenIssue> CreateAsync(string email, bool rememberMe, CancellationToken ct, int authorizationVersion = 0) =>
+        CreateNewAsync(email.Trim().ToLowerInvariant(), rememberMe, ct, authorizationVersion);
 
     public async Task<RefreshTokenRotation?> RotateAsync(string token, CancellationToken ct)
     {
@@ -43,8 +43,8 @@ public sealed class RedisRefreshTokenStore(IConnectionMultiplexer redis, Microso
                 Convert.FromHexString(record.SecretHash), SHA256.HashData(secret)))
             return null;
 
-        var issue = await CreateNewAsync(record.Email, record.RememberMe, ct);
-        return new RefreshTokenRotation(record.Email, record.RememberMe, issue);
+        var issue = await CreateNewAsync(record.Email, record.RememberMe, ct, record.AuthorizationVersion);
+        return new RefreshTokenRotation(record.Email, record.RememberMe, issue, record.AuthorizationVersion);
     }
 
     public async Task<bool> IsActiveAsync(string sessionId, string email, CancellationToken ct)
@@ -75,14 +75,14 @@ public sealed class RedisRefreshTokenStore(IConnectionMultiplexer redis, Microso
         await _cache.KeyDeleteAsync(userKey);
     }
 
-    private async Task<RefreshTokenIssue> CreateNewAsync(string normalizedEmail, bool rememberMe, CancellationToken ct)
+    private async Task<RefreshTokenIssue> CreateNewAsync(string normalizedEmail, bool rememberMe, CancellationToken ct, int authorizationVersion)
     {
         var sessionId = Guid.NewGuid().ToString("N");
         var secret = RandomNumberGenerator.GetBytes(32);
         var expires = DateTimeOffset.UtcNow.AddDays(rememberMe
             ? _options.RememberMeRefreshTokenExpirationDays
             : _options.RefreshTokenExpirationDays);
-        var record = new RefreshTokenRecord(normalizedEmail, Convert.ToHexString(SHA256.HashData(secret)), rememberMe);
+        var record = new RefreshTokenRecord(normalizedEmail, Convert.ToHexString(SHA256.HashData(secret)), rememberMe, authorizationVersion);
         await _cache.StringSetAsync(TokenKey(sessionId), JsonSerializer.Serialize(record), expires - DateTimeOffset.UtcNow);
         await _cache.SetAddAsync(UserTokensKey(normalizedEmail), sessionId);
         return new RefreshTokenIssue($"{sessionId}.{Convert.ToBase64String(secret)}", sessionId, expires);
@@ -103,5 +103,5 @@ public sealed class RedisRefreshTokenStore(IConnectionMultiplexer redis, Microso
 
     private static string TokenKey(string sessionId) => TokenPrefix + sessionId;
     private static string UserTokensKey(string email) => $"refresh-token-user:{email.Trim().ToLowerInvariant()}";
-    private sealed record RefreshTokenRecord(string Email, string SecretHash, bool RememberMe);
+    private sealed record RefreshTokenRecord(string Email, string SecretHash, bool RememberMe, int AuthorizationVersion);
 }

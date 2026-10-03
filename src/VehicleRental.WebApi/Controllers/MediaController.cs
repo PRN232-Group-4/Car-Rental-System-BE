@@ -26,7 +26,7 @@ public sealed class MediaController(IImageStorage images, IUserRepository users)
         return Ok(image);
     }
 
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(Policy = Car_Rental_System_BE.Authentication.AuthorizationPolicies.Management)]
     [HttpPost("vehicle")]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(StatusCodes.Status200OK)]

@@ -13,3 +13,7 @@
 - [x] Google OAuth tạo/đảm bảo customer và trả cùng cặp token cookie.
 - [x] Login, refresh rotation, logout, logout-all và revoke token khi đổi/reset mật khẩu.
 - [ ] CSRF cho endpoint state-changing cookie-auth.
+
+## Phân quyền cập nhật 2026-10-03
+
+JWT có staff_id, department_id, department_name, facility_id (nếu có), authorization_version và roles. GET /api/account/profile trả thông tin tương ứng cho frontend. Access/refresh token gắn phiên bản quyền; thay role, thông tin staff, mật khẩu hoặc active flag làm token cũ mất hiệu lực. Migration 0008 bắt buộc trước khi chạy phiên bản này.

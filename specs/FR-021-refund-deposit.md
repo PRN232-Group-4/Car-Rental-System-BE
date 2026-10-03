@@ -9,7 +9,7 @@ Hoàn tiền/cọc được ghi thành payment `type='refund'` trong ledger, tr�
 ## API
 | Method | Path | Auth | Mô tả |
 |---|---|---|---|
-| POST | `/api/payments/{paymentId}/refunds` | Admin, Staff | Tạo yêu cầu hoàn tiền/cọc |
+| POST | `/api/payments/{paymentId}/refunds` | Admin, Manager, CustomerService | Tạo yêu cầu hoàn tiền/cọc |
 | POST | `/api/payments/refunds/{refundId}/approve` | Admin | Duyệt hoàn tiền (`paid`) |
 | POST | `/api/payments/refunds/{refundId}/reject` | Admin | Từ chối yêu cầu |
 
