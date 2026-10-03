@@ -29,6 +29,27 @@ public sealed class PaymentsController(IPaymentRepository payments, IPaymentGate
         return Ok(result);
     }
 
+    [Authorize(Policy = AuthorizationPolicies.Customer)]
+    [HttpPost("subscription-plans/{planId:int}/purchase")]
+    [ProducesResponseType<CheckoutResult>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> PurchasePlan(int planId, CancellationToken ct)
+    {
+        if (!gateway.IsConfigured) return Problem("PayOS is not configured yet.", statusCode: StatusCodes.Status503ServiceUnavailable);
+        var checkout = await payments.CreatePlanCheckoutAsync(planId, Email(), ct);
+        var description = $"Goi {checkout.PlanName}";
+        var result = await gateway.CreateCheckoutAsync(new(checkout.OrderCode, checkout.Amount, description[..Math.Min(25, description.Length)], SubscriptionReturnUrl(options.Value.ReturnUrl), options.Value.CancelUrl), ct);
+        return Ok(result);
+    }
+
+    // Polled by the FE after PayOS returns, to know when the webhook has activated the subscription.
+    [Authorize(Policy = AuthorizationPolicies.Customer)]
+    [HttpGet("subscription-plans/purchases/{orderCode:long}")]
+    [ProducesResponseType<PlanPurchaseStatus>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> PlanPurchase(long orderCode, CancellationToken ct) =>
+        await payments.GetPlanPurchaseAsync(orderCode, Email(), ct) is { } x ? Ok(x) : Problem("Subscription purchase was not found.", statusCode: StatusCodes.Status404NotFound);
+
     // PayOS calls this endpoint directly; it is intentionally anonymous but signature-verified.
     [AllowAnonymous]
     [HttpPost("payments/webhooks/payos")]
@@ -44,7 +65,14 @@ public sealed class PaymentsController(IPaymentRepository payments, IPaymentGate
         signedData["paymentLinkId"] = request.Data.PaymentLinkId;
         var webhook = new PayOsWebhook(request.Data.OrderCode, request.Data.Amount, request.Data.Reference ?? request.Data.PaymentLinkId, request.Data.Code, request.Signature, signedData);
         if (!gateway.VerifyWebhook(webhook)) return Problem("Invalid PayOS signature.", statusCode: StatusCodes.Status400BadRequest);
-        if (request.Code == "00" && request.Success && request.Data.Code == "00") await payments.CompleteInvoiceAsync((int)request.Data.OrderCode, request.Data.Amount, request.Data.Reference ?? request.Data.PaymentLinkId, ct);
+        if (request.Code == "00" && request.Success && request.Data.Code == "00")
+        {
+            var reference = request.Data.Reference ?? request.Data.PaymentLinkId;
+            if (SubscriptionOrderCodes.IsSubscriptionOrder(request.Data.OrderCode))
+                await payments.CompletePlanPurchaseAsync(request.Data.OrderCode, request.Data.Amount, reference, ct);
+            else
+                await payments.CompleteInvoiceAsync((int)request.Data.OrderCode, request.Data.Amount, reference, ct);
+        }
         return NoContent();
     }
 
@@ -101,6 +129,8 @@ public sealed class PaymentsController(IPaymentRepository payments, IPaymentGate
 
     private string Email() => User.FindFirstValue(ClaimTypes.Email) ?? throw new UnauthorizedAccessException();
     private string? Scope() => AuthorizationPolicies.CanServeCustomers(User) ? null : Email();
+    // Marks the return URL so the FE result page knows to poll a plan purchase instead of an invoice.
+    private static string SubscriptionReturnUrl(string returnUrl) => $"{returnUrl}{(returnUrl.Contains('?') ? '&' : '?')}type=subscription";
 }
 
 public sealed record RefundRequest([param: Range(1, double.MaxValue)] decimal Amount);

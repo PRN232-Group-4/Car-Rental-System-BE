@@ -1,4 +1,6 @@
 # Changelog
+- 2026-10-03 — [Mua/gia hạn gói qua PayOS & endpoint "Gói của tôi"](2026-10-03-subscription-plan-payments.md)
+- 2026-10-03 — [Sửa `GET /api/vehicles` 500 và lỗi test hết hạn gói](2026-10-03-vehicle-search-envelope-fixes.md)
 - 2026-10-03 — [Subscription rental hours deduction and expiry job](2026-10-03-subscription-rental-expiry.md)
 - 2026-10-03 — [Staff specialties and resource authorization](2026-10-03-staff-authorization.md)
 - 2026-10-03 — [Access and refresh token cookies](2026-10-03-access-refresh-token-cookies.md)
