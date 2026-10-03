@@ -6,8 +6,11 @@ using Car_Rental_System_BE.Application.Organization;
 using Car_Rental_System_BE.Application.Operations;
 using Car_Rental_System_BE.Application.Payments;
 using Car_Rental_System_BE.Infrastructure.Payments;
+using Car_Rental_System_BE.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using StackExchange.Redis;
 using Microsoft.Extensions.Options;
@@ -15,6 +18,7 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using System.Security.Claims;
 using Car_Rental_System_BE.Responses;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
@@ -38,8 +42,12 @@ builder.Services.AddOptions<BrevoOptions>()
     .Bind(builder.Configuration.GetSection(BrevoOptions.SectionName))
     .ValidateDataAnnotations()
     .ValidateOnStart();
-builder.Services.AddOptions<RentalSessionOptions>()
-    .Bind(builder.Configuration.GetSection(RentalSessionOptions.SectionName))
+builder.Services.AddOptions<TokenOptions>()
+    .Bind(builder.Configuration.GetSection(TokenOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+builder.Services.AddOptions<JwtOptions>()
+    .Bind(builder.Configuration.GetSection(JwtOptions.SectionName))
     .ValidateDataAnnotations()
     .ValidateOnStart();
 builder.Services.Configure<GoogleAuthOptions>(builder.Configuration.GetSection(GoogleAuthOptions.SectionName));
@@ -74,18 +82,53 @@ builder.Services.AddScoped<IRegistrationWorkflow, RedisRegistrationWorkflow>();
 builder.Services.AddScoped<IPasswordResetWorkflow, RedisPasswordResetWorkflow>();
 builder.Services.AddSingleton<IImageStorage, CloudinaryImageStorage>();
 builder.Services.AddHostedService<RedisConnectionHostedService>();
-builder.Services.AddSingleton<RedisTicketStore>();
-builder.Services.AddSingleton<IPostConfigureOptions<CookieAuthenticationOptions>, ConfigureCookieTicketStore>();
+builder.Services.AddSingleton<RedisRefreshTokenStore>();
+builder.Services.AddSingleton<JwtTokenService>();
 var googleAuthentication = builder.Configuration.GetSection(GoogleAuthOptions.SectionName).Get<GoogleAuthOptions>() ?? new GoogleAuthOptions();
-var authentication = builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
+var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
+var authentication = builder.Services.AddAuthentication(options =>
     {
-        options.Cookie.Name = "__Host-vehicle-rental";
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtOptions.Issuer,
+            ValidateAudience = true,
+            ValidAudience = jwtOptions.Audience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey)),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                if (string.IsNullOrEmpty(context.Token))
+                    context.Token = context.Request.Cookies["access_token"];
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = async context =>
+            {
+                var sessionId = context.Principal?.FindFirstValue("sid") ?? context.Principal?.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sid);
+                var email = context.Principal?.FindFirstValue(ClaimTypes.Email) ?? context.Principal?.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Email);
+                var tokens = context.HttpContext.RequestServices.GetRequiredService<RedisRefreshTokenStore>();
+                if (string.IsNullOrWhiteSpace(sessionId) || string.IsNullOrWhiteSpace(email) || !await tokens.IsActiveAsync(sessionId, email, context.HttpContext.RequestAborted))
+                    context.Fail("The token session is no longer active.");
+            }
+        };
+    })
+    .AddCookie("External", options =>
+    {
+        options.Cookie.Name = "__Host-vehicle-rental-external";
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-        options.SlidingExpiration = true;
-        options.ExpireTimeSpan = TimeSpan.FromHours(8);
+        options.ExpireTimeSpan = TimeSpan.FromMinutes(5);
         options.Events.OnRedirectToLogin = context =>
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -99,6 +142,7 @@ if (googleAuthentication.Enabled)
         options.ClientId = googleAuthentication.ClientId;
         options.ClientSecret = googleAuthentication.ClientSecret;
         options.CallbackPath = "/signin-google";
+        options.SignInScheme = "External";
         options.Events.OnCreatingTicket = async context =>
         {
             var email = context.Principal?.FindFirstValue(ClaimTypes.Email);
