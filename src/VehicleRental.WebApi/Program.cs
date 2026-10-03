@@ -61,6 +61,7 @@ if (!string.IsNullOrWhiteSpace(connectionString))
     builder.Services.AddOptions<DatabaseMigrationOptions>()
         .Bind(builder.Configuration.GetSection(DatabaseMigrationOptions.SectionName));
     builder.Services.AddHostedService<DatabaseMigrationHostedService>();
+    builder.Services.AddHostedService<SubscriptionExpiryHostedService>();
 }
 
 var redisConnection = builder.Configuration["Redis:ConnectionString"] ?? builder.Configuration["REDIS_URL"];
