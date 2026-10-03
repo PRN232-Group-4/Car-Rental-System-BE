@@ -120,6 +120,57 @@ public sealed class NpgsqlPaymentRepository(NpgsqlDataSource dataSource) : IPaym
         return summary;
     }
 
+    public async Task<PlanCheckout> CreatePlanCheckoutAsync(int planId, string email, CancellationToken ct)
+    {
+        await using var lookup = dataSource.CreateCommand("SELECT c.id,p.price,p.name FROM customers c JOIN users u ON u.id=c.user_id JOIN subscription_plans p ON p.id=$2 AND p.is_active=true WHERE u.email=$1");
+        lookup.Parameters.AddWithValue(email); lookup.Parameters.AddWithValue(planId);
+        await using var reader = await lookup.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) throw new KeyNotFoundException("Subscription plan was not found or is inactive.");
+        var customerId = reader.GetInt32(0); var price = reader.GetDecimal(1); var name = reader.GetString(2);
+        await reader.CloseAsync();
+        await using var insert = dataSource.CreateCommand("INSERT INTO payments(rental_id,invoice_id,customer_id,is_subscription_payment,plan_id,amount,status,type,method) VALUES(NULL,NULL,$1,true,$2,$3,'pending','subscription','payos') RETURNING id");
+        insert.Parameters.AddWithValue(customerId); insert.Parameters.AddWithValue(planId); insert.Parameters.AddWithValue(price);
+        var paymentId = (int)(await insert.ExecuteScalarAsync(ct))!;
+        return new(paymentId, SubscriptionOrderCodes.ForPayment(paymentId), price, name);
+    }
+
+    public async Task<PlanPurchaseStatus> CompletePlanPurchaseAsync(long orderCode, decimal amount, string providerReference, CancellationToken ct)
+    {
+        var paymentId = SubscriptionOrderCodes.ToPaymentId(orderCode);
+        await using var cn = await dataSource.OpenConnectionAsync(ct); await using var tx = await cn.BeginTransactionAsync(ct);
+        int planId, customerId; decimal expected; string status;
+        await using (var payment = new NpgsqlCommand("SELECT plan_id,customer_id,amount,status FROM payments WHERE id=$1 AND is_subscription_payment=true AND plan_id IS NOT NULL FOR UPDATE", cn, tx))
+        {
+            payment.Parameters.AddWithValue(paymentId);
+            await using var r = await payment.ExecuteReaderAsync(ct);
+            if (!await r.ReadAsync(ct)) throw new KeyNotFoundException();
+            planId = r.GetInt32(0); customerId = r.GetInt32(1); expected = r.GetDecimal(2); status = r.GetString(3);
+        }
+        // PayOS may deliver the same webhook more than once; a paid row already produced its subscription.
+        if (status == "paid") { await tx.CommitAsync(ct); return new(orderCode, "paid"); }
+        if (amount != expected) throw new InvalidOperationException("Webhook amount does not match the subscription plan price.");
+        await using (var subscription = new NpgsqlCommand("INSERT INTO customer_subscriptions(customer_id,plan_id,start_date,end_date,remaining_hours) SELECT $1,p.id,CURRENT_DATE,CURRENT_DATE+p.duration_days,p.included_hours FROM subscription_plans p WHERE p.id=$2 RETURNING id", cn, tx))
+        {
+            subscription.Parameters.AddWithValue(customerId); subscription.Parameters.AddWithValue(planId);
+            if (await subscription.ExecuteScalarAsync(ct) is not int) throw new KeyNotFoundException("Subscription plan was not found.");
+        }
+        await using (var update = new NpgsqlCommand("UPDATE payments SET status='paid',paid_at=now(),provider_reference=$2 WHERE id=$1", cn, tx))
+        {
+            update.Parameters.AddWithValue(paymentId); update.Parameters.AddWithValue(providerReference);
+            await update.ExecuteNonQueryAsync(ct);
+        }
+        await tx.CommitAsync(ct);
+        return new(orderCode, "paid");
+    }
+
+    public async Task<PlanPurchaseStatus?> GetPlanPurchaseAsync(long orderCode, string email, CancellationToken ct)
+    {
+        await using var c = dataSource.CreateCommand("SELECT p.status FROM payments p JOIN customers cu ON cu.id=p.customer_id JOIN users u ON u.id=cu.user_id WHERE p.id=$1 AND p.is_subscription_payment=true AND p.plan_id IS NOT NULL AND u.email=$2");
+        c.Parameters.AddWithValue(SubscriptionOrderCodes.ToPaymentId(orderCode)); c.Parameters.AddWithValue(email);
+        await using var r = await c.ExecuteReaderAsync(ct);
+        return await r.ReadAsync(ct) ? new(orderCode, r.GetString(0)) : null;
+    }
+
     private static InvoiceSummary ReadInvoice(NpgsqlDataReader r) => new(r.GetInt32(0), r.GetInt32(1), r.GetString(2), r.GetDecimal(3), r.GetDecimal(4), r.GetString(5), r.GetDateTime(6), r.IsDBNull(7) ? null : r.GetDateTime(7));
-    private static PaymentSummary ReadPayment(NpgsqlDataReader r) => new(r.GetInt32(0), r.GetInt32(1), r.IsDBNull(2) ? null : r.GetInt32(2), r.IsDBNull(3) ? null : r.GetString(3), r.GetDecimal(4), r.GetString(5), r.IsDBNull(6) ? null : r.GetString(6), r.IsDBNull(7) ? null : r.GetString(7), r.IsDBNull(8) ? null : r.GetDateTime(8), r.GetDateTime(9));
+    private static PaymentSummary ReadPayment(NpgsqlDataReader r) => new(r.GetInt32(0), r.IsDBNull(1) ? null : r.GetInt32(1), r.IsDBNull(2) ? null : r.GetInt32(2), r.IsDBNull(3) ? null : r.GetString(3), r.GetDecimal(4), r.GetString(5), r.IsDBNull(6) ? null : r.GetString(6), r.IsDBNull(7) ? null : r.GetString(7), r.IsDBNull(8) ? null : r.GetDateTime(8), r.GetDateTime(9));
 }
