@@ -32,6 +32,11 @@ public sealed class PostgresFixture : IAsyncLifetime
         var script = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "docs", "db", "Init.sql"));
         await using var command = DataSource.CreateCommand(script);
         await command.ExecuteNonQueryAsync();
+        foreach (var path in Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "db", "migrations"), "*.sql").Order(StringComparer.Ordinal))
+        {
+            await using var migration = DataSource.CreateCommand(await File.ReadAllTextAsync(path));
+            await migration.ExecuteNonQueryAsync();
+        }
     }
 
     public async Task DisposeAsync()

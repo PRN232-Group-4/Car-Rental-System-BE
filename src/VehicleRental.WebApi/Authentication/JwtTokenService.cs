@@ -35,6 +35,11 @@ public sealed class JwtTokenService(IOptions<JwtOptions> options, IOptions<Token
             new(JwtRegisteredClaimNames.Sid, sessionId),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N"))
         };
+        claims.Add(new Claim("authorization_version", account.AuthorizationVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        if (account.StaffId is { } staffId) claims.Add(new Claim("staff_id", staffId.ToString()));
+        if (account.DepartmentId is { } departmentId) claims.Add(new Claim("department_id", departmentId.ToString()));
+        if (account.DepartmentName is { } departmentName) claims.Add(new Claim("department_name", departmentName));
+        if (account.FacilityId is { } facilityId) claims.Add(new Claim("facility_id", facilityId.ToString()));
         claims.AddRange(account.Roles.Select(role => new Claim(ClaimTypes.Role, role)));
         return new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken(
             _options.Issuer,

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
+using Car_Rental_System_BE.Authentication;
 using System.Text.Json;
 using Car_Rental_System_BE.Application.Payments;
 using Car_Rental_System_BE.Infrastructure.Payments;
@@ -13,7 +14,7 @@ namespace Car_Rental_System_BE.Controllers;
 [Route("api")]
 public sealed class PaymentsController(IPaymentRepository payments, IPaymentGateway gateway, IOptions<PayOsOptions> options) : ControllerBase
 {
-    [Authorize]
+    [Authorize(Policy = AuthorizationPolicies.Customer)]
     [HttpPost("invoices/{invoiceId:int}/checkout")]
     [ProducesResponseType<CheckoutResult>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
@@ -47,7 +48,7 @@ public sealed class PaymentsController(IPaymentRepository payments, IPaymentGate
         return NoContent();
     }
 
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(Policy = AuthorizationPolicies.CustomerService)]
     [HttpPost("payments/{paymentId:int}/refunds")]
     [ProducesResponseType<PaymentResult>(StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Refund(int paymentId, RefundRequest request, CancellationToken ct)
@@ -57,18 +58,18 @@ public sealed class PaymentsController(IPaymentRepository payments, IPaymentGate
         return Accepted(result);
     }
 
-    [Authorize]
+    [Authorize(Policy = AuthorizationPolicies.FinancialRead)]
     [HttpGet("invoices")]
     [ProducesResponseType<IReadOnlyList<InvoiceSummary>>(StatusCodes.Status200OK)]
     public Task<IReadOnlyList<InvoiceSummary>> Invoices(CancellationToken ct) => payments.ListInvoicesAsync(Scope(), ct);
 
-    [Authorize]
+    [Authorize(Policy = AuthorizationPolicies.FinancialRead)]
     [HttpGet("invoices/{invoiceId:int}")]
     [ProducesResponseType<InvoiceSummary>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Invoice(int invoiceId, CancellationToken ct) => await payments.GetInvoiceAsync(invoiceId, Scope(), ct) is { } x ? Ok(x) : Problem("Invoice was not found.", statusCode: StatusCodes.Status404NotFound);
 
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(Policy = AuthorizationPolicies.CustomerService)]
     [HttpPost("rentals/{rentalId:int}/invoice")]
     [ProducesResponseType<InvoiceSummary>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -79,7 +80,7 @@ public sealed class PaymentsController(IPaymentRepository payments, IPaymentGate
         return Created($"api/invoices/{invoice.Id}", invoice);
     }
 
-    [Authorize]
+    [Authorize(Policy = AuthorizationPolicies.FinancialRead)]
     [HttpGet("payments")]
     [ProducesResponseType<IReadOnlyList<PaymentSummary>>(StatusCodes.Status200OK)]
     public Task<IReadOnlyList<PaymentSummary>> Payments([FromQuery] int? invoiceId, CancellationToken ct) => payments.ListPaymentsAsync(Scope(), invoiceId, ct);
@@ -99,7 +100,7 @@ public sealed class PaymentsController(IPaymentRepository payments, IPaymentGate
     public async Task<IActionResult> RejectRefund(int refundId, CancellationToken ct) => Ok(await payments.ReviewRefundAsync(refundId, false, Email(), ct));
 
     private string Email() => User.FindFirstValue(ClaimTypes.Email) ?? throw new UnauthorizedAccessException();
-    private string? Scope() => User.IsInRole("Admin") || User.IsInRole("Staff") ? null : Email();
+    private string? Scope() => AuthorizationPolicies.CanServeCustomers(User) ? null : Email();
 }
 
 public sealed record RefundRequest([property: Range(1, double.MaxValue)] decimal Amount);

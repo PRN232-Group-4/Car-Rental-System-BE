@@ -22,7 +22,7 @@ public sealed class SessionController(IAccountRepository accounts, RedisRefreshT
         if (account is null || !PasswordHash.Verify(request.Password, account.PasswordHash))
             return Problem("Email hoặc mật khẩu không chính xác.", statusCode: StatusCodes.Status401Unauthorized);
 
-        var refresh = await refreshTokens.CreateAsync(account.Email, request.RememberMe, ct);
+        var refresh = await refreshTokens.CreateAsync(account.Email, request.RememberMe, ct, account.AuthorizationVersion);
         AuthCookies.Write(Response, jwtTokens.CreateAccessToken(account, refresh.SessionId), refresh.Token, refresh.ExpiresUtc, jwtTokens.AccessTokenLifetime);
         return NoContent();
     }
@@ -38,7 +38,7 @@ public sealed class SessionController(IAccountRepository accounts, RedisRefreshT
         if (rotation is null) { AuthCookies.Clear(Response); return Unauthorized(); }
 
         var account = await accounts.FindByEmailAsync(rotation.Email, ct);
-        if (account is null)
+        if (account is null || account.AuthorizationVersion != rotation.AuthorizationVersion)
         {
             await refreshTokens.RevokeAsync(rotation.Issue.Token, ct);
             AuthCookies.Clear(Response);

@@ -1,4 +1,5 @@
 # Changelog
+- 2026-10-03 — [Staff specialties and resource authorization](2026-10-03-staff-authorization.md)
 - 2026-10-03 — [Access and refresh token cookies](2026-10-03-access-refresh-token-cookies.md)
 - 2026-10-02 — [Cross-platform migration checksum](2026-10-02-cross-platform-migration-checksum.md)
 - 2026-10-02 — [Legacy initial-migration checksum compatibility](2026-10-02-legacy-initial-migration-checksum.md)

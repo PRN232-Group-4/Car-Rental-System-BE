@@ -11,7 +11,7 @@ Payment của direct rental bắt buộc gắn `invoice_id` (`ck_payments_invoic
 |---|---|---|---|
 | POST | `/api/invoices/{invoiceId}/checkout` | Customer (chủ hóa đơn) | Tạo link thanh toán PayOS |
 | POST | `/api/payments/webhooks/payos` | Anonymous (signature-verified) | Nhận webhook, đánh dấu invoice `paid` |
-| GET | `/api/payments` | Customer (của mình), Admin/Staff (tất cả) | Danh sách payment, lọc `invoiceId` |
+| GET | `/api/payments` | Customer (của mình), Admin/Manager/CustomerService (tất cả) | Danh sách payment, lọc `invoiceId` |
 
 ## Acceptance criteria
 - [x] Payment direct rental bắt buộc `invoice_id`; subscription payment không có invoice

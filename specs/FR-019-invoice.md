@@ -4,16 +4,16 @@
 - **Milestone:** M5
 
 ## Mô tả
-Chỉ direct rental (`rentals.is_subscription = false`) mới có hóa đơn. Invoice được tạo tự động khi tạo rental và có thể tạo lại/idempotent qua API cho Admin/Staff. Rental theo gói bị chặn ở cả Application (lỗi 400) và DB trigger `trg_invoice_no_subscription`.
+Chỉ direct rental (`rentals.is_subscription = false`) mới có hóa đơn. Invoice được tạo tự động khi tạo rental và có thể tạo lại/idempotent qua API cho Admin/Manager/CustomerService. Rental theo gói bị chặn ở cả Application (lỗi 400) và DB trigger `trg_invoice_no_subscription`.
 
 `invoice.amount = rentals.total_price + rentals.deposit_price` (tiền thuê + VAT + cọc), `vat_amount = rentals.vat_price`.
 
 ## API
 | Method | Path | Auth | Mô tả |
 |---|---|---|---|
-| GET | `/api/invoices` | Customer (của mình), Admin/Staff (tất cả) | Danh sách hóa đơn |
-| GET | `/api/invoices/{id}` | Customer (của mình), Admin/Staff | Chi tiết hóa đơn |
-| POST | `/api/rentals/{id}/invoice` | Admin, Staff | Tạo hóa đơn cho direct rental (idempotent: trả invoice đã có nếu đã tồn tại) |
+| GET | `/api/invoices` | Customer (của mình), Admin/Manager/CustomerService (tất cả) | Danh sách hóa đơn |
+| GET | `/api/invoices/{id}` | Customer (của mình), Admin/Manager/CustomerService | Chi tiết hóa đơn |
+| POST | `/api/rentals/{id}/invoice` | Admin, Manager, CustomerService | Tạo hóa đơn cho direct rental (idempotent: trả invoice đã có nếu đã tồn tại) |
 
 ## Acceptance criteria
 - [x] Invoice tự tạo khi tạo direct rental

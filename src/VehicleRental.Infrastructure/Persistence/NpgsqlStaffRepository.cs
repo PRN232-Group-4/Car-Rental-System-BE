@@ -9,7 +9,8 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
         SELECT s.id, u.id, u.email, COALESCE(u.fullname, ''), u.phone,
                s.department_id, d.name, s.facility_id, f.name, s.hired_date, s.is_driver,
                s.license_number, s.license_type, s.license_issue_date, s.license_expiry_date,
-               s.license_img, s.rating, u.is_active
+               s.license_img, s.rating, u.is_active,
+               (SELECT r.name FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=u.id AND r.name IN ('CustomerService','Driver','Maintenance') ORDER BY r.name LIMIT 1)
         FROM staffs s
         JOIN users u ON u.id = s.user_id
         LEFT JOIN departments d ON d.id = s.department_id
@@ -53,13 +54,14 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
+        StaffSpecialty.Validate(command.StaffRole, command.IsDriver);
         await ValidateReferencesAsync(connection, transaction, command.DepartmentId, command.FacilityId, ct);
         try
         {
             var userId = await InsertUserAsync(connection, transaction, command, passwordHash, ct);
             var staffId = await InsertStaffAsync(connection, transaction, userId, command, ct);
             await EnsureRoleAsync(connection, transaction, userId, "Staff", ct);
-            if (command.IsDriver) await EnsureRoleAsync(connection, transaction, userId, "Driver", ct);
+            await SetSpecialtyAsync(connection, transaction, userId, command.IsDriver ? "Driver" : command.StaffRole, ct);
             await transaction.CommitAsync(ct);
             return (await FindByIdAsync(staffId, ct))!;
         }
@@ -73,6 +75,7 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
+        StaffSpecialty.Validate(command.StaffRole, command.IsDriver);
         await ValidateReferencesAsync(connection, transaction, command.DepartmentId, command.FacilityId, ct);
         await using var update = new NpgsqlCommand("""
             UPDATE staffs s SET department_id = $1, facility_id = $2, hired_date = $3, is_driver = $4,
@@ -90,12 +93,8 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
         user.Parameters.AddWithValue(userId);
         await user.ExecuteNonQueryAsync(ct);
         await EnsureRoleAsync(connection, transaction, userId, "Staff", ct);
-        if (command.IsDriver) await EnsureRoleAsync(connection, transaction, userId, "Driver", ct);
-        else await using (var removeDriver = new NpgsqlCommand("DELETE FROM user_roles WHERE user_id = $1 AND role_id IN (SELECT id FROM roles WHERE name = 'Driver')", connection, transaction))
-        {
-            removeDriver.Parameters.AddWithValue(userId);
-            await removeDriver.ExecuteNonQueryAsync(ct);
-        }
+        await SetSpecialtyAsync(connection, transaction, userId, command.IsDriver ? "Driver" : command.StaffRole, ct);
+
         await transaction.CommitAsync(ct);
         return (await FindByIdAsync(staffId, ct))!;
     }
@@ -157,6 +156,14 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
         command.Parameters.AddWithValue((object?)staff.LicenseImageUrl ?? DBNull.Value);
     }
 
+    private static async Task SetSpecialtyAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int userId, string? roleName, CancellationToken ct)
+    {
+        await using var remove = new NpgsqlCommand("DELETE FROM user_roles WHERE user_id=$1 AND role_id IN (SELECT id FROM roles WHERE name IN ('CustomerService','Driver','Maintenance'))", connection, transaction);
+        remove.Parameters.AddWithValue(userId);
+        await remove.ExecuteNonQueryAsync(ct);
+        if (roleName is not null) await EnsureRoleAsync(connection, transaction, userId, roleName, ct);
+    }
+
     private static async Task EnsureRoleAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int userId, string roleName, CancellationToken ct)
     {
         await using var create = new NpgsqlCommand("INSERT INTO roles (name) SELECT $1 WHERE NOT EXISTS (SELECT 1 FROM roles WHERE name = $1)", connection, transaction);
@@ -168,7 +175,7 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
         await assign.ExecuteNonQueryAsync(ct);
     }
 
-    private static Staff Read(NpgsqlDataReader reader) => new(reader.GetInt32(0), reader.GetInt32(1), reader.GetString(2), reader.GetString(3), NullableString(reader, 4), NullableInt(reader, 5), NullableString(reader, 6), NullableInt(reader, 7), NullableString(reader, 8), NullableDate(reader, 9), reader.GetBoolean(10), NullableString(reader, 11), NullableString(reader, 12), NullableDate(reader, 13), NullableDate(reader, 14), NullableString(reader, 15), reader.IsDBNull(16) ? null : reader.GetDecimal(16), reader.GetBoolean(17));
+    private static Staff Read(NpgsqlDataReader reader) => new(reader.GetInt32(0), reader.GetInt32(1), reader.GetString(2), reader.GetString(3), NullableString(reader, 4), NullableInt(reader, 5), NullableString(reader, 6), NullableInt(reader, 7), NullableString(reader, 8), NullableDate(reader, 9), reader.GetBoolean(10), NullableString(reader, 11), NullableString(reader, 12), NullableDate(reader, 13), NullableDate(reader, 14), NullableString(reader, 15), reader.IsDBNull(16) ? null : reader.GetDecimal(16), reader.GetBoolean(17), NullableString(reader, 18));
     private static string? NullableString(NpgsqlDataReader reader, int ordinal) => reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
     private static int? NullableInt(NpgsqlDataReader reader, int ordinal) => reader.IsDBNull(ordinal) ? null : reader.GetInt32(ordinal);
     private static DateOnly? NullableDate(NpgsqlDataReader reader, int ordinal) => reader.IsDBNull(ordinal) ? null : reader.GetFieldValue<DateOnly>(ordinal);
