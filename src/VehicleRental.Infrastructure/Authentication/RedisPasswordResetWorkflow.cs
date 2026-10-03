@@ -13,7 +13,7 @@ public sealed class RedisPasswordResetWorkflow(
     IConnectionMultiplexer redis,
     IAccountRepository accounts,
     IBrevoEmailSender emails,
-    RedisTicketStore tickets,
+    RedisRefreshTokenStore refreshTokens,
     IOptions<RegistrationOptions> options) : IPasswordResetWorkflow
 {
     private const string Prefix = "password-reset:";
@@ -53,7 +53,7 @@ public sealed class RedisPasswordResetWorkflow(
             throw new PasswordResetException("OTP không chính xác.", StatusCodes.Status400BadRequest);
         }
         await accounts.UpdatePasswordHashAsync(email, PasswordHash.Create(newPassword), ct);
-        await tickets.RevokeAllAsync(email, ct);
+        await refreshTokens.RevokeAllAsync(email, ct);
         await _cache.KeyDeleteAsync(key);
     }
 

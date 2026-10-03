@@ -31,7 +31,7 @@ Content-Type: application/json
   "otp": "123456"
 }
 
-### Local login (stores secure cookie)
+### Local login (sets access_token + refresh_token HttpOnly cookies)
 POST {{Car_Rental_System_BE_HostAddress}}/api/auth/login
 Content-Type: application/json
 
@@ -41,7 +41,10 @@ Content-Type: application/json
   "rememberMe": false
 }
 
-### Current profile (requires cookie from login)
+### Renew the cookies when access_token is expired (refresh_token rotates)
+POST {{Car_Rental_System_BE_HostAddress}}/api/auth/refresh
+
+### Current profile (requires access_token cookie from login)
 GET {{Car_Rental_System_BE_HostAddress}}/api/account/profile
 Accept: application/json
 
