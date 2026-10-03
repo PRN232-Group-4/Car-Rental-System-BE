@@ -38,10 +38,8 @@ public sealed class UnitTests
     [Fact]
     public void Plan_request_rejects_invalid_price_and_duration()
     {
-        var request = new PlanRequest("Plan", null, 0m, 0, null);
-        var results = new List<ValidationResult>();
+        var results = ValidateParameters(new PlanRequest("Plan", null, 0m, 0, null));
 
-        Assert.False(Validator.TryValidateObject(request, new ValidationContext(request), results, validateAllProperties: true));
         Assert.Contains(results, result => result.MemberNames.Contains(nameof(PlanRequest.Price)));
         Assert.Contains(results, result => result.MemberNames.Contains(nameof(PlanRequest.DurationDays)));
     }
@@ -49,10 +47,7 @@ public sealed class UnitTests
     [Fact]
     public void Refund_request_requires_a_positive_amount()
     {
-        var request = new RefundRequest(0m);
-        var results = new List<ValidationResult>();
-
-        Assert.False(Validator.TryValidateObject(request, new ValidationContext(request), results, validateAllProperties: true));
+        Assert.NotEmpty(ValidateParameters(new RefundRequest(0m)));
     }
 
     [Fact]
@@ -76,6 +71,20 @@ public sealed class UnitTests
         }
 
         Assert.Null(typeof(OperationsController).GetMethod("EditPolicy", BindingFlags.Instance | BindingFlags.Public));
+    }
+
+    /// <summary>Validates the validation attributes MVC reads from a request record's primary constructor parameters.</summary>
+    private static IReadOnlyList<ValidationResult> ValidateParameters(object instance)
+    {
+        var results = new List<ValidationResult>();
+        foreach (var parameter in instance.GetType().GetConstructors().Single().GetParameters())
+        {
+            var attributes = parameter.GetCustomAttributes<ValidationAttribute>().ToArray();
+            if (attributes.Length == 0) continue;
+            var value = instance.GetType().GetProperty(parameter.Name!)?.GetValue(instance);
+            Validator.TryValidateValue(value!, new ValidationContext(instance) { MemberName = parameter.Name }, results, attributes);
+        }
+        return results;
     }
 
     private static string Sign(string checksumKey, IReadOnlyDictionary<string, object?> data)

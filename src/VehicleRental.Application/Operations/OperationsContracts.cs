@@ -14,6 +14,7 @@ public sealed record Rental(int Id, int CustomerId, int VehicleId, string Rental
 public sealed record DriverScheduleEntry(int AssignmentId, int RentalId, int VehicleId, int DriverStaffId, string DriverName, DateTime StartTime, DateTime EndTime, string RentalStatus);
 public sealed record Inspection(int Id, int RentalId, string Type, bool? IsOk, decimal? OdometerKm, decimal? FuelBatteryLevel, string? DamageNotes, string? ImageUrls, DateTime? InspectedAt);
 public sealed record SubscriptionPlan(int Id, string Name, string? Description, decimal Price, int DurationDays, decimal? IncludedHours, bool IsActive);
+public sealed record ExpiringSubscription(int Id, string Email, string Name, DateOnly EndDate, decimal? RemainingHours);
 public sealed record Maintenance(int Id, int VehicleId, int? FacilityId, int? AssignedStaffId, string? Status, string? MaintenanceType, DateOnly? ScheduledDate, bool? IsSafe, string? Description, decimal? Cost);
 public sealed record CustomerLicense(string? Number, string? Type, DateOnly? IssueDate, DateOnly? ExpiryDate, string? ImageUrl, string Status);
 
@@ -48,6 +49,9 @@ public interface IOperationsRepository
     Task<SubscriptionPlan> SavePlanAsync(int? id, SubscriptionPlan plan, CancellationToken ct);
     Task DeletePlanAsync(int id, CancellationToken ct);
     Task<int> BuyPlanAsync(string email, int planId, CancellationToken ct);
+    Task<int> ExpireSubscriptionsAsync(DateOnly today, CancellationToken ct);
+    Task<IReadOnlyList<ExpiringSubscription>> ListSubscriptionsToRemindAsync(DateOnly today, int withinDays, CancellationToken ct);
+    Task MarkSubscriptionRemindedAsync(int subscriptionId, CancellationToken ct);
     Task<Maintenance> SaveMaintenanceAsync(int? id, Maintenance maintenance, CancellationToken ct);
     Task<IReadOnlyList<Maintenance>> ListMaintenanceAsync(int? vehicleId, string? status, CancellationToken ct);
     Task<object> DashboardAsync(DateTime? from, DateTime? to, CancellationToken ct);
