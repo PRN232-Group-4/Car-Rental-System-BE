@@ -12,4 +12,6 @@ Cookie session phải `Secure`, `HttpOnly`, `SameSite=Lax`; Redis key có TTL. P
 
 Google OAuth callback là `/signin-google`; chỉ dùng client secret ở server. Cloudinary API secret chỉ được dùng server-side để upload signed asset; browser/mobile không được nhận secret. Avatar giới hạn ảnh 5 MB; ảnh xe sẽ dùng cùng `IImageStorage` với folder `vehicle-rental/vehicles` khi FR-009 triển khai.
 
-Rental-policy API yêu cầu role `Admin`, `Manager` hoặc `Staff`. Role `Manager` được seed bằng migration `0005_add_manager_role`; việc gán role cho người dùng thực hiện qua quản trị dữ liệu/luồng quản lý nhân sự được phê duyệt, không qua client.
+Rental-policy API yêu cầu role `Admin` hoặc `Manager`. Role `Manager` được seed bằng migration `0005_add_manager_role`; việc gán role cho người dùng thực hiện qua quản trị dữ liệu/luồng quản lý nhân sự được phê duyệt, không qua client.
+
+Phân quyền Staff chuyên môn và hợp đồng frontend: [staff-authorization.md](staff-authorization.md). Ma trận quyền hiện hành: [FR-007](../specs/FR-007-rbac.md). Không cấp quyền nghiệp vụ dựa trên tên department hoặc role Staff chung.

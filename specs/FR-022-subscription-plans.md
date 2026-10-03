@@ -9,10 +9,10 @@ CRUD `subscription_plans`. Validate ở HTTP boundary: `price >= 0.01`, `duratio
 ## API
 | Method | Path | Auth | Mô tả |
 |---|---|---|---|
-| GET | `/api/subscription-plans?all=` | Public | Danh sách; mặc định chỉ plan active |
+| GET | `/api/subscription-plans?all=` | Public | Danh sách active; chỉ Admin/Manager được dùng all=true để xem plan inactive |
 | GET | `/api/subscription-plans/{id}` | Public | Chi tiết plan |
-| POST | `/api/subscription-plans` | Admin, Staff | Tạo plan |
-| PUT | `/api/subscription-plans/{id}` | Admin, Staff | Cập nhật plan |
+| POST | `/api/subscription-plans` | Admin, Manager | Tạo plan |
+| PUT | `/api/subscription-plans/{id}` | Admin, Manager | Cập nhật plan |
 | DELETE | `/api/subscription-plans/{id}` | Admin | Xóa/ngừng kích hoạt plan |
 | POST | `/api/subscription-plans/{id}/purchase` | Customer | Mua plan active |
 

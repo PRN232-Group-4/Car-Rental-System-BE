@@ -38,6 +38,7 @@ public interface IOperationsRepository
     Task<IReadOnlyList<RentalPolicy>> ListPoliciesAsync(CancellationToken ct);
     Task<Rental> CreateRentalAsync(string email, int vehicleId, int? policyId, string rentalType, DateTime start, DateTime end, bool subscription, int? subscriptionId, bool hasDriver, CancellationToken ct);
     Task<Rental?> GetRentalAsync(int id, CancellationToken ct);
+    Task<Rental?> GetRentalForUserAsync(int id, string email, bool readAll, bool customer, bool driver, CancellationToken ct);
     Task<Rental> ChangeRentalStatusAsync(int id, string status, CancellationToken ct);
     Task AssignAsync(int rentalId, int? driverStaffId, string assignedByEmail, CancellationToken ct);
     Task<IReadOnlyList<DriverScheduleEntry>> ListDriverScheduleAsync(int? driverStaffId, DateTime from, DateTime to, CancellationToken ct);

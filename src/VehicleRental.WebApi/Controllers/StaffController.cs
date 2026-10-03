@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Car_Rental_System_BE.Application.Accounts;
+using Car_Rental_System_BE.Infrastructure.Authentication;
 using Car_Rental_System_BE.Application.Organization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -9,7 +10,7 @@ namespace Car_Rental_System_BE.Controllers;
 [ApiController]
 [Route("api/staff")]
 [Authorize(Roles = "Admin")]
-public sealed class StaffController(IStaffRepository staff) : ControllerBase
+public sealed class StaffController(IStaffRepository staff, RedisRefreshTokenStore refreshTokens) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType<StaffPage>(StatusCodes.Status200OK)]
@@ -38,6 +39,8 @@ public sealed class StaffController(IStaffRepository staff) : ControllerBase
     public async Task<IActionResult> Create(CreateStaffRequest request, CancellationToken ct)
     {
         if (!ModelState.IsValid) return ValidationProblem(ModelState);
+        try { StaffSpecialty.Validate(request.StaffRole, request.IsDriver); }
+        catch (ArgumentException invalidRole) { return Problem(invalidRole.Message, statusCode: StatusCodes.Status400BadRequest); }
         var error = ValidateDriver(request.IsDriver, request.LicenseNumber, request.LicenseExpiryDate, request.LicenseIssueDate);
         if (error is not null) return LicenseValidationProblem(error);
         try
@@ -55,9 +58,11 @@ public sealed class StaffController(IStaffRepository staff) : ControllerBase
     public async Task<IActionResult> Update(int id, UpdateStaffRequest request, CancellationToken ct)
     {
         if (!ModelState.IsValid) return ValidationProblem(ModelState);
+        try { StaffSpecialty.Validate(request.StaffRole, request.IsDriver); }
+        catch (ArgumentException invalidRole) { return Problem(invalidRole.Message, statusCode: StatusCodes.Status400BadRequest); }
         var error = ValidateDriver(request.IsDriver, request.LicenseNumber, request.LicenseExpiryDate, request.LicenseIssueDate);
         if (error is not null) return LicenseValidationProblem(error);
-        try { return Ok(await staff.UpdateAsync(id, request.ToCommand(), ct)); }
+        try { var updated = await staff.UpdateAsync(id, request.ToCommand(), ct); await refreshTokens.RevokeAllAsync(updated.Email, ct); return Ok(updated); }
         catch (StaffNotFoundException) { return Problem("Staff member was not found.", statusCode: StatusCodes.Status404NotFound); }
         catch (OrganizationReferenceNotFoundException exception) { return Problem(exception.Message, statusCode: StatusCodes.Status400BadRequest); }
     }
@@ -67,7 +72,7 @@ public sealed class StaffController(IStaffRepository staff) : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Deactivate(int id, CancellationToken ct)
     {
-        try { await staff.DeactivateAsync(id, ct); return NoContent(); }
+        try { var existing = await staff.FindByIdAsync(id, ct) ?? throw new StaffNotFoundException(); await staff.DeactivateAsync(id, ct); await refreshTokens.RevokeAllAsync(existing.Email, ct); return NoContent(); }
         catch (StaffNotFoundException) { return Problem("Staff member was not found.", statusCode: StatusCodes.Status404NotFound); }
     }
 
@@ -100,9 +105,9 @@ public sealed record CreateStaffRequest(
     [param: StringLength(255)] string? LicenseType,
     DateOnly? LicenseIssueDate,
     DateOnly? LicenseExpiryDate,
-    [param: Url, StringLength(255)] string? LicenseImageUrl)
+    [param: Url, StringLength(255)] string? LicenseImageUrl, [param: RegularExpression("^(CustomerService|Driver|Maintenance)$")] string? StaffRole = null)
 {
-    public CreateStaff ToCommand() => new(Email.Trim().ToLowerInvariant(), FullName.Trim(), Password, Phone?.Trim(), DepartmentId, FacilityId, HiredDate, IsDriver, LicenseNumber?.Trim(), LicenseType?.Trim(), LicenseIssueDate, LicenseExpiryDate, LicenseImageUrl?.Trim());
+    public CreateStaff ToCommand() => new(Email.Trim().ToLowerInvariant(), FullName.Trim(), Password, Phone?.Trim(), DepartmentId, FacilityId, HiredDate, IsDriver, LicenseNumber?.Trim(), LicenseType?.Trim(), LicenseIssueDate, LicenseExpiryDate, LicenseImageUrl?.Trim(), StaffRole);
 }
 
 public sealed record UpdateStaffRequest(
@@ -116,7 +121,7 @@ public sealed record UpdateStaffRequest(
     [param: StringLength(255)] string? LicenseType,
     DateOnly? LicenseIssueDate,
     DateOnly? LicenseExpiryDate,
-    [param: Url, StringLength(255)] string? LicenseImageUrl)
+    [param: Url, StringLength(255)] string? LicenseImageUrl, [param: RegularExpression("^(CustomerService|Driver|Maintenance)$")] string? StaffRole = null)
 {
-    public UpdateStaff ToCommand() => new(FullName.Trim(), Phone?.Trim(), DepartmentId, FacilityId, HiredDate, IsDriver, LicenseNumber?.Trim(), LicenseType?.Trim(), LicenseIssueDate, LicenseExpiryDate, LicenseImageUrl?.Trim());
+    public UpdateStaff ToCommand() => new(FullName.Trim(), Phone?.Trim(), DepartmentId, FacilityId, HiredDate, IsDriver, LicenseNumber?.Trim(), LicenseType?.Trim(), LicenseIssueDate, LicenseExpiryDate, LicenseImageUrl?.Trim(), StaffRole);
 }

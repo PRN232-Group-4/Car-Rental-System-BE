@@ -66,8 +66,13 @@ public sealed class UnitTests
             var authorization = method.GetCustomAttribute<AuthorizeAttribute>();
 
             Assert.NotNull(authorization);
-            Assert.Contains("Manager", authorization!.Roles!.Split(','));
-            Assert.Contains("Admin", authorization.Roles!.Split(','));
+            Assert.NotNull(authorization!.Policy);
+            var options = new AuthorizationOptions();
+            Car_Rental_System_BE.Authentication.AuthorizationPolicies.Configure(options);
+            var policy = options.GetPolicy(authorization.Policy!);
+            var roles = Assert.Single(policy!.Requirements.OfType<Microsoft.AspNetCore.Authorization.Infrastructure.RolesAuthorizationRequirement>()).AllowedRoles;
+            Assert.Contains("Manager", roles);
+            Assert.Contains("Admin", roles);
         }
 
         Assert.Null(typeof(OperationsController).GetMethod("EditPolicy", BindingFlags.Instance | BindingFlags.Public));

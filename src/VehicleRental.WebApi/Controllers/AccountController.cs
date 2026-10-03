@@ -110,7 +110,7 @@ public sealed record PasswordResetStartRequest([param: System.ComponentModel.Dat
 public sealed record PasswordResetCompleteRequest([param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress] string Email, [param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.RegularExpression("^[0-9]{6}$")] string Otp, [param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(128, MinimumLength = 6)] string NewPassword);
 public sealed record UpdateProfileRequest([param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(120, MinimumLength = 2)] string FullName, [param: System.ComponentModel.DataAnnotations.StringLength(50)] string? Gender, [param: System.ComponentModel.DataAnnotations.StringLength(30)] string? Phone);
 public sealed record ChangePasswordRequest([param: System.ComponentModel.DataAnnotations.Required] string CurrentPassword, [param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(128, MinimumLength = 6)] string NewPassword);
-public sealed record AccountResponse(string Email, string FullName, string? Gender, string? Phone, string? AvatarUrl, IReadOnlyList<string> Roles)
+public sealed record AccountResponse(string Email, string FullName, string? Gender, string? Phone, string? AvatarUrl, IReadOnlyList<string> Roles, int? StaffId, int? DepartmentId, string? DepartmentName, int? FacilityId)
 {
-    public static AccountResponse From(Account account) => new(account.Email, account.FullName, account.Gender, account.Phone, account.AvatarUrl, account.Roles);
+    public static AccountResponse From(Account account) => new(account.Email, account.FullName, account.Gender, account.Phone, account.AvatarUrl, account.Roles, account.StaffId, account.DepartmentId, account.DepartmentName, account.FacilityId);
 }

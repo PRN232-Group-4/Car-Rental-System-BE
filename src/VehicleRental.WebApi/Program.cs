@@ -118,7 +118,14 @@ var authentication = builder.Services.AddAuthentication(options =>
                 var email = context.Principal?.FindFirstValue(ClaimTypes.Email) ?? context.Principal?.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Email);
                 var tokens = context.HttpContext.RequestServices.GetRequiredService<RedisRefreshTokenStore>();
                 if (string.IsNullOrWhiteSpace(sessionId) || string.IsNullOrWhiteSpace(email) || !await tokens.IsActiveAsync(sessionId, email, context.HttpContext.RequestAborted))
+                {
                     context.Fail("The token session is no longer active.");
+                    return;
+                }
+                var accounts = context.HttpContext.RequestServices.GetRequiredService<IAccountRepository>();
+                var account = await accounts.FindByEmailAsync(email, context.HttpContext.RequestAborted);
+                if (!AuthorizationPolicies.IsCurrentAccount(context.Principal!, account))
+                    context.Fail("Account permissions have changed. Sign in again.");
             }
         };
     })
@@ -154,13 +161,7 @@ if (googleAuthentication.Enabled)
         };
     });
 }
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("RequireAdmin", policy => policy.RequireRole("Admin"));
-    options.AddPolicy("RequireStaff", policy => policy.RequireRole("Admin", "Staff"));
-    options.AddPolicy("RequireMaintenance", policy => policy.RequireRole("Admin", "Staff", "Maintenance"));
-    options.AddPolicy("RequireCustomer", policy => policy.RequireRole("Customer"));
-});
+builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
 
 var app = builder.Build();
 
