@@ -10,14 +10,18 @@
 | FR-008..011 | Catalog/operations | M3 | P0-P1 | In progress | FR-008..011 | 2026-10-03-staff-authorization |
 | FR-012..018 | Rentals | M4 | P0-P1 | In progress | FR-012..018 | 2026-10-03-staff-authorization |
 | FR-019..021 | Payments | M5 | P1 | In progress | FR-019..021 | 2026-10-03-staff-authorization |
-| FR-022..025 | Subscription | M6 | P0-P1 | In progress | FR-022..025 | 2026-10-03-staff-authorization |
+| FR-022..025 | Subscription | M6 | P0-P1 | Done | FR-022..025 | 2026-10-03-subscription-rental-expiry |
 | FR-026..027,029..030 | Maintenance/report/loyalty/dashboard | M7 | P1-P2 | In progress | FR-026..027,029..030 | 2026-10-03-staff-authorization |
 | FR-028 | Brevo notifications | M7 | P0 | In progress | FR-028 | 2026-09-30-bootstrap |
 | NFR-001..005,008 | Architecture/platform/security | M0 | P0 | In progress | NFR files | 2026-09-30-bootstrap |
 | NFR-006..007 | Performance/testing | M0 | P1 | In progress | NFR files | 2026-10-01-test-project |
 
 ## Tổng kết
-Done: 0; In progress: 8 groups; Not started: 6 groups. `dotnet build` đã xanh; Docker, hosted CI còn cần xác nhận; test suite đã pass ngày 2026-10-03.
+Done: FR-022..025 (subscription); In progress: các nhóm còn lại; Not started: các nhóm chưa chạm. `dotnet build` đã xanh; Docker, hosted CI còn cần xác nhận; test suite đã pass ngày 2026-10-03.
+
+## Subscription — 2026-10-03
+
+FR-024 (thuê bằng gói, trừ `remaining_hours`, khóa `FOR UPDATE` chống double deduct) và FR-025 (job hết hạn + nhắc trước hạn, UTC, idempotent) đã hoàn thành. `customer_subscriptions` thêm `reminder_sent_at` (migration `0009`). Integration test cho trừ giờ/chống double deduct và cho job hết hạn. Sửa nốt `[property:]` ở `PlanRequest`/`RefundRequest` sang `[param:]`. Chưa gắn thanh toán PayOS cho việc mua gói (BE-21/FR-023). Xem [thay đổi](../changes/2026-10-03-subscription-rental-expiry.md).
 
 ## RBAC — 2026-10-03
 

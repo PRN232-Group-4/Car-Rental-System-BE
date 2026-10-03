@@ -183,6 +183,7 @@ CREATE TABLE customer_subscriptions (
     start_date       DATE NOT NULL,
     end_date         DATE NOT NULL,
     remaining_hours  NUMERIC(10,2),         -- còn lại của package limit
+    reminder_sent_at TIMESTAMP,             -- FR-025: set once the pre-expiry warning email is sent
     created_at       TIMESTAMP NOT NULL DEFAULT now(),
     CONSTRAINT ck_cs_dates CHECK (end_date >= start_date)
 );
