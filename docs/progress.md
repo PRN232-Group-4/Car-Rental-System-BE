@@ -5,7 +5,7 @@
 | Bootstrap | Docs, architecture, Docker, CI | M0 | P0 | In progress | NFR-001..008 | 2026-10-02-local-migration-path |
 | FR-001 | Đăng ký OTP | M2 | P0 | In progress | FR-001 | 2026-09-30-account-basics |
 | FR-002 | Verify/resend OTP | M2 | P0 | In progress | FR-002 | 2026-09-30-account-basics |
-| FR-003 | Cookie Redis session | M2 | P0 | In progress | FR-003 | 2026-09-30-account-basics |
+| FR-003 | Access/refresh token cookies | M2 | P0 | In progress | FR-003 | 2026-10-03-access-refresh-token-cookies |
 | FR-004..007 | Account/RBAC | M2 | P0-P1 | In progress | FR-004..007 | 2026-09-30-account-basics |
 | FR-008..011 | Catalog/operations | M3 | P0-P1 | In progress | FR-008..011 | 2026-10-02-immutable-rental-policies |
 | FR-012..018 | Rentals | M4 | P0-P1 | In progress | FR-012..018 | 2026-10-02-driver-scheduling-assignment |

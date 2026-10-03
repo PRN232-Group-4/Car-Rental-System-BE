@@ -2,7 +2,6 @@ using Car_Rental_System_BE.Application.Registration;
 using Car_Rental_System_BE.Application.Accounts;
 using Car_Rental_System_BE.Infrastructure;
 using Car_Rental_System_BE.Infrastructure.Authentication;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -11,7 +10,7 @@ namespace Car_Rental_System_BE.Controllers;
 
 [ApiController]
 [Route("api/account")]
-public sealed class AccountController(IRegistrationWorkflow registration, IPasswordResetWorkflow passwordResets, IAccountRepository accounts, RedisTicketStore tickets) : ControllerBase
+public sealed class AccountController(IRegistrationWorkflow registration, IPasswordResetWorkflow passwordResets, IAccountRepository accounts, RedisRefreshTokenStore refreshTokens) : ControllerBase
 {
     [HttpPost("registrations")]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
@@ -92,8 +91,8 @@ public sealed class AccountController(IRegistrationWorkflow registration, IPassw
         if (account is null || !PasswordHash.Verify(request.CurrentPassword, account.PasswordHash))
             return Problem("Mật khẩu hiện tại không chính xác.", statusCode: StatusCodes.Status400BadRequest);
         await accounts.UpdatePasswordHashAsync(account.Email, PasswordHash.Create(request.NewPassword), ct);
-        await tickets.RevokeAllAsync(account.Email, ct);
-        await HttpContext.SignOutAsync();
+        await refreshTokens.RevokeAllAsync(account.Email, ct);
+        AuthCookies.Clear(Response);
         return NoContent();
     }
 
