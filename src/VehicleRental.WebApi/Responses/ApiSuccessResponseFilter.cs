@@ -23,6 +23,10 @@ public sealed class ApiSuccessResponseFilter : IAsyncResultFilter
         {
             case ObjectResult objectResult:
                 objectResult.Value = ApiSuccessResponse.Create(objectResult.Value, message);
+                // The envelope now replaces the action's value, so the declared action type no
+                // longer matches. Leaving it set makes typed actions (e.g. Task<VehiclePage>)
+                // fail with InvalidCastException while serializing the response.
+                objectResult.DeclaredType = null;
                 break;
             case JsonResult jsonResult:
                 jsonResult.Value = ApiSuccessResponse.Create(jsonResult.Value, message);
@@ -124,11 +128,13 @@ public sealed class ApiSuccessResponseFilter : IAsyncResultFilter
         ["Operations.AddPlan"] = "Subscription plan created successfully.",
         ["Operations.EditPlan"] = "Subscription plan updated successfully.",
         ["Operations.DeletePlan"] = "Subscription plan deleted successfully.",
-        ["Operations.Purchase"] = "Subscription plan purchased successfully.",
+        ["Operations.CustomerSubscriptions"] = "Customer subscriptions retrieved successfully.",
         ["Operations.AddMaintenance"] = "Maintenance record created successfully.",
         ["Operations.EditMaintenance"] = "Maintenance record updated successfully.",
         ["Operations.Dashboard"] = "Dashboard data retrieved successfully.",
         ["Payments.Checkout"] = "Checkout link created successfully.",
+        ["Payments.PurchasePlan"] = "Subscription plan checkout created successfully.",
+        ["Payments.PlanPurchase"] = "Subscription purchase retrieved successfully.",
         ["Payments.Webhook"] = "Payment webhook processed successfully.",
         ["Payments.Refund"] = "Refund request submitted successfully.",
         ["Payments.Invoices"] = "Invoices retrieved successfully.",

@@ -73,4 +73,32 @@ public sealed class SubscriptionPlanTests(PostgresFixture db) : IClassFixture<Po
     {
         await Assert.ThrowsAsync<KeyNotFoundException>(() => _operations.DeletePlanAsync(999999, CancellationToken.None));
     }
+
+    [Fact]
+    public async Task Customer_subscriptions_lists_the_purchased_plan()
+    {
+        var (_, email) = await Seed.CustomerAsync(db.DataSource);
+        var plan = await Seed.PlanAsync(db.DataSource, active: true, durationDays: 30, includedHours: 100m);
+        var subscriptionId = await _operations.BuyPlanAsync(email, plan, CancellationToken.None);
+
+        var mine = await _operations.ListCustomerSubscriptionsAsync(email, CancellationToken.None);
+
+        var only = Assert.Single(mine);
+        Assert.Equal(subscriptionId, only.Id);
+        Assert.Equal(plan, only.PlanId);
+        Assert.Equal(100m, only.TotalHours);
+        Assert.Equal(100m, only.RemainingHours);
+        Assert.Equal("active", only.Status);
+    }
+
+    [Fact]
+    public async Task Customer_subscriptions_are_scoped_to_the_owner()
+    {
+        var (_, buyer) = await Seed.CustomerAsync(db.DataSource);
+        var (_, other) = await Seed.CustomerAsync(db.DataSource);
+        var plan = await Seed.PlanAsync(db.DataSource, active: true);
+        await _operations.BuyPlanAsync(buyer, plan, CancellationToken.None);
+
+        Assert.Empty(await _operations.ListCustomerSubscriptionsAsync(other, CancellationToken.None));
+    }
 }

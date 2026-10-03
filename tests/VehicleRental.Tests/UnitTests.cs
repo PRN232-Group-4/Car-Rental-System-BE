@@ -3,10 +3,18 @@ using System.Globalization;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using Car_Rental_System_BE.Application.Operations;
 using Car_Rental_System_BE.Application.Payments;
 using Car_Rental_System_BE.Controllers;
 using Car_Rental_System_BE.Infrastructure.Payments;
+using Car_Rental_System_BE.Responses;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -71,6 +79,27 @@ public sealed class UnitTests
         }
 
         Assert.Null(typeof(OperationsController).GetMethod("EditPolicy", BindingFlags.Instance | BindingFlags.Public));
+    }
+
+    [Fact]
+    public async Task Success_filter_wraps_typed_results_and_clears_the_declared_type()
+    {
+        var descriptor = new ControllerActionDescriptor { ControllerName = "Operations", ActionName = "Vehicles" };
+        var actionContext = new ActionContext(new DefaultHttpContext(), new RouteData(), descriptor);
+        var result = new ObjectResult(new VehiclePage(new List<Vehicle>(), 1, 20, 0)) { DeclaredType = typeof(VehiclePage) };
+        var context = new ResultExecutingContext(actionContext, new List<IFilterMetadata>(), result, new object());
+
+        await new ApiSuccessResponseFilter().OnResultExecutionAsync(
+            context,
+            () => Task.FromResult(new ResultExecutedContext(actionContext, new List<IFilterMetadata>(), context.Result, new object())));
+
+        var wrapped = Assert.IsType<ObjectResult>(context.Result);
+        // Regression: a non-null DeclaredType made the serializer cast the envelope back to the
+        // action's return type, so endpoints like GET /api/vehicles failed with InvalidCastException.
+        Assert.Null(wrapped.DeclaredType);
+        var envelope = Assert.IsType<ApiSuccessResponse>(wrapped.Value);
+        Assert.True(envelope.IsSuccess);
+        Assert.IsType<VehiclePage>(envelope.Data);
     }
 
     /// <summary>Validates the validation attributes MVC reads from a request record's primary constructor parameters.</summary>
