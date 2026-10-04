@@ -28,16 +28,22 @@ public sealed class ExternalAuthController(IOptions<GoogleAuthOptions> google, I
     [Authorize(AuthenticationSchemes = "External")]
     [HttpGet("google/complete")]
     [ProducesResponseType(StatusCodes.Status302Found)]
-    [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GoogleComplete(CancellationToken ct)
     {
         var email = User.FindFirstValue(ClaimTypes.Email);
-        if (string.IsNullOrWhiteSpace(email)) return Unauthorized();
+        if (string.IsNullOrWhiteSpace(email)) return RedirectToLogin("error");
         var account = await accounts.FindByEmailAsync(email, ct);
-        if (account is null) return Unauthorized();
+        if (account is null) return RedirectToLogin("error");
         var refresh = await refreshTokens.CreateAsync(account.Email, false, ct, account.AuthorizationVersion);
         AuthCookies.Write(Response, jwtTokens.CreateAccessToken(account, refresh.SessionId), refresh.Token, refresh.ExpiresUtc, jwtTokens.AccessTokenLifetime);
         await HttpContext.SignOutAsync("External");
-        return Redirect(google.Value.SuccessRedirectUrl);
+        return RedirectToLogin("ok");
     }
+
+    /// <summary>
+    /// Đưa trình duyệt về trang đăng nhập của FE kèm cờ kết quả. Dùng URL cấu hình sẵn
+    /// (GoogleAuthentication:SuccessRedirectUrl) thay vì host của request để không phụ thuộc proxy.
+    /// </summary>
+    private IActionResult RedirectToLogin(string status) =>
+        Redirect($"{google.Value.SuccessRedirectUrl.TrimEnd('/')}/login?google={status}");
 }
