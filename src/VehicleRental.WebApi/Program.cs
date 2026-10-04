@@ -19,6 +19,10 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using System.Security.Claims;
 using Car_Rental_System_BE.Responses;
 using System.Text;
+using Car_Rental_System_BE.Application.Availability;
+using Car_Rental_System_BE.Infrastructure.Availability;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
@@ -53,6 +57,24 @@ builder.Services.AddOptions<JwtOptions>()
 builder.Services.Configure<GoogleAuthOptions>(builder.Configuration.GetSection(GoogleAuthOptions.SectionName));
 builder.Services.Configure<CloudinaryOptions>(builder.Configuration.GetSection(CloudinaryOptions.SectionName));
 builder.Services.Configure<PayOsOptions>(builder.Configuration.GetSection(PayOsOptions.SectionName));
+builder.Services.AddOptions<AvailabilityOptions>()
+    .Bind(builder.Configuration.GetSection(AvailabilityOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy("public-search", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
+});
 
 var connectionString = builder.Configuration.GetConnectionString("RentalDatabase") ?? builder.Configuration["DATABASE_URL"];
 if (!string.IsNullOrWhiteSpace(connectionString))
@@ -85,6 +107,11 @@ builder.Services.AddSingleton<IImageStorage, CloudinaryImageStorage>();
 builder.Services.AddHostedService<RedisConnectionHostedService>();
 builder.Services.AddSingleton<RedisRefreshTokenStore>();
 builder.Services.AddSingleton<JwtTokenService>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<IVehicleSearchRepository, NpgsqlVehicleSearchRepository>();
+builder.Services.AddScoped<IVehicleAvailabilityService, NpgsqlVehicleAvailabilityService>();
+builder.Services.AddScoped<IDriverAvailability, NpgsqlDriverAvailability>();
+builder.Services.AddScoped<VehicleSearchService>();
 var googleAuthentication = builder.Configuration.GetSection(GoogleAuthOptions.SectionName).Get<GoogleAuthOptions>() ?? new GoogleAuthOptions();
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 var authentication = builder.Services.AddAuthentication(options =>
@@ -203,6 +230,7 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
     await Results.Problem(detail, statusCode: status, extensions: extensions).ExecuteAsync(context);
 }));
 app.UseHttpsRedirection();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 

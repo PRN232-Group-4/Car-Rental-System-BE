@@ -142,6 +142,11 @@ public sealed class ApiSuccessResponseFilter : IAsyncResultFilter
         ["Payments.CreateInvoice"] = "Invoice created successfully.",
         ["Payments.Payments"] = "Payments retrieved successfully.",
         ["Payments.ApproveRefund"] = "Refund approved successfully.",
-        ["Payments.RejectRefund"] = "Refund rejected successfully."
+        ["Payments.RejectRefund"] = "Refund rejected successfully.",
+        ["VehicleSearch.Search"] = "Vehicles retrieved successfully.",
+        ["VehicleSearch.Availability"] = "Vehicle availability retrieved successfully.",
+        ["VehicleSearch.BusySlots"] = "Vehicle busy slots retrieved successfully.",
+        ["VehicleSearch.ActivePolicy"] = "Active rental policy retrieved successfully.",
+        ["VehicleSearch.AffectedRentals"] = "Affected rentals retrieved successfully."
     };
 }
