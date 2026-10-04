@@ -1,4 +1,5 @@
 # Changelog
+- 2026-10-04 — [Phân xe, tài xế & Đổi xe (FR-014 / BE-14)](2026-10-04-assignment-vehicle-swap.md)
 - 2026-10-04 — [Tìm xe, kiểm tra availability và đệm đối xứng 60 phút (FR-010 / BE-10)](2026-10-04-vehicle-availability.md)
 - 2026-10-04 — [Google OAuth callback and forwarded headers on Railway](2026-10-04-google-oauth-railway-callback.md)
 - 2026-10-03 — [Mua/gia hạn gói qua PayOS & endpoint "Gói của tôi"](2026-10-03-subscription-plan-payments.md)

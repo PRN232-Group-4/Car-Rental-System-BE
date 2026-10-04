@@ -9,7 +9,8 @@
 | FR-004..007 | Account/RBAC | M2 | P0-P1 | In progress | FR-004..007 | 2026-10-03-staff-authorization |
 | FR-008..009,011 | Catalog/operations | M3 | P0-P1 | In progress | FR-008..011 | 2026-10-03-vehicle-search-envelope-fixes |
 | FR-010 | Tìm xe & availability (BE-10) | M3 | P0 | Done | FR-010 | 2026-10-04-vehicle-availability |
-| FR-012..018 | Rentals | M4 | P0-P1 | In progress | FR-012..018 | 2026-10-03-staff-authorization |
+| FR-014 | Phân xe/tài xế & Đổi xe (BE-14) | M4 | P0 | Done | FR-014 | 2026-10-04-assignment-vehicle-swap |
+| FR-012,013,015..018 | Rentals | M4 | P0-P1 | In progress | FR-012..018 | 2026-10-03-staff-authorization |
 | FR-019..021 | Payments | M5 | P1 | In progress | FR-019..021 | 2026-10-03-subscription-plan-payments |
 | FR-022..025 | Subscription | M6 | P0-P1 | Done | FR-022..025 | 2026-10-03-subscription-plan-payments |
 | FR-026..027,029..030 | Maintenance/report/loyalty/dashboard | M7 | P1-P2 | In progress | FR-026..027,029..030 | 2026-10-03-staff-authorization |
@@ -18,7 +19,17 @@
 | NFR-006..007 | Performance/testing | M0 | P1 | In progress | NFR files | 2026-10-01-test-project |
 
 ## Tổng kết
-Done: FR-010 (tìm xe và availability), FR-022..025 (subscription, gồm cả thanh toán mua gói); In progress: các nhóm còn lại; Not started: các nhóm chưa chạm. `dotnet build -warnaserror` đã xanh 0 warning/0 error; test suite **159/159 pass** ngày 2026-10-04.
+Done: FR-010 (tìm xe và availability), FR-014 (phân xe/tài xế & đổi xe), FR-022..025 (subscription, gồm cả thanh toán mua gói); In progress: các nhóm còn lại; Not started: các nhóm chưa chạm. `dotnet build -warnaserror` đã xanh 0 warning/0 error; test suite pass 100% ngày 2026-10-04.
+
+## Phân xe, tài xế & Đổi xe (FR-014 / BE-14) — 2026-10-04
+
+Đã hoàn thành module BE-14 theo kiến trúc Clean Architecture:
+- Migration `0012_assignment_constraints.sql`: Ràng buộc từ vựng `ck_va_status`, cột sinh `period tsrange` kèm đệm 60 phút, exclusion constraint `ex_va_driver_no_overlap` chống trùng lịch tài xế, các cột lưu vết (`reason`, `note`, `supersedes_id`, `ended_at`, `starts_at`, `ends_at`), và backfill dữ liệu cũ.
+- Domain: `AssignmentStatus`, `AssignmentReason`, `DriverEligibility` (kiểm tra hạn bằng GMT+7, active, is_driver, đệm), `RentalAssignmentPolicy`.
+- Application: `IAssignmentRepository`, `IAssignmentService`, `IMaintenanceIncidentGateway`, `AssignmentOptions` (cấu hình đệm, cờ kiểm tra hạng bằng), các record/DTO chuẩn.
+- Infrastructure: `NpgsqlAssignmentRepository`, `DriverLock` (advisory lock 1002), khóa xe theo thứ tự ID tăng dần chống deadlock, xử lý đổi xe cập nhật `rentals.vehicle_id` dời `vehicle_bookings`, tự động mở phiếu bảo dưỡng sự cố `vehicle_maintenance` khi xe hỏng (`breakdown`/`accident`), ánh xạ lỗi `23P01` -> `DRIVER_BUSY` (409) / `VEHICLE_UNAVAILABLE` (409).
+- WebApi: `RentalAssignmentsController` với 5 endpoints chuẩn Swagger metadata, phân quyền `CustomerService`, mapping message trong `ApiSuccessResponseFilter`, endpoint cũ `POST /api/rentals/{id}/assignments` được đánh dấu `[Obsolete]` kèm header `Deprecation: true`.
+- Kiểm thử: 100% tests pass bao gồm Domain tests, Schema integration tests, Concurrency 20x loop test không flaky, API contract tests. Xem [thay đổi](../changes/2026-10-04-assignment-vehicle-swap.md) và [ADR-003](decisions/ADR-003-vehicle-and-driver-assignments.md).
 
 ## Tìm xe và availability (FR-010 / BE-10) — 2026-10-04
 
