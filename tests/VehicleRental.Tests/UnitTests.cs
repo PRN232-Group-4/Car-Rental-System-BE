@@ -102,6 +102,47 @@ public sealed class UnitTests
         Assert.IsType<VehiclePage>(envelope.Data);
     }
 
+    [Fact]
+    public async Task PayOs_gateway_reads_payment_link_status()
+    {
+        string? requestedUrl = null;
+        var requestHeaders = new Dictionary<string, string>();
+        var gateway = Gateway(request =>
+        {
+            requestedUrl = request.RequestUri!.ToString();
+            foreach (var header in request.Headers) requestHeaders[header.Key] = string.Join(",", header.Value);
+            return Json("""{"code":"00","desc":"success","data":{"orderCode":123,"status":"PENDING"}}""");
+        });
+
+        Assert.Equal("PENDING", await gateway.GetPaymentStatusAsync(123, CancellationToken.None));
+        Assert.Equal("https://api-merchant.payos.vn/v2/payment-requests/123", requestedUrl);
+        Assert.Equal("id", requestHeaders["x-client-id"]);
+        Assert.Equal("key", requestHeaders["x-api-key"]);
+    }
+
+    [Fact]
+    public async Task PayOs_gateway_returns_null_when_status_is_unknown()
+    {
+        // Không tra được thì phải là null để phía gọi KHÔNG đổi trạng thái hoá đơn thành 'cancelled'.
+        Assert.Null(await Gateway(_ => Json("""{"code":"00","data":{"status":"PAID"}}""", status: 401)).GetPaymentStatusAsync(1, CancellationToken.None));
+        Assert.Null(await Gateway(_ => Json("""{"code":"231","desc":"order existed"}""")).GetPaymentStatusAsync(1, CancellationToken.None));
+    }
+
+    private static PayOsPaymentGateway Gateway(Func<HttpRequestMessage, HttpResponseMessage> respond) =>
+        new(new HttpClient(new StubHandler(respond)) { BaseAddress = new Uri("https://api-merchant.payos.vn/") },
+            Options.Create(new PayOsOptions { Enabled = true, ClientId = "id", ApiKey = "key", ChecksumKey = "checksum", ReturnUrl = "https://return.test/", CancelUrl = "https://cancel.test/" }));
+
+    private static HttpResponseMessage Json(string body, int status = 200) => new((System.Net.HttpStatusCode)status)
+    {
+        Content = new StringContent(body, Encoding.UTF8, "application/json"),
+    };
+
+    private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(respond(request));
+    }
+
     /// <summary>Validates the validation attributes MVC reads from a request record's primary constructor parameters.</summary>
     private static IReadOnlyList<ValidationResult> ValidateParameters(object instance)
     {

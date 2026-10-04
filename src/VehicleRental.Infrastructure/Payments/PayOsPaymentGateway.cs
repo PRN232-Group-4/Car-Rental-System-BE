@@ -60,6 +60,23 @@ public sealed class PayOsPaymentGateway(HttpClient http, IOptions<PayOsOptions> 
         catch (FormatException) { return false; }
     }
 
+    public async Task<string?> GetPaymentStatusAsync(long orderCode, CancellationToken ct)
+    {
+        if (!IsConfigured) return null;
+        using var message = new HttpRequestMessage(HttpMethod.Get, $"v2/payment-requests/{orderCode}");
+        message.Headers.Add("x-client-id", _options.ClientId);
+        message.Headers.Add("x-api-key", _options.ApiKey);
+        using var response = await http.SendAsync(message, ct);
+        // Không tra được (404/401/429…) → trả null để phía gọi KHÔNG đổi trạng thái.
+        if (!response.IsSuccessStatusCode) return null;
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStreamAsync(ct));
+        var root = json.RootElement;
+        if (!root.TryGetProperty("code", out var code) || code.GetString() != "00") return null;
+        return root.TryGetProperty("data", out var data) && data.TryGetProperty("status", out var status)
+            ? status.GetString()?.ToUpperInvariant()
+            : null;
+    }
+
     private string Sign(SortedDictionary<string, string> fields)
     {
         var source = string.Join("&", fields.Select(x => $"{x.Key}={x.Value}"));
