@@ -27,6 +27,7 @@ public sealed class ExternalAuthController(IOptions<GoogleAuthOptions> google, I
 
     [Authorize(AuthenticationSchemes = "External")]
     [HttpGet("google/complete")]
+    [ProducesResponseType(StatusCodes.Status302Found)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GoogleComplete(CancellationToken ct)
     {
@@ -37,6 +38,6 @@ public sealed class ExternalAuthController(IOptions<GoogleAuthOptions> google, I
         var refresh = await refreshTokens.CreateAsync(account.Email, false, ct, account.AuthorizationVersion);
         AuthCookies.Write(Response, jwtTokens.CreateAccessToken(account, refresh.SessionId), refresh.Token, refresh.ExpiresUtc, jwtTokens.AccessTokenLifetime);
         await HttpContext.SignOutAsync("External");
-        return Ok(new { email = account.Email });
+        return Redirect(google.Value.SuccessRedirectUrl);
     }
 }
