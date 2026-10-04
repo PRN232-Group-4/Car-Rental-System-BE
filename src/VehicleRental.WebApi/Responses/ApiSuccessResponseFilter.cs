@@ -74,6 +74,15 @@ public sealed class ApiSuccessResponseFilter : IAsyncResultFilter
     // stable message without controllers repeating envelope construction.
     private static readonly IReadOnlyDictionary<string, string> Messages = new Dictionary<string, string>
     {
+        ["Dispatch.CreateShift"] = "Driver duty shift created successfully.",
+        ["Dispatch.UpdateShift"] = "Driver duty shift updated successfully.",
+        ["Dispatch.Shifts"] = "Driver duty shifts retrieved successfully.",
+        ["Dispatch.CreateReport"] = "Incident report submitted for manager review.",
+        ["Dispatch.Reports"] = "Incident reports retrieved successfully.",
+        ["Dispatch.AssignMaintenance"] = "Maintenance technician assigned to the report successfully.",
+        ["Dispatch.ResolveReport"] = "Damage report resolved successfully.",
+        ["Dispatch.InspectReplacement"] = "Replacement vehicle inspection recorded successfully.",
+        ["Dispatch.ReplaceVehicle"] = "Replacement vehicle dispatched with original rental pricing preserved.",
         ["Account.Start"] = "Registration OTP sent successfully.",
         ["Account.Verify"] = "Registration verified successfully.",
         ["Account.Resend"] = "Registration OTP resent successfully.",

@@ -25,10 +25,11 @@ public sealed class AuthorizationTests
     [InlineData("AddVehicle", "Manager", true)]
     [InlineData("AddMaintenance", "Driver", false)]
     [InlineData("AddMaintenance", "CustomerService", false)]
-    [InlineData("AddMaintenance", "Maintenance", true)]
+    [InlineData("AddMaintenance", "Maintenance", false)]
     [InlineData("AddMaintenance", "Manager", true)]
     [InlineData("Assign", "Driver", false)]
-    [InlineData("Assign", "CustomerService", true)]
+    [InlineData("Assign", "CustomerService", false)]
+    [InlineData("Assign", "Manager", true)]
     [InlineData("ReviewLicense", "Driver", false)]
     [InlineData("ReviewLicense", "CustomerService", true)]
     [InlineData("Hourly", "Staff", false)]
@@ -39,6 +40,20 @@ public sealed class AuthorizationTests
     [InlineData("Policies", "Manager", true)]
     public async Task Operations_enforce_capability_matrix(string action, string role, bool allowed) =>
         Assert.Equal(allowed, await AuthorizeEndpoint<OperationsController>(action, Principal(role, 7)));
+
+    [Theory]
+    [InlineData("CreateShift", "Manager", true)]
+    [InlineData("UpdateShift", "Driver", false)]
+    [InlineData("CreateShift", "CustomerService", false)]
+    [InlineData("CreateReport", "Driver", true)]
+    [InlineData("CreateReport", "Customer", false)]
+    [InlineData("AssignMaintenance", "Manager", true)]
+    [InlineData("AssignMaintenance", "Maintenance", false)]
+    [InlineData("ReplaceVehicle", "Manager", true)]
+    [InlineData("ReplaceVehicle", "Driver", false)]
+    [InlineData("InspectReplacement", "Maintenance", true)]
+    public async Task Dispatch_endpoints_enforce_roles(string action, string role, bool allowed) =>
+        Assert.Equal(allowed, await AuthorizeEndpoint<DispatchController>(action, Principal(role, 7)));
 
     [Theory]
     [InlineData("Staff", false)]

@@ -58,16 +58,18 @@ public sealed class PaymentTests(PostgresFixture db) : IClassFixture<PostgresFix
     }
 
     [Fact]
-    public async Task Passing_post_inspection_creates_deposit_refund()
+    public async Task Passing_post_inspection_does_not_create_financial_transactions()
     {
         var (scenario, _) = await PaidScenarioAsync();
 
-        await _operations.AddInspectionAsync(scenario.RentalId, 1, "pre_rental", true, null, null, null, null, CancellationToken.None);
-        await _operations.ChangeRentalStatusAsync(scenario.RentalId, "renting", CancellationToken.None);
-        await _operations.AddInspectionAsync(scenario.RentalId, 1, "post_rental", true, null, null, null, null, CancellationToken.None);
+        var user = await Seed.ScalarAsync(db.DataSource,"INSERT INTO users(email) VALUES($1) RETURNING id",$"inspector-{Guid.NewGuid():N}@test.local");
+        var staff = (int)(await Seed.ScalarAsync(db.DataSource,"INSERT INTO staffs(user_id) VALUES($1) RETURNING id",user))!;
 
-        Assert.Equal(scenario.Deposit, (decimal)(await Seed.ScalarAsync(db.DataSource, "SELECT amount FROM payments WHERE rental_id=$1 AND type='refund' AND method='deposit'", scenario.RentalId))!);
-        Assert.Equal("requested", (string)(await Seed.ScalarAsync(db.DataSource, "SELECT status FROM payments WHERE rental_id=$1 AND type='refund' AND method='deposit'", scenario.RentalId))!);
+        await _operations.AddInspectionAsync(scenario.RentalId, staff, "pre_rental", true, null, null, null, null, CancellationToken.None);
+        await _operations.ChangeRentalStatusAsync(scenario.RentalId, "renting", CancellationToken.None);
+        await _operations.AddInspectionAsync(scenario.RentalId, staff, "post_rental", true, null, null, null, null, CancellationToken.None);
+
+        Assert.Equal(0, await Seed.CountAsync(db.DataSource,"SELECT COUNT(*) FROM payments WHERE rental_id=$1 AND type='refund'",scenario.RentalId));
     }
 
     private async Task<(DirectRental Scenario, int PaymentId)> PaidScenarioAsync()

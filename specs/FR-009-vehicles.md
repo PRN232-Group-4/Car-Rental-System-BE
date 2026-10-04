@@ -5,3 +5,6 @@ CRUD vehicle type, vehicle details/images. Cloudinary storage service đã sẵn
 ## Phân quyền cập nhật 2026-10-03
 
 Phân quyền: đọc catalog public; tạo/sửa loại xe, xe và upload ảnh xe cho Admin/Manager; xóa loại xe chỉ Admin. Staff/Driver không tự có quyền quản lý catalog.
+
+## 2026-10-04 — Biển số
+Vehicle có licensePlate nullable, tối đa 255 ký tự trong create/update/list/detail. Migration 0011 dùng ADD COLUMN IF NOT EXISTS.

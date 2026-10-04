@@ -216,6 +216,7 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
     app.Logger.LogError(exception, "Unhandled request exception for {Method} {Path}.", context.Request.Method, context.Request.Path);
     var status = exception switch
     {
+        UnauthorizedAccessException => StatusCodes.Status403Forbidden,
         KeyNotFoundException => StatusCodes.Status404NotFound,
         ArgumentException or InvalidOperationException => StatusCodes.Status400BadRequest,
         _ => StatusCodes.Status500InternalServerError
