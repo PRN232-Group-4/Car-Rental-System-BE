@@ -139,7 +139,7 @@ public interface IAssignmentRepository
         DateTime windowStart,
         DateTime windowEnd,
         int bufferMinutes,
-        int excludeRentalId,
+        int excludeVehicleId,
         CancellationToken ct);
 
     Task<bool> VehicleExistsAndActiveAsync(int vehicleId, int requiredTypeId, CancellationToken ct);

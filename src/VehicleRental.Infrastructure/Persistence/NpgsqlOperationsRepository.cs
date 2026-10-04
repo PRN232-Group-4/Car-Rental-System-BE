@@ -160,8 +160,8 @@ public sealed class NpgsqlOperationsRepository(NpgsqlDataSource dataSource, Time
             Add(conflict,driver.Value,start,end,rental);
             if((bool)(await conflict.ExecuteScalarAsync(ct))!) throw new InvalidOperationException("Driver is unavailable for the rental period.");
         }
-        await using (var closeCurrent=new NpgsqlCommand("UPDATE vehicle_assignments SET status='reassigned' WHERE rental_id=$1 AND status='assigned'",cn,tx)) { closeCurrent.Parameters.AddWithValue(rental); await closeCurrent.ExecuteNonQueryAsync(ct); }
-        await using (var insert=new NpgsqlCommand("INSERT INTO vehicle_assignments(rental_id,vehicle_id,driver_staff_id,status,assigned_by)VALUES($1,$2,$3,'assigned',$4)",cn,tx)) { Add(insert,rental,vehicle,driver,assignedByEmail); await insert.ExecuteNonQueryAsync(ct); }
+        await using (var closeCurrent=new NpgsqlCommand("UPDATE vehicle_assignments SET status='reassigned', ended_at=now(), ends_at=LEAST(ends_at, now()) WHERE rental_id=$1 AND status='assigned'",cn,tx)) { closeCurrent.Parameters.AddWithValue(rental); await closeCurrent.ExecuteNonQueryAsync(ct); }
+        await using (var insert=new NpgsqlCommand("INSERT INTO vehicle_assignments(rental_id,vehicle_id,driver_staff_id,status,assigned_by,starts_at,ends_at,reason)VALUES($1,$2,$3,'assigned',$4,$5,$6,'initial')",cn,tx)) { Add(insert,rental,vehicle,driver,assignedByEmail,DateTime.SpecifyKind(start,DateTimeKind.Unspecified),DateTime.SpecifyKind(end,DateTimeKind.Unspecified)); await insert.ExecuteNonQueryAsync(ct); }
         await tx.CommitAsync(ct);
     }
     public async Task<IReadOnlyList<DriverScheduleEntry>> ListDriverScheduleAsync(int? driver,DateTime from,DateTime to,CancellationToken ct)

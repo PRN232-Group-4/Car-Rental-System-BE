@@ -181,7 +181,7 @@ public sealed class AssignmentService(
             startsAt,
             endsAt,
             _options.DriverBufferMinutes,
-            rentalId,
+            rental.VehicleId,
             ct);
     }
 }
