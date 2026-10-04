@@ -67,8 +67,31 @@ public sealed class OperationsController(IOperationsRepository store) : Controll
         return Ok(await store.AddInspectionAsync(id, staffId.Value, type, request.IsOk,
             request.OdometerKm, request.FuelBatteryLevel, request.DamageNotes, request.ImageUrls, ct));
     }
+
+    [Authorize(Policy=AuthorizationPolicies.Customer)]
+    [HttpPost("rentals/{rentalId:int}/ratings")]
+    [ProducesResponseType<StaffRating>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RateStaff(int rentalId, RateStaffRequest request, CancellationToken ct)
+    {
+        if (!ModelState.IsValid) return ValidationProblem(ModelState);
+        try
+        {
+            var result = await store.RateStaffAsync(rentalId, request.StaffId, request.Rating, request.Comment, Email(), ct);
+            return Created($"api/staff/{request.StaffId}/ratings", result);
+        }
+        catch (KeyNotFoundException ex) { return Problem(ex.Message, statusCode: StatusCodes.Status404NotFound); }
+    }
+
+    [Authorize(Policy=AuthorizationPolicies.Management)]
+    [HttpGet("staff/{staffId:int}/ratings")]
+    [ProducesResponseType<IReadOnlyList<StaffRating>>(StatusCodes.Status200OK)]
+    public Task<IReadOnlyList<StaffRating>> StaffRatings(int staffId, CancellationToken ct) =>
+        store.ListStaffRatingsAsync(staffId, ct);
+
     private string Email()=>User.FindFirstValue(ClaimTypes.Email)??throw new UnauthorizedAccessException();
 }
+
 
 public sealed record NameRequest([param:Required,StringLength(255,MinimumLength=2)]string Name,[param:StringLength(255)]string? FuelType=null);
 public sealed record FacilityRequest([param:Required,StringLength(255,MinimumLength=2)]string Name,[param:StringLength(255)]string? Address);
@@ -81,3 +104,5 @@ public sealed record AssignmentRequest([param:Range(1,int.MaxValue)]int? DriverS
 public sealed record InspectionRequest([param:Range(1,int.MaxValue)]int? StaffId,bool IsOk,[param:Range(0,double.MaxValue)]decimal? OdometerKm,[param:Range(0,100)]decimal? FuelBatteryLevel,[param:StringLength(500)]string? DamageNotes,string? ImageUrls);
 public sealed record PlanRequest([param: Required] string Name,string? Description,[param: Range(0.01,double.MaxValue)]decimal Price,[param: Range(1,3650)]int DurationDays,[param: Range(0,double.MaxValue)]decimal? IncludedHours,bool IsActive=true){public SubscriptionPlan ToModel()=>new(0,Name,Description,Price,DurationDays,IncludedHours,IsActive);}
 public sealed record MaintenanceRequest([param:Range(1,int.MaxValue)]int VehicleId,int? FacilityId,int? AssignedStaffId,string? Status,string? MaintenanceType,DateOnly? ScheduledDate,bool? IsSafe,string? Description,[param:Range(0,double.MaxValue)]decimal? Cost){public Maintenance ToModel()=>new(0,VehicleId,FacilityId,AssignedStaffId,Status,MaintenanceType,ScheduledDate,IsSafe,Description,Cost);}
+public sealed record RateStaffRequest([param:Range(1,int.MaxValue)]int StaffId,[param:Range(1,5)]decimal Rating,[param:StringLength(500)]string? Comment);
+
