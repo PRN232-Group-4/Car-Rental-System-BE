@@ -64,3 +64,6 @@ JWT validation reads the active account from PostgreSQL on each authenticated re
 ## Verification and boundaries
 
 Tests cover actual authorization policy evaluation, controller scope enforcement, JWT claims, refresh version rejection, specialty assignment, ownership, and migration triggers. PostgreSQL tests use disposable databases; refresh tests use an in-memory Redis command substitute. Browser cookie flows and live Redis are not end-to-end tested here. CSRF remains the separately tracked unfinished requirement in FR-003.
+
+## Override 2026-10-04 — FR-031
+Manager/Admin quản lý ca trực, assignment, replacement và giao maintenance. CustomerService không assign driver. Maintenance chỉ sửa công việc được giao, không đổi assignee; Manager/Admin tạo maintenance. Staff/Driver report với staff_id từ principal; Driver chỉ report chuyến được phân công.

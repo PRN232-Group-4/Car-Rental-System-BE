@@ -28,3 +28,4 @@
 
 - [Google OAuth callback on Railway](2026-10-04-google-oauth-railway-callback.md)
 
+- 2026-10-04: [Vehicle plates, duty shifts and incident recovery](2026-10-04-operational-recovery.md)
