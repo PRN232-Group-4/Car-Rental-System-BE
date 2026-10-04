@@ -1,5 +1,6 @@
 # Changelog
 - 2026-10-04 — [Tìm xe, kiểm tra availability và đệm đối xứng 60 phút (FR-010 / BE-10)](2026-10-04-vehicle-availability.md)
+- 2026-10-04 — [Google OAuth callback and forwarded headers on Railway](2026-10-04-google-oauth-railway-callback.md)
 - 2026-10-03 — [Mua/gia hạn gói qua PayOS & endpoint "Gói của tôi"](2026-10-03-subscription-plan-payments.md)
 - 2026-10-03 — [Sửa `GET /api/vehicles` 500 và lỗi test hết hạn gói](2026-10-03-vehicle-search-envelope-fixes.md)
 - 2026-10-03 — [Subscription rental hours deduction and expiry job](2026-10-03-subscription-rental-expiry.md)
@@ -24,4 +25,8 @@
 - 2026-09-30 — [Startup database and Redis diagnostics](2026-09-30-startup-diagnostics.md)
 - 2026-09-30 — [SQL migration runner and safe baseline](2026-09-30-database-migrations.md)
 - 2026-09-30 — [Bootstrap Clean Architecture, OTP, Redis, Brevo, Docker/CI](2026-09-30-bootstrap.md)
+
+# 2026-10-04
+
+- [Google OAuth callback on Railway](2026-10-04-google-oauth-railway-callback.md)
 

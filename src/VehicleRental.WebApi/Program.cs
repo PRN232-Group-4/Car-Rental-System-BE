@@ -16,6 +16,7 @@ using StackExchange.Redis;
 using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.HttpOverrides;
 using System.Security.Claims;
 using Car_Rental_System_BE.Responses;
 using System.Text;
@@ -54,7 +55,11 @@ builder.Services.AddOptions<JwtOptions>()
     .Bind(builder.Configuration.GetSection(JwtOptions.SectionName))
     .ValidateDataAnnotations()
     .ValidateOnStart();
-builder.Services.Configure<GoogleAuthOptions>(builder.Configuration.GetSection(GoogleAuthOptions.SectionName));
+builder.Services.AddOptions<GoogleAuthOptions>()
+    .Bind(builder.Configuration.GetSection(GoogleAuthOptions.SectionName))
+    .Validate(options => !options.Enabled || (!string.IsNullOrWhiteSpace(options.ClientId) && !string.IsNullOrWhiteSpace(options.ClientSecret)),
+        "GoogleAuthentication:ClientId and GoogleAuthentication:ClientSecret are required when Google authentication is enabled.")
+    .ValidateOnStart();
 builder.Services.Configure<CloudinaryOptions>(builder.Configuration.GetSection(CloudinaryOptions.SectionName));
 builder.Services.Configure<PayOsOptions>(builder.Configuration.GetSection(PayOsOptions.SectionName));
 builder.Services.AddOptions<AvailabilityOptions>()
@@ -74,6 +79,14 @@ builder.Services.AddRateLimiter(options =>
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
             }));
+});
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedHost | ForwardedHeaders.XForwardedProto;
+    // Railway terminates TLS in its reverse proxy. The container is not publicly reachable directly.
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
 });
 
 var connectionString = builder.Configuration.GetConnectionString("RentalDatabase") ?? builder.Configuration["DATABASE_URL"];
@@ -187,6 +200,14 @@ if (googleAuthentication.Enabled)
             var users = scope.ServiceProvider.GetRequiredService<IUserRepository>();
             await users.EnsureGoogleCustomerAsync(email.Trim().ToLowerInvariant(), name, context.HttpContext.RequestAborted);
         };
+        options.Events.OnRemoteFailure = async context =>
+        {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("GoogleAuthentication");
+            logger.LogWarning(context.Failure, "Google OAuth callback failed.");
+            context.HandleResponse();
+            await Results.Problem("Google sign-in could not be completed. Please try again.", statusCode: StatusCodes.Status400BadRequest)
+                .ExecuteAsync(context.HttpContext);
+        };
     });
 }
 builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
@@ -205,6 +226,8 @@ app.Lifetime.ApplicationStarted.Register(() =>
 });
 
 // Configure the HTTP request pipeline.
+app.UseForwardedHeaders();
+
 if (!app.Environment.IsProduction())
 {
     app.UseSwagger();
@@ -214,6 +237,7 @@ if (!app.Environment.IsProduction())
 app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 {
     var exception = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+    app.Logger.LogError(exception, "Unhandled request exception for {Method} {Path}.", context.Request.Method, context.Request.Path);
     var status = exception switch
     {
         Car_Rental_System_BE.Application.Common.Errors.BusinessRuleException bre => bre.StatusCode,
