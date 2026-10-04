@@ -42,6 +42,36 @@ public sealed class PaymentsController(IPaymentRepository payments, IPaymentGate
         return Ok(result);
     }
 
+    // FE gọi khi trình duyệt quay về từ cancelUrl: payOS KHÔNG gửi webhook khi khách huỷ link,
+    // nên phải hỏi lại payOS rồi mới đánh dấu 'cancelled' (không tin query param của FE).
+    [Authorize(Policy = AuthorizationPolicies.Customer)]
+    [HttpPost("payments/checkouts/{orderCode:long}/cancel")]
+    [ProducesResponseType<CheckoutCancellation>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> CancelCheckout(long orderCode, CancellationToken ct)
+    {
+        var providerStatus = await gateway.GetPaymentStatusAsync(orderCode, ct);
+        if (providerStatus is null)
+            return Problem("Không tra được trạng thái liên kết thanh toán trên payOS.", statusCode: StatusCodes.Status404NotFound);
+        // Khách đã trả tiền (webhook có thể tới trễ) → không được đánh dấu huỷ.
+        if (providerStatus == "PAID")
+            return Problem("Giao dịch đã thanh toán thành công.", statusCode: StatusCodes.Status409Conflict);
+        // Link còn hiệu lực (khách chỉ bấm back) → giữ nguyên trạng thái.
+        if (providerStatus != "CANCELLED" && providerStatus != "EXPIRED")
+            return Problem("Liên kết thanh toán vẫn đang chờ thanh toán.", statusCode: StatusCodes.Status409Conflict);
+
+        var email = Email();
+        // ponytail: chỉ chốt 'cancelled' được khi khách quay về cancelUrl (FE gọi endpoint này).
+        // Khách đóng tab giữa chừng thì hoá đơn vẫn 'unpaid' — cần job quét link quá expiredAt nếu
+        // muốn dọn tự động.
+        var cancelled = SubscriptionOrderCodes.IsSubscriptionOrder(orderCode)
+            ? await payments.CancelPlanPurchaseAsync(orderCode, email, ct)
+            : await payments.CancelInvoicePaymentAsync((int)orderCode, email, ct);
+        if (!cancelled) return Problem("Không tìm thấy giao dịch cần huỷ.", statusCode: StatusCodes.Status404NotFound);
+        return Ok(new CheckoutCancellation(orderCode, "cancelled"));
+    }
+
     // Polled by the FE after PayOS returns, to know when the webhook has activated the subscription.
     [Authorize(Policy = AuthorizationPolicies.Customer)]
     [HttpGet("subscription-plans/purchases/{orderCode:long}")]

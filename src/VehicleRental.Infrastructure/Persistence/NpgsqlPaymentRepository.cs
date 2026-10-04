@@ -163,6 +163,26 @@ public sealed class NpgsqlPaymentRepository(NpgsqlDataSource dataSource) : IPaym
         return new(orderCode, "paid");
     }
 
+    public async Task<bool> CancelInvoicePaymentAsync(int invoiceId, string email, CancellationToken ct)
+    {
+        await using var c = dataSource.CreateCommand(@"UPDATE invoices SET status='cancelled'
+            WHERE id=$1 AND status <> 'paid'
+              AND EXISTS (SELECT 1 FROM rentals r JOIN customers cu ON cu.id=r.customer_id JOIN users u ON u.id=cu.user_id
+                          WHERE r.id=invoices.rental_id AND u.email=$2)");
+        c.Parameters.AddWithValue(invoiceId); c.Parameters.AddWithValue(email);
+        return await c.ExecuteNonQueryAsync(ct) > 0;
+    }
+
+    public async Task<bool> CancelPlanPurchaseAsync(long orderCode, string email, CancellationToken ct)
+    {
+        await using var c = dataSource.CreateCommand(@"UPDATE payments SET status='cancelled'
+            WHERE id=$1 AND is_subscription_payment=true AND plan_id IS NOT NULL AND status='pending'
+              AND EXISTS (SELECT 1 FROM customers cu JOIN users u ON u.id=cu.user_id
+                          WHERE cu.id=payments.customer_id AND u.email=$2)");
+        c.Parameters.AddWithValue(SubscriptionOrderCodes.ToPaymentId(orderCode)); c.Parameters.AddWithValue(email);
+        return await c.ExecuteNonQueryAsync(ct) > 0;
+    }
+
     public async Task<PlanPurchaseStatus?> GetPlanPurchaseAsync(long orderCode, string email, CancellationToken ct)
     {
         await using var c = dataSource.CreateCommand("SELECT p.status FROM payments p JOIN customers cu ON cu.id=p.customer_id JOIN users u ON u.id=cu.user_id WHERE p.id=$1 AND p.is_subscription_payment=true AND p.plan_id IS NOT NULL AND u.email=$2");

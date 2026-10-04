@@ -7,6 +7,9 @@ public sealed record PaymentSummary(int Id, int? RentalId, int? InvoiceId, strin
 public sealed record PlanCheckout(int PaymentId, long OrderCode, decimal Amount, string PlanName);
 public sealed record PlanPurchaseStatus(long OrderCode, string Status);
 
+/// <summary>Kết quả xác minh + huỷ một link thanh toán (invoice hoặc gói) theo orderCode.</summary>
+public sealed record CheckoutCancellation(long OrderCode, string Status);
+
 /// <summary>
 /// Plan purchases and invoices share the PayOS <c>orderCode</c> (an int64). Plan order codes are
 /// offset into a high range so the webhook can route them without colliding with invoice ids.
@@ -35,6 +38,12 @@ public interface IPaymentRepository
     Task<PlanCheckout> CreatePlanCheckoutAsync(int planId, string email, CancellationToken ct);
     Task<PlanPurchaseStatus> CompletePlanPurchaseAsync(long orderCode, decimal amount, string providerReference, CancellationToken ct);
     Task<PlanPurchaseStatus?> GetPlanPurchaseAsync(long orderCode, string email, CancellationToken ct);
+
+    /// <summary>Đánh dấu hoá đơn 'cancelled' (bỏ qua nếu đã 'paid'). False khi không tìm thấy/không phải chủ.</summary>
+    Task<bool> CancelInvoicePaymentAsync(int invoiceId, string email, CancellationToken ct);
+
+    /// <summary>Đánh dấu payment mua gói 'cancelled' khi còn 'pending'. False khi không tìm thấy/không phải chủ.</summary>
+    Task<bool> CancelPlanPurchaseAsync(long orderCode, string email, CancellationToken ct);
 }
 
 public interface IPaymentGateway
@@ -42,6 +51,13 @@ public interface IPaymentGateway
     bool IsConfigured { get; }
     Task<CheckoutResult> CreateCheckoutAsync(CheckoutRequest request, CancellationToken ct);
     bool VerifyWebhook(PayOsWebhook webhook);
+
+    /// <summary>
+    /// Trạng thái link thanh toán theo orderCode (PENDING/PAID/CANCELLED/EXPIRED) hoặc null nếu
+    /// không tra được. payOS không gửi webhook khi khách huỷ — chỉ redirect về cancelUrl — nên
+    /// đây là cách duy nhất để biết link đã bị huỷ/hết hạn.
+    /// </summary>
+    Task<string?> GetPaymentStatusAsync(long orderCode, CancellationToken ct);
 }
 
 public sealed class PaymentProviderNotConfiguredException : Exception
