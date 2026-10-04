@@ -105,7 +105,20 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
         while(await r.ReadAsync(ct)) a.Add(ReadMaintenance(r));
         return a;
     }
-    public async Task<object> DashboardAsync(DateTime? from,DateTime? to,CancellationToken ct){await using var c=dataSource.CreateCommand("SELECT COALESCE(SUM(amount) FILTER(WHERE status='paid'),0),COUNT(*) FILTER(WHERE status='renting'),(SELECT COUNT(*) FROM vehicle_maintenance WHERE status NOT IN ('completed','cancelled')), (SELECT COUNT(*) FROM customer_subscriptions WHERE status='active' AND end_date>=CURRENT_DATE) FROM invoices i FULL JOIN rentals r ON false");await using var rr=await c.ExecuteReaderAsync(ct);await rr.ReadAsync(ct);return new { revenue=rr.GetDecimal(0),renting=rr.GetInt64(1),maintenance=rr.GetInt64(2),activeSubscriptions=rr.GetInt64(3)};}
+    public async Task<object> DashboardAsync(DateTime? from,DateTime? to,CancellationToken ct)
+    {
+        await using var c = dataSource.CreateCommand("""
+            SELECT 
+                (SELECT COALESCE(SUM(amount), 0) FROM invoices WHERE status = 'paid' AND ($1::timestamp IS NULL OR issued_at >= $1) AND ($2::timestamp IS NULL OR issued_at <= $2)),
+                (SELECT COUNT(*) FROM rentals WHERE status = 'renting'),
+                (SELECT COUNT(*) FROM vehicle_maintenance WHERE status NOT IN ('completed','cancelled')),
+                (SELECT COUNT(*) FROM customer_subscriptions WHERE status = 'active' AND end_date >= CURRENT_DATE)
+            """);
+        Add(c, from, to);
+        await using var rr = await c.ExecuteReaderAsync(ct);
+        await rr.ReadAsync(ct);
+        return new { revenue = rr.GetDecimal(0), renting = rr.GetInt64(1), maintenance = rr.GetInt64(2), activeSubscriptions = rr.GetInt64(3) };
+    }
     private async Task<IReadOnlyList<OrganizationUnit>> UnitsAsync(string table,bool address,CancellationToken ct){await using var c=dataSource.CreateCommand($"SELECT id,name{(address?",address":"")} FROM {table} ORDER BY name");await using var r=await c.ExecuteReaderAsync(ct);var a=new List<OrganizationUnit>();while(await r.ReadAsync(ct))a.Add(new(r.GetInt32(0),r.GetString(1),address?S(r,2):null));return a;}
     private async Task<OrganizationUnit> SaveUnitAsync(string table,int? id,string name,string? address,CancellationToken ct){var q=id is null?(table=="facilities"?"INSERT INTO facilities(name,address)VALUES($1,$2) RETURNING id,name,address":"INSERT INTO departments(name)VALUES($1) RETURNING id,name"):(table=="facilities"?"UPDATE facilities SET name=$1,address=$2 WHERE id=$3 RETURNING id,name,address":"UPDATE departments SET name=$1 WHERE id=$2 RETURNING id,name");await using var c=dataSource.CreateCommand(q);Add(c,name);if(table=="facilities")c.Parameters.AddWithValue((object?)address??DBNull.Value);if(id is not null)c.Parameters.AddWithValue(id.Value);await using var r=await c.ExecuteReaderAsync(ct);if(!await r.ReadAsync(ct))throw new KeyNotFoundException();return new(r.GetInt32(0),r.GetString(1),r.FieldCount>2?S(r,2):null);}
     private async Task DeleteAsync(string table,int id,CancellationToken ct){await using var c=dataSource.CreateCommand($"DELETE FROM {table} WHERE id=$1");c.Parameters.AddWithValue(id);if(await c.ExecuteNonQueryAsync(ct)!=1)throw new KeyNotFoundException();}
