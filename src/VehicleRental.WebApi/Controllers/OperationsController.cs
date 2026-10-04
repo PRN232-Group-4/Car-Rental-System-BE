@@ -28,7 +28,7 @@ public sealed class OperationsController(IOperationsRepository store) : Controll
     [Authorize(Roles="Admin")] [HttpPost("departments")] public async Task<IActionResult> AddDepartment(NameRequest x,CancellationToken ct){var d=await store.SaveDepartmentAsync(null,x.Name,ct);return Created($"api/departments/{d.Id}",d);}
     [Authorize(Roles="Admin")] [HttpPut("departments/{id:int}")] public Task<OrganizationUnit> EditDepartment(int id,NameRequest x,CancellationToken ct)=>store.SaveDepartmentAsync(id,x.Name,ct);
     [Authorize(Roles="Admin")] [HttpDelete("departments/{id:int}")] public async Task<IActionResult> DeleteDepartment(int id,CancellationToken ct){await store.DeleteDepartmentAsync(id,ct);return NoContent();}
-    [Authorize(Roles="Admin")] [HttpGet("facilities")] public Task<IReadOnlyList<OrganizationUnit>> Facilities(CancellationToken ct)=>store.ListFacilitiesAsync(ct);
+    [HttpGet("facilities")] public Task<IReadOnlyList<OrganizationUnit>> Facilities(CancellationToken ct)=>store.ListFacilitiesAsync(ct);
     [Authorize(Roles="Admin")] [HttpPost("facilities")] public async Task<IActionResult> AddFacility(FacilityRequest x,CancellationToken ct){var f=await store.SaveFacilityAsync(null,x.Name,x.Address,ct);return Created($"api/facilities/{f.Id}",f);}
     [Authorize(Roles="Admin")] [HttpPut("facilities/{id:int}")] public Task<OrganizationUnit> EditFacility(int id,FacilityRequest x,CancellationToken ct)=>store.SaveFacilityAsync(id,x.Name,x.Address,ct);
     [Authorize(Roles="Admin")] [HttpDelete("facilities/{id:int}")] public async Task<IActionResult> DeleteFacility(int id,CancellationToken ct){await store.DeleteFacilityAsync(id,ct);return NoContent();}
