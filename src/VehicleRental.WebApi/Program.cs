@@ -165,7 +165,12 @@ if (googleAuthentication.Enabled)
     {
         options.ClientId = googleAuthentication.ClientId;
         options.ClientSecret = googleAuthentication.ClientSecret;
-        options.CallbackPath = "/signin-google";
+        // Đặt callback dưới /api/* để proxy của FE (Cloudflare worker ở prod, rewrite của next dev)
+        // chuyển tiếp được request callback. Nhờ vậy các cookie của quá trình OAuth thuộc origin FE.
+        options.CallbackPath = "/api/auth/google/callback";
+        // Mặc định CorrelationCookie là SameSite=None (buộc Secure) → hỏng khi dev qua http.
+        // Callback là điều hướng GET top-level từ accounts.google.com nên Lax vẫn gửi cookie.
+        options.CorrelationCookie.SameSite = SameSiteMode.Lax;
         options.SignInScheme = "External";
         options.Events.OnCreatingTicket = async context =>
         {
@@ -176,13 +181,15 @@ if (googleAuthentication.Enabled)
             var users = scope.ServiceProvider.GetRequiredService<IUserRepository>();
             await users.EnsureGoogleCustomerAsync(email.Trim().ToLowerInvariant(), name, context.HttpContext.RequestAborted);
         };
-        options.Events.OnRemoteFailure = async context =>
+        options.Events.OnRemoteFailure = context =>
         {
             var logger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("GoogleAuthentication");
             logger.LogWarning(context.Failure, "Google OAuth callback failed.");
             context.HandleResponse();
-            await Results.Problem("Google sign-in could not be completed. Please try again.", statusCode: StatusCodes.Status400BadRequest)
-                .ExecuteAsync(context.HttpContext);
+            // Khách bấm huỷ ở màn hình Google cũng rơi vào đây → trả về trang đăng nhập kèm cờ lỗi
+            // thay vì trang JSON 400.
+            context.Response.Redirect($"{googleAuthentication.SuccessRedirectUrl.TrimEnd('/')}/login?google=error");
+            return Task.CompletedTask;
         };
     });
 }
@@ -202,7 +209,10 @@ app.Lifetime.ApplicationStarted.Register(() =>
 });
 
 // Configure the HTTP request pipeline.
-app.UseForwardedHeaders();
+// Phải truyền options từ DI: overload không tham số tạo ForwardedHeadersOptions mặc định
+// (không có XForwardedHost, chỉ tin loopback) nên X-Forwarded-Host của FE worker bị bỏ qua →
+// Request.Host = host nội bộ, làm redirect_uri của Google trỏ về domain BE.
+app.UseForwardedHeaders(app.Services.GetRequiredService<IOptions<ForwardedHeadersOptions>>().Value);
 
 if (!app.Environment.IsProduction())
 {
