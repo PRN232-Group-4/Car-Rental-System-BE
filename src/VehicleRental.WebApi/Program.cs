@@ -189,12 +189,18 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
     var exception = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
     var status = exception switch
     {
+        Car_Rental_System_BE.Application.Common.Errors.BusinessRuleException bre => bre.StatusCode,
         KeyNotFoundException => StatusCodes.Status404NotFound,
         ArgumentException or InvalidOperationException => StatusCodes.Status400BadRequest,
         _ => StatusCodes.Status500InternalServerError
     };
     var detail = status == StatusCodes.Status500InternalServerError ? "An unexpected server error occurred." : exception?.Message;
-    await Results.Problem(detail, statusCode: status).ExecuteAsync(context);
+    Dictionary<string, object?>? extensions = null;
+    if (exception is Car_Rental_System_BE.Application.Common.Errors.BusinessRuleException businessEx)
+    {
+        extensions = new Dictionary<string, object?> { ["code"] = businessEx.Code };
+    }
+    await Results.Problem(detail, statusCode: status, extensions: extensions).ExecuteAsync(context);
 }));
 app.UseHttpsRedirection();
 app.UseAuthentication();
