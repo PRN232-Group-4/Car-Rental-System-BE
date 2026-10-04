@@ -1,4 +1,5 @@
 # Changelog
+- 2026-10-04 — [Tìm xe, kiểm tra availability và đệm đối xứng 60 phút (FR-010 / BE-10)](2026-10-04-vehicle-availability.md)
 - 2026-10-03 — [Mua/gia hạn gói qua PayOS & endpoint "Gói của tôi"](2026-10-03-subscription-plan-payments.md)
 - 2026-10-03 — [Sửa `GET /api/vehicles` 500 và lỗi test hết hạn gói](2026-10-03-vehicle-search-envelope-fixes.md)
 - 2026-10-03 — [Subscription rental hours deduction and expiry job](2026-10-03-subscription-rental-expiry.md)
