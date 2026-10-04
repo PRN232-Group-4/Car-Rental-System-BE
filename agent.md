@@ -17,7 +17,7 @@ Repository chỉ đại diện aggregate root. Không generic repository; contro
 - Xác thực: email lower-case; OTP 6 số có TTL, cooldown, giới hạn sai và rate limit email/IP. Không log OTP, API key, mật khẩu, cookie hoặc connection string. Tạo `users`/`customers` chỉ sau verify thành công.
 - Mật khẩu: PBKDF2/Argon2 có salt; đổi/reset mật khẩu thu hồi mọi session.
 - Session: cookie `HttpOnly`, `Secure`, `SameSite=Lax`; ticket Redis với absolute + sliding expiry; logout xóa ticket.
-- Thuê xe: không chồng lịch; long-term khóa xe; pre-inspection đạt trước `renting`; post-inspection trước `completed`; fail tạo maintenance.
+- Thuê xe: không chồng lịch; long-term khóa xe; pre-inspection đạt trước `renting`; post-inspection trước `completed`; fail khóa xe, staff report riêng, Manager giao maintenance (FR-031).
 - Payment: subscription rental không invoice; direct rental phải qua invoice; snapshot giá/policy lúc đặt.
 
 ## Quy trình mỗi thay đổi
