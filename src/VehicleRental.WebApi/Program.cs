@@ -22,6 +22,8 @@ using Car_Rental_System_BE.Responses;
 using System.Text;
 using Car_Rental_System_BE.Application.Availability;
 using Car_Rental_System_BE.Infrastructure.Availability;
+using Car_Rental_System_BE.Application.Assignments;
+using Car_Rental_System_BE.Infrastructure.Assignments;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 
@@ -125,6 +127,18 @@ builder.Services.AddScoped<IVehicleSearchRepository, NpgsqlVehicleSearchReposito
 builder.Services.AddScoped<IVehicleAvailabilityService, NpgsqlVehicleAvailabilityService>();
 builder.Services.AddScoped<IDriverAvailability, NpgsqlDriverAvailability>();
 builder.Services.AddScoped<VehicleSearchService>();
+builder.Services.Configure<AssignmentOptions>(builder.Configuration.GetSection(AssignmentOptions.SectionName));
+builder.Services.AddScoped<NpgsqlAssignmentRepository>();
+builder.Services.AddScoped<IAssignmentRepository>(sp => sp.GetRequiredService<NpgsqlAssignmentRepository>());
+builder.Services.AddScoped<IMaintenanceIncidentGateway>(sp => sp.GetRequiredService<NpgsqlAssignmentRepository>());
+builder.Services.AddScoped<IAssignmentService>(sp =>
+{
+    var repo = sp.GetRequiredService<IAssignmentRepository>();
+    var vehicleAvailability = sp.GetRequiredService<IVehicleAvailabilityService>();
+    var timeProvider = sp.GetRequiredService<TimeProvider>();
+    var options = sp.GetRequiredService<IOptions<AssignmentOptions>>().Value;
+    return new AssignmentService(repo, vehicleAvailability, options, timeProvider);
+});
 var googleAuthentication = builder.Configuration.GetSection(GoogleAuthOptions.SectionName).Get<GoogleAuthOptions>() ?? new GoogleAuthOptions();
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 var authentication = builder.Services.AddAuthentication(options =>

@@ -147,6 +147,11 @@ public sealed class ApiSuccessResponseFilter : IAsyncResultFilter
         ["VehicleSearch.Availability"] = "Vehicle availability retrieved successfully.",
         ["VehicleSearch.BusySlots"] = "Vehicle busy slots retrieved successfully.",
         ["VehicleSearch.ActivePolicy"] = "Active rental policy retrieved successfully.",
-        ["VehicleSearch.AffectedRentals"] = "Affected rentals retrieved successfully."
+        ["VehicleSearch.AffectedRentals"] = "Affected rentals retrieved successfully.",
+        ["RentalAssignments.AssignDriver"] = "Driver assigned successfully.",
+        ["RentalAssignments.ReplaceVehicle"] = "Vehicle replaced successfully.",
+        ["RentalAssignments.ListAssignments"] = "Rental assignments retrieved successfully.",
+        ["RentalAssignments.ListAssignableDrivers"] = "Assignable drivers retrieved successfully.",
+        ["RentalAssignments.ListAssignableVehicles"] = "Assignable vehicles retrieved successfully."
     };
 }
