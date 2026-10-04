@@ -16,4 +16,8 @@ API nhận cả URI cloud (`redis://user:password@host:port` hoặc TLS `rediss:
 
 ## Google OAuth và Cloudinary
 
+On Railway, also set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`, and keep the exact Google redirect URI `https://<railway-domain>/signin-google`. The API consumes Railway's forwarded HTTPS and host headers before running authentication.
+
+If the callback fails, the API returns a safe `400` response and writes `Google OAuth callback failed.` with the underlying exception to the Railway deployment log. Check that migration `0008_staff_authorization` has run and that database and Redis connectivity is healthy; do not log or share any client secret, cookie, or connection string.
+
 Đặt Railway variables: `GoogleAuthentication__Enabled=true`, `GoogleAuthentication__ClientId`, `GoogleAuthentication__ClientSecret`, `Cloudinary__CloudName`, `Cloudinary__ApiKey`, `Cloudinary__ApiSecret`. Trong Google Cloud Console thêm Authorized redirect URI `https://<railway-domain>/signin-google`; local là `http://localhost:3000/signin-google`. Không dùng `appsettings.json` cho các giá trị này.

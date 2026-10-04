@@ -24,3 +24,7 @@
 - 2026-09-30 — [SQL migration runner and safe baseline](2026-09-30-database-migrations.md)
 - 2026-09-30 — [Bootstrap Clean Architecture, OTP, Redis, Brevo, Docker/CI](2026-09-30-bootstrap.md)
 
+# 2026-10-04
+
+- [Google OAuth callback on Railway](2026-10-04-google-oauth-railway-callback.md)
+
