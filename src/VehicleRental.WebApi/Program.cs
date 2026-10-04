@@ -53,8 +53,12 @@ builder.Services.AddOptions<JwtOptions>()
     .ValidateOnStart();
 builder.Services.AddOptions<GoogleAuthOptions>()
     .Bind(builder.Configuration.GetSection(GoogleAuthOptions.SectionName))
-    .Validate(options => !options.Enabled || (!string.IsNullOrWhiteSpace(options.ClientId) && !string.IsNullOrWhiteSpace(options.ClientSecret)),
-        "GoogleAuthentication:ClientId and GoogleAuthentication:ClientSecret are required when Google authentication is enabled.")
+    .Validate(options => !options.Enabled ||
+        (!string.IsNullOrWhiteSpace(options.ClientId) &&
+         !string.IsNullOrWhiteSpace(options.ClientSecret) &&
+         Uri.TryCreate(options.SuccessRedirectUrl, UriKind.Absolute, out var successRedirectUri) &&
+         successRedirectUri.Scheme == Uri.UriSchemeHttps),
+        "GoogleAuthentication:ClientId, GoogleAuthentication:ClientSecret and an HTTPS GoogleAuthentication:SuccessRedirectUrl are required when Google authentication is enabled.")
     .ValidateOnStart();
 builder.Services.Configure<CloudinaryOptions>(builder.Configuration.GetSection(CloudinaryOptions.SectionName));
 builder.Services.Configure<PayOsOptions>(builder.Configuration.GetSection(PayOsOptions.SectionName));
