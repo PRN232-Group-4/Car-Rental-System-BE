@@ -20,9 +20,10 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
     public async Task<StaffPage> SearchAsync(string? search, bool? isDriver, int page, int pageSize, CancellationToken ct)
     {
         const string filter = """
+
             WHERE u.is_active = TRUE
-              AND ($1 IS NULL OR s.is_driver = $1)
-              AND ($2 IS NULL OR u.email ILIKE '%' || $2 || '%' OR u.fullname ILIKE '%' || $2 || '%'
+              AND ($1::boolean IS NULL OR s.is_driver = $1::boolean)
+              AND ($2::text IS NULL OR u.email ILIKE '%' || $2 || '%' OR u.fullname ILIKE '%' || $2 || '%'
                    OR u.phone ILIKE '%' || $2 || '%' OR s.license_number ILIKE '%' || $2 || '%')
             """;
         var normalizedSearch = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
