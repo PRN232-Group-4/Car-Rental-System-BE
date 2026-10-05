@@ -11,3 +11,6 @@
 
 ## Department assignment — 2026-10-05 assumptions
 Assignment moves an existing Staff/Manager account to a department and does not grant the Manager role. Manager assignment authority is system-wide, matching existing management policies. Multiple Managers may belong to one department; no single department-head relationship is introduced.
+
+## Rental contracts — 2026-10-05 assumptions
+Admin/Manager/CustomerService records externally signed documents by HTTP(S) URL and UTC signing time. Signed evidence is immutable and is recorded before rental start; corrections/versioning need a separate workflow. This API stores evidence and does not perform electronic signing. Existing rental start requirements are preserved; whether a signed contract must also gate long-term pickup remains a business decision.

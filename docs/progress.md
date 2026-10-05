@@ -1,5 +1,8 @@
 # Tiến độ
 
+## BE-12/BE-13/BE-15 audit — 2026-10-05
+Hourly/long-term creation, transactional interval locks and pre-inspection gating already exist. Added signed contract PUT API and exposed unit-price snapshots/contract metadata in rental responses. Build/test with warnings as errors: 131/131 tests pass against isolated PostgreSQL 18. Corrected shared vehicle test seed to include required category/fuel. No migration required; Docker deployment not verified. FR-013 renewal/payment schedules, FR-017 automated overtime and dedicated Domain Rental aggregate remain pending. See [API guide](rental-contract-api.md).
+
 | ID | Tên | Milestone | Priority | Status | Spec | Change gần nhất |
 |---|---|---|---|---|---|---|
 | Bootstrap | Docs, architecture, Docker, CI | M0 | P0 | In progress | NFR-001..008 | 2026-10-02-local-migration-path |
