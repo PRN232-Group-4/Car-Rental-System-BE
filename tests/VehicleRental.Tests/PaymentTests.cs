@@ -65,6 +65,7 @@ public sealed class PaymentTests(PostgresFixture db) : IClassFixture<PostgresFix
         await _operations.AddInspectionAsync(scenario.RentalId, 1, "pre_rental", true, null, null, null, null, CancellationToken.None);
         await _operations.ChangeRentalStatusAsync(scenario.RentalId, "renting", CancellationToken.None);
         await _operations.AddInspectionAsync(scenario.RentalId, 1, "post_rental", true, null, null, null, null, CancellationToken.None);
+        await _operations.ChangeRentalStatusAsync(scenario.RentalId, "completed", CancellationToken.None);
 
         Assert.Equal(scenario.Deposit, (decimal)(await Seed.ScalarAsync(db.DataSource, "SELECT amount FROM payments WHERE rental_id=$1 AND type='refund' AND method='deposit'", scenario.RentalId))!);
         Assert.Equal("requested", (string)(await Seed.ScalarAsync(db.DataSource, "SELECT status FROM payments WHERE rental_id=$1 AND type='refund' AND method='deposit'", scenario.RentalId))!);

@@ -127,7 +127,33 @@ public sealed class NpgsqlOperationsRepository(NpgsqlDataSource dataSource, Time
         return (await GetRentalAsync(rid,ct))!;
     }
     public async Task<Rental?> GetRentalAsync(int id,CancellationToken ct){await using var c=dataSource.CreateCommand("SELECT r.id,r.customer_id,r.vehicle_id,r.rental_type,r.status,r.is_subscription,r.vat_price,r.deposit_price,r.overtime_price,r.total_price,COALESCE(h.start_time,l.start_time),COALESCE(h.end_time,l.end_time) FROM rentals r LEFT JOIN hour_rental_detail h ON h.rental_id=r.id LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id WHERE r.id=$1");c.Parameters.AddWithValue(id);await using var r=await c.ExecuteReaderAsync(ct);return await r.ReadAsync(ct)?ReadRental(r):null;}
-    public async Task<Rental> ChangeRentalStatusAsync(int id,string status,CancellationToken ct){var old=await GetRentalAsync(id,ct)??throw new KeyNotFoundException();var allowed=(old.Status,status) switch {("pending","cancelled")or("pending","pre_inspection")or("pre_inspection","renting")or("renting","post_inspection")or("post_inspection","completed")=>true,_=>false};if(!allowed)throw new InvalidOperationException("Invalid rental state transition.");await RequireInspectionForStatusAsync(id,status,ct);await using var c=dataSource.CreateCommand("UPDATE rentals SET status=$1 WHERE id=$2");Add(c,status,id);await c.ExecuteNonQueryAsync(ct);return (await GetRentalAsync(id,ct))!;}
+    public async Task<Rental> ChangeRentalStatusAsync(int id,string status,CancellationToken ct){
+        var old=await GetRentalAsync(id,ct)??throw new KeyNotFoundException();
+        var allowed=(old.Status,status) switch {
+            ("pending","cancelled")or("pending","pre_inspection")or("pre_inspection","renting")or("renting","post_inspection")or("post_inspection","completed")=>true,
+            _=>false
+        };
+        if(!allowed)throw new InvalidOperationException("Invalid rental state transition.");
+        await RequireInspectionForStatusAsync(id,status,ct);
+        await using var c=dataSource.CreateCommand("UPDATE rentals SET status=$1, status_changed_at=now(), completed_at=CASE WHEN $1='completed' THEN COALESCE(completed_at, now()) ELSE completed_at END WHERE id=$2");
+        Add(c,status,id);
+        await c.ExecuteNonQueryAsync(ct);
+        if(status=="completed"){
+            await using var refund=dataSource.CreateCommand("""
+                INSERT INTO payments(rental_id,invoice_id,customer_id,is_subscription_payment,amount,status,type,method,created_at)
+                SELECT r.id,i.id,r.customer_id,false,r.deposit_price,'requested','refund','deposit',now()
+                FROM rentals r JOIN invoices i ON i.rental_id=r.id AND i.kind='rental'
+                WHERE r.id=$1 AND r.is_subscription=false AND r.deposit_price>0 AND i.status='paid'
+                  AND NOT EXISTS(SELECT 1 FROM payments p WHERE p.rental_id=r.id AND p.type='refund' AND p.method='deposit')
+                """);
+            refund.Parameters.AddWithValue(id);
+            await refund.ExecuteNonQueryAsync(ct);
+            await using var relVehicle=dataSource.CreateCommand("UPDATE vehicles SET is_renting=false, status=CASE WHEN status='maintenance' THEN 'maintenance' ELSE 'available' END WHERE id=$1");
+            relVehicle.Parameters.AddWithValue(old.VehicleId);
+            await relVehicle.ExecuteNonQueryAsync(ct);
+        }
+        return (await GetRentalAsync(id,ct))!;
+    }
     public async Task AssignAsync(int rental,int? driver,string assignedByEmail,CancellationToken ct)
     {
         await using var cn=await dataSource.OpenConnectionAsync(ct);
@@ -171,7 +197,35 @@ public sealed class NpgsqlOperationsRepository(NpgsqlDataSource dataSource, Time
         while(await r.ReadAsync(ct)) schedules.Add(new(r.GetInt32(0),r.GetInt32(1),r.GetInt32(2),r.GetInt32(3),r.GetString(4),r.GetDateTime(5),r.GetDateTime(6),r.GetString(7)));
         return schedules;
     }
-    public async Task<Inspection> AddInspectionAsync(int rental,int staff,string type,bool ok,decimal? odo,decimal? fuel,string? notes,string? images,CancellationToken ct){var r=await GetRentalAsync(rental,ct)??throw new KeyNotFoundException();var required=type=="pre_rental"?"pending":"renting";if(r.Status!=required)throw new InvalidOperationException("Inspection is not allowed in current rental state.");await using var c=dataSource.CreateCommand("INSERT INTO inspections(rental_id,vehicle_id,staff_id,inspection_type,is_ok,odometer_km,fuel_battery_level,damage_notes,img_urls,inspected_at)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,now()) RETURNING id,inspection_type,is_ok,odometer_km,fuel_battery_level,damage_notes,img_urls,inspected_at");Add(c,rental,r.VehicleId,staff,type,ok,odo,fuel,notes,images);await using var x=await c.ExecuteReaderAsync(ct);await x.ReadAsync(ct);var output=new Inspection(x.GetInt32(0),rental,x.GetString(1),x.GetBoolean(2),x.IsDBNull(3)?null:x.GetDecimal(3),x.IsDBNull(4)?null:x.GetDecimal(4),S(x,5),S(x,6),x.GetDateTime(7));await ChangeRentalStatusAsync(rental,type=="pre_rental"?(ok?"pre_inspection":"cancelled"):("post_inspection"),ct);if(type=="post_rental"&&!ok)await SaveMaintenanceAsync(null,new(0,r.VehicleId,null,null,"open","inspection",DateOnly.FromDateTime(DateTime.UtcNow),false,notes,null),ct);if(type=="post_rental"&&ok){await using var refund=dataSource.CreateCommand("INSERT INTO payments(rental_id,invoice_id,customer_id,is_subscription_payment,amount,status,type,method) SELECT r.id,i.id,r.customer_id,false,r.deposit_price,'requested','refund','deposit' FROM rentals r JOIN invoices i ON i.rental_id=r.id WHERE r.id=$1 AND r.is_subscription=false AND r.deposit_price>0 AND i.status='paid' AND NOT EXISTS(SELECT 1 FROM payments p WHERE p.rental_id=r.id AND p.type='refund' AND p.method='deposit')");refund.Parameters.AddWithValue(rental);await refund.ExecuteNonQueryAsync(ct);}return output;}
+    public async Task<Inspection> AddInspectionAsync(int rental,int staff,string type,bool ok,decimal? odo,decimal? fuel,string? notes,string? images,CancellationToken ct){
+        var r=await GetRentalAsync(rental,ct)??throw new KeyNotFoundException();
+        var allowed = type == "pre_rental"
+            ? (r.Status == "pending" || r.Status == "pre_inspection")
+            : (r.Status == "renting" || r.Status == "post_inspection");
+        if(!allowed)throw new InvalidOperationException("Inspection is not allowed in current rental state.");
+        await using var c=dataSource.CreateCommand("INSERT INTO inspections(rental_id,vehicle_id,staff_id,inspection_type,is_ok,odometer_km,fuel_battery_level,damage_notes,img_urls,inspected_at)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,now()) RETURNING id,inspection_type,is_ok,odometer_km,fuel_battery_level,damage_notes,img_urls,inspected_at");
+        Add(c,rental,r.VehicleId,staff,type,ok,odo,fuel,notes,images);
+        await using var x=await c.ExecuteReaderAsync(ct);
+        await x.ReadAsync(ct);
+        var output=new Inspection(x.GetInt32(0),rental,x.GetString(1),x.GetBoolean(2),x.IsDBNull(3)?null:x.GetDecimal(3),x.IsDBNull(4)?null:x.GetDecimal(4),S(x,5),S(x,6),x.GetDateTime(7));
+        if(type=="pre_rental"){
+            if(!ok){
+                await using var cancelCmd=dataSource.CreateCommand("UPDATE rentals SET status='cancelled', cancelled_at=now(), cancelled_by='system', cancel_reason='PRE_INSPECTION_FAILED', status_changed_at=now() WHERE id=$1");
+                cancelCmd.Parameters.AddWithValue(rental);
+                await cancelCmd.ExecuteNonQueryAsync(ct);
+            }else if(r.Status=="pending"){
+                await ChangeRentalStatusAsync(rental,"pre_inspection",ct);
+            }
+        }else if(type=="post_rental"){
+            if(r.Status=="renting"){
+                await ChangeRentalStatusAsync(rental,"post_inspection",ct);
+            }
+            if(!ok){
+                await SaveMaintenanceAsync(null,new(0,r.VehicleId,null,null,"open","inspection",DateOnly.FromDateTime(DateTime.UtcNow),false,notes,null),ct);
+            }
+        }
+        return output;
+    }
     public async Task<IReadOnlyList<SubscriptionPlan>> ListPlansAsync(bool active,CancellationToken ct){await using var c=dataSource.CreateCommand("SELECT id,name,description,price,duration_days,included_hours,is_active FROM subscription_plans WHERE ($1=false OR is_active=true) ORDER BY id");c.Parameters.AddWithValue(active);await using var r=await c.ExecuteReaderAsync(ct);var a=new List<SubscriptionPlan>();while(await r.ReadAsync(ct))a.Add(ReadPlan(r));return a;}
     public async Task<SubscriptionPlan?> GetPlanAsync(int id,CancellationToken ct){await using var c=dataSource.CreateCommand("SELECT id,name,description,price,duration_days,included_hours,is_active FROM subscription_plans WHERE id=$1");c.Parameters.AddWithValue(id);await using var r=await c.ExecuteReaderAsync(ct);return await r.ReadAsync(ct)?ReadPlan(r):null;}
     public async Task DeletePlanAsync(int id,CancellationToken ct){await using var cn=await dataSource.OpenConnectionAsync(ct);await using var tx=await cn.BeginTransactionAsync(ct);var used=await ScalarAsync(cn,tx,"SELECT EXISTS(SELECT 1 FROM customer_subscriptions WHERE plan_id=$1)",id,ct);await using var c=new NpgsqlCommand(used is true?"UPDATE subscription_plans SET is_active=false WHERE id=$1":"DELETE FROM subscription_plans WHERE id=$1",cn,tx);c.Parameters.AddWithValue(id);if(await c.ExecuteNonQueryAsync(ct)!=1)throw new KeyNotFoundException();await tx.CommitAsync(ct);}
