@@ -16,15 +16,16 @@ public sealed class OperationsController(IOperationsRepository store) : Controll
     [Authorize(Policy=AuthorizationPolicies.CustomerService)] [HttpPut("customers/{customerId:int}/license-status")] public Task<CustomerLicense> ReviewLicense(int customerId,LicenseReviewRequest x,CancellationToken ct) => store.ReviewLicenseAsync(customerId,x.Status.ToLowerInvariant(),ct);
 
     [HttpGet("vehicle-types")] public Task<IReadOnlyList<VehicleType>> VehicleTypes(CancellationToken ct)=>store.ListVehicleTypesAsync(ct);
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPost("vehicle-types")] public async Task<IActionResult> AddType(NameRequest x,CancellationToken ct){var t=await store.SaveVehicleTypeAsync(null,x.Name,x.FuelType,ct);return Created($"api/vehicle-types/{t.Id}",t);}
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPut("vehicle-types/{id:int}")] public Task<VehicleType> EditType(int id,NameRequest x,CancellationToken ct)=>store.SaveVehicleTypeAsync(id,x.Name,x.FuelType,ct);
+    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPost("vehicle-types")] public async Task<IActionResult> AddType(VehicleTypeRequest x,CancellationToken ct){var t=await store.SaveVehicleTypeAsync(null,x.Name,x.FuelType,ct,x.Type);return Created($"api/vehicle-types/{t.Id}",t);}
+    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPut("vehicle-types/{id:int}")] public Task<VehicleType> EditType(int id,VehicleTypeRequest x,CancellationToken ct)=>store.SaveVehicleTypeAsync(id,x.Name,x.FuelType,ct,x.Type);
     [Authorize(Roles="Admin")] [HttpDelete("vehicle-types/{id:int}")] public async Task<IActionResult> DeleteType(int id,CancellationToken ct){await store.DeleteVehicleTypeAsync(id,ct);return NoContent();}
     [HttpGet("vehicles")] public Task<VehiclePage> Vehicles([FromQuery]int? vehicleTypeId,[FromQuery]int? facilityId,[FromQuery]string? status,[FromQuery]DateTime? from,[FromQuery]DateTime? to,[FromQuery,Range(1,int.MaxValue)]int page=1,[FromQuery,Range(1,100)]int pageSize=20,CancellationToken ct=default)=>store.SearchVehiclesAsync(vehicleTypeId,facilityId,status,from,to,page,pageSize,ct);
     [HttpGet("vehicles/{id:int}")] public async Task<IActionResult> Vehicle(int id,CancellationToken ct)=>await store.GetVehicleAsync(id,ct) is { } x?Ok(x):Problem("Vehicle was not found.", statusCode: StatusCodes.Status404NotFound);
     [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPost("vehicles")] public async Task<IActionResult> AddVehicle(VehicleRequest x,CancellationToken ct){var v=await store.SaveVehicleAsync(null,x.ToModel(),ct);return Created($"api/vehicles/{v.Id}",v);}
+    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpDelete("vehicles/{id:int}")] public async Task<IActionResult> DeleteVehicle(int id,CancellationToken ct){await store.DeleteVehicleAsync(id,ct);return NoContent();}
     [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPut("vehicles/{id:int}")] public Task<Vehicle> EditVehicle(int id,VehicleRequest x,CancellationToken ct)=>store.SaveVehicleAsync(id,x.ToModel(),ct);
 
-    [Authorize(Roles="Admin")] [HttpGet("departments")] public Task<IReadOnlyList<OrganizationUnit>> Departments(CancellationToken ct)=>store.ListDepartmentsAsync(ct);
+    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpGet("departments")] public Task<IReadOnlyList<OrganizationUnit>> Departments(CancellationToken ct)=>store.ListDepartmentsAsync(ct);
     [Authorize(Roles="Admin")] [HttpPost("departments")] public async Task<IActionResult> AddDepartment(NameRequest x,CancellationToken ct){var d=await store.SaveDepartmentAsync(null,x.Name,ct);return Created($"api/departments/{d.Id}",d);}
     [Authorize(Roles="Admin")] [HttpPut("departments/{id:int}")] public Task<OrganizationUnit> EditDepartment(int id,NameRequest x,CancellationToken ct)=>store.SaveDepartmentAsync(id,x.Name,ct);
     [Authorize(Roles="Admin")] [HttpDelete("departments/{id:int}")] public async Task<IActionResult> DeleteDepartment(int id,CancellationToken ct){await store.DeleteDepartmentAsync(id,ct);return NoContent();}
@@ -106,3 +107,5 @@ public sealed record PlanRequest([param: Required] string Name,string? Descripti
 public sealed record MaintenanceRequest([param:Range(1,int.MaxValue)]int VehicleId,int? FacilityId,int? AssignedStaffId,string? Status,string? MaintenanceType,DateOnly? ScheduledDate,bool? IsSafe,string? Description,[param:Range(0,double.MaxValue)]decimal? Cost){public Maintenance ToModel()=>new(0,VehicleId,FacilityId,AssignedStaffId,Status,MaintenanceType,ScheduledDate,IsSafe,Description,Cost);}
 public sealed record RateStaffRequest([param:Range(1,int.MaxValue)]int StaffId,[param:Range(1,5)]decimal Rating,[param:StringLength(500)]string? Comment);
 
+
+public sealed record VehicleTypeRequest([param:Required,StringLength(255)]string Name,[param:Required]string FuelType,[param:Required]string Type);

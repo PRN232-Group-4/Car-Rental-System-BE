@@ -52,6 +52,8 @@ public sealed record StaffPage(IReadOnlyList<Staff> Items, int Page, int PageSiz
 
 public interface IStaffRepository
 {
+    Task<Staff> AssignFacilityAsync(int userId, int facilityId, bool actorIsAdmin, CancellationToken ct);
+    Task<Staff> AssignDepartmentAsync(int userId, int departmentId, bool actorIsAdmin, CancellationToken ct);
     Task<StaffPage> SearchAsync(string? search, bool? isDriver, int page, int pageSize, CancellationToken ct);
     Task<Staff?> FindByIdAsync(int staffId, CancellationToken ct);
     Task<Staff> CreateAsync(CreateStaff command, string passwordHash, CancellationToken ct);
@@ -60,5 +62,6 @@ public interface IStaffRepository
 }
 
 public sealed class StaffNotFoundException : Exception;
+public sealed class OrganizationAssignmentForbiddenException : Exception;
 public sealed class StaffConflictException(string message) : Exception(message);
 public sealed class OrganizationReferenceNotFoundException(string message) : Exception(message);

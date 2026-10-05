@@ -1,7 +1,7 @@
 namespace Car_Rental_System_BE.Application.Operations;
 
 public sealed record OrganizationUnit(int Id, string Name, string? Address = null);
-public sealed record VehicleType(int Id, string Name, string? FuelType);
+public sealed record VehicleType(int Id, string Name, string? FuelType, string? Type = null);
 public sealed record VehicleDetail(
     int? SeatCount = null, string? Transmission = null, decimal? TrunkCapacity = null,
     string? BikeType = null, bool? HasStorageBox = null,
@@ -39,11 +39,12 @@ public interface IOperationsRepository
     Task<OrganizationUnit> SaveFacilityAsync(int? id, string name, string? address, CancellationToken ct);
     Task DeleteFacilityAsync(int id, CancellationToken ct);
     Task<IReadOnlyList<VehicleType>> ListVehicleTypesAsync(CancellationToken ct);
-    Task<VehicleType> SaveVehicleTypeAsync(int? id, string name, string? fuelType, CancellationToken ct);
+    Task<VehicleType> SaveVehicleTypeAsync(int? id, string name, string? fuelType, CancellationToken ct, string? type = null);
     Task DeleteVehicleTypeAsync(int id, CancellationToken ct);
     Task<VehiclePage> SearchVehiclesAsync(int? typeId, int? facilityId, string? status, DateTime? from, DateTime? to, int page, int pageSize, CancellationToken ct);
     Task<Vehicle?> GetVehicleAsync(int id, CancellationToken ct);
     Task<Vehicle> SaveVehicleAsync(int? id, Vehicle vehicle, CancellationToken ct);
+    Task DeleteVehicleAsync(int id, CancellationToken ct);
     Task<RentalPolicy> CreatePolicyAsync(RentalPolicy policy, CancellationToken ct);
     Task<IReadOnlyList<RentalPolicy>> ListPoliciesAsync(CancellationToken ct);
     Task<Rental> CreateRentalAsync(string email, int vehicleId, int? policyId, string rentalType, DateTime start, DateTime end, bool subscription, int? subscriptionId, bool hasDriver, CancellationToken ct);

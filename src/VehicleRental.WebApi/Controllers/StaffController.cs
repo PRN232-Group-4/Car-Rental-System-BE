@@ -9,7 +9,7 @@ namespace Car_Rental_System_BE.Controllers;
 
 [ApiController]
 [Route("api/staff")]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = "Admin,Manager")]
 public sealed class StaffController(IStaffRepository staff, RedisRefreshTokenStore refreshTokens) : ControllerBase
 {
     [HttpGet]
@@ -34,6 +34,7 @@ public sealed class StaffController(IStaffRepository staff, RedisRefreshTokenSto
         staff.SearchAsync(search, true, page, pageSize, ct);
 
     [HttpPost]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType<Staff>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Create(CreateStaffRequest request, CancellationToken ct)
@@ -53,6 +54,7 @@ public sealed class StaffController(IStaffRepository staff, RedisRefreshTokenSto
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType<Staff>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(int id, UpdateStaffRequest request, CancellationToken ct)
@@ -68,6 +70,7 @@ public sealed class StaffController(IStaffRepository staff, RedisRefreshTokenSto
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Deactivate(int id, CancellationToken ct)
