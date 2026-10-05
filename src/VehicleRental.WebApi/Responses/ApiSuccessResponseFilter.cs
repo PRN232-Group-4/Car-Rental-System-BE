@@ -128,6 +128,7 @@ public sealed class ApiSuccessResponseFilter : IAsyncResultFilter
         ["Operations.AddPolicy"] = "Rental policy created successfully.",
         ["Operations.Hourly"] = "Hourly rental created successfully.",
         ["Operations.Longterm"] = "Long-term rental created successfully.",
+        ["Operations.SaveContract"] = "Signed long-term rental contract recorded successfully.",
         ["Operations.Rental"] = "Rental retrieved successfully.",
         ["Operations.Assign"] = "Driver assignment updated successfully.",
         ["Operations.DriverSchedule"] = "Driver schedule retrieved successfully.",

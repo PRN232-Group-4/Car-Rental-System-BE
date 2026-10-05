@@ -14,7 +14,7 @@ internal static class Seed
 
     public static async Task<int> VehicleAsync(NpgsqlDataSource db, decimal hourly = 100m, decimal longterm = 1000m)
     {
-        var typeId = await ScalarAsync(db, "INSERT INTO vehicle_types(name) VALUES('Car') RETURNING id");
+        var typeId = await ScalarAsync(db, "INSERT INTO vehicle_types(name,type,fuel_type) VALUES('Car','car','gasoline') RETURNING id");
         return (int)(await ScalarAsync(db, "INSERT INTO vehicles(vehicle_type_id,status,rental_price_hourly,rental_price_longterm) VALUES($1,'available',$2,$3) RETURNING id", typeId, hourly, longterm))!;
     }
 

@@ -10,7 +10,7 @@ public sealed record VehicleDetail(
 public sealed record Vehicle(int Id, int VehicleTypeId, string VehicleType, int? FacilityId, string? Facility, string Status, string? Brand, string? Model, string? Color, int? YearOfManufacture, decimal? HourlyPrice, decimal? LongtermPrice, string? Description, string? MainImageUrl, string? Location, VehicleDetail? Detail = null, string? LicensePlate = null);
 public sealed record VehiclePage(IReadOnlyList<Vehicle> Items, int Page, int PageSize, int TotalCount);
 public sealed record RentalPolicy(int Id, int? VehicleTypeId, string Name, decimal VatRate, decimal OvertimeFeeRate, decimal DepositPercentage, bool IsActive);
-public sealed record Rental(int Id, int CustomerId, int VehicleId, string RentalType, string Status, bool IsSubscription, decimal VatPrice, decimal DepositPrice, decimal OvertimePrice, decimal TotalPrice, DateTime? StartTime, DateTime? EndTime);
+public sealed record Rental(int Id, int CustomerId, int VehicleId, string RentalType, string Status, bool IsSubscription, decimal VatPrice, decimal DepositPrice, decimal OvertimePrice, decimal TotalPrice, DateTime? StartTime, DateTime? EndTime, decimal? HourlyPriceSnapshot = null, decimal? MonthlyPriceSnapshot = null, bool? HasDriver = null, string? ContractLink = null, DateTime? SignedAt = null);
 public sealed record DriverScheduleEntry(int AssignmentId, int RentalId, int VehicleId, int DriverStaffId, string DriverName, DateTime StartTime, DateTime EndTime, string RentalStatus);
 public sealed record Inspection(int Id, int RentalId, string Type, bool? IsOk, decimal? OdometerKm, decimal? FuelBatteryLevel, string? DamageNotes, string? ImageUrls, DateTime? InspectedAt, int? StaffId = null, int? VehicleId = null);
 public sealed record SubscriptionPlan(int Id, string Name, string? Description, decimal Price, int DurationDays, decimal? IncludedHours, bool IsActive);
@@ -48,6 +48,7 @@ public interface IOperationsRepository
     Task<RentalPolicy> CreatePolicyAsync(RentalPolicy policy, CancellationToken ct);
     Task<IReadOnlyList<RentalPolicy>> ListPoliciesAsync(CancellationToken ct);
     Task<Rental> CreateRentalAsync(string email, int vehicleId, int? policyId, string rentalType, DateTime start, DateTime end, bool subscription, int? subscriptionId, bool hasDriver, CancellationToken ct);
+    Task<Rental> SaveRentalContractAsync(int id, string contractLink, DateTime signedAt, CancellationToken ct);
     Task<Rental?> GetRentalAsync(int id, CancellationToken ct);
     Task<Rental?> GetRentalForUserAsync(int id, string email, bool readAll, bool customer, bool driver, CancellationToken ct);
     Task<Rental> ChangeRentalStatusAsync(int id, string status, CancellationToken ct);
