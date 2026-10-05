@@ -43,6 +43,7 @@ public sealed class UnitTests
         Assert.False(gateway.VerifyWebhook(new PayOsWebhook(1, 100m, "ref", "00", "not-hex", data)));
     }
 
+
     [Fact]
     public void Plan_request_rejects_invalid_price_and_duration()
     {
