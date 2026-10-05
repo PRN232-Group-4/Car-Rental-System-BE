@@ -1,3 +1,4 @@
+using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Lifecycle;
 using Npgsql;
 using VehicleRental.Domain.Lifecycle;
@@ -125,6 +126,22 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
 
+        await using (var lockCmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock($1)", conn, tx))
+        {
+            lockCmd.Parameters.AddWithValue(rentalId);
+            await lockCmd.ExecuteNonQueryAsync(ct);
+        }
+
+        await using (var checkCmd = new NpgsqlCommand("SELECT status FROM rentals WHERE id = $1 FOR UPDATE", conn, tx))
+        {
+            checkCmd.Parameters.AddWithValue(rentalId);
+            var curStatus = (string?)(await checkCmd.ExecuteScalarAsync(ct));
+            if (curStatus == "pre_inspection")
+                throw new ConflictException("ALREADY_IN_STATE", "Rental is already confirmed.");
+            if (curStatus != "pending")
+                throw new ConflictException("ILLEGAL_TRANSITION", $"Rental cannot be confirmed from {curStatus}.");
+        }
+
         await using var cmd = new NpgsqlCommand("""
             UPDATE rentals
             SET status = 'pre_inspection', confirmed_at = $2, status_changed_at = now()
@@ -142,6 +159,22 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
+
+        await using (var lockCmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock($1)", conn, tx))
+        {
+            lockCmd.Parameters.AddWithValue(rentalId);
+            await lockCmd.ExecuteNonQueryAsync(ct);
+        }
+
+        await using (var checkCmd = new NpgsqlCommand("SELECT status FROM rentals WHERE id = $1 FOR UPDATE", conn, tx))
+        {
+            checkCmd.Parameters.AddWithValue(rentalId);
+            var curStatus = (string?)(await checkCmd.ExecuteScalarAsync(ct));
+            if (curStatus == "renting")
+                throw new ConflictException("ALREADY_IN_STATE", "Rental is already started.");
+            if (curStatus != "pre_inspection")
+                throw new ConflictException("ILLEGAL_TRANSITION", $"Rental cannot be started from {curStatus}.");
+        }
 
         await using var cmdRental = new NpgsqlCommand("""
             UPDATE rentals
@@ -168,6 +201,22 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
+
+        await using (var lockCmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock($1)", conn, tx))
+        {
+            lockCmd.Parameters.AddWithValue(rentalId);
+            await lockCmd.ExecuteNonQueryAsync(ct);
+        }
+
+        await using (var checkCmd = new NpgsqlCommand("SELECT status FROM rentals WHERE id = $1 FOR UPDATE", conn, tx))
+        {
+            checkCmd.Parameters.AddWithValue(rentalId);
+            var curStatus = (string?)(await checkCmd.ExecuteScalarAsync(ct));
+            if (curStatus == "post_inspection")
+                throw new ConflictException("ALREADY_IN_STATE", "Rental vehicle is already returned.");
+            if (curStatus != "renting")
+                throw new ConflictException("ILLEGAL_TRANSITION", $"Rental cannot be returned from {curStatus}.");
+        }
 
         await using var cmd = new NpgsqlCommand("""
             UPDATE rentals
@@ -197,6 +246,26 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
+
+        await using (var lockCmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock($1)", conn, tx))
+        {
+            lockCmd.Parameters.AddWithValue(rentalId);
+            await lockCmd.ExecuteNonQueryAsync(ct);
+        }
+
+        await using (var checkCmd = new NpgsqlCommand("SELECT status FROM rentals WHERE id = $1 FOR UPDATE", conn, tx))
+        {
+            checkCmd.Parameters.AddWithValue(rentalId);
+            var curStatus = (string?)(await checkCmd.ExecuteScalarAsync(ct));
+            if (curStatus == "completed")
+            {
+                throw new ConflictException("ALREADY_IN_STATE", "Rental is already in completed status.");
+            }
+            if (curStatus != "post_inspection")
+            {
+                throw new ConflictException("ILLEGAL_TRANSITION", $"Rental cannot be completed from {curStatus}.");
+            }
+        }
 
         await using var cmdRental = new NpgsqlCommand("""
             UPDATE rentals
@@ -265,6 +334,26 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
+
+        await using (var lockCmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock($1)", conn, tx))
+        {
+            lockCmd.Parameters.AddWithValue(rentalId);
+            await lockCmd.ExecuteNonQueryAsync(ct);
+        }
+
+        await using (var checkCmd = new NpgsqlCommand("SELECT status FROM rentals WHERE id = $1 FOR UPDATE", conn, tx))
+        {
+            checkCmd.Parameters.AddWithValue(rentalId);
+            var curStatus = (string?)(await checkCmd.ExecuteScalarAsync(ct));
+            if (curStatus == "cancelled")
+            {
+                throw new ConflictException("ALREADY_IN_STATE", "Rental is already cancelled.");
+            }
+            if (curStatus != "pending" && curStatus != "pre_inspection")
+            {
+                throw new ConflictException("ILLEGAL_TRANSITION", $"Rental cannot be cancelled from {curStatus}.");
+            }
+        }
 
         await using var cmdRental = new NpgsqlCommand("""
             UPDATE rentals

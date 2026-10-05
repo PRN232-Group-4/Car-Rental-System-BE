@@ -37,7 +37,7 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
 
         var dataSql = $"""
             SELECT r.id, r.status, r.rental_type, r.is_subscription,
-                   v.id, v.brand, v.model, v.main_image_url,
+                   v.id, COALESCE(v.brand, 'Unknown'), COALESCE(v.model, 'Unknown'), v.main_img_url,
                    COALESCE(h.start_time, l.start_time),
                    COALESCE(h.end_time, l.end_time),
                    r.total_price, r.created_at
@@ -81,7 +81,7 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
     {
         await using var cmd = dataSource.CreateCommand("""
             SELECT r.id, r.status, r.rental_type, r.is_subscription,
-                   v.id, v.brand, v.model, v.main_image_url, v.color,
+                   v.id, COALESCE(v.brand, 'Unknown'), COALESCE(v.model, 'Unknown'), v.main_img_url, v.color,
                    COALESCE(f.name, 'Main Facility') AS facility_name,
                    COALESCE(h.start_time, l.start_time) AS start_time,
                    COALESCE(h.end_time, l.end_time) AS end_time,
@@ -354,7 +354,7 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
 
         var dataSql = $"""
             SELECT r.id, r.customer_id, COALESCE(u.fullname, u.email), u.email,
-                   v.id, v.license_plate, v.model, r.status,
+                   v.id, v.license_plate, COALESCE(v.model, 'Unknown'), r.status,
                    COALESCE(h.start_time, l.start_time),
                    COALESCE(h.end_time, l.end_time),
                    r.total_price, COALESCE(h.has_driver, false),
@@ -417,7 +417,7 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                    r.confirmed_at, r.started_at, r.returned_at, r.completed_at,
                    r.cancelled_at, r.cancelled_by, r.cancel_reason, r.overtime_hours,
                    COALESCE(u.fullname, u.email), u.email, u.phone_number,
-                   v.brand, v.model, v.license_plate,
+                   COALESCE(v.brand, 'Unknown'), COALESCE(v.model, 'Unknown'), v.license_plate,
                    COALESCE(f.name, 'Main Facility'),
                    COALESCE(du.fullname, du.email),
                    i.id, i.invoice_number, i.status, i.amount
@@ -591,7 +591,7 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
     {
         var now = timeProvider.GetUtcNow().UtcDateTime;
         await using var cmd = dataSource.CreateCommand("""
-            SELECT r.id, v.id, v.license_plate, v.model,
+            SELECT r.id, v.id, v.license_plate, COALESCE(v.model, 'Unknown'),
                    c.id, COALESCE(u.fullname, u.email), u.phone_number,
                    COALESCE(h.end_time, l.end_time) AS sched_end,
                    ROUND(EXTRACT(EPOCH FROM ($1 - COALESCE(h.end_time, l.end_time))) / 60)::int AS overdue_mins,
