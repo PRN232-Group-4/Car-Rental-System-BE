@@ -1,4 +1,5 @@
 # Changelog
+- 2026-10-05 — [Rental contract evidence API and price snapshot responses](2026-10-05-rental-contract-api.md)
 - 2026-10-05 — [Facility assignment for Staff and Manager](2026-10-05-facility-assignment.md)
 - 2026-10-05 — [Department assignment for Staff and Manager](2026-10-05-department-assignment.md)
 - 2026-10-04 — [Staff and driver rating after completed rental](2026-10-04-staff-driver-rating.md)
