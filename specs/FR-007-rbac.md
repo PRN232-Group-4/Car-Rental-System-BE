@@ -6,6 +6,10 @@ Roles: Customer, Staff (employee marker only), CustomerService, Driver, Maintena
 | Capability | Roles |
 |---|---|
 | Organization/staff CRUD, refund approval, destructive catalog actions | Admin |
+| Read staff/departments; assign Staff to a department | Admin, Manager |
+| Assign Manager to a department (including Manager + Staff targets) | Admin |
+| Assign Staff to a facility | Admin, Manager |
+| Assign Manager to a facility (including Manager + Staff targets) | Admin |
 | Vehicle catalog, subscription plans, rental policies, dashboard | Admin, Manager |
 | License review, rental lifecycle/assignment, invoices, payment/refund requests | Admin, Manager, CustomerService |
 | Inspections | Admin or Maintenance, with own active staff profile |

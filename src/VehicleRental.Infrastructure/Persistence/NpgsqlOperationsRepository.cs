@@ -24,8 +24,7 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
     public Task<IReadOnlyList<OrganizationUnit>> ListFacilitiesAsync(CancellationToken ct)=>UnitsAsync("facilities",true,ct);
     public Task<OrganizationUnit> SaveFacilityAsync(int? id,string name,string? address,CancellationToken ct)=>SaveUnitAsync("facilities",id,name,address,ct);
     public Task DeleteFacilityAsync(int id,CancellationToken ct)=>DeleteAsync("facilities",id,ct);
-    public async Task<IReadOnlyList<VehicleType>> ListVehicleTypesAsync(CancellationToken ct){await using var c=dataSource.CreateCommand("SELECT id,name,fuel_type FROM vehicle_types ORDER BY name");await using var r=await c.ExecuteReaderAsync(ct);var a=new List<VehicleType>();while(await r.ReadAsync(ct))a.Add(new(r.GetInt32(0),r.GetString(1),S(r,2)));return a;}
-    public async Task<VehicleType> SaveVehicleTypeAsync(int? id,string name,string? fuel,CancellationToken ct){var sql=id is null?"INSERT INTO vehicle_types(name,fuel_type) VALUES($1,$2) RETURNING id,name,fuel_type":"UPDATE vehicle_types SET name=$1,fuel_type=$2 WHERE id=$3 RETURNING id,name,fuel_type";await using var c=dataSource.CreateCommand(sql);Add(c,name,fuel);if(id is not null)c.Parameters.AddWithValue(id.Value);await using var r=await c.ExecuteReaderAsync(ct);if(!await r.ReadAsync(ct))throw new KeyNotFoundException();return new(r.GetInt32(0),r.GetString(1),S(r,2));}
+    public async Task<IReadOnlyList<VehicleType>> ListVehicleTypesAsync(CancellationToken ct){await using var c=dataSource.CreateCommand("SELECT id,name,fuel_type,type FROM vehicle_types ORDER BY name");await using var r=await c.ExecuteReaderAsync(ct);var a=new List<VehicleType>();while(await r.ReadAsync(ct))a.Add(new(r.GetInt32(0),r.GetString(1),S(r,2),S(r,3)));return a;}
     public Task DeleteVehicleTypeAsync(int id,CancellationToken ct)=>DeleteAsync("vehicle_types",id,ct);
     public async Task<VehiclePage> SearchVehiclesAsync(int? type,int? facility,string? status,DateTime? from,DateTime? to,int page,int size,CancellationToken ct)
     { const string filter=" WHERE ($1::int IS NULL OR v.vehicle_type_id=$1::int) AND ($2::int IS NULL OR v.facility_id=$2::int) AND ($3::text IS NULL OR v.status=$3::text) AND ($4::timestamp IS NULL OR (v.status='available' AND NOT EXISTS(SELECT 1 FROM vehicle_maintenance m WHERE m.vehicle_id=v.id AND (COALESCE(m.status,'open') NOT IN ('completed','cancelled') OR m.is_safe=false)) AND NOT EXISTS (SELECT 1 FROM rentals r LEFT JOIN hour_rental_detail h ON h.rental_id=r.id LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id WHERE r.vehicle_id=v.id AND r.status NOT IN ('cancelled','completed') AND COALESCE(h.start_time,l.start_time)<$5::timestamp AND COALESCE(h.end_time,l.end_time)>$4::timestamp))) ";
@@ -41,13 +40,24 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
         return vehicle with { Detail = await LoadVehicleDetailAsync(id, ct) };
     }
     public async Task<Vehicle> SaveVehicleAsync(int? id,Vehicle v,CancellationToken ct){
+        await using var cn = await dataSource.OpenConnectionAsync(ct);
+        await using var tx = await cn.BeginTransactionAsync(ct);
+        await LockOperationsAsync(cn, tx, ct);
+        if (id is not null && await ScalarAsync(cn, tx, "SELECT id FROM vehicles WHERE id=$1 FOR UPDATE", id.Value, ct) is not int)
+            throw new KeyNotFoundException("Vehicle was not found.");
+        var category = await GetVehicleCategoryAsync(cn, tx, v.VehicleTypeId, ct);
+        ValidateVehicleDetail(category.Type, category.Fuel, v.Detail);
+        if (v.FacilityId is not null && await ScalarAsync(cn, tx, "SELECT id FROM facilities WHERE id=$1", v.FacilityId.Value, ct) is not int)
+            throw new ArgumentException("Facility was not found.");
         var sql=id is null?"INSERT INTO vehicles(vehicle_type_id,facility_id,status,brand,model,color,year_of_manufacture,rental_price_hourly,rental_price_longterm,description,main_img_url,current_location,license_plate) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id":"UPDATE vehicles SET vehicle_type_id=$1,facility_id=$2,status=$3,brand=$4,model=$5,color=$6,year_of_manufacture=$7,rental_price_hourly=$8,rental_price_longterm=$9,description=$10,main_img_url=$11,current_location=$12,license_plate=$13,modified_at=now() WHERE id=$14 RETURNING id";
-        await using var c=dataSource.CreateCommand(sql);
+        await using var c=new NpgsqlCommand(sql, cn, tx);
         Add(c,v.VehicleTypeId,v.FacilityId,v.Status,v.Brand,v.Model,v.Color,v.YearOfManufacture,v.HourlyPrice,v.LongtermPrice,v.Description,v.MainImageUrl,v.Location,v.LicensePlate);
         if(id is not null)c.Parameters.AddWithValue(id.Value);
         var result=await c.ExecuteScalarAsync(ct);
         if(result is not int vehicleId)throw new KeyNotFoundException();
-        if(v.Detail is not null) await SaveVehicleDetailAsync(vehicleId, v.Detail, ct);
+        await CleanVehicleDetailsAsync(cn, tx, vehicleId, category.Type, category.Fuel, ct);
+        if(v.Detail is not null) await SaveVehicleDetailAsync(cn, tx, vehicleId, category.Type, category.Fuel, v.Detail, ct);
+        await tx.CommitAsync(ct);
         return (await GetVehicleAsync(vehicleId,ct))!;
     }
     public async Task<RentalPolicy> CreatePolicyAsync(RentalPolicy x,CancellationToken ct){await using var c=dataSource.CreateCommand("INSERT INTO rental_policies(vehicle_type_id,name,vat_rate,overtime_fee_rate,deposit_percentage,is_active)VALUES($1,$2,$3,$4,$5,$6) RETURNING id,vehicle_type_id,name,vat_rate,overtime_fee_rate,deposit_percentage,is_active");Add(c,x.VehicleTypeId,x.Name,x.VatRate,x.OvertimeFeeRate,x.DepositPercentage,x.IsActive);await using var r=await c.ExecuteReaderAsync(ct);if(!await r.ReadAsync(ct))throw new InvalidOperationException("Rental policy could not be created.");return ReadPolicy(r);}
@@ -128,35 +138,35 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
     private static CustomerSubscription ReadCustomerSubscription(NpgsqlDataReader r)=>new(r.GetInt32(0),r.GetInt32(1),r.GetInt32(2),r.GetString(3),r.GetFieldValue<DateOnly>(4),r.GetFieldValue<DateOnly>(5),r.IsDBNull(6)?null:r.GetDecimal(6),r.IsDBNull(7)?null:r.GetDecimal(7),r.GetString(8));
     private static Rental ReadRental(NpgsqlDataReader r)=>new(r.GetInt32(0),r.GetInt32(1),r.GetInt32(2),r.GetString(3),r.GetString(4),r.GetBoolean(5),r.GetDecimal(6),r.GetDecimal(7),r.GetDecimal(8),r.GetDecimal(9),r.IsDBNull(10)?null:r.GetDateTime(10),r.IsDBNull(11)?null:r.GetDateTime(11));
     private static Maintenance ReadMaintenance(NpgsqlDataReader r)=>new(r.GetInt32(0),r.GetInt32(1),r.IsDBNull(2)?null:r.GetInt32(2),r.IsDBNull(3)?null:r.GetInt32(3),S(r,4),S(r,5),D(r,6),r.IsDBNull(7)?null:r.GetBoolean(7),S(r,8),r.IsDBNull(9)?null:r.GetDecimal(9));
-    private async Task SaveVehicleDetailAsync(int vehicleId, VehicleDetail d, CancellationToken ct)
+    private async Task SaveVehicleDetailAsync(NpgsqlConnection cn, NpgsqlTransaction tx, int vehicleId, string type, string fuel, VehicleDetail d, CancellationToken ct)
     {
-        if (d.SeatCount.HasValue || d.Transmission is not null || d.TrunkCapacity.HasValue)
+        if (type == "car")
         {
-            await using var cmd = dataSource.CreateCommand("INSERT INTO car_detail(vehicle_id,seat_count,transmission,trunk_capacity) VALUES($1,$2,$3,$4) ON CONFLICT(vehicle_id) DO UPDATE SET seat_count=$2,transmission=$3,trunk_capacity=$4");
+            await using var cmd = new NpgsqlCommand("INSERT INTO car_detail(vehicle_id,seat_count,transmission,trunk_capacity) VALUES($1,$2,$3,$4) ON CONFLICT(vehicle_id) DO UPDATE SET seat_count=$2,transmission=$3,trunk_capacity=$4", cn, tx);
             Add(cmd, vehicleId, d.SeatCount, d.Transmission, d.TrunkCapacity);
             await cmd.ExecuteNonQueryAsync(ct);
         }
-        if (d.BikeType is not null || d.HasStorageBox.HasValue)
+        if (type == "motorbike")
         {
-            await using var cmd = dataSource.CreateCommand("INSERT INTO motorbike_detail(vehicle_id,bike_type,has_storage_box) VALUES($1,$2,$3) ON CONFLICT(vehicle_id) DO UPDATE SET bike_type=$2,has_storage_box=$3");
+            await using var cmd = new NpgsqlCommand("INSERT INTO motorbike_detail(vehicle_id,bike_type,has_storage_box) VALUES($1,$2,$3) ON CONFLICT(vehicle_id) DO UPDATE SET bike_type=$2,has_storage_box=$3", cn, tx);
             Add(cmd, vehicleId, d.BikeType, d.HasStorageBox);
             await cmd.ExecuteNonQueryAsync(ct);
         }
-        if (d.BatteryCapacity is not null || d.ChargingType is not null || d.MaxRangeKm.HasValue)
+        if (fuel == "electric")
         {
-            await using var cmd = dataSource.CreateCommand("INSERT INTO electric_car_detail(vehicle_id,battery_capacity,charging_type,charging_time_hours,max_range_km,battery_type) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(vehicle_id) DO UPDATE SET battery_capacity=$2,charging_type=$3,charging_time_hours=$4,max_range_km=$5,battery_type=$6");
+            await using var cmd = new NpgsqlCommand($"INSERT INTO {ElectricDetailTable(type)}(vehicle_id,battery_capacity,charging_type,charging_time_hours,max_range_km,battery_type) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(vehicle_id) DO UPDATE SET battery_capacity=$2,charging_type=$3,charging_time_hours=$4,max_range_km=$5,battery_type=$6", cn, tx);
             Add(cmd, vehicleId, d.BatteryCapacity, d.ChargingType, d.ChargingTimeHours, d.MaxRangeKm, d.BatteryType);
             await cmd.ExecuteNonQueryAsync(ct);
         }
         if (d.GalleryImages is not null)
         {
-            await using var del = dataSource.CreateCommand("DELETE FROM vehicle_imgs WHERE vehicle_id=$1");
+            await using var del = new NpgsqlCommand("DELETE FROM vehicle_imgs WHERE vehicle_id=$1", cn, tx);
             del.Parameters.AddWithValue(vehicleId);
             await del.ExecuteNonQueryAsync(ct);
             foreach (var img in d.GalleryImages)
             {
                 if (string.IsNullOrWhiteSpace(img)) continue;
-                await using var ins = dataSource.CreateCommand("INSERT INTO vehicle_imgs(vehicle_id,url) VALUES($1,$2)");
+                await using var ins = new NpgsqlCommand("INSERT INTO vehicle_imgs(vehicle_id,url) VALUES($1,$2)", cn, tx);
                 Add(ins, vehicleId, img);
                 await ins.ExecuteNonQueryAsync(ct);
             }
@@ -168,19 +178,19 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
         string? bike = null; bool? box = null;
         string? batCap = null; string? chgType = null; string? chgHrs = null; decimal? range = null; string? batType = null;
 
-        await using (var carCmd = dataSource.CreateCommand("SELECT seat_count,transmission,trunk_capacity FROM car_detail WHERE vehicle_id=$1"))
+        await using (var carCmd = dataSource.CreateCommand("SELECT seat_count,transmission,trunk_capacity FROM car_detail WHERE vehicle_id=$1 AND EXISTS(SELECT 1 FROM vehicles v JOIN vehicle_types t ON t.id=v.vehicle_type_id WHERE v.id=$1 AND lower(trim(t.type))='car')"))
         {
             carCmd.Parameters.AddWithValue(vehicleId);
             await using var cr = await carCmd.ExecuteReaderAsync(ct);
             if (await cr.ReadAsync(ct)) { seats = cr.IsDBNull(0) ? null : cr.GetInt32(0); trans = S(cr, 1); trunk = cr.IsDBNull(2) ? null : cr.GetDecimal(2); }
         }
-        await using (var bikeCmd = dataSource.CreateCommand("SELECT bike_type,has_storage_box FROM motorbike_detail WHERE vehicle_id=$1"))
+        await using (var bikeCmd = dataSource.CreateCommand("SELECT bike_type,has_storage_box FROM motorbike_detail WHERE vehicle_id=$1 AND EXISTS(SELECT 1 FROM vehicles v JOIN vehicle_types t ON t.id=v.vehicle_type_id WHERE v.id=$1 AND lower(trim(t.type))='motorbike')"))
         {
             bikeCmd.Parameters.AddWithValue(vehicleId);
             await using var br = await bikeCmd.ExecuteReaderAsync(ct);
             if (await br.ReadAsync(ct)) { bike = S(br, 0); box = br.IsDBNull(1) ? null : br.GetBoolean(1); }
         }
-        await using (var elCmd = dataSource.CreateCommand("SELECT battery_capacity,charging_type,charging_time_hours,max_range_km,battery_type FROM electric_car_detail WHERE vehicle_id=$1"))
+        await using (var elCmd = dataSource.CreateCommand("SELECT d.battery_capacity,d.charging_type,d.charging_time_hours,d.max_range_km,d.battery_type FROM electric_car_detail d JOIN vehicles v ON v.id=d.vehicle_id JOIN vehicle_types t ON t.id=v.vehicle_type_id WHERE v.id=$1 AND lower(trim(t.type))='car' AND lower(trim(t.fuel_type))='electric' UNION ALL SELECT d.battery_capacity,d.charging_type,d.charging_time_hours,d.max_range_km,d.battery_type FROM electric_motorbike_detail d JOIN vehicles v ON v.id=d.vehicle_id JOIN vehicle_types t ON t.id=v.vehicle_type_id WHERE v.id=$1 AND lower(trim(t.type))='motorbike' AND lower(trim(t.fuel_type))='electric'"))
         {
             elCmd.Parameters.AddWithValue(vehicleId);
             await using var er = await elCmd.ExecuteReaderAsync(ct);
@@ -193,7 +203,7 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
             await using var ir = await imgCmd.ExecuteReaderAsync(ct);
             while (await ir.ReadAsync(ct)) imgs.Add(ir.GetString(0));
         }
-        var hasAny = seats.HasValue || trans is not null || trunk.HasValue || bike is not null || box.HasValue || batCap is not null || imgs.Count > 0;
+        var hasAny = seats.HasValue || trans is not null || trunk.HasValue || bike is not null || box.HasValue || batCap is not null || chgType is not null || chgHrs is not null || range.HasValue || batType is not null || imgs.Count > 0;
         return hasAny ? new(seats, trans, trunk, bike, box, batCap, chgType, chgHrs, range, batType, imgs) : null;
     }
     private static string? S(NpgsqlDataReader r,int i)=>r.IsDBNull(i)?null:r.GetString(i); private static DateOnly? D(NpgsqlDataReader r,int i)=>r.IsDBNull(i)?null:r.GetFieldValue<DateOnly>(i);
