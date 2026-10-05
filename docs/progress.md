@@ -10,7 +10,8 @@
 | FR-008..009,011 | Catalog/operations | M3 | P0-P1 | In progress | FR-008..011 | 2026-10-03-vehicle-search-envelope-fixes |
 | FR-010 | Tìm xe & availability (BE-10) | M3 | P0 | Done | FR-010 | 2026-10-04-vehicle-availability |
 | FR-014 | Phân xe/tài xế & Đổi xe (BE-14) | M4 | P0 | Done | FR-014 | 2026-10-04-assignment-vehicle-swap |
-| FR-012,013,015..018 | Rentals | M4 | P0-P1 | In progress | FR-012..018 | 2026-10-03-staff-authorization |
+| FR-018 | Vòng đời đơn thuê, Quá giờ & Quyết toán (BE-17) | M4 | P0 | Done | FR-018 | 2026-10-06-rental-lifecycle |
+| FR-012,013,015..017 | Rentals | M4 | P0-P1 | In progress | FR-012..017 | 2026-10-06-rental-lifecycle |
 | FR-019..021 | Payments | M5 | P1 | In progress | FR-019..021 | 2026-10-03-subscription-plan-payments |
 | FR-022..025 | Subscription | M6 | P0-P1 | Done | FR-022..025 | 2026-10-03-subscription-plan-payments |
 | FR-026..027,029..030 | Maintenance/report/loyalty/dashboard | M7 | P1-P2 | In progress | FR-026..027,029..030 | 2026-10-03-staff-authorization |
@@ -19,7 +20,18 @@
 | NFR-006..007 | Performance/testing | M0 | P1 | In progress | NFR files | 2026-10-01-test-project |
 
 ## Tổng kết
-Done: FR-010 (tìm xe và availability), FR-014 (phân xe/tài xế & đổi xe), FR-022..025 (subscription, gồm cả thanh toán mua gói); In progress: các nhóm còn lại; Not started: các nhóm chưa chạm. `dotnet build -warnaserror` đã xanh 0 warning/0 error; test suite pass 100% ngày 2026-10-04.
+Done: FR-010 (tìm xe và availability), FR-014 (phân xe/tài xế & đổi xe), FR-018 (vòng đời đơn thuê & quyết toán), FR-022..025 (subscription, gồm cả thanh toán mua gói); In progress: các nhóm còn lại; Not started: các nhóm chưa chạm. `dotnet build -warnaserror` đã xanh 0 warning/0 error; test suite pass 100% (318/318 tests) ngày 2026-10-06.
+
+## Vòng đời đơn thuê, Quá giờ & Quyết toán (FR-018 / BE-17) — 2026-10-06
+
+Đã hoàn thành module BE-17 theo kiến trúc Clean Architecture:
+- Migration `0013_rental_lifecycle.sql`: Ràng buộc `ck_rentals_status`, các mốc thời gian vòng đời trên `rentals`, bảng `rental_status_history` kèm trigger bất biến `trg_rsh_immutable`, bảng quyết toán `rental_settlements`, cột `kind` trên bảng `invoices` kèm partial unique index `ux_invoices_rental_kind`.
+- Domain: `RentalStatus`, `RentalTrigger`, `RentalStateMachine`, `OvertimeCalculator` (15 phút grace period, làm tròn lên theo giờ), `CancellationPolicy` (trước 24h miễn phí, dưới 24h giữ 20% phí thuê), `SettlementCalculator` (bù trừ cọc và tiền quá giờ), `MoneyRounding` làm tròn VND tại một chỗ duy nhất bằng `MidpointRounding.AwayFromZero`.
+- Application: `RentalLifecycleService`, `RentalOptions`, `RentalCancellationOptions`, các ports `IRentalLifecycleRepository`, `IRentalPaymentGate`, `IInvoiceGateway`, `ISubscriptionUsage`, `ILoyaltyAward`, `IRentalEventSink`, `IRentalQueries`.
+- Infrastructure: `NpgsqlRentalLifecycleRepository` với `pg_advisory_xact_lock` và `FOR UPDATE` trong transaction chống tranh chấp đồng thời, `RentalPaymentGateAdapter` tạo refund payment có tính lũy nghiệm, `InvoiceGatewayAdapter` tạo hóa đơn quá giờ `kind = 'overtime'`, `NpgsqlRentalQueries` hỗ trợ xem đơn của tôi, đơn vận hành và đơn quá hạn (`overdue`).
+- WebApi: `RentalLifecycleController` và `RentalQueriesController` đầy đủ metadata Swagger, cấu hình phân quyền và ánh xạ thông báo qua `ApiSuccessResponseFilter`. Endpoint cũ `PATCH /api/rentals/{id}/status` của `OperationsController` chuyển thành bí danh deprecated với header `Deprecation: true`.
+- Gỡ bỏ hoàn cọc tự động tại inspection (`AddInspectionAsync` / O2): Toàn bộ việc quyết toán cọc và hoàn cọc được chuyển tập trung về `complete`.
+- Kiểm thử: 100% tests pass (318/318 tests), bao gồm unit test Domain ma trận 6 trạng thái x 5 lệnh, unit test Service, integration test schema/trigger/index, integration test E2E có quá giờ 90 phút, test shortfall, test hủy đơn và test đua tranh `CompleteAsync` 20 lần lặp liên tiếp không flaky. Xem [thay đổi](../changes/2026-10-06-rental-lifecycle.md) và [ADR-004](decisions/ADR-004-rental-lifecycle-and-settlement.md).
 
 ## Phân xe, tài xế & Đổi xe (FR-014 / BE-14) — 2026-10-04
 

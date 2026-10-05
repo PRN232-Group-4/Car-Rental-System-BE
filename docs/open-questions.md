@@ -1,6 +1,10 @@
 # Câu hỏi mở và giả định
 
-| 2026-10-04 | FR-014 | Đệm tài xế mặc định 60 phút (di chuyển/nghỉ ngơi): lưu theo cột buffer_minutes = 60 ở bảng vehicle_assignments và sinh period tsrange tương ứng. | Xác nhận với nhóm vận hành (O1). |
+| 2026-10-06 | FR-018 | Gỡ bỏ auto-refund tại AddInspectionAsync: hoàn cọc chỉ xử lý duy nhất tại complete sau khi tính toán quá giờ để tránh hoàn cọc 2 lần hoặc thất thoát. | Đã thống nhất với Huy (O2), đã kiểm chứng qua test. |
+| 2026-10-06 | FR-018 | Chính sách hủy đơn: khách hủy trước 24h hoàn 100%; dưới 24h giữ phí phạt 20% tiền thuê, hoàn 80% tiền thuê + 100% cọc; Staff/System hủy hoàn 100%. | Đã thống nhất (O1), xem ADR-004. |
+| 2026-10-06 | FR-018 | Hóa đơn thiếu hụt quá giờ: tạo với kind = 'overtime', hạn thanh toán 72h; partial unique index chặn trùng lặp. | Xác nhận với Phúc (BE-18/19) cách xử lý thanh toán hóa đơn này (O3). |
+| 2026-10-06 | FR-018 | Thuê bằng gói thuê bao khi trả trễ: trừ giờ trễ vào remaining_hours; không thu/hoàn cọc tiền mặt. | Đã triển khai và tích hợp với ISubscriptionUsage (O4). |
+| 2026-10-06 | FR-018 | Xe hỏng khi nhận lại (is_ok = false): đánh dấu damage_review_required = true trên rental_settlements để Staff lập biên bản sự cố riêng sau. | Đã thống nhất với Huy (O4), xem ADR-004. |
 | 2026-10-04 | FR-014 | Đổi xe khác loại: hiện tại chặn (409 VEHICLE_TYPE_MISMATCH) để tránh phá vỡ tính toán giá ban đầu. | Cần Lạc (BE-12/33) xác nhận nếu muốn cho phép đổi chéo loại xe kèm tính bù trừ chênh lệch (O2). |
 | 2026-10-04 | FR-014 | Kiểm tra hạng GPLX theo loại xe theo luật mới: tạm tắt qua config (Assignment:CheckLicenseClass=false). | Chờ nhóm nghiệp vụ cung cấp ma trận phân hạng GPLX tương thích (O3). |
 | 2026-10-04 | FR-014 | Kiểm định xe thay thế: bảng inspections hiện có UNIQUE(rental_id, inspection_type) nên xe thay thế chưa thể ghi thêm pre-inspection. | Đề xuất cho BE-15/16 (Lạc/Anh) bổ sung cột assignment_id vào bảng inspections (O4). |

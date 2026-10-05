@@ -1,4 +1,5 @@
 # Changelog
+- 2026-10-06 — [Vòng đời đơn thuê, Quá giờ & Quyết toán (FR-018 / BE-17)](2026-10-06-rental-lifecycle.md)
 - 2026-10-04 — [Phân xe, tài xế & Đổi xe (FR-014 / BE-14)](2026-10-04-assignment-vehicle-swap.md)
 - 2026-10-04 — [Tìm xe, kiểm tra availability và đệm đối xứng 60 phút (FR-010 / BE-10)](2026-10-04-vehicle-availability.md)
 - 2026-10-04 — [Google OAuth callback and forwarded headers on Railway](2026-10-04-google-oauth-railway-callback.md)
