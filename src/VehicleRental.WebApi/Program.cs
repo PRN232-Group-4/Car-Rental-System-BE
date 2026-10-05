@@ -24,6 +24,8 @@ using Car_Rental_System_BE.Application.Availability;
 using Car_Rental_System_BE.Infrastructure.Availability;
 using Car_Rental_System_BE.Application.Assignments;
 using Car_Rental_System_BE.Infrastructure.Assignments;
+using Car_Rental_System_BE.Application.Lifecycle;
+using Car_Rental_System_BE.Infrastructure.Lifecycle;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 
@@ -138,6 +140,31 @@ builder.Services.AddScoped<IAssignmentService>(sp =>
     var timeProvider = sp.GetRequiredService<TimeProvider>();
     var options = sp.GetRequiredService<IOptions<AssignmentOptions>>().Value;
     return new AssignmentService(repo, vehicleAvailability, options, timeProvider);
+});
+
+builder.Services.Configure<RentalOptions>(builder.Configuration.GetSection(RentalOptions.SectionName));
+builder.Services.Configure<RentalCancellationOptions>(builder.Configuration.GetSection(RentalCancellationOptions.SectionName));
+builder.Services.AddScoped<NpgsqlRentalLifecycleRepository>();
+builder.Services.AddScoped<IRentalLifecycleRepository>(sp => sp.GetRequiredService<NpgsqlRentalLifecycleRepository>());
+builder.Services.AddScoped<IRentalPaymentGate, RentalPaymentGateAdapter>();
+builder.Services.AddScoped<IInvoiceGateway, InvoiceGatewayAdapter>();
+builder.Services.AddScoped<ISubscriptionUsage, SubscriptionUsageAdapter>();
+builder.Services.AddScoped<ILoyaltyAward, LoyaltyAwardAdapter>();
+builder.Services.AddScoped<IRentalEventSink, RentalEventSink>();
+builder.Services.AddScoped<ICurrentCustomer, CurrentCustomerService>();
+builder.Services.AddScoped<IRentalQueries, NpgsqlRentalQueries>();
+builder.Services.AddScoped<IRentalLifecycleService>(sp =>
+{
+    var repo = sp.GetRequiredService<IRentalLifecycleRepository>();
+    var paymentGate = sp.GetRequiredService<IRentalPaymentGate>();
+    var invoiceGateway = sp.GetRequiredService<IInvoiceGateway>();
+    var subscriptionUsage = sp.GetRequiredService<ISubscriptionUsage>();
+    var loyaltyAward = sp.GetRequiredService<ILoyaltyAward>();
+    var eventSink = sp.GetRequiredService<IRentalEventSink>();
+    var rOptions = sp.GetRequiredService<IOptions<RentalOptions>>().Value;
+    var cOptions = sp.GetRequiredService<IOptions<RentalCancellationOptions>>().Value;
+    var timeProvider = sp.GetRequiredService<TimeProvider>();
+    return new RentalLifecycleService(repo, paymentGate, invoiceGateway, subscriptionUsage, loyaltyAward, eventSink, rOptions, cOptions, timeProvider);
 });
 var googleAuthentication = builder.Configuration.GetSection(GoogleAuthOptions.SectionName).Get<GoogleAuthOptions>() ?? new GoogleAuthOptions();
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();

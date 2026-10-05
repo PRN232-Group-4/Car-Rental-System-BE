@@ -152,6 +152,17 @@ public sealed class ApiSuccessResponseFilter : IAsyncResultFilter
         ["RentalAssignments.ReplaceVehicle"] = "Vehicle replaced successfully.",
         ["RentalAssignments.ListAssignments"] = "Rental assignments retrieved successfully.",
         ["RentalAssignments.ListAssignableDrivers"] = "Assignable drivers retrieved successfully.",
-        ["RentalAssignments.ListAssignableVehicles"] = "Assignable vehicles retrieved successfully."
+        ["RentalAssignments.ListAssignableVehicles"] = "Assignable vehicles retrieved successfully.",
+        ["RentalLifecycle.Confirm"] = "Rental confirmed successfully.",
+        ["RentalLifecycle.Start"] = "Rental started successfully.",
+        ["RentalLifecycle.Return"] = "Vehicle returned successfully.",
+        ["RentalLifecycle.Complete"] = "Rental completed and settled successfully.",
+        ["RentalLifecycle.Cancel"] = "Rental cancelled successfully.",
+        ["RentalLifecycle.CancellationPreview"] = "Cancellation preview retrieved successfully.",
+        ["RentalQueries.Mine"] = "My rentals retrieved successfully.",
+        ["RentalQueries.MineDetail"] = "Rental detail retrieved successfully.",
+        ["RentalQueries.List"] = "Operational rentals retrieved successfully.",
+        ["RentalQueries.Detail"] = "Operational rental detail retrieved successfully.",
+        ["RentalQueries.Overdue"] = "Overdue rentals retrieved successfully."
     };
 }
