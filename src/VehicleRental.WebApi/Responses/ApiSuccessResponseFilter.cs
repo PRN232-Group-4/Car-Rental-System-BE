@@ -115,6 +115,8 @@ public sealed class ApiSuccessResponseFilter : IAsyncResultFilter
         ["Operations.AddVehicle"] = "Vehicle created successfully.",
         ["Operations.EditVehicle"] = "Vehicle updated successfully.",
         ["Operations.Departments"] = "Departments retrieved successfully.",
+        ["DepartmentMembers.Assign"] = "Employee assigned to department successfully.",
+        ["FacilityMembers.Assign"] = "Employee assigned to facility successfully.",
         ["Operations.AddDepartment"] = "Department created successfully.",
         ["Operations.EditDepartment"] = "Department updated successfully.",
         ["Operations.DeleteDepartment"] = "Department deleted successfully.",

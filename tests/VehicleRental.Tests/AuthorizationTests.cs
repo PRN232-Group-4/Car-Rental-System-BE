@@ -19,6 +19,22 @@ namespace VehicleRental.Tests;
 public sealed class AuthorizationTests
 {
     [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("Manager", true)]
+    [InlineData("Staff", false)]
+    [InlineData("Customer", false)]
+    [InlineData("Driver", false)]
+    public async Task Department_assignment_requires_management(string role, bool allowed)
+    {
+        Assert.Equal(allowed, await AuthorizeEndpoint<DepartmentMembersController>("Assign", Principal(role)));
+        Assert.Equal(allowed, await AuthorizeEndpoint<FacilityMembersController>("Assign", Principal(role)));
+        Assert.Equal(allowed, await AuthorizeEndpoint<OperationsController>("Departments", Principal(role)));
+        Assert.Equal(allowed, await AuthorizeEndpoint<StaffController>("List", Principal(role)));
+        foreach (var action in new[] { "Create", "Update", "Deactivate" })
+            Assert.Equal(role == "Admin", await AuthorizeEndpoint<StaffController>(action, Principal(role)));
+    }
+
+    [Theory]
     [InlineData("AddVehicle", "Driver", false)]
     [InlineData("AddVehicle", "Staff", false)]
     [InlineData("AddVehicle", "CustomerService", false)]

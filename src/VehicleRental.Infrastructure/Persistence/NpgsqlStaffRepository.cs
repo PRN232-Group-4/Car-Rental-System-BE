@@ -107,6 +107,51 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
         if (await command.ExecuteNonQueryAsync(ct) != 1) throw new StaffNotFoundException();
     }
 
+    public Task<Staff> AssignDepartmentAsync(int userId, int departmentId, bool actorIsAdmin, CancellationToken ct) =>
+        AssignOrganizationAsync(userId, departmentId, actorIsAdmin, false, ct);
+
+    public Task<Staff> AssignFacilityAsync(int userId, int facilityId, bool actorIsAdmin, CancellationToken ct) =>
+        AssignOrganizationAsync(userId, facilityId, actorIsAdmin, true, ct);
+
+    private async Task<Staff> AssignOrganizationAsync(int userId, int unitId, bool actorIsAdmin, bool isFacility, CancellationToken ct)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        // Serialize profile creation and membership changes for this account.
+        await using var account = new NpgsqlCommand("SELECT id FROM users WHERE id=$1 AND is_active=TRUE FOR UPDATE", connection, transaction);
+        account.Parameters.AddWithValue(userId);
+        if (await account.ExecuteScalarAsync(ct) is null) throw new StaffNotFoundException();
+
+        await using var roles = new NpgsqlCommand("SELECT r.name FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=$1", connection, transaction);
+        roles.Parameters.AddWithValue(userId);
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        await using (var reader = await roles.ExecuteReaderAsync(ct))
+            while (await reader.ReadAsync(ct)) names.Add(reader.GetString(0));
+        if (!actorIsAdmin && (names.Contains("Manager") || names.Contains("Admin")))
+            throw new OrganizationAssignmentForbiddenException();
+        if (!names.Contains("Manager") && !names.Contains("Staff"))
+            throw new OrganizationReferenceNotFoundException("The account must already have the Staff or Manager role.");
+
+        // SQL identifiers come only from fixed values, never request input.
+        var table = isFacility ? "facilities" : "departments";
+        var column = isFacility ? "facility_id" : "department_id";
+        await using var unit = new NpgsqlCommand($"SELECT id FROM {table} WHERE id=$1 FOR SHARE", connection, transaction);
+        unit.Parameters.AddWithValue(unitId);
+        if (await unit.ExecuteScalarAsync(ct) is null)
+            throw new OrganizationReferenceNotFoundException(isFacility ? "Facility was not found." : "Department was not found.");
+
+        await using var assign = new NpgsqlCommand($"""
+            INSERT INTO staffs(user_id, {column}) VALUES($1, $2)
+            ON CONFLICT (user_id) DO UPDATE SET {column}=EXCLUDED.{column}
+            RETURNING id
+            """, connection, transaction);
+        assign.Parameters.AddWithValue(userId);
+        assign.Parameters.AddWithValue(unitId);
+        var staffId = (int)(await assign.ExecuteScalarAsync(ct))!;
+        await transaction.CommitAsync(ct);
+        return (await FindByIdAsync(staffId, ct))!;
+    }
+
     private static async Task ValidateReferencesAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int? departmentId, int? facilityId, CancellationToken ct)
     {
         if (departmentId.HasValue && !await ExistsAsync(connection, transaction, "departments", departmentId.Value, ct))
