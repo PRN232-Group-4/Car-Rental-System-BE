@@ -1,13 +1,16 @@
+using Car_Rental_System_BE.WebApi.Controllers;
+using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.Application.DTOs.Accounts;
+using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Application.DTOs.Organization;
+using Car_Rental_System_BE.Application.DTOs.Payments;
+using Car_Rental_System_BE.Infrastructure.Services.Payments;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
-using Car_Rental_System_BE.Application.Operations;
-using Car_Rental_System_BE.Application.Payments;
-using Car_Rental_System_BE.Controllers;
-using Car_Rental_System_BE.Infrastructure.Payments;
-using Car_Rental_System_BE.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -68,7 +71,6 @@ public sealed class UnitTests
         Assert.False(gateway.VerifyWebhook(new PayOsWebhook(1, 100m, "ref", "00", "not-hex", data)));
     }
 
-
     [Fact]
     public void Plan_request_rejects_invalid_price_and_duration()
     {
@@ -97,7 +99,7 @@ public sealed class UnitTests
             Assert.NotNull(authorization);
             Assert.NotNull(authorization!.Policy);
             var options = new AuthorizationOptions();
-            Car_Rental_System_BE.Authentication.AuthorizationPolicies.Configure(options);
+            Car_Rental_System_BE.WebApi.Middlewares.Authentication.AuthorizationPolicies.Configure(options);
             var policy = options.GetPolicy(authorization.Policy!);
             var roles = Assert.Single(policy!.Requirements.OfType<Microsoft.AspNetCore.Authorization.Infrastructure.RolesAuthorizationRequirement>()).AllowedRoles;
             Assert.Contains("Manager", roles);

@@ -1,9 +1,9 @@
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.Application.DTOs.Accounts;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Car_Rental_System_BE.Responses;
-using Car_Rental_System_BE.Controllers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;

@@ -1,4 +1,4 @@
-using Car_Rental_System_BE.Infrastructure;
+using Car_Rental_System_BE.Infrastructure.Repositories;
 using Npgsql;
 
 namespace VehicleRental.Tests;

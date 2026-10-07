@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Npgsql;
 
-namespace Car_Rental_System_BE.Infrastructure;
+namespace Car_Rental_System_BE.Infrastructure.Persistence;
 
 public sealed class DatabaseMigrationOptions
 {

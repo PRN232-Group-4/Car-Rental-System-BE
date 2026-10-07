@@ -1,12 +1,19 @@
-using Car_Rental_System_BE.Infrastructure;
-using Car_Rental_System_BE.Infrastructure.Authentication;
-using Car_Rental_System_BE.Application.Registration;
-using Car_Rental_System_BE.Application.Accounts;
-using Car_Rental_System_BE.Application.Organization;
-using Car_Rental_System_BE.Application.Operations;
-using Car_Rental_System_BE.Application.Payments;
-using Car_Rental_System_BE.Infrastructure.Payments;
-using Car_Rental_System_BE.Authentication;
+using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.Application.DTOs.Accounts;
+using Car_Rental_System_BE.Application.DTOs.Options;
+using Car_Rental_System_BE.Application.Interfaces.External;
+using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.Application.Services;
+using Car_Rental_System_BE.Domain.Entities;
+using Car_Rental_System_BE.Domain.Interfaces;
+using Car_Rental_System_BE.Infrastructure.Persistence;
+using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Services.Authentication;
+using Car_Rental_System_BE.Infrastructure.Services.Media;
+using Car_Rental_System_BE.Infrastructure.Services.Payments;
+using Car_Rental_System_BE.Infrastructure.Services.Registration;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -18,7 +25,6 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using System.Security.Claims;
-using Car_Rental_System_BE.Responses;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -99,12 +105,28 @@ builder.Services.AddScoped<IAccountRepository, NpgsqlAccountRepository>();
 builder.Services.AddScoped<IStaffRepository, NpgsqlStaffRepository>();
 builder.Services.AddScoped<IOperationsRepository, NpgsqlOperationsRepository>();
 builder.Services.AddScoped<IPaymentRepository, NpgsqlPaymentRepository>();
-builder.Services.AddScoped<IRegistrationWorkflow, RedisRegistrationWorkflow>();
-builder.Services.AddScoped<IPasswordResetWorkflow, RedisPasswordResetWorkflow>();
+builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IStaffService, StaffService>();
+builder.Services.AddScoped<IOperationsService, OperationsService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IMediaService, MediaService>();
+builder.Services.AddScoped<ISessionService, SessionService>();
+builder.Services.AddSingleton<IWorkflowStateStore, RedisWorkflowStateStore>();
+builder.Services.AddSingleton(provider => provider.GetRequiredService<IOptions<RegistrationOptions>>().Value);
+builder.Services.AddScoped(provider =>
+{
+    var options = provider.GetRequiredService<IOptions<PayOsOptions>>().Value;
+    return new PaymentCheckoutOptions(options.ReturnUrl, options.CancelUrl);
+});
+builder.Services.AddScoped<IRegistrationWorkflow, RegistrationService>();
+builder.Services.AddScoped<IPasswordResetWorkflow, PasswordResetService>();
 builder.Services.AddSingleton<IImageStorage, CloudinaryImageStorage>();
 builder.Services.AddHostedService<RedisConnectionHostedService>();
 builder.Services.AddSingleton<RedisRefreshTokenStore>();
 builder.Services.AddSingleton<JwtTokenService>();
+builder.Services.AddSingleton<IAccessTokenIssuer>(provider => provider.GetRequiredService<JwtTokenService>());
+builder.Services.AddSingleton<IRefreshTokenStore>(provider => provider.GetRequiredService<RedisRefreshTokenStore>());
 var googleAuthentication = builder.Configuration.GetSection(GoogleAuthOptions.SectionName).Get<GoogleAuthOptions>() ?? new GoogleAuthOptions();
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 var authentication = builder.Services.AddAuthentication(options =>
@@ -137,13 +159,13 @@ var authentication = builder.Services.AddAuthentication(options =>
             {
                 var sessionId = context.Principal?.FindFirstValue("sid") ?? context.Principal?.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sid);
                 var email = context.Principal?.FindFirstValue(ClaimTypes.Email) ?? context.Principal?.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Email);
-                var tokens = context.HttpContext.RequestServices.GetRequiredService<RedisRefreshTokenStore>();
+                var tokens = context.HttpContext.RequestServices.GetRequiredService<IRefreshTokenStore>();
                 if (string.IsNullOrWhiteSpace(sessionId) || string.IsNullOrWhiteSpace(email) || !await tokens.IsActiveAsync(sessionId, email, context.HttpContext.RequestAborted))
                 {
                     context.Fail("The token session is no longer active.");
                     return;
                 }
-                var accounts = context.HttpContext.RequestServices.GetRequiredService<IAccountRepository>();
+                var accounts = context.HttpContext.RequestServices.GetRequiredService<IAccountService>();
                 var account = await accounts.FindByEmailAsync(email, context.HttpContext.RequestAborted);
                 if (!AuthorizationPolicies.IsCurrentAccount(context.Principal!, account))
                     context.Fail("Account permissions have changed. Sign in again.");
@@ -182,7 +204,7 @@ if (googleAuthentication.Enabled)
             if (string.IsNullOrWhiteSpace(email)) { context.Fail("Google did not return a verified email."); return; }
             var name = context.Principal?.FindFirstValue(ClaimTypes.Name) ?? email;
             await using var scope = context.HttpContext.RequestServices.CreateAsyncScope();
-            var users = scope.ServiceProvider.GetRequiredService<IUserRepository>();
+            var users = scope.ServiceProvider.GetRequiredService<IUserService>();
             await users.EnsureGoogleCustomerAsync(email.Trim().ToLowerInvariant(), name, context.HttpContext.RequestAborted);
         };
         options.Events.OnRemoteFailure = context =>

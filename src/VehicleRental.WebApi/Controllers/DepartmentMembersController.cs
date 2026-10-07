@@ -1,16 +1,18 @@
+using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.Application.DTOs.Organization;
+using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.Domain.Entities;
 using System.ComponentModel.DataAnnotations;
-using Car_Rental_System_BE.Application.Organization;
-using Car_Rental_System_BE.Authentication;
-using Car_Rental_System_BE.Infrastructure.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Car_Rental_System_BE.Controllers;
+namespace Car_Rental_System_BE.WebApi.Controllers;
 
 [ApiController]
 [Route("api/departments/{departmentId:int}/members")]
 [Authorize(Policy = AuthorizationPolicies.Management)]
-public sealed class DepartmentMembersController(IStaffRepository staff, RedisRefreshTokenStore refreshTokens) : ControllerBase
+public sealed class DepartmentMembersController(IStaffService staff) : ControllerBase
 {
     /// <summary>Assign an employee to a department. Only Admin may assign a Manager.</summary>
     [HttpPut("{userId:int}")]
@@ -25,7 +27,6 @@ public sealed class DepartmentMembersController(IStaffRepository staff, RedisRef
         try
         {
             var updated = await staff.AssignDepartmentAsync(userId, departmentId, User.IsInRole("Admin"), ct);
-            await refreshTokens.RevokeAllAsync(updated.Email, ct);
             return Ok(updated);
         }
         catch (OrganizationAssignmentForbiddenException)

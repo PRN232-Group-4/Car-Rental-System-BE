@@ -1,10 +1,10 @@
-using Car_Rental_System_BE.Application.Operations;
-using Car_Rental_System_BE.Application.Registration;
+using Car_Rental_System_BE.Application.Interfaces.External;
+using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Car_Rental_System_BE.Infrastructure;
+namespace Car_Rental_System_BE.Infrastructure.Persistence;
 
 /// <summary>
 /// FR-025 maintenance job: expires subscriptions whose end_date has passed and warns customers
