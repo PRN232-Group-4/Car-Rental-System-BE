@@ -1,5 +1,20 @@
 # Câu hỏi mở và giả định
 
+## Reference layout — 2026-10-07 assumptions
+
+Giữ prefix VehicleRental và suffix WebApi theo xác nhận của người dùng. Phân nhóm phụ được đặt dưới
+Interfaces/DTOs/Services/Middlewares để các layer có đúng nhóm thư mục tham chiếu.
+Domain port không sử dụng Application DTO; chỉ IUserRepository đủ điều kiện chuyển vào Domain.
+ValueObjects chưa có model thực tế nên giữ bằng README. Properties/Program.cs/config vẫn là file
+khởi chạy cần thiết của project API. Tổ chức file không thay đổi schema, route hoặc nghiệp vụ.
+
+## Services/Repositories — 2026-10-07 assumptions
+
+Yêu cầu “Services, Repository để query riêng” được triển khai thành Application Services,
+persistence interfaces riêng và thư mục SQL repository riêng. Giữ nguyên API/database schema;
+không tách project mới, không thêm generic repository. Các kiểm tra phụ thuộc dữ liệu dưới lock
+được giữ trong transaction hiện tại; tách Operations theo aggregate là bước tiếp theo.
+
 | Ngày | Liên quan | Giả định đã chọn | Cần xác nhận |
 |---|---|---|---|
 | 2026-10-03 | FR-007/008/026 | Department là tổ chức; staffRole cấp quyền. Một specialty cho mỗi staff trong API quản trị; Maintenance = Technician. Không tự cấp CustomerService cho Staff cũ. | Có cần kiêm nhiệm nhiều specialty qua API sau này? |

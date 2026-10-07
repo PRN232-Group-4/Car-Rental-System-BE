@@ -1,8 +1,11 @@
+using Car_Rental_System_BE.WebApi.Controllers;
+using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.Application.DTOs.Accounts;
+using Car_Rental_System_BE.Application.DTOs.Organization;
+using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Application.Services;
+using Car_Rental_System_BE.Infrastructure.Services.Authentication;
 using System.Reflection;
-using Car_Rental_System_BE.Application.Accounts;
-using Car_Rental_System_BE.Authentication;
-using Car_Rental_System_BE.Controllers;
-using Car_Rental_System_BE.Infrastructure.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -28,8 +31,8 @@ public sealed class RefreshAuthorizationTests
         var accounts = DispatchProxy.Create<IAccountRepository, Accounts>();
         ((Accounts)accounts).Account = currentVersion < 0 ? null : new(1, "staff@test.local", "Staff", null, null, null, null,
             ["Staff", "CustomerService"], AuthorizationVersion: currentVersion);
-        var controller = new SessionController(accounts, store,
-            new JwtTokenService(Options.Create(new JwtOptions { SigningKey = new string('x', 64) }), Options.Create(new TokenOptions())))
+        var controller = new SessionController(new SessionService(accounts, store,
+            new JwtTokenService(Options.Create(new JwtOptions { SigningKey = new string('x', 64) }), Options.Create(new TokenOptions()))))
         { ControllerContext = new() { HttpContext = new DefaultHttpContext() } };
         controller.Request.Headers.Cookie = $"refresh_token={issued.Token}";
         var result = await controller.Refresh(default);

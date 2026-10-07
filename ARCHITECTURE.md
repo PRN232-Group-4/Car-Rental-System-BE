@@ -1,5 +1,11 @@
 # Kiến trúc Hệ thống Car Rental System (Backend Architecture)
 
+Cập nhật cấu trúc 2026-10-07: layout hiện hành là Domain (`Entities/ValueObjects/Services/Interfaces`),
+Application (`Services/Interfaces/DTOs/Validators`), Infrastructure (`Persistence/Repositories/Services`),
+API (`Controllers/Middlewares`). Xem [tài liệu kiến trúc hiện hành](docs/architecture.md).
+Phân tích CodeGraph bên dưới là snapshot trước khi tách Services/DTOs; danh mục module và luồng session
+trong snapshot chưa phản ánh toàn bộ code hiện tại (hiện dùng JWT access cookie và Redis refresh token).
+
 Tài liệu này được biên soạn dựa trên phân tích đồ thị mã nguồn thực tế bằng **CodeGraph** (776 nodes, 1,446 edges, 73 API routes). Đây là tài liệu quy chuẩn mô tả toàn bộ kiến trúc, ranh giới module, luồng dữ liệu và danh mục phụ thuộc của dự án.
 
 ---

@@ -6,12 +6,16 @@
 ## Kiến trúc bắt buộc
 Giữ dependency một chiều: `Domain <- Application <- Infrastructure <- WebApi`.
 
-- `Domain`: aggregate, value object, invariant; không EF/Npgsql/HTTP/Redis.
-- `Application`: use case, command/query, port (repository/email/cache); không phụ thuộc Infrastructure/Web.
-- `Infrastructure`: Npgsql, Redis, Brevo, repository implementation.
-- `WebApi` (project root hiện tại): controller, DTO, middleware, composition root duy nhất.
+- `Domain`: `Entities/`, `ValueObjects/`, `Services/`, `Interfaces/`; không EF/Npgsql/HTTP/Redis. Domain port chỉ được dùng Domain types/kiểu cơ bản.
+- `Application`: `Services/` điều phối use case; `Interfaces/` cho service/repository/provider ports; `DTOs/` cho input/output/options; `Validators/` cho input rules. Không phụ thuộc Infrastructure/WebApi.
+- `Infrastructure`: `Persistence/` cho migration/hosted service; `Repositories/` chứa SQL/mapping/transaction; `Services/` chứa adapter Redis/Brevo/PayOS/Cloudinary.
+- `WebApi` (`VehicleRental.WebApi`): `Controllers/`, `Middlewares/` và composition root duy nhất. DTO ở Application; HTTP auth/response/filter hỗ trợ nằm dưới Middlewares.
 
 Repository chỉ đại diện aggregate root. Không generic repository; controller không gọi Npgsql/Redis trực tiếp. Schema cố ý không có FK: Application phải xác minh logical reference và transaction khi đổi nhiều bảng.
+
+Controller gọi Application service interface, không inject Repository hoặc Redis implementation.
+Service không kế thừa repository interface; SQL chỉ nằm ở Infrastructure. Khi chuyển invariant đang
+đọc dữ liệu dưới lock sang Domain/Application, giữ nguyên transaction boundary và cơ chế chống race.
 
 ## Quy tắc nghiệp vụ bắt buộc
 - Xác thực: email lower-case; OTP 6 số có TTL, cooldown, giới hạn sai và rate limit email/IP. Không log OTP, API key, mật khẩu, cookie hoặc connection string. Tạo `users`/`customers` chỉ sau verify thành công.
@@ -33,13 +37,13 @@ Mọi response JSON của API, bao gồm thành công và lỗi, phải có đ�
 | `message` | Chuỗi thông báo đúng ngữ cảnh thao tác/lỗi. |
 | `error` | `null` khi thành công; chi tiết lỗi khi thất bại. Giữ ProblemDetails/ValidationProblemDetails và `errors` bên trong trường này. |
 
-- Dùng contract chung trong [ApiResponse.cs](src/VehicleRental.WebApi/Responses/ApiResponse.cs); không tự tạo format khác hoặc bọc envelope hai lần.
-- Controller trả dữ liệu/kết quả bình thường để [response filter](src/VehicleRental.WebApi/Responses/ApiSuccessResponseFilter.cs) chuẩn hóa. Minimal API hoặc kết quả ngoài MVC phải dùng factory `ApiResponse.Create`/`ApiResponse.Failure` với code đúng HTTP.
+- Dùng contract chung trong [ApiResponse.cs](src/VehicleRental.WebApi/Middlewares/Responses/ApiResponse.cs); không tự tạo format khác hoặc bọc envelope hai lần.
+- Controller trả dữ liệu/kết quả bình thường để [response filter](src/VehicleRental.WebApi/Middlewares/Responses/ApiSuccessResponseFilter.cs) chuẩn hóa. Minimal API hoặc kết quả ngoài MVC phải dùng factory `ApiResponse.Create`/`ApiResponse.Failure` với code đúng HTTP.
 - Bao phủ lỗi nghiệp vụ, validation tự động, JSON không hợp lệ, authentication/authorization, exception và route/method không hợp lệ. Không để lỗi 401/403/404/405 trả body rỗng; giữ các header giao thức như `WWW-Authenticate`, `Allow` và `Set-Cookie`.
 - Giữ hành vi hiện tại: empty success/NoContent trả 200 có envelope; Created có dữ liệu trả 201, Accepted trả 202. Không trả 204 cho thao tác cần body JSON.
 - Không đưa stack trace, exception nội bộ hoặc secret vào lỗi 500; dùng thông báo an toàn.
 - Redirect OAuth/HTTPS, HTML, Swagger/OpenAPI và các response giao thức không phải JSON API giữ định dạng riêng; không bọc chúng thành envelope.
-- Khi thêm/sửa endpoint hoặc contract, cập nhật [Swagger response filter](src/VehicleRental.WebApi/Responses/ApiSuccessResponseOperationFilter.cs), [docs/API.md](docs/API.md) và test liên quan. Swagger phải khai báo đủ 6 trường bắt buộc cho success/error, `code` là integer và `is_success` là boolean.
+- Khi thêm/sửa endpoint hoặc contract, cập nhật [Swagger response filter](src/VehicleRental.WebApi/Middlewares/Responses/ApiSuccessResponseOperationFilter.cs), [docs/API.md](docs/API.md) và test liên quan. Swagger phải khai báo đủ 6 trường bắt buộc cho success/error, `code` là integer và `is_success` là boolean.
 - Test thay đổi response phải kiểm tra JSON thực tế: đủ 6 trường kể cả null, đúng kiểu boolean, code khớp HTTP và không double wrap. Dùng [ApiResponseTests.cs](tests/VehicleRental.Tests/ApiResponseTests.cs) cho kiểm chứng HTTP/serialization; không chỉ kiểm tra đối tượng C#.
 
 Nguồn quyết định: [NFR-008](specs/NFR-008-openapi.md), [ADR-002](docs/decisions/ADR-002-api-response-envelope.md).
@@ -54,7 +58,7 @@ Nguồn quyết định: [NFR-008](specs/NFR-008-openapi.md), [ADR-002](docs/dec
 ## Definition of Done
 - Validate ở HTTP boundary, invariant ở Application/Domain; success/error JSON tuân thủ contract 6 trường ở trên, lỗi giữ ProblemDetails bên trong `error`.
 - Mỗi API mới phải xuất hiện trong Swagger ở non-production: controller dùng `ApiController`, route rõ ràng, request/response status codes và auth requirement được mô tả. Không ẩn endpoint khỏi Swagger trừ khi có lý do bảo mật được ghi trong spec.
-- Mỗi API mới phải trả success message đúng ngữ cảnh nghiệp vụ, không dùng message chung chung. Bổ sung mapping `Controller.Action` tương ứng trong `src/VehicleRental.WebApi/Responses/ApiSuccessResponseFilter.cs` và kiểm tra message phản ánh đúng hành động (ví dụ: tạo, cập nhật, phê duyệt, hủy hoặc truy xuất).
+- Mỗi API mới phải trả success message đúng ngữ cảnh nghiệp vụ, không dùng message chung chung. Bổ sung mapping `Controller.Action` tương ứng trong `src/VehicleRental.WebApi/Middlewares/Responses/ApiSuccessResponseFilter.cs` và kiểm tra message phản ánh đúng hành động (ví dụ: tạo, cập nhật, phê duyệt, hủy hoặc truy xuất).
 - Không secret trong Git; Options `ValidateOnStart`, `.env.example` đầy đủ.
 - Build/test/Docker chạy; container non-root.
 - Specs, changes và progress phản ánh đúng đã làm/chưa làm.

@@ -1,18 +1,19 @@
+using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.Application.DTOs.Payments;
+using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.Application.Services.Exceptions;
+using Car_Rental_System_BE.Domain.Entities;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
-using Car_Rental_System_BE.Authentication;
 using System.Text.Json;
-using Car_Rental_System_BE.Application.Payments;
-using Car_Rental_System_BE.Infrastructure.Payments;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 
-namespace Car_Rental_System_BE.Controllers;
+namespace Car_Rental_System_BE.WebApi.Controllers;
 
 [ApiController]
 [Route("api")]
-public sealed class PaymentsController(IPaymentRepository payments, IPaymentGateway gateway, IOptions<PayOsOptions> options) : ControllerBase
+public sealed class PaymentsController(IPaymentService payments) : ControllerBase
 {
     [Authorize(Policy = AuthorizationPolicies.Customer)]
     [HttpPost("invoices/{invoiceId:int}/checkout")]
@@ -20,13 +21,8 @@ public sealed class PaymentsController(IPaymentRepository payments, IPaymentGate
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> Checkout(int invoiceId, CancellationToken ct)
     {
-        if (!gateway.IsConfigured) return Problem("PayOS is not configured yet.", statusCode: StatusCodes.Status503ServiceUnavailable);
-        var invoice = await payments.GetInvoiceForCustomerAsync(invoiceId, Email(), ct);
-        if (invoice is null) return Problem("Invoice was not found.", statusCode: StatusCodes.Status404NotFound);
-        if (invoice.Status == "paid") return Problem("Invoice is already paid.", statusCode: StatusCodes.Status409Conflict);
-        var description = $"Rental {invoice.InvoiceNumber}";
-        var result = await gateway.CreateCheckoutAsync(new(invoice.InvoiceId, invoice.Amount, description[..Math.Min(25, description.Length)], options.Value.ReturnUrl, options.Value.CancelUrl), ct);
-        return Ok(result);
+        try { return Ok(await payments.CheckoutAsync(invoiceId, Email(), ct)); }
+        catch (PaymentWorkflowException error) { return Problem(error.Message, statusCode: error.StatusCode); }
     }
 
     [Authorize(Policy = AuthorizationPolicies.Customer)]
@@ -35,11 +31,8 @@ public sealed class PaymentsController(IPaymentRepository payments, IPaymentGate
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> PurchasePlan(int planId, CancellationToken ct)
     {
-        if (!gateway.IsConfigured) return Problem("PayOS is not configured yet.", statusCode: StatusCodes.Status503ServiceUnavailable);
-        var checkout = await payments.CreatePlanCheckoutAsync(planId, Email(), ct);
-        var description = $"Goi {checkout.PlanName}";
-        var result = await gateway.CreateCheckoutAsync(new(checkout.OrderCode, checkout.Amount, description[..Math.Min(25, description.Length)], SubscriptionReturnUrl(options.Value.ReturnUrl), options.Value.CancelUrl), ct);
-        return Ok(result);
+        try { return Ok(await payments.PurchasePlanAsync(planId, Email(), ct)); }
+        catch (PaymentWorkflowException error) { return Problem(error.Message, statusCode: error.StatusCode); }
     }
 
     // FE gọi khi trình duyệt quay về từ cancelUrl: payOS KHÔNG gửi webhook khi khách huỷ link,
@@ -51,25 +44,8 @@ public sealed class PaymentsController(IPaymentRepository payments, IPaymentGate
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CancelCheckout(long orderCode, CancellationToken ct)
     {
-        var providerStatus = await gateway.GetPaymentStatusAsync(orderCode, ct);
-        if (providerStatus is null)
-            return Problem("Không tra được trạng thái liên kết thanh toán trên payOS.", statusCode: StatusCodes.Status404NotFound);
-        // Khách đã trả tiền (webhook có thể tới trễ) → không được đánh dấu huỷ.
-        if (providerStatus == "PAID")
-            return Problem("Giao dịch đã thanh toán thành công.", statusCode: StatusCodes.Status409Conflict);
-        // Link còn hiệu lực (khách chỉ bấm back) → giữ nguyên trạng thái.
-        if (providerStatus != "CANCELLED" && providerStatus != "EXPIRED")
-            return Problem("Liên kết thanh toán vẫn đang chờ thanh toán.", statusCode: StatusCodes.Status409Conflict);
-
-        var email = Email();
-        // ponytail: chỉ chốt 'cancelled' được khi khách quay về cancelUrl (FE gọi endpoint này).
-        // Khách đóng tab giữa chừng thì hoá đơn vẫn 'unpaid' — cần job quét link quá expiredAt nếu
-        // muốn dọn tự động.
-        var cancelled = SubscriptionOrderCodes.IsSubscriptionOrder(orderCode)
-            ? await payments.CancelPlanPurchaseAsync(orderCode, email, ct)
-            : await payments.CancelInvoicePaymentAsync((int)orderCode, email, ct);
-        if (!cancelled) return Problem("Không tìm thấy giao dịch cần huỷ.", statusCode: StatusCodes.Status404NotFound);
-        return Ok(new CheckoutCancellation(orderCode, "cancelled"));
+        try { return Ok(await payments.CancelCheckoutAsync(orderCode, Email(), ct)); }
+        catch (PaymentWorkflowException error) { return Problem(error.Message, statusCode: error.StatusCode); }
     }
 
     // Polled by the FE after PayOS returns, to know when the webhook has activated the subscription.
@@ -94,15 +70,8 @@ public sealed class PaymentsController(IPaymentRepository payments, IPaymentGate
         signedData["reference"] = request.Data.Reference;
         signedData["paymentLinkId"] = request.Data.PaymentLinkId;
         var webhook = new PayOsWebhook(request.Data.OrderCode, request.Data.Amount, request.Data.Reference ?? request.Data.PaymentLinkId, request.Data.Code, request.Signature, signedData);
-        if (!gateway.VerifyWebhook(webhook)) return Problem("Invalid PayOS signature.", statusCode: StatusCodes.Status400BadRequest);
-        if (request.Code == "00" && request.Success && request.Data.Code == "00")
-        {
-            var reference = request.Data.Reference ?? request.Data.PaymentLinkId;
-            if (SubscriptionOrderCodes.IsSubscriptionOrder(request.Data.OrderCode))
-                await payments.CompletePlanPurchaseAsync(request.Data.OrderCode, request.Data.Amount, reference, ct);
-            else
-                await payments.CompleteInvoiceAsync((int)request.Data.OrderCode, request.Data.Amount, reference, ct);
-        }
+        try { await payments.HandleWebhookAsync(webhook, request.Code, request.Success, ct); }
+        catch (PaymentWorkflowException error) { return Problem(error.Message, statusCode: error.StatusCode); }
         return NoContent();
     }
 
@@ -159,19 +128,4 @@ public sealed class PaymentsController(IPaymentRepository payments, IPaymentGate
 
     private string Email() => User.FindFirstValue(ClaimTypes.Email) ?? throw new UnauthorizedAccessException();
     private string? Scope() => AuthorizationPolicies.CanServeCustomers(User) ? null : Email();
-    // Marks the return URL so the FE result page knows to poll a plan purchase instead of an invoice.
-    private static string SubscriptionReturnUrl(string returnUrl) => $"{returnUrl}{(returnUrl.Contains('?') ? '&' : '?')}type=subscription";
-}
-
-public sealed record RefundRequest([param: Range(1, double.MaxValue)] decimal Amount);
-public sealed record PayOsWebhookRequest(string Code, bool Success, PayOsWebhookData Data, [param: Required] string Signature);
-public sealed class PayOsWebhookData
-{
-    public long OrderCode { get; init; }
-    public decimal Amount { get; init; }
-    public string Code { get; init; } = "";
-    public string? Reference { get; init; }
-    public string PaymentLinkId { get; init; } = "";
-    [System.Text.Json.Serialization.JsonExtensionData]
-    public Dictionary<string, JsonElement> Raw { get; init; } = [];
 }

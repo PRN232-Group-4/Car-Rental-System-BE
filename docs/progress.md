@@ -4,6 +4,43 @@
 
 Đăng ký/đăng nhập dùng giới hạn chung **6–20 ký tự**, bao gồm hai mốc; tạo nhân viên/đổi/reset mật khẩu mới dùng cùng rule để tránh tạo credential vượt giới hạn login. Lỗi trả 400 với envelope hiện tại và thông báo tiếng Việt. Swagger đọc minLength/maxLength từ record parameters; AGENTS và API reference đã cập nhật. Build 0 warning/error; **110/110** test response/validation/unit/authorization/refresh authorization pass, gồm các mốc 5/6/20/21. Không thay hash/session hoặc migration; không chạy lại DB suite do lỗi xác thực local đã ghi. Account cũ có password >20 cần reset. Xem [change](../changes/2026-10-07-password-length.md).
 
+## WebApi project naming correction — 2026-10-07
+
+Theo xác nhận người dùng, project/folder/assembly giữ tên `VehicleRental.WebApi`.
+Namespace HTTP dùng `Car_Rental_System_BE.WebApi`; solution/test references, Docker và source links đã cập nhật.
+Build và Release publish thành công, 0 warning/error; 124/124 regression tests pass.
+Các thư mục con và nghiệp vụ giữ nguyên. Thư mục `VehicleRental.API` đã xóa hết source/build artifacts
+nhưng root rỗng còn bị Windows process khóa. Không còn project/reference ở đó.
+Xem [change](../changes/2026-10-07-webapi-project-name.md).
+
+## Reference source layout — 2026-10-07
+
+Sắp xếp theo hình người dùng: Domain (`Entities`, `ValueObjects`, `Services`, `Interfaces`);
+Application (`Services`, `Interfaces`, `DTOs`, `Validators`); Infrastructure
+(`Persistence`, `Repositories`, `Services`); API (`Controllers`, `Middlewares`).
+Request/response DTO tách khỏi Controller, port tách khỏi DTO/implementation, namespace khớp folder.
+Project/directory/assembly giữ tên `VehicleRental.WebApi`; solution, Docker, tests và source links cập nhật.
+
+Build warnings-as-errors 0 warning/error; **183/183 test pass** trên PostgreSQL 18.4 độc lập,
+server đã dừng. Release publish tạo đúng `VehicleRental.WebApi.dll`. Docker engine chưa chạy nên
+chưa kiểm chứng Docker build. Tên project WebApi đã được xác nhận lại ở cập nhật phía trên.
+Không migration/thay đổi API contract/nghiệp vụ.
+Xem [change](../changes/2026-10-07-reference-layer-layout.md).
+
+## Services/Repositories — 2026-10-07
+
+Thêm Application Services cho account/session/staff/media/payment/operations/user và OTP/reset;
+Controller gọi service thay vì repository/Redis implementation. Repository interfaces tách khỏi DTO
+sang `Application/Repositories`; các query Npgsql ở `Infrastructure/Repositories`.
+Application dùng cache/session/token/email/payment ports, không tham chiếu HTTP/Redis/Npgsql.
+
+Build warnings-as-errors: 0 warning/error. Boundary/use-case/HTTP/auth tests: 124/124 pass;
+toàn bộ suite: **183/183 pass** trên PostgreSQL 18.4 test riêng và đã dừng server sau chạy.
+Diff whitespace sạch. Docker chưa kiểm chứng do Docker Desktop engine không chạy.
+Không có migration, đổi route hay response contract. Operations còn cần tách theo aggregate;
+invariant đang đọc dữ liệu dưới database lock vẫn giữ tại repository transaction.
+Xem [change](../changes/2026-10-07-services-repositories.md) và [architecture](architecture.md).
+
 ## Response contract — 2026-10-07
 
 Quy tắc duy trì contract đã được ghi trong [AGENTS.md](../AGENTS.md), áp dụng cho các lần thêm/sửa API tiếp theo; Definition of Done dùng ProblemDetails trong `error`.

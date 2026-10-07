@@ -1,5 +1,5 @@
-using Car_Rental_System_BE.Application.Payments;
-using Car_Rental_System_BE.Infrastructure;
+using Car_Rental_System_BE.Application.Services.Payments;
+using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
 namespace VehicleRental.Tests;

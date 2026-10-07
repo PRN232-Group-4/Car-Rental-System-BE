@@ -1,16 +1,17 @@
+using Car_Rental_System_BE.Application.DTOs.Organization;
+using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.Application.Validators;
 using System.ComponentModel.DataAnnotations;
-using Car_Rental_System_BE.Application.Accounts;
-using Car_Rental_System_BE.Infrastructure.Authentication;
-using Car_Rental_System_BE.Application.Organization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Car_Rental_System_BE.Controllers;
+namespace Car_Rental_System_BE.WebApi.Controllers;
 
 [ApiController]
 [Route("api/staff")]
 [Authorize(Roles = "Admin,Manager")]
-public sealed class StaffController(IStaffRepository staff, RedisRefreshTokenStore refreshTokens) : ControllerBase
+public sealed class StaffController(IStaffService staff) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType<StaffPage>(StatusCodes.Status200OK)]
@@ -40,15 +41,13 @@ public sealed class StaffController(IStaffRepository staff, RedisRefreshTokenSto
     public async Task<IActionResult> Create(CreateStaffRequest request, CancellationToken ct)
     {
         if (!ModelState.IsValid) return ValidationProblem(ModelState);
-        try { StaffSpecialty.Validate(request.StaffRole, request.IsDriver); }
-        catch (ArgumentException invalidRole) { return Problem(invalidRole.Message, statusCode: StatusCodes.Status400BadRequest); }
-        var error = ValidateDriver(request.IsDriver, request.LicenseNumber, request.LicenseExpiryDate, request.LicenseIssueDate);
-        if (error is not null) return LicenseValidationProblem(error);
         try
         {
-            var created = await staff.CreateAsync(request.ToCommand(), PasswordHash.Create(request.Password), ct);
+            var created = await staff.CreateAsync(request.ToCommand(), ct);
             return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
         }
+        catch (StaffLicenseException exception) { return LicenseValidationProblem(exception.Message); }
+        catch (ArgumentException exception) { return Problem(exception.Message, statusCode: StatusCodes.Status400BadRequest); }
         catch (StaffConflictException exception) { return Problem(exception.Message, statusCode: StatusCodes.Status409Conflict); }
         catch (OrganizationReferenceNotFoundException exception) { return Problem(exception.Message, statusCode: StatusCodes.Status400BadRequest); }
     }
@@ -60,11 +59,9 @@ public sealed class StaffController(IStaffRepository staff, RedisRefreshTokenSto
     public async Task<IActionResult> Update(int id, UpdateStaffRequest request, CancellationToken ct)
     {
         if (!ModelState.IsValid) return ValidationProblem(ModelState);
-        try { StaffSpecialty.Validate(request.StaffRole, request.IsDriver); }
-        catch (ArgumentException invalidRole) { return Problem(invalidRole.Message, statusCode: StatusCodes.Status400BadRequest); }
-        var error = ValidateDriver(request.IsDriver, request.LicenseNumber, request.LicenseExpiryDate, request.LicenseIssueDate);
-        if (error is not null) return LicenseValidationProblem(error);
-        try { var updated = await staff.UpdateAsync(id, request.ToCommand(), ct); await refreshTokens.RevokeAllAsync(updated.Email, ct); return Ok(updated); }
+        try { var updated = await staff.UpdateAsync(id, request.ToCommand(), ct); return Ok(updated); }
+        catch (StaffLicenseException exception) { return LicenseValidationProblem(exception.Message); }
+        catch (ArgumentException exception) { return Problem(exception.Message, statusCode: StatusCodes.Status400BadRequest); }
         catch (StaffNotFoundException) { return Problem("Staff member was not found.", statusCode: StatusCodes.Status404NotFound); }
         catch (OrganizationReferenceNotFoundException exception) { return Problem(exception.Message, statusCode: StatusCodes.Status400BadRequest); }
     }
@@ -75,17 +72,8 @@ public sealed class StaffController(IStaffRepository staff, RedisRefreshTokenSto
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Deactivate(int id, CancellationToken ct)
     {
-        try { var existing = await staff.FindByIdAsync(id, ct) ?? throw new StaffNotFoundException(); await staff.DeactivateAsync(id, ct); await refreshTokens.RevokeAllAsync(existing.Email, ct); return NoContent(); }
+        try { await staff.DeactivateAsync(id, ct); return NoContent(); }
         catch (StaffNotFoundException) { return Problem("Staff member was not found.", statusCode: StatusCodes.Status404NotFound); }
-    }
-
-    private static string? ValidateDriver(bool isDriver, string? licenseNumber, DateOnly? expiry, DateOnly? issue)
-    {
-        if (!isDriver) return null;
-        if (string.IsNullOrWhiteSpace(licenseNumber)) return "Tài xế phải có số giấy phép lái xe.";
-        if (!expiry.HasValue) return "Tài xế phải có ngày hết hạn giấy phép.";
-        if (issue.HasValue && issue > expiry) return "Ngày cấp giấy phép phải trước hoặc bằng ngày hết hạn.";
-        return null;
     }
 
     private IActionResult LicenseValidationProblem(string error)
@@ -93,38 +81,4 @@ public sealed class StaffController(IStaffRepository staff, RedisRefreshTokenSto
         ModelState.AddModelError("license", error);
         return ValidationProblem(ModelState);
     }
-}
-
-public sealed record CreateStaffRequest(
-    [param: Required, EmailAddress] string Email,
-    [param: Required, StringLength(120, MinimumLength = 2)] string FullName,
-    [param: Required, StringLength(PasswordRules.MaximumLength, MinimumLength = PasswordRules.MinimumLength, ErrorMessage = PasswordRules.LengthErrorMessage)] string Password,
-    [param: StringLength(30)] string? Phone,
-    [param: Range(1, int.MaxValue)] int? DepartmentId,
-    [param: Range(1, int.MaxValue)] int? FacilityId,
-    DateOnly? HiredDate,
-    bool IsDriver,
-    [param: StringLength(255)] string? LicenseNumber,
-    [param: StringLength(255)] string? LicenseType,
-    DateOnly? LicenseIssueDate,
-    DateOnly? LicenseExpiryDate,
-    [param: Url, StringLength(255)] string? LicenseImageUrl, [param: RegularExpression("^(CustomerService|Driver|Maintenance)$")] string? StaffRole = null)
-{
-    public CreateStaff ToCommand() => new(Email.Trim().ToLowerInvariant(), FullName.Trim(), Password, Phone?.Trim(), DepartmentId, FacilityId, HiredDate, IsDriver, LicenseNumber?.Trim(), LicenseType?.Trim(), LicenseIssueDate, LicenseExpiryDate, LicenseImageUrl?.Trim(), StaffRole);
-}
-
-public sealed record UpdateStaffRequest(
-    [param: Required, StringLength(120, MinimumLength = 2)] string FullName,
-    [param: StringLength(30)] string? Phone,
-    [param: Range(1, int.MaxValue)] int? DepartmentId,
-    [param: Range(1, int.MaxValue)] int? FacilityId,
-    DateOnly? HiredDate,
-    bool IsDriver,
-    [param: StringLength(255)] string? LicenseNumber,
-    [param: StringLength(255)] string? LicenseType,
-    DateOnly? LicenseIssueDate,
-    DateOnly? LicenseExpiryDate,
-    [param: Url, StringLength(255)] string? LicenseImageUrl, [param: RegularExpression("^(CustomerService|Driver|Maintenance)$")] string? StaffRole = null)
-{
-    public UpdateStaff ToCommand() => new(FullName.Trim(), Phone?.Trim(), DepartmentId, FacilityId, HiredDate, IsDriver, LicenseNumber?.Trim(), LicenseType?.Trim(), LicenseIssueDate, LicenseExpiryDate, LicenseImageUrl?.Trim(), StaffRole);
 }
