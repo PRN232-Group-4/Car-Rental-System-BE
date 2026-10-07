@@ -57,40 +57,57 @@ Flutter không tự động lưu cookie giữa các request như trình duyệt.
 
 ## 3. Chuẩn hóa Định dạng Dữ liệu (Request / Response / Error)
 
-### 3.1. Response Thành công chuẩn (ApiSuccessResponse<T>)
-Hầu hết các API trả về cấu trúc bọc dữ liệu sau:
+### 3.1. Response Thành công chuẩn (ApiResponse)
+Response JSON có đủ sáu trường; `code` là HTTP status dạng số, `status` là `success`/`error`, `is_success` luôn boolean:
 ```json
 {
+  "code": 200,
+  "status": "success",
   "is_success": true,
   "message": "Service is healthy.",
-  "data": { ... }
+  "data": { "status": "Healthy" },
+  "error": null
 }
 ```
 
-### 3.2. Response Lỗi chuẩn (ProblemDetails - RFC 7807)
-Khi có lỗi xác thực (400), quyền hạn (401/403), không tìm thấy (404), xung đột (409) hoặc hệ thống (500):
+### 3.2. Response Lỗi chuẩn (ProblemDetails bên trong error)
+Khi dữ liệu không hợp lệ (400), lỗi xác thực/quyền hạn (401/403), không tìm thấy (404), xung đột (409) hoặc hệ thống (500):
 ```json
 {
-  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
-  "title": "Bad Request",
-  "status": 400,
-  "detail": "License must not be expired."
+  "code": 400,
+  "status": "error",
+  "is_success": false,
+  "data": null,
+  "message": "License must not be expired.",
+  "error": {
+    "title": "Bad Request",
+    "status": 400,
+    "detail": "License must not be expired."
+  }
 }
 ```
 Khi lỗi Validate Model (ValidationProblem):
 ```json
 {
-  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
-  "title": "One or more validation errors occurred.",
-  "status": 400,
-  "errors": {
-    "Email": ["The Email field is required."],
-    "Password": ["The field Password must be a string with a minimum length of 6."]
+  "code": 400,
+  "status": "error",
+  "is_success": false,
+  "data": null,
+  "message": "One or more validation errors occurred.",
+  "error": {
+    "title": "One or more validation errors occurred.",
+    "status": 400,
+    "errors": {
+      "Email": ["The Email field is required."],
+      "Password": ["Mật khẩu phải có từ 6 đến 20 ký tự."]
+    }
   }
 }
 ```
 
 ---
+
+Xem [API reference hiện hành](API.md) để lấy route, cookie và request/response mới nhất. Client đọc `message`/`error.detail` và `error.errors`; các trường null vẫn có mặt. Redirect OAuth và nội dung Swagger không dùng envelope JSON này.
 
 ## 4. Kiến trúc Cơ sở Dữ liệu PostgreSQL Hoàn chỉnh
 
