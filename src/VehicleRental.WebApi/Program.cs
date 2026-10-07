@@ -32,7 +32,11 @@ builder.Logging.AddSimpleConsole(options =>
 // Add services to the container.
 builder.Services.AddControllers(options => options.Filters.Add<ApiSuccessResponseFilter>());
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options => options.OperationFilter<ApiSuccessResponseOperationFilter>());
+builder.Services.AddSwaggerGen(options =>
+{
+    options.OperationFilter<ApiSuccessResponseOperationFilter>();
+    options.SchemaFilter<PasswordRequestSchemaFilter>();
+});
 
 builder.Services.AddProblemDetails();
 builder.Services.AddOptions<RegistrationOptions>()
@@ -213,6 +217,7 @@ app.Lifetime.ApplicationStarted.Register(() =>
 // (không có XForwardedHost, chỉ tin loopback) nên X-Forwarded-Host của FE worker bị bỏ qua →
 // Request.Host = host nội bộ, làm redirect_uri của Google trỏ về domain BE.
 app.UseForwardedHeaders(app.Services.GetRequiredService<IOptions<ForwardedHeadersOptions>>().Value);
+app.UseApiResponseErrors();
 
 if (!app.Environment.IsProduction())
 {
@@ -220,20 +225,6 @@ if (!app.Environment.IsProduction())
     app.UseSwaggerUI();
 }
 
-app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
-{
-    var exception = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
-    app.Logger.LogError(exception, "Unhandled request exception for {Method} {Path}.", context.Request.Method, context.Request.Path);
-    var status = exception switch
-    {
-        UnauthorizedAccessException => StatusCodes.Status403Forbidden,
-        KeyNotFoundException => StatusCodes.Status404NotFound,
-        ArgumentException or InvalidOperationException => StatusCodes.Status400BadRequest,
-        _ => StatusCodes.Status500InternalServerError
-    };
-    var detail = status == StatusCodes.Status500InternalServerError ? "An unexpected server error occurred." : exception?.Message;
-    await Results.Problem(detail, statusCode: status).ExecuteAsync(context);
-}));
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -243,16 +234,16 @@ app.MapGet("/", () => Results.Redirect(app.Environment.IsProduction() ? "/health
 app.MapGet("/health", async (NpgsqlDataSource? dataSource, CancellationToken cancellationToken) =>
 {
     if (dataSource is null)
-        return Results.Problem("ConnectionStrings:RentalDatabase is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
+        return Results.Json(ApiResponse.Failure(StatusCodes.Status503ServiceUnavailable, message: "ConnectionStrings:RentalDatabase is not configured."), statusCode: StatusCodes.Status503ServiceUnavailable);
 
     try
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        return Results.Ok(ApiSuccessResponse.Create(new { status = "Healthy" }, "Service is healthy."));
+        return Results.Ok(ApiResponse.Create(new { status = "Healthy" }, "Service is healthy."));
     }
     catch (NpgsqlException)
     {
-        return Results.Problem("Database is unavailable.", statusCode: StatusCodes.Status503ServiceUnavailable);
+        return Results.Json(ApiResponse.Failure(StatusCodes.Status503ServiceUnavailable, message: "Database is unavailable."), statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 });
 
