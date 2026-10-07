@@ -98,7 +98,7 @@ public sealed class StaffController(IStaffRepository staff, RedisRefreshTokenSto
 public sealed record CreateStaffRequest(
     [param: Required, EmailAddress] string Email,
     [param: Required, StringLength(120, MinimumLength = 2)] string FullName,
-    [param: Required, StringLength(128, MinimumLength = 6)] string Password,
+    [param: Required, StringLength(PasswordRules.MaximumLength, MinimumLength = PasswordRules.MinimumLength, ErrorMessage = PasswordRules.LengthErrorMessage)] string Password,
     [param: StringLength(30)] string? Phone,
     [param: Range(1, int.MaxValue)] int? DepartmentId,
     [param: Range(1, int.MaxValue)] int? FacilityId,

@@ -89,4 +89,4 @@ public static class AuthCookies
     }
 }
 
-public sealed record LoginRequest([param: Required, EmailAddress] string Email, [param: Required, StringLength(128, MinimumLength = 6)] string Password, bool RememberMe = false);
+public sealed record LoginRequest([param: Required, EmailAddress] string Email, [param: Required, StringLength(PasswordRules.MaximumLength, MinimumLength = PasswordRules.MinimumLength, ErrorMessage = PasswordRules.LengthErrorMessage)] string Password, bool RememberMe = false);

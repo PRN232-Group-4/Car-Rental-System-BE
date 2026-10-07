@@ -22,7 +22,7 @@ public sealed class AccountController(IRegistrationWorkflow registration, IPassw
     }
 
     [HttpPost("registrations/verify")]
-    [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> Verify(VerifyRegistrationRequest request, CancellationToken ct)
     {
         if (!ModelState.IsValid) return ValidationProblem(ModelState);
@@ -103,13 +103,13 @@ public sealed class AccountController(IRegistrationWorkflow registration, IPassw
     }
 }
 
-public sealed record StartRegistrationRequest([param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress] string Email, [param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(120, MinimumLength = 2)] string FullName, [param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(128, MinimumLength = 6)] string Password);
+public sealed record StartRegistrationRequest([param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress] string Email, [param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(120, MinimumLength = 2)] string FullName, [param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(PasswordRules.MaximumLength, MinimumLength = PasswordRules.MinimumLength, ErrorMessage = PasswordRules.LengthErrorMessage)] string Password);
 public sealed record VerifyRegistrationRequest([param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress] string Email, [param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.RegularExpression("^[0-9]{6}$")] string Otp);
 public sealed record ResendRegistrationRequest([param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress] string Email);
 public sealed record PasswordResetStartRequest([param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress] string Email);
-public sealed record PasswordResetCompleteRequest([param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress] string Email, [param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.RegularExpression("^[0-9]{6}$")] string Otp, [param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(128, MinimumLength = 6)] string NewPassword);
+public sealed record PasswordResetCompleteRequest([param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress] string Email, [param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.RegularExpression("^[0-9]{6}$")] string Otp, [param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(PasswordRules.MaximumLength, MinimumLength = PasswordRules.MinimumLength, ErrorMessage = PasswordRules.LengthErrorMessage)] string NewPassword);
 public sealed record UpdateProfileRequest([param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(120, MinimumLength = 2)] string FullName, [param: System.ComponentModel.DataAnnotations.StringLength(50)] string? Gender, [param: System.ComponentModel.DataAnnotations.StringLength(30)] string? Phone);
-public sealed record ChangePasswordRequest([param: System.ComponentModel.DataAnnotations.Required] string CurrentPassword, [param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(128, MinimumLength = 6)] string NewPassword);
+public sealed record ChangePasswordRequest([param: System.ComponentModel.DataAnnotations.Required] string CurrentPassword, [param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(PasswordRules.MaximumLength, MinimumLength = PasswordRules.MinimumLength, ErrorMessage = PasswordRules.LengthErrorMessage)] string NewPassword);
 public sealed record AccountResponse(string Email, string FullName, string? Gender, string? Phone, string? AvatarUrl, IReadOnlyList<string> Roles, int? StaffId, int? DepartmentId, string? DepartmentName, int? FacilityId)
 {
     public static AccountResponse From(Account account) => new(account.Email, account.FullName, account.Gender, account.Phone, account.AvatarUrl, account.Roles, account.StaffId, account.DepartmentId, account.DepartmentName, account.FacilityId);
