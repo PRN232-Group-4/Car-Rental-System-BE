@@ -22,6 +22,31 @@ namespace VehicleRental.Tests;
 
 public sealed class UnitTests
 {
+    [Theory]
+    [InlineData(5, false)]
+    [InlineData(6, true)]
+    [InlineData(20, true)]
+    [InlineData(21, false)]
+    public void Password_boundaries_are_consistent_across_account_and_staff_requests(int length, bool valid)
+    {
+        var password = new string('a', length);
+        object[] requests =
+        [
+            new StartRegistrationRequest("customer@example.test", "Customer", password),
+            new LoginRequest("customer@example.test", password),
+            new PasswordResetCompleteRequest("customer@example.test", "123456", password),
+            new ChangePasswordRequest("old-password", password),
+            new CreateStaffRequest("staff@example.test", "Staff", password, null, null, null, null, false, null, null, null, null, null)
+        ];
+        foreach (var request in requests)
+        {
+            var errors = ValidateParameters(request);
+            Assert.Equal(valid, errors.Count == 0);
+            if (!valid)
+                Assert.Contains(errors, error => error.ErrorMessage == "Mật khẩu phải có từ 6 đến 20 ký tự.");
+        }
+    }
+
     [Fact]
     public void PayOs_webhook_signature_is_verified()
     {
@@ -98,7 +123,7 @@ public sealed class UnitTests
         // Regression: a non-null DeclaredType made the serializer cast the envelope back to the
         // action's return type, so endpoints like GET /api/vehicles failed with InvalidCastException.
         Assert.Null(wrapped.DeclaredType);
-        var envelope = Assert.IsType<ApiSuccessResponse>(wrapped.Value);
+        var envelope = Assert.IsType<ApiResponse>(wrapped.Value);
         Assert.True(envelope.IsSuccess);
         Assert.IsType<VehiclePage>(envelope.Data);
     }

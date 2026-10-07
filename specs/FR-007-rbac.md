@@ -3,6 +3,8 @@
 
 Roles: Customer, Staff (employee marker only), CustomerService, Driver, Maintenance (Technician in UI), Manager, Admin. Department is organizational metadata, not an implicit permission grant. Only Admin assigns staff specialties. Existing Staff accounts require explicit specialty assignment; no automatic CustomerService backfill.
 
+Staff creation passwords follow the same 6–20 character limit as registration/login; invalid lengths return 400 validation. See [password-length change](../changes/2026-10-07-password-length.md).
+
 | Capability | Roles |
 |---|---|
 | Organization/staff CRUD, refund approval, destructive catalog actions | Admin |
