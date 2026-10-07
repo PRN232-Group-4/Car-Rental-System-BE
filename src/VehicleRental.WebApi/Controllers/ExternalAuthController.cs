@@ -1,7 +1,6 @@
-using Car_Rental_System_BE.Infrastructure;
-using Car_Rental_System_BE.Infrastructure.Authentication;
-using Car_Rental_System_BE.Application.Accounts;
-using Car_Rental_System_BE.Authentication;
+using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.Domain.Entities;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
@@ -10,11 +9,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
 
-namespace Car_Rental_System_BE.Controllers;
+namespace Car_Rental_System_BE.WebApi.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public sealed class ExternalAuthController(IOptions<GoogleAuthOptions> google, IAccountRepository accounts, RedisRefreshTokenStore refreshTokens, JwtTokenService jwtTokens) : ControllerBase
+public sealed class ExternalAuthController(IOptions<GoogleAuthOptions> google, ISessionService sessions) : ControllerBase
 {
     [HttpGet("google")]
     [ProducesResponseType(StatusCodes.Status302Found)]
@@ -32,10 +31,9 @@ public sealed class ExternalAuthController(IOptions<GoogleAuthOptions> google, I
     {
         var email = User.FindFirstValue(ClaimTypes.Email);
         if (string.IsNullOrWhiteSpace(email)) return RedirectToLogin("error");
-        var account = await accounts.FindByEmailAsync(email, ct);
-        if (account is null) return RedirectToLogin("error");
-        var refresh = await refreshTokens.CreateAsync(account.Email, false, ct, account.AuthorizationVersion);
-        AuthCookies.Write(Response, jwtTokens.CreateAccessToken(account, refresh.SessionId), refresh.Token, refresh.ExpiresUtc, jwtTokens.AccessTokenLifetime);
+        var tokens = await sessions.SignInExternalAsync(email, ct);
+        if (tokens is null) return RedirectToLogin("error");
+        AuthCookies.Write(Response, tokens.AccessToken, tokens.Refresh.Token, tokens.Refresh.ExpiresUtc, tokens.AccessTokenLifetime);
         await HttpContext.SignOutAsync("External");
         return RedirectToLogin("ok");
     }

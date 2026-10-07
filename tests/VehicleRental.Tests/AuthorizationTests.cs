@@ -1,12 +1,16 @@
+using Car_Rental_System_BE.WebApi.Controllers;
+using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.Application.DTOs.Accounts;
+using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Application.DTOs.Organization;
+using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Application.Services;
+using Car_Rental_System_BE.Domain.Entities;
+using Car_Rental_System_BE.Domain.Services;
+using Car_Rental_System_BE.Infrastructure.Services.Authentication;
 using System.IdentityModel.Tokens.Jwt;
 using System.Reflection;
 using System.Security.Claims;
-using Car_Rental_System_BE.Application.Accounts;
-using Car_Rental_System_BE.Application.Operations;
-using Car_Rental_System_BE.Application.Organization;
-using Car_Rental_System_BE.Authentication;
-using Car_Rental_System_BE.Controllers;
-using Car_Rental_System_BE.Infrastructure.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -183,7 +187,7 @@ public sealed class AuthorizationTests
     {
         var store = DispatchProxy.Create<IOperationsRepository, RepositorySpy>();
         spy = (RepositorySpy)store;
-        return new(store) { ControllerContext = new() { HttpContext = new DefaultHttpContext { User = principal } } };
+        return new(new Car_Rental_System_BE.Application.Services.OperationsService(store)) { ControllerContext = new() { HttpContext = new DefaultHttpContext { User = principal } } };
     }
 
     public class RepositorySpy : DispatchProxy

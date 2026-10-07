@@ -1,4 +1,7 @@
 # Changelog
+- 2026-10-07 — [Khôi phục tên project VehicleRental.WebApi](2026-10-07-webapi-project-name.md)
+- 2026-10-07 — [Sắp xếp source theo layout Domain/Application/Infrastructure/API](2026-10-07-reference-layer-layout.md)
+- 2026-10-07 — [Tách Application Services và query Repositories](2026-10-07-services-repositories.md)
 - 2026-10-07 — [Giới hạn mật khẩu 6–20 ký tự](2026-10-07-password-length.md)
 - 2026-10-07 — [Chuẩn hóa response JSON 6 trường](2026-10-07-api-response-contract.md)
 - 2026-10-07 — [Tài liệu API BE tiếng Việt](2026-10-07-api-documentation.md)
