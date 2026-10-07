@@ -16,7 +16,7 @@ Only Admin can call `POST /api/staff` or `PUT /api/staff/{id}`. Add `staffRole` 
 {
   "email": "support@example.test",
   "fullName": "Customer Support",
-  "password": "replace-with-a-strong-password",
+  "password": "ExamplePass123!",
   "departmentId": 2,
   "facilityId": 1,
   "isDriver": false,
@@ -24,7 +24,7 @@ Only Admin can call `POST /api/staff` or `PUT /api/staff/{id}`. Add `staffRole` 
 }
 ```
 
-Department/facility IDs must exist. Driver creation uses `isDriver: true`, `staffRole: "Driver"`, and valid license fields. A missing role with `isDriver: true` infers Driver for compatibility. `Maintenance` and `CustomerService` require `isDriver: false`. Arbitrary role names including Admin/Manager are rejected. Existing administrative roles remain managed outside the specialty field.
+Department/facility IDs must exist. Creation passwords must contain 6–20 characters, matching registration/login. Driver creation uses `isDriver: true`, `staffRole: "Driver"`, and valid license fields. A missing role with `isDriver: true` infers Driver for compatibility. `Maintenance` and `CustomerService` require `isDriver: false`. Arbitrary role names including Admin/Manager are rejected. Existing administrative roles remain managed outside the specialty field.
 
 PUT replaces the specialty: send the current `staffRole` to retain it. Null for a non-driver removes the specialty and leaves the employee marker Staff. This does not remove separately assigned Admin/Manager roles. Staff responses include `staffRole` so edit forms can round-trip it.
 

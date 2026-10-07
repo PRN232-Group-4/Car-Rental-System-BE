@@ -1,4 +1,7 @@
 # Changelog
+- 2026-10-07 — [Giới hạn mật khẩu 6–20 ký tự](2026-10-07-password-length.md)
+- 2026-10-07 — [Chuẩn hóa response JSON 6 trường](2026-10-07-api-response-contract.md)
+- 2026-10-07 — [Tài liệu API BE tiếng Việt](2026-10-07-api-documentation.md)
 - 2026-10-05 — [Rental contract evidence API and price snapshot responses](2026-10-05-rental-contract-api.md)
 - 2026-10-05 — [Facility assignment for Staff and Manager](2026-10-05-facility-assignment.md)
 - 2026-10-05 — [Department assignment for Staff and Manager](2026-10-05-department-assignment.md)

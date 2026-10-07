@@ -1,6 +1,7 @@
 # FR-004 — Quên/đặt lại mật khẩu bằng OTP
 - **Status:** In progress; **Priority:** P0; **Milestone:** M2
 Reset qua OTP, thay hash và revoke toàn bộ session.
+Mật khẩu mới khi đổi/reset dùng cùng giới hạn 6–20 ký tự như đăng ký/đăng nhập để không tạo mật khẩu không thể đăng nhập. `currentPassword` giữ kiểm tra bắt buộc và xác minh hash, không áp giới hạn mới lên mật khẩu cũ.
 ## API
 | Method | Path | Auth | Mô tả |
 |---|---|---|---|
