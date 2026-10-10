@@ -1,5 +1,18 @@
 # Tiến độ
 
+## Định vị GPS, Tích hợp Google Maps, Lộ trình và Cảnh báo — 2026-10-10
+
+Bổ sung đầy đủ các module tính năng:
+1. API nhận tọa độ GPS telemetry (`POST /api/tracking/ingest`), kiểm soát và xác thực thiết bị qua API key hash (`tracking_devices`), cập nhật vị trí tức thời (`vehicle_last_positions`) và lưu trữ lịch sử vị trí (`vehicle_positions`).
+2. Chính sách lưu giữ dữ liệu: dọn dẹp dữ liệu vị trí cũ hơn số ngày quy định định kỳ qua `TelemetryRetentionHostedService` và API thủ công (`POST /api/tracking/retention/purge`).
+3. Tích hợp Google Maps API: Places (`/api/map/places`), Geocoding & Reverse Geocoding (`/api/map/geocode`, `/api/map/reverse-geocode`), Distance Matrix (`/api/map/distance-matrix`), Directions (`/api/map/directions`) với cơ chế fallback ngoại tuyến/mô phỏng an toàn.
+4. Truy vấn xe theo bán kính (`GET /api/tracking/vehicles/nearby`) sử dụng công thức khoảng cách Haversine trên SQL và tính khoảng cách/ETA thực tế qua Google Maps API.
+5. Tổng hợp lộ trình chuyến thuê (`GET /api/tracking/rentals/{rentalId}/route`) gồm quãng đường, thời gian, vận tốc trung bình/tối đa và danh sách tọa độ.
+6. Quản lý vùng địa lý (`geofences`) và phát hiện chuyển đổi trạng thái ENTER/EXIT (`geofence_events`). Tự động cảnh báo khi vào vùng cấm hoặc rời vùng cho phép (`tracking_alerts`).
+7. Cảnh báo xe đi lệch lộ trình (route deviation) dựa trên khoảng cách tới polyline dự kiến và kiểm tra trả sai điểm (`POST /api/tracking/rentals/{rentalId}/verify-dropoff`) đối chiếu với trạm quy định của đơn vị cho thuê.
+
+Toàn bộ API danh sách tuân thủ quy tắc phân trang (`page`, `pageSize`, `items`, `totalCount`) và hợp đồng envelope 6 trường bắt buộc. Thêm migration `0015_vehicle_tracking_and_geofencing.sql`, tài liệu [FR-033](../specs/FR-033-telemetry-and-device-control.md), [FR-034](../specs/FR-034-google-maps-places-and-eta.md), [FR-035](../specs/FR-035-routes-geofencing-and-alerts.md) và change log [2026-10-10-gps-tracking-and-google-maps.md](../changes/2026-10-10-gps-tracking-and-google-maps.md).
+
 ## Rule pagination — 2026-10-10
 
 AGENTS.md và Definition of Done bắt buộc mọi API list dùng page=1/pageSize=20, pageSize tối đa 100, data có items/page/pageSize/totalCount, validation tại HTTP và Application. NFR-008/API reference/ADR-003 đã đồng bộ. Đây là thay đổi rule/tài liệu; các API cũ còn trả array chưa được chuyển đổi trong lượt này. Kiểm tra diff/link tài liệu, không chạy lại build/test do không sửa runtime. Xem [change](../changes/2026-10-10-list-pagination-rule.md).

@@ -189,6 +189,27 @@ public sealed class ApiSuccessResponseFilter : IAsyncAlwaysRunResultFilter
         ["Payments.CreateInvoice"] = "Invoice created successfully.",
         ["Payments.Payments"] = "Payments retrieved successfully.",
         ["Payments.ApproveRefund"] = "Refund approved successfully.",
-        ["Payments.RejectRefund"] = "Refund rejected successfully."
+        ["Payments.RejectRefund"] = "Refund rejected successfully.",
+        ["Tracking.Ingest"] = "GPS telemetry coordinates ingested successfully.",
+        ["Tracking.LastPosition"] = "Vehicle last position retrieved successfully.",
+        ["Tracking.History"] = "Vehicle location history retrieved successfully.",
+        ["Tracking.Nearby"] = "Nearby vehicles retrieved successfully.",
+        ["Tracking.Route"] = "Rental route retrieved successfully.",
+        ["Tracking.VerifyDropoff"] = "Drop-off location verification completed successfully.",
+        ["Tracking.PurgeRetention"] = "Expired GPS telemetry purged successfully.",
+        ["Tracking.Alerts"] = "Tracking alerts retrieved successfully.",
+        ["Tracking.ResolveAlert"] = "Tracking alert resolved successfully.",
+        ["Map.Geocode"] = "Address geocoded successfully.",
+        ["Map.ReverseGeocode"] = "Coordinates reverse-geocoded successfully.",
+        ["Map.Places"] = "Places retrieved successfully.",
+        ["Map.DistanceMatrix"] = "Distance and ETA calculated successfully.",
+        ["Map.Directions"] = "Directions calculated successfully.",
+        ["Devices.List"] = "Tracking devices retrieved successfully.",
+        ["Devices.Register"] = "Tracking device registered successfully.",
+        ["Devices.Get"] = "Tracking device retrieved successfully.",
+        ["Devices.Update"] = "Tracking device updated successfully.",
+        ["Geofences.List"] = "Geofences retrieved successfully.",
+        ["Geofences.Create"] = "Geofence created successfully.",
+        ["Geofences.Events"] = "Geofence events retrieved successfully."
     };
 }

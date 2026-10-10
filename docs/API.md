@@ -17,9 +17,10 @@ Cập nhật: **10/10/2026**. Tài liệu được đối chiếu với controll
 11. [Ca trực, sự cố và thay xe](#11-ca-trực-sự-cố-và-thay-xe)
 12. [Bảo trì, đánh giá và dashboard](#12-bảo-trì-đánh-giá-và-dashboard)
 13. [Trạng thái dịch vụ](#13-trạng-thái-dịch-vụ)
-14. [Cấu trúc dữ liệu trả về](#14-cấu-trúc-dữ-liệu-trả-về)
-15. [Ví dụ tích hợp frontend](#15-ví-dụ-tích-hợp-frontend)
-16. [Phạm vi hiện tại và nguồn đối chiếu](#16-phạm-vi-hiện-tại-và-nguồn-đối-chiếu)
+14. [Định vị GPS, Bản đồ và Cảnh báo](#14-định-vị-gps-bản-đồ-và-cảnh-báo)
+15. [Cấu trúc dữ liệu trả về](#15-cấu-trúc-dữ-liệu-trả-về)
+16. [Ví dụ tích hợp frontend](#16-ví-dụ-tích-hợp-frontend)
+17. [Phạm vi hiện tại và nguồn đối chiếu](#17-phạm-vi-hiện-tại-và-nguồn-đối-chiếu)
 
 ## 1. Quy ước chung
 
@@ -651,7 +652,50 @@ Dashboard trả `revenue`, `renting`, `maintenance`, `activeSubscriptions`. `fro
 
 `/health` kiểm tra mở kết nối PostgreSQL; không phải kiểm tra toàn bộ Redis/email/PayOS. `/Home/status` chỉ báo tiến trình API đang trả response. `/Home` vẫn redirect Swagger ngay cả Production, nơi Swagger không được bật.
 
-## 14. Cấu trúc dữ liệu trả về
+## 14. Định vị GPS, Bản đồ và Cảnh báo
+
+### API nhận tọa độ và vị trí xe
+
+| Method | Endpoint | Quyền | Body / query | HTTP / data |
+| --- | --- | --- | --- | --- |
+| POST | `/api/tracking/ingest` | Public (X-Device-Id, X-Device-Key) | `IngestPositionsRequest` | 200 / `IngestPositionsResult` |
+| GET | `/api/tracking/vehicles/{vehicleId}/last-position` | Authenticated | Không | 200 / `VehicleLocationDto` |
+| GET | `/api/tracking/vehicles/{vehicleId}/history` | Authenticated | `from: datetime?`, `to: datetime?`, `page: int=1`, `pageSize: int=20` | 200 / `LocationHistoryPage` |
+| GET | `/api/tracking/vehicles/nearby` | Authenticated | `lat: double`, `lng: double`, `radiusMeters: double?`, `includeEta: bool=false`, `page: int=1`, `pageSize: int=20` | 200 / `NearbyVehiclePage` |
+| GET | `/api/tracking/rentals/{rentalId}/route` | Authenticated | Không | 200 / `RentalRouteSummaryDto` |
+| POST | `/api/tracking/rentals/{rentalId}/verify-dropoff` | Authenticated | `currentLat: double?`, `currentLng: double?` | 200 / `DropoffVerificationResult` |
+| POST | `/api/tracking/retention/purge` | Admin | `olderThanDays: int?` | 200 / `PurgeRetentionResult` |
+| GET | `/api/tracking/alerts` | Management | `rentalId: int?`, `vehicleId: int?`, `isResolved: bool?`, `page: int=1`, `pageSize: int=20` | 200 / `TrackingAlertPage` |
+| POST | `/api/tracking/alerts/{alertId}/resolve` | Management | Không | 200 / `TrackingAlertDto` |
+
+### Tích hợp Google Maps (Places, Geocoding, Distance Matrix, Directions)
+
+| Method | Endpoint | Quyền | Body / query | HTTP / data |
+| --- | --- | --- | --- | --- |
+| GET | `/api/map/geocode` | Authenticated | `address: string` | 200 / `GeocodeResult` |
+| GET | `/api/map/reverse-geocode` | Authenticated | `lat: double`, `lng: double` | 200 / `GeocodeResult` |
+| GET | `/api/map/places` | Authenticated | `query: string`, `lat: double?`, `lng: double?`, `radius: double?` | 200 / `PlaceSearchResult[]` |
+| GET | `/api/map/distance-matrix` | Authenticated | `originLat: double`, `originLng: double`, `destLat: double`, `destLng: double` | 200 / `DistanceMatrixResult` |
+| GET | `/api/map/directions` | Authenticated | `originLat: double`, `originLng: double`, `destLat: double`, `destLng: double` | 200 / `DirectionsResult` |
+
+### Quản lý thiết bị định vị (Devices)
+
+| Method | Endpoint | Quyền | Body / query | HTTP / data |
+| --- | --- | --- | --- | --- |
+| GET | `/api/devices` | Management | `vehicleId: int?`, `isActive: bool?`, `page: int=1`, `pageSize: int=20` | 200 / `DevicePage` |
+| POST | `/api/devices` | Management | `RegisterDeviceRequest` | 201 / `RegisterDeviceResult` |
+| GET | `/api/devices/{id}` | Management | Không | 200 / `TrackingDeviceDto` |
+| PUT | `/api/devices/{id}` | Management | `UpdateDeviceRequest` | 200 / `TrackingDeviceDto` |
+
+### Vùng địa lý và Sự kiện Geofence
+
+| Method | Endpoint | Quyền | Body / query | HTTP / data |
+| --- | --- | --- | --- | --- |
+| GET | `/api/geofences` | Management | Không | 200 / `GeofenceDto[]` |
+| POST | `/api/geofences` | Management | `CreateGeofenceRequest` | 201 / `GeofenceDto` |
+| GET | `/api/geofences/events` | Management | `vehicleId: int?`, `rentalId: int?`, `page: int=1`, `pageSize: int=20` | 200 / `GeofenceEventPage` |
+
+## 15. Cấu trúc dữ liệu trả về
 
 Các trường dưới đây nằm trong `data`. `T[]` là array; page có `items`, `page`, `pageSize`, `totalCount`, không có `totalPages`.
 
@@ -707,7 +751,7 @@ Ví dụ page xe (lược bớt trường của item):
 }
 ```
 
-## 15. Ví dụ tích hợp frontend
+## 16. Ví dụ tích hợp frontend
 
 ### Gọi qua proxy cùng origin
 
@@ -763,7 +807,7 @@ Không tự đặt `Content-Type` khi gửi FormData; trình duyệt cần tạo
 
 Đây là luồng tích hợp đề xuất theo API hiện có. Các điều kiện chuyển trạng thái thực thi ở server được mô tả ở mục thuê xe; không suy ra thêm gate thanh toán/hợp đồng chưa có trong mã.
 
-## 16. Phạm vi hiện tại và nguồn đối chiếu
+## 17. Phạm vi hiện tại và nguồn đối chiếu
 
 - Tài liệu mô tả endpoint đã có trong mã nguồn, không biến các FR đang dự kiến thành endpoint tồn tại.
 - Chưa có controller endpoint cho danh sách rental, customer tự report sự cố, loyalty, renewal hợp đồng, lịch thanh toán dài hạn hoặc tính overtime tự động.
