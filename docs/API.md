@@ -1,6 +1,6 @@
 # Tài liệu API — Car Rental System BE
 
-Cập nhật: **07/10/2026**. Tài liệu được đối chiếu với controller, DTO, cấu hình xác thực, response filter và repository trong mã nguồn hiện tại. Các ví dụ dùng dữ liệu minh họa; thay ID, thời gian, email và URL bằng dữ liệu thật trước khi gọi.
+Cập nhật: **10/10/2026**. Tài liệu được đối chiếu với controller, DTO, cấu hình xác thực, response filter và repository trong mã nguồn hiện tại. Các ví dụ dùng dữ liệu minh họa; thay ID, thời gian, email và URL bằng dữ liệu thật trước khi gọi.
 
 ## Mục lục
 
@@ -22,6 +22,12 @@ Cập nhật: **07/10/2026**. Tài liệu được đối chiếu với controll
 16. [Phạm vi hiện tại và nguồn đối chiếu](#16-phạm-vi-hiện-tại-và-nguồn-đối-chiếu)
 
 ## 1. Quy ước chung
+
+### Pagination bắt buộc cho API danh sách
+
+Contract chung: `page=1`, `pageSize=20` khi bỏ query; `page >= 1`, `1 <= pageSize <= 100`. Validate ở HTTP và Application; dữ liệu sai trả 400, không tự clamp. Response `data` gồm đủ `items`, `page`, `pageSize`, `totalCount` (tổng sau lọc, trước phân trang). Trang ngoài phạm vi trả `items=[]` và metadata chính xác; kết quả được sắp xếp ổn định.
+
+Rule áp dụng cho mọi API list và bắt buộc khi thêm/sửa endpoint. Một số API cũ trong các bảng dưới đây vẫn trả array; chuyển đổi chúng sang pagination còn pending. Xem [ADR-003](decisions/ADR-003-list-pagination.md).
 
 ### Địa chỉ và định dạng
 
@@ -226,8 +232,13 @@ Login:
 | --- | --- | --- | --- | --- |
 | POST | `/api/media/avatar` | Login | `file` | 200 / `StoredImage` |
 | POST | `/api/media/vehicle` | Management | `file` | 200 / `StoredImage` |
+| POST | `/api/media/staff-license` | Admin | `file` | 200 / `StoredImage` |
+| POST | `/api/media/inspection` | Inspection | `file` | 200 / `StoredImage` |
+| POST | `/api/media/report` | Nhân viên có quyền report + `staff_id` | `file` | 200 / `StoredImage` |
 
 Avatar: file khác rỗng, tối đa **5 MiB**, MIME bắt đầu bằng `image/`. Ảnh xe: tối đa **10 MiB**, cùng điều kiện MIME. Avatar được lưu vào account hiện tại; upload ảnh xe chỉ trả URL/publicId, sau đó dùng URL trong body tạo/sửa xe. Dịch vụ lưu trữ là Cloudinary.
+
+Ảnh bằng lái nhân viên tối đa **5 MiB**; ảnh inspection/report tối đa **10 MiB**. Các endpoint này trả `secureUrl` và `publicId`; dùng `secureUrl` trong `licenseImageUrl` khi tạo/sửa nhân viên hoặc `imageUrls` khi ghi inspection/report. Kiểm tra nội dung ảnh JPEG/PNG/WebP/GIF trước upload. Upload ảnh customer license trực tiếp qua PUT ở mục 6.
 
 ```json
 {
@@ -296,13 +307,39 @@ Phân công members chỉ thay department/facility, giữ specialty và các tr�
 
 ## 6. Giấy phép lái xe
 
+### Danh sách và chi tiết customer
+
+| Method | Endpoint | Quyền | Query | HTTP / data |
+| --- | --- | --- | --- | --- |
+| GET | `/api/customers` | CustomerService | `search?`, `isActive?`, `page=1`, `pageSize=20` | 200 / `CustomerPage` |
+| GET | `/api/customers/{customerId}` | CustomerService | Không | 200 / `CustomerDetail` |
+
+Policy CustomerService gồm **Admin, Manager, CustomerService**. Danh sách tìm chuỗi theo tên/email/điện thoại, không phân biệt hoa thường; `isActive` bỏ qua thì lấy cả tài khoản active và inactive. `page >= 1`, `pageSize` từ 1 đến 100. Dữ liệu sắp xếp theo customer ID; trang vượt phạm vi trả `items=[]` và giữ `totalCount`.
+
+`customerId` là **ID bảng customers**, khác `userId`. Chi tiết gồm liên hệ, avatar, trạng thái tài khoản, `license` và `loyalty.points`; không chứa mật khẩu/token. ID không dương trả 400, không tồn tại trả 404. Customer thông thường không được truy cập danh bạ này.
+
+### Giấy phép của customer
+
 | Method | Endpoint | Quyền | Body | HTTP / data |
 | --- | --- | --- | --- | --- |
 | GET | `/api/customer/license` | Customer | Không | 200 / `CustomerLicense` hoặc null |
-| PUT | `/api/customer/license` | Customer | `LicenseRequest` | 200 / `CustomerLicense` |
+| PUT | `/api/customer/license` | Customer | Multipart: `number`, `type`, `issueDate?`, `expiryDate`, `file` | 200 / `CustomerLicense` |
+| PUT | `/api/customer/license/url` | Customer | JSON `LicenseRequest` | 200 / `CustomerLicense` |
 | PUT | `/api/customers/{customerId}/license-status` | CustomerService | `LicenseReviewRequest` | 200 / `CustomerLicense` |
 
-`LicenseRequest`:
+`PUT /api/customer/license` nhận **multipart/form-data** để Swagger hiện ô chọn file. Ảnh tối đa **5 MiB**, định dạng JPEG/PNG/WebP/GIF. Server upload Cloudinary rồi lưu URL HTTPS vào giấy phép của customer đang đăng nhập, đưa trạng thái về `pending`. Dữ liệu/ảnh không hợp lệ trả 400 trước khi gọi Cloudinary.
+
+```javascript
+const licenseForm = new FormData();
+licenseForm.append("number", "GPLX-CUSTOMER-001");
+licenseForm.append("type", "B2");
+licenseForm.append("issueDate", "2024-01-01");
+licenseForm.append("expiryDate", "2030-01-01");
+licenseForm.append("file", licenseFile);
+await callApi("/api/customer/license", { method: "PUT", body: licenseForm });
+```
+
+Để dùng URL ảnh đã có, gửi JSON `LicenseRequest` tới **`/api/customer/license/url`**. Client trước đây gửi JSON tới `/api/customer/license` cần chuyển sang route `/url` hoặc FormData; không tự đặt header Content-Type khi gửi FormData.
 
 ```json
 {
@@ -623,6 +660,9 @@ Các trường dưới đây nằm trong `data`. `T[]` là array; page có `item
 | `AccountResponse` | `email: string`, `fullName: string`, `gender: string?`, `phone: string?`, `avatarUrl: string?`, `roles: string[]`, `staffId: int?`, `departmentId: int?`, `departmentName: string?`, `facilityId: int?` |
 | `StoredImage` | `secureUrl: string`, `publicId: string` |
 | `StaffPage` | `items: Staff[]`, `page: int`, `pageSize: int`, `totalCount: int` |
+| `CustomerPage` | `items: CustomerListItem[]`, `page: int`, `pageSize: int`, `totalCount: int` |
+| `CustomerListItem` | `id: int`, `userId: int`, `email: string`, `fullName: string?`, `phone: string?`, `avatarUrl: string?`, `isActive: bool`, `licenseStatus: string`, `loyaltyPoint: int` |
+| `CustomerDetail` | `id: int`, `userId: int`, `email: string`, `fullName: string?`, `gender: string?`, `phone: string?`, `avatarUrl: string?`, `isActive: bool`, `license: { number, type, issueDate, expiryDate, imageUrl, status }`, `loyalty: { points: int }` |
 | `Staff` | `id: int`, `userId: int`, `email: string`, `fullName: string`, `phone: string?`, `departmentId: int?`, `departmentName: string?`, `facilityId: int?`, `facilityName: string?`, `hiredDate: date?`, `isDriver: bool`, `licenseNumber: string?`, `licenseType: string?`, `licenseIssueDate: date?`, `licenseExpiryDate: date?`, `licenseImageUrl: string?`, `rating: decimal?`, `isActive: bool`, `staffRole: string?` |
 | `OrganizationUnit` | `id: int`, `name: string`, `address: string?` |
 | `CustomerLicense` | `number: string?`, `type: string?`, `issueDate: date?`, `expiryDate: date?`, `imageUrl: string?`, `status: string` |
@@ -728,7 +768,7 @@ Không tự đặt `Content-Type` khi gửi FormData; trình duyệt cần tạo
 - Tài liệu mô tả endpoint đã có trong mã nguồn, không biến các FR đang dự kiến thành endpoint tồn tại.
 - Chưa có controller endpoint cho danh sách rental, customer tự report sự cố, loyalty, renewal hợp đồng, lịch thanh toán dài hạn hoặc tính overtime tự động.
 - Không có API PUT/DELETE rental policy hiện tại; tạo policy mới để sử dụng cho các lần đặt tiếp theo.
-- Các message chưa có mapping riêng dùng fallback của response filter, ví dụ refresh/upload ảnh xe/delete xe/maintenance list/ratings/cancel checkout. Client nên dựa HTTP và dữ liệu, không so sánh cứng text message.
+- Các message chưa có mapping riêng dùng fallback của response filter, ví dụ refresh/delete xe/maintenance list/ratings/cancel checkout. Client nên dựa HTTP và dữ liệu, không so sánh cứng text message.
 - Contract response có HTTP tests trên host kiểm thử độc lập không cần DB/Redis/provider; việc gọi BE triển khai và dịch vụ ngoài vẫn cần xác nhận riêng.
 
 Nguồn chính:

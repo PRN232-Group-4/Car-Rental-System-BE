@@ -48,6 +48,17 @@ Mọi response JSON của API, bao gồm thành công và lỗi, phải có đ�
 
 Nguồn quyết định: [NFR-008](specs/NFR-008-openapi.md), [ADR-002](docs/decisions/ADR-002-api-response-envelope.md).
 
+## Pagination bắt buộc cho API danh sách
+
+- Mọi API trả về danh sách phải có pagination. Khi thêm hoặc sửa API list, bắt buộc áp dụng contract này.
+- Query mặc định `page=1`, `pageSize=20`; `page >= 1`, `pageSize` từ **1 đến 100**.
+- `data` trong envelope chung phải chứa đủ **`items`, `page`, `pageSize`, `totalCount`**; không trả array trực tiếp. `totalCount` là tổng bản ghi sau lọc, trước phân trang.
+- Validate pagination tại **HTTP boundary và Application service**. Giá trị sai trả **400** theo contract lỗi chung; không tự clamp giá trị sai.
+- Dùng thứ tự sắp xếp ổn định; tính offset tránh tràn số nguyên. Trang vượt phạm vi trả `items=[]`, giữ `page`, `pageSize`, `totalCount` chính xác.
+- Swagger và docs/API.md phải mô tả default/range và page schema. Test liên quan phải bao phủ mặc định, giới hạn 1/100, giá trị không hợp lệ, tổng sau lọc và trang rỗng.
+
+Nguồn quyết định: [NFR-008](specs/NFR-008-openapi.md), [ADR-003](docs/decisions/ADR-003-list-pagination.md).
+
 ## Quy trình mỗi thay đổi
 1. Đọc/cập nhật spec FR/NFR trước.
 2. Làm use case nhỏ nhất, thêm test Domain/Application hoặc integration khi dùng DB/Redis.
@@ -57,6 +68,7 @@ Nguồn quyết định: [NFR-008](specs/NFR-008-openapi.md), [ADR-002](docs/dec
 
 ## Definition of Done
 - Validate ở HTTP boundary, invariant ở Application/Domain; success/error JSON tuân thủ contract 6 trường ở trên, lỗi giữ ProblemDetails bên trong `error`.
+- API danh sách tuân thủ pagination chung: mặc định page=1/pageSize=20, tối đa 100, đủ items/page/pageSize/totalCount và validation ở HTTP/Application.
 - Mỗi API mới phải xuất hiện trong Swagger ở non-production: controller dùng `ApiController`, route rõ ràng, request/response status codes và auth requirement được mô tả. Không ẩn endpoint khỏi Swagger trừ khi có lý do bảo mật được ghi trong spec.
 - Mỗi API mới phải trả success message đúng ngữ cảnh nghiệp vụ, không dùng message chung chung. Bổ sung mapping `Controller.Action` tương ứng trong `src/VehicleRental.WebApi/Middlewares/Responses/ApiSuccessResponseFilter.cs` và kiểm tra message phản ánh đúng hành động (ví dụ: tạo, cập nhật, phê duyệt, hủy hoặc truy xuất).
 - Không secret trong Git; Options `ValidateOnStart`, `.env.example` đầy đủ.

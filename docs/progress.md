@@ -1,5 +1,15 @@
 # Tiến độ
 
+## Rule pagination — 2026-10-10
+
+AGENTS.md và Definition of Done bắt buộc mọi API list dùng page=1/pageSize=20, pageSize tối đa 100, data có items/page/pageSize/totalCount, validation tại HTTP và Application. NFR-008/API reference/ADR-003 đã đồng bộ. Đây là thay đổi rule/tài liệu; các API cũ còn trả array chưa được chuyển đổi trong lượt này. Kiểm tra diff/link tài liệu, không chạy lại build/test do không sửa runtime. Xem [change](../changes/2026-10-10-list-pagination-rule.md).
+
+## Customer directory và upload Cloudinary — 2026-10-10
+
+Thêm GET danh sách/chi tiết customer cho Admin/Manager/CustomerService, có phân trang/tìm kiếm/lọc active và profile/license/loyalty an toàn. PUT customer license nhận multipart và lưu secureUrl sau upload, đặt lại pending; JSON URL chuyển sang `/api/customer/license/url`. Bổ sung upload ảnh bằng lái nhân viên, inspection và report theo quyền tạo dữ liệu tương ứng. Avatar/ảnh xe đã có upload. Lỗi Cloudinary trả 500 an toàn, không ghi license khi provider thất bại.
+
+Build warnings-as-errors thành công; **249/249 test pass**, gồm HTTP multipart/Swagger/envelope/auth, Application và PostgreSQL 18.4 riêng. PostgreSQL kiểm thử đã dừng. Cloudinary dùng stub; chưa kiểm chứng upload vào tài khoản thật. Không migration; private delivery/cleanup ảnh cũ và Docker còn chưa kiểm chứng. Xem [change](../changes/2026-10-10-customer-directory-media.md) và [API](API.md).
+
 ## Giới hạn mật khẩu — 2026-10-07
 
 Đăng ký/đăng nhập dùng giới hạn chung **6–20 ký tự**, bao gồm hai mốc; tạo nhân viên/đổi/reset mật khẩu mới dùng cùng rule để tránh tạo credential vượt giới hạn login. Lỗi trả 400 với envelope hiện tại và thông báo tiếng Việt. Swagger đọc minLength/maxLength từ record parameters; AGENTS và API reference đã cập nhật. Build 0 warning/error; **110/110** test response/validation/unit/authorization/refresh authorization pass, gồm các mốc 5/6/20/21. Không thay hash/session hoặc migration; không chạy lại DB suite do lỗi xác thực local đã ghi. Account cũ có password >20 cần reset. Xem [change](../changes/2026-10-07-password-length.md).
@@ -67,6 +77,7 @@ Hourly/long-term creation, transactional interval locks and pre-inspection gatin
 | FR-022..025 | Subscription | M6 | P0-P1 | Done | FR-022..025 | 2026-10-03-subscription-plan-payments |
 | FR-026..027,029..030 | Maintenance/report/loyalty/dashboard | M7 | P1-P2 | In progress | FR-026..027,029..030 | 2026-10-03-staff-authorization |
 | FR-028 | Brevo notifications | M7 | P0 | In progress | FR-028 | 2026-09-30-bootstrap |
+| FR-032 | Customer directory list/detail | M2 | P1 | Done | FR-032 | 2026-10-10-customer-directory-media |
 | NFR-001..005,008 | Architecture/platform/security | M0 | P0 | In progress | NFR files | 2026-09-30-bootstrap |
 | NFR-006..007 | Performance/testing | M0 | P1 | In progress | NFR files | 2026-10-01-test-project |
 

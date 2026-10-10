@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.WebApi.Middlewares.Requests;
 using Car_Rental_System_BE.Domain.Entities;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
@@ -11,7 +12,7 @@ namespace Car_Rental_System_BE.WebApi.Controllers;
 
 [ApiController]
 [Route("api")]
-public sealed class OperationsController(IOperationsService store) : ControllerBase
+public sealed class OperationsController(IOperationsService store, IMediaService media) : ControllerBase
 {
     /// <summary>Admin, Manager or CustomerService records signed long-term contract evidence.</summary>
     [Authorize(Policy=AuthorizationPolicies.CustomerService)]
@@ -25,7 +26,30 @@ public sealed class OperationsController(IOperationsService store) : ControllerB
         Ok(await store.SaveRentalContractAsync(id, request.ContractLink, request.SignedAt, ct));
 
     [Authorize(Policy=AuthorizationPolicies.Customer)] [HttpGet("customer/license")] public async Task<IActionResult> License(CancellationToken ct) => Ok(await store.GetLicenseAsync(Email(),ct));
-    [Authorize(Policy=AuthorizationPolicies.Customer)] [HttpPut("customer/license")] public async Task<IActionResult> SaveLicense(LicenseRequest x,CancellationToken ct) { return Ok(await store.SaveLicenseAsync(Email(),new(x.Number,x.Type,x.IssueDate,x.ExpiryDate,x.ImageUrl,"pending"),ct)); }
+    /// <summary>Customer uploads and resubmits their driver license for review.</summary>
+    [Authorize(Policy=AuthorizationPolicies.Customer)]
+    [HttpPut("customer/license")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType<CustomerLicense>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SaveLicense([FromForm] LicenseUploadForm request, CancellationToken ct)
+    {
+        if (!ImageFileRules.IsImage(request.File, 5 * 1024 * 1024))
+            return Problem("License must be an image no larger than 5 MB.", statusCode: StatusCodes.Status400BadRequest);
+        await using var content = request.File!.OpenReadStream();
+        return Ok(await media.SaveCustomerLicenseAsync(Email(), request.ToModel(), content, request.File.FileName, ct));
+    }
+
+    /// <summary>Customer submits an existing image URL using the previous JSON contract.</summary>
+    [Authorize(Policy=AuthorizationPolicies.Customer)]
+    [HttpPut("customer/license/url")]
+    [Consumes("application/json")]
+    [ProducesResponseType<CustomerLicense>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SaveLicenseUrl(LicenseRequest x, CancellationToken ct) =>
+        Ok(await store.SaveLicenseAsync(Email(), new(x.Number.Trim(), x.Type.Trim(), x.IssueDate, x.ExpiryDate, x.ImageUrl, "pending"), ct));
     [Authorize(Policy=AuthorizationPolicies.CustomerService)] [HttpPut("customers/{customerId:int}/license-status")] public Task<CustomerLicense> ReviewLicense(int customerId,LicenseReviewRequest x,CancellationToken ct) => store.ReviewLicenseAsync(customerId,x.Status.ToLowerInvariant(),ct);
 
     [HttpGet("vehicle-types")] public Task<IReadOnlyList<VehicleType>> VehicleTypes(CancellationToken ct)=>store.ListVehicleTypesAsync(ct);

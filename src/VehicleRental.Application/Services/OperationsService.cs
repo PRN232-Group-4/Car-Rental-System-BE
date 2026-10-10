@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.Application.Validators;
 
 namespace Car_Rental_System_BE.Application.Services;
 
@@ -35,9 +36,8 @@ public sealed class OperationsService(IOperationsRepository repository) : IOpera
 
     public Task<CustomerLicense> SaveLicenseAsync(string email, CustomerLicense license, CancellationToken ct)
     {
-        if (license.ExpiryDate < DateOnly.FromDateTime(DateTime.UtcNow))
-            throw new ArgumentException("License must not be expired.");
-        return repository.SaveLicenseAsync(email, license, ct);
+        CustomerLicenseValidator.Validate(license);
+        return repository.SaveLicenseAsync(email, license with { Status = "pending" }, ct);
     }
 
     public Task<CustomerLicense> ReviewLicenseAsync(int customerId, string status, CancellationToken ct) =>
