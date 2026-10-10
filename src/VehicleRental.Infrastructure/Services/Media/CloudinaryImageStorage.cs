@@ -1,5 +1,6 @@
 using Car_Rental_System_BE.Application.DTOs.Registration;
 using Car_Rental_System_BE.Application.Interfaces.External;
+using Car_Rental_System_BE.Application.Services.Exceptions;
 using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
 using Microsoft.Extensions.Options;
@@ -20,17 +21,28 @@ public sealed class CloudinaryImageStorage(IOptions<CloudinaryOptions> options) 
     {
         var settings = options.Value;
         if (string.IsNullOrWhiteSpace(settings.CloudName) || string.IsNullOrWhiteSpace(settings.ApiKey) || string.IsNullOrWhiteSpace(settings.ApiSecret))
-            throw new InvalidOperationException("Cloudinary is not configured.");
-        var cloudinary = new Cloudinary(new Account(settings.CloudName, settings.ApiKey, settings.ApiSecret));
-        var result = await cloudinary.UploadAsync(new ImageUploadParams
+            throw new ImageStorageException("Image storage is not configured.");
+        try
         {
-            File = new FileDescription(fileName, content),
-            Folder = $"vehicle-rental/{folder}",
-            UseFilename = false,
-            UniqueFilename = true,
-            Overwrite = false
-        }, ct);
-        if (result.Error is not null) throw new InvalidOperationException($"Cloudinary upload failed: {result.Error.Message}");
-        return new StoredImage(result.SecureUrl.AbsoluteUri, result.PublicId);
+            var cloudinary = new Cloudinary(new Account(settings.CloudName, settings.ApiKey, settings.ApiSecret));
+            var result = await cloudinary.UploadAsync(new ImageUploadParams
+            {
+                File = new FileDescription(fileName, content),
+                Folder = $"vehicle-rental/{folder}",
+                UseFilename = false,
+                UniqueFilename = true,
+                Overwrite = false
+            }, ct);
+            if (result.Error is not null || result.SecureUrl is null)
+                throw new ImageStorageException("Image upload failed.");
+            return new StoredImage(result.SecureUrl.AbsoluteUri, result.PublicId);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (ImageStorageException) { throw; }
+        catch (Exception)
+        {
+            // Provider diagnostics can contain credentials or internal URLs; never propagate them.
+            throw new ImageStorageException("Image upload failed.");
+        }
     }
 }

@@ -187,7 +187,7 @@ public sealed class AuthorizationTests
     {
         var store = DispatchProxy.Create<IOperationsRepository, RepositorySpy>();
         spy = (RepositorySpy)store;
-        return new(new Car_Rental_System_BE.Application.Services.OperationsService(store)) { ControllerContext = new() { HttpContext = new DefaultHttpContext { User = principal } } };
+        return new(new Car_Rental_System_BE.Application.Services.OperationsService(store), null!) { ControllerContext = new() { HttpContext = new DefaultHttpContext { User = principal } } };
     }
 
     public class RepositorySpy : DispatchProxy

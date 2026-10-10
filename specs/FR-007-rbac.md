@@ -14,6 +14,7 @@ Staff creation passwords follow the same 6–20 character limit as registration/
 | Assign Manager to a facility (including Manager + Staff targets) | Admin |
 | Vehicle catalog, subscription plans, rental policies, dashboard | Admin, Manager |
 | License review, rental lifecycle/assignment, invoices, payment/refund requests | Admin, Manager, CustomerService |
+| Customer directory list/detail | Admin, Manager, CustomerService |
 | Inspections | Admin or Maintenance, with own active staff profile |
 | Maintenance management | Admin, Manager, Maintenance |
 | Driver schedule | Admin/Manager all; Driver own assignments |

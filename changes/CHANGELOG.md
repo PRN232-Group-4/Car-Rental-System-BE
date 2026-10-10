@@ -1,4 +1,6 @@
 # Changelog
+- 2026-10-10 — [Rule pagination cho API danh sách](2026-10-10-list-pagination-rule.md)
+- 2026-10-10 — [Customer directory và Cloudinary evidence uploads](2026-10-10-customer-directory-media.md)
 - 2026-10-07 — [Khôi phục tên project VehicleRental.WebApi](2026-10-07-webapi-project-name.md)
 - 2026-10-07 — [Sắp xếp source theo layout Domain/Application/Infrastructure/API](2026-10-07-reference-layer-layout.md)
 - 2026-10-07 — [Tách Application Services và query Repositories](2026-10-07-services-repositories.md)

@@ -16,6 +16,8 @@ public sealed class ApiSuccessResponseOperationFilter : IOperationFilter
 
         var attributes = context.MethodInfo.GetCustomAttributes(true)
             .Concat(context.MethodInfo.DeclaringType?.GetCustomAttributes(true) ?? []);
+        if (attributes.OfType<Microsoft.AspNetCore.Mvc.ConsumesAttribute>().Any())
+            operation.Responses.TryAdd("415", new OpenApiResponse());
         if (attributes.OfType<AuthorizeAttribute>().Any() && !attributes.OfType<AllowAnonymousAttribute>().Any())
             foreach (var code in new[] { "401", "403" })
                 operation.Responses.TryAdd(code, new OpenApiResponse());
