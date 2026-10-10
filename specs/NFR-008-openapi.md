@@ -25,3 +25,15 @@ Quyết định: [ADR-002](../docs/decisions/ADR-002-api-response-envelope.md). 
 ## Password validation schema — 2026-10-07
 
 Swagger đọc StringLength của Password/NewPassword ở constructor parameter của record qua schema filter: minLength=6, maxLength=20. HTTP/Swagger tests xác nhận DTO đăng ký/đăng nhập và unit tests xác nhận giới hạn đồng nhất khi tạo nhân viên/đổi/reset mật khẩu. Xem [change](../changes/2026-10-07-password-length.md).
+
+## Pagination contract — 2026-10-10
+
+Mọi API trả về danh sách phải có pagination: query `page` mặc định **1**, `pageSize` mặc định **20**; `page >= 1` và `1 <= pageSize <= 100`. Response nằm trong `data` của envelope chung, gồm đủ `items`, `page`, `pageSize`, `totalCount`; `totalCount` là tổng số bản ghi sau lọc trước phân trang. Trang vượt phạm vi trả `items: []` và giữ metadata chính xác.
+
+Validation bắt buộc tại cả HTTP boundary và Application service. Giá trị không hợp lệ trả 400 theo envelope lỗi chung; không tự clamp để bỏ qua validation. Query dùng thứ tự ổn định và tính offset tránh tràn số nguyên.
+
+- [x] Ghi rule bắt buộc trong AGENTS.md và tài liệu API.
+- [x] Customer list hiện đáp ứng contract và có test HTTP/Application/PostgreSQL.
+- [ ] Chuyển toàn bộ API list cũ còn trả array sang contract pagination.
+
+Khi thêm/sửa API list, Swagger phải mô tả default/range của query và schema page trong `data`. Test phải kiểm tra mặc định, các mốc hợp lệ 1/100, giá trị sai (page < 1, pageSize < 1 hoặc > 100), tổng sau lọc và trang rỗng. Quyết định: [ADR-003](../docs/decisions/ADR-003-list-pagination.md); thay đổi: [pagination rule](../changes/2026-10-10-list-pagination-rule.md).

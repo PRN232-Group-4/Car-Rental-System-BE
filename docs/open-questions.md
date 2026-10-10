@@ -1,5 +1,11 @@
 # Câu hỏi mở và giả định
 
+## Customer directory và upload — 2026-10-10 assumptions
+
+Danh bạ customer dùng cùng policy CustomerService với duyệt giấy phép (Admin/Manager/CustomerService), bao gồm hồ sơ inactive để phục vụ vận hành; caller lọc `isActive` khi cần. Detail dùng customer ID và chỉ trả thông tin liên hệ/license/loyalty đang có trong schema.
+
+PUT license chính chuyển sang multipart để chọn file trong Swagger; JSON lưu URL chuyển tới `/api/customer/license/url`. Ảnh staff license/inspection/report dùng upload trước rồi gửi secureUrl vào JSON lưu nghiệp vụ. Hợp đồng ký lưu chứng từ bằng URL theo FR-013, chưa có yêu cầu upload PDF/tài liệu bằng Cloudinary trong thay đổi này.
+
 ## Reference layout — 2026-10-07 assumptions
 
 Giữ prefix VehicleRental và suffix WebApi theo xác nhận của người dùng. Phân nhóm phụ được đặt dưới
