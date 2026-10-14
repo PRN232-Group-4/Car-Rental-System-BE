@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Lifecycle;
 using Car_Rental_System_BE.Infrastructure.Lifecycle;
+using Car_Rental_System_BE.Infrastructure.Loyalty;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using VehicleRental.Domain.Lifecycle;
@@ -22,7 +23,8 @@ public sealed class RentalLifecycleIntegrationTests(PostgresFixture db) : IClass
         var paymentGate = new RentalPaymentGateAdapter(db.DataSource);
         var invoiceGateway = new InvoiceGatewayAdapter(db.DataSource, tp);
         var subUsage = new SubscriptionUsageAdapter(db.DataSource);
-        var loyalty = new LoyaltyAwardAdapter(db.DataSource, NullLogger<LoyaltyAwardAdapter>.Instance);
+        var loyaltyRepo = new NpgsqlLoyaltyRepository(db.DataSource, tp);
+        var loyalty = new LoyaltyAwardAdapter(loyaltyRepo, NullLogger<LoyaltyAwardAdapter>.Instance);
         var sink = new RentalEventSink(NullLogger<RentalEventSink>.Instance);
 
         var service = new RentalLifecycleService(
