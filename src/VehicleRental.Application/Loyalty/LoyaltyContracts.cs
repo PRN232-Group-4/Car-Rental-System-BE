@@ -28,6 +28,12 @@ public sealed record LoyaltyTransactionDto(
     string? CreatedBy,
     DateTime CreatedAt);
 
+public sealed record PagedLoyaltyTransactionsResponse(
+    IReadOnlyList<LoyaltyTransactionDto> Items,
+    int TotalCount,
+    int Page,
+    int PageSize);
+
 public sealed record LoyaltyAdjustmentRequest(
     int Points,
     string Reason,

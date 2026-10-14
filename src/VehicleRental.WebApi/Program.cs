@@ -32,6 +32,8 @@ using Car_Rental_System_BE.Application.Assignments;
 using Car_Rental_System_BE.Infrastructure.Assignments;
 using Car_Rental_System_BE.Application.Lifecycle;
 using Car_Rental_System_BE.Infrastructure.Lifecycle;
+using Car_Rental_System_BE.Application.Loyalty;
+using Car_Rental_System_BE.Infrastructure.Loyalty;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 
@@ -176,6 +178,19 @@ builder.Services.AddScoped<IAssignmentService>(sp =>
 
 builder.Services.Configure<RentalOptions>(builder.Configuration.GetSection(RentalOptions.SectionName));
 builder.Services.Configure<RentalCancellationOptions>(builder.Configuration.GetSection(RentalCancellationOptions.SectionName));
+builder.Services.AddOptions<LoyaltyOptions>()
+    .Bind(builder.Configuration.GetSection(LoyaltyOptions.SectionName))
+    .Validate(options =>
+    {
+        options.Validate();
+        return true;
+    }, "Loyalty options configuration validation failed.")
+    .ValidateOnStart();
+builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<LoyaltyOptions>>().Value);
+builder.Services.AddScoped<ILoyaltyRepository, NpgsqlLoyaltyRepository>();
+builder.Services.AddScoped<ILoyaltyService, LoyaltyService>();
+builder.Services.AddScoped<ILoyaltyRedemption>(sp => (LoyaltyService)sp.GetRequiredService<ILoyaltyService>());
+
 builder.Services.AddScoped<NpgsqlRentalLifecycleRepository>();
 builder.Services.AddScoped<IRentalLifecycleRepository>(sp => sp.GetRequiredService<NpgsqlRentalLifecycleRepository>());
 builder.Services.AddScoped<IRentalPaymentGate, RentalPaymentGateAdapter>();
