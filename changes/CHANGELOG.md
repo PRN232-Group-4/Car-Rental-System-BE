@@ -1,4 +1,5 @@
 # Changelog
+- 2026-10-14 — [Mặc định kết nối local cho PostgreSQL và Redis](2026-10-14-localhost-startup-defaults.md)
 - 2026-10-10 — [Định vị GPS, Tích hợp Google Maps, Lộ trình, Geofencing và Cảnh báo](2026-10-10-gps-tracking-and-google-maps.md)
 - 2026-10-10 — [Rule pagination cho API danh sách](2026-10-10-list-pagination-rule.md)
 - 2026-10-10 — [Customer directory và Cloudinary evidence uploads](2026-10-10-customer-directory-media.md)

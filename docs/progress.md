@@ -1,5 +1,9 @@
 # Tiến độ
 
+## Localhost startup — 2026-10-14
+
+Development tự dùng PostgreSQL `localhost:5432` và Redis `localhost:6379` theo Docker Compose nếu chưa có connection string riêng. Production không thay đổi. Để chạy đầy đủ, cần có PostgreSQL/Redis đang hoạt động và cấu hình `Jwt__SigningKey`, `Brevo__ApiKey`, `Brevo__SenderEmail`; Swagger dùng `http://localhost:3000/swagger`. Build WebApi pass (0 warning/error). Chưa xác nhận kết nối thật vì Docker CLI và PostgreSQL/Redis local không khả dụng trong môi trường kiểm tra. Xem [thay đổi](../changes/2026-10-14-localhost-startup-defaults.md).
+
 ## Định vị GPS, Tích hợp Google Maps, Lộ trình và Cảnh báo — 2026-10-10
 
 Bổ sung đầy đủ các module tính năng:

@@ -84,6 +84,9 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 
 var connectionString = builder.Configuration.GetConnectionString("RentalDatabase") ?? builder.Configuration["DATABASE_URL"];
+if (string.IsNullOrWhiteSpace(connectionString) && builder.Environment.IsDevelopment())
+    connectionString = "Host=localhost;Port=5432;Database=car_rental;Username=postgres;Password=postgres";
+
 if (!string.IsNullOrWhiteSpace(connectionString))
 {
     builder.Services.AddSingleton<NpgsqlDataSource>(_ => NpgsqlDataSource.Create(ToNpgsqlConnectionString(connectionString)));
@@ -95,6 +98,9 @@ if (!string.IsNullOrWhiteSpace(connectionString))
 }
 
 var redisConnection = builder.Configuration["Redis:ConnectionString"] ?? builder.Configuration["REDIS_URL"];
+if (string.IsNullOrWhiteSpace(redisConnection) && builder.Environment.IsDevelopment())
+    redisConnection = "localhost:6379";
+
 if (string.IsNullOrWhiteSpace(redisConnection))
     throw new InvalidOperationException("Redis:ConnectionString (or REDIS_URL) must be configured.");
 
