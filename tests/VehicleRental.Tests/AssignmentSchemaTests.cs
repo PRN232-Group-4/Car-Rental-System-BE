@@ -162,9 +162,9 @@ public sealed class AssignmentSchemaTests(PostgresFixture db) : IClassFixture<Po
     }
 
     [Fact]
-    public async Task Migration_0012_is_idempotent()
+    public async Task Migration_0016_is_idempotent()
     {
-        var migrationSql = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "db", "migrations", "0012_assignment_constraints.sql"));
+        var migrationSql = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "db", "migrations", "0016_assignment_constraints.sql"));
         await using var cmd = db.DataSource.CreateCommand(migrationSql);
         await cmd.ExecuteNonQueryAsync();
     }
