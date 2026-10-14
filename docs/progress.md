@@ -1,5 +1,16 @@
 # Tiến độ
 
+## BE-27 (FR-029) Loyalty Phase 1 (Điểm thưởng) — 2026-10-14
+
+Hiện thực toàn diện module Loyalty Phase 1 theo đặc tả `specs/FR-029-loyalty.md`:
+1. **Migration 0018 (`0018_loyalty.sql`)**: Tạo bảng `customer_loyalty_transactions`, triggers `trg_clt_before_insert` (tính balance_after dưới khóa dòng FOR UPDATE) và `trg_clt_after_insert` (đồng bộ `customers.loyalty_point`), immutability triggers chặn UPDATE/DELETE/TRUNCATE, partial unique indexes chặn cộng đôi khi retry/concurrency, view đối soát `v_loyalty_reconciliation`, nạp số dư đầu kỳ idempotent.
+2. **Domain Layer**: `LoyaltyDomainRules` tính toán phân hạng (`Member`, `Silver`, `Gold`, `Platinum`), hệ số nhân (1.0x, 1.1x, 1.25x, 1.5x), tích điểm theo net rent, báo giá tiêu điểm và thẩm định quy tắc; 23 unit tests xanh 100%.
+3. **Application Layer**: `LoyaltyOptions` (POCO + ValidateOnStart), `LoyaltyContracts` (DTOs/Interfaces), `LoyaltyService` thực hiện nghiệp vụ tóm tắt, lịch sử, điều chỉnh điểm thủ công, báo giá quy đổi; 7 unit tests xanh 100%.
+4. **Infrastructure Layer**: `NpgsqlLoyaltyRepository` ánh xạ lỗi DB (23514 -> 409 INSUFFICIENT_POINTS, 23505 -> Idempotent DTO, AwardForRentalAsync ON CONFLICT DO NOTHING); cập nhật `LoyaltyAwardAdapter` tính điểm chuẩn xác theo net rent và gỡ bỏ hoàn toàn lệnh update trực tiếp `customers.loyalty_point`.
+5. **WebApi Layer**: `LoyaltyController` (`GET /api/loyalty/me`, `GET /api/loyalty/me/transactions`, `GET /api/customers/{id}/loyalty`, `POST /api/customers/{id}/loyalty/adjustments`, `GET /api/loyalty/redemption-quote`, `GET /api/admin/loyalty/reconciliation`); chuẩn hóa messages trong `ApiSuccessResponseFilter`; đăng ký DI trong `Program.cs`. 7 controller tests xanh 100%.
+6. **Kiểm thử tích hợp & Concurrency**: 5 kịch bản tích hợp hoàn tất (tích điểm khi complete, 2 request complete song song chỉ ghi 1 dòng, 200 thao tác ngẫu nhiên không gây drift, đơn subscription không tích điểm, kiểm tra số dư âm và idempotency). Toàn bộ 49/49 loyalty tests xanh 100%.
+7. Xem [ADR-005](decisions/ADR-005-loyalty-ledger.md) và [change](../changes/2026-10-14-be-27-loyalty-phase1.md).
+
 ## Rule pagination — 2026-10-10
 
 AGENTS.md và Definition of Done bắt buộc mọi API list dùng page=1/pageSize=20, pageSize tối đa 100, data có items/page/pageSize/totalCount, validation tại HTTP và Application. NFR-008/API reference/ADR-003 đã đồng bộ. Đây là thay đổi rule/tài liệu; các API cũ còn trả array chưa được chuyển đổi trong lượt này. Kiểm tra diff/link tài liệu, không chạy lại build/test do không sửa runtime. Xem [change](../changes/2026-10-10-list-pagination-rule.md).
@@ -71,8 +82,11 @@ Hourly/long-term creation, transactional interval locks and pre-inspection gatin
 | FR-002 | Verify/resend OTP | M2 | P0 | In progress | FR-002 | 2026-09-30-account-basics |
 | FR-003 | Access/refresh token cookies | M2 | P0 | In progress | FR-003 | 2026-10-03-access-refresh-token-cookies |
 | FR-004..007 | Account/RBAC | M2 | P0-P1 | In progress | FR-004..007 | 2026-10-03-staff-authorization |
-| FR-008..011 | Catalog/operations | M3 | P0-P1 | In progress | FR-008..011 | 2026-10-03-vehicle-search-envelope-fixes |
-| FR-012..018 | Rentals | M4 | P0-P1 | In progress | FR-012..018 | 2026-10-03-staff-authorization |
+| FR-008..009,011 | Catalog/operations | M3 | P0-P1 | In progress | FR-008..011 | 2026-10-03-vehicle-search-envelope-fixes |
+| FR-010 | Tìm xe & availability (BE-10) | M3 | P0 | Done | FR-010 | 2026-10-04-vehicle-availability |
+| FR-014 | Phân xe/tài xế & Đổi xe (BE-14) | M4 | P0 | Done | FR-014 | 2026-10-04-assignment-vehicle-swap |
+| FR-018 | Vòng đời đơn thuê, Quá giờ & Quyết toán (BE-17) | M4 | P0 | Done | FR-018 | 2026-10-06-rental-lifecycle |
+| FR-012,013,015..017 | Rentals | M4 | P0-P1 | In progress | FR-012..017 | 2026-10-06-rental-lifecycle |
 | FR-019..021 | Payments | M5 | P1 | In progress | FR-019..021 | 2026-10-03-subscription-plan-payments |
 | FR-022..025 | Subscription | M6 | P0-P1 | Done | FR-022..025 | 2026-10-03-subscription-plan-payments |
 | FR-026..027,029..030 | Maintenance/report/loyalty/dashboard | M7 | P1-P2 | In progress | FR-026..027,029..030 | 2026-10-03-staff-authorization |
@@ -82,7 +96,39 @@ Hourly/long-term creation, transactional interval locks and pre-inspection gatin
 | NFR-006..007 | Performance/testing | M0 | P1 | In progress | NFR files | 2026-10-01-test-project |
 
 ## Tổng kết
-Done: FR-022..025 (subscription, gồm cả thanh toán mua gói); In progress: các nhóm còn lại; Not started: các nhóm chưa chạm. `dotnet build -warnaserror` đã xanh; Docker, hosted CI còn cần xác nhận; test suite **84/84 pass** ngày 2026-10-03.
+Done: FR-010 (tìm xe và availability), FR-014 (phân xe/tài xế & đổi xe), FR-018 (vòng đời đơn thuê & quyết toán), FR-022..025 (subscription, gồm cả thanh toán mua gói); In progress: các nhóm còn lại; Not started: các nhóm chưa chạm. `dotnet build -warnaserror` đã xanh 0 warning/0 error; test suite pass 100% (318/318 tests) ngày 2026-10-06.
+
+## Vòng đời đơn thuê, Quá giờ & Quyết toán (FR-018 / BE-17) — 2026-10-06
+
+Đã hoàn thành module BE-17 theo kiến trúc Clean Architecture:
+- Migration `0013_rental_lifecycle.sql`: Ràng buộc `ck_rentals_status`, các mốc thời gian vòng đời trên `rentals`, bảng `rental_status_history` kèm trigger bất biến `trg_rsh_immutable`, bảng quyết toán `rental_settlements`, cột `kind` trên bảng `invoices` kèm partial unique index `ux_invoices_rental_kind`.
+- Domain: `RentalStatus`, `RentalTrigger`, `RentalStateMachine`, `OvertimeCalculator` (15 phút grace period, làm tròn lên theo giờ), `CancellationPolicy` (trước 24h miễn phí, dưới 24h giữ 20% phí thuê), `SettlementCalculator` (bù trừ cọc và tiền quá giờ), `MoneyRounding` làm tròn VND tại một chỗ duy nhất bằng `MidpointRounding.AwayFromZero`.
+- Application: `RentalLifecycleService`, `RentalOptions`, `RentalCancellationOptions`, các ports `IRentalLifecycleRepository`, `IRentalPaymentGate`, `IInvoiceGateway`, `ISubscriptionUsage`, `ILoyaltyAward`, `IRentalEventSink`, `IRentalQueries`.
+- Infrastructure: `NpgsqlRentalLifecycleRepository` với `pg_advisory_xact_lock` và `FOR UPDATE` trong transaction chống tranh chấp đồng thời, `RentalPaymentGateAdapter` tạo refund payment có tính lũy nghiệm, `InvoiceGatewayAdapter` tạo hóa đơn quá giờ `kind = 'overtime'`, `NpgsqlRentalQueries` hỗ trợ xem đơn của tôi, đơn vận hành và đơn quá hạn (`overdue`).
+- WebApi: `RentalLifecycleController` và `RentalQueriesController` đầy đủ metadata Swagger, cấu hình phân quyền và ánh xạ thông báo qua `ApiSuccessResponseFilter`. Endpoint cũ `PATCH /api/rentals/{id}/status` của `OperationsController` chuyển thành bí danh deprecated với header `Deprecation: true`.
+- Gỡ bỏ hoàn cọc tự động tại inspection (`AddInspectionAsync` / O2): Toàn bộ việc quyết toán cọc và hoàn cọc được chuyển tập trung về `complete`.
+- Kiểm thử: 100% tests pass (318/318 tests), bao gồm unit test Domain ma trận 6 trạng thái x 5 lệnh, unit test Service, integration test schema/trigger/index, integration test E2E có quá giờ 90 phút, test shortfall, test hủy đơn và test đua tranh `CompleteAsync` 20 lần lặp liên tiếp không flaky. Xem [thay đổi](../changes/2026-10-06-rental-lifecycle.md) và [ADR-004](decisions/ADR-004-rental-lifecycle-and-settlement.md).
+
+## Phân xe, tài xế & Đổi xe (FR-014 / BE-14) — 2026-10-04
+
+Đã hoàn thành module BE-14 theo kiến trúc Clean Architecture:
+- Migration `0012_assignment_constraints.sql`: Ràng buộc từ vựng `ck_va_status`, cột sinh `period tsrange` kèm đệm 60 phút, exclusion constraint `ex_va_driver_no_overlap` chống trùng lịch tài xế, các cột lưu vết (`reason`, `note`, `supersedes_id`, `ended_at`, `starts_at`, `ends_at`), và backfill dữ liệu cũ.
+- Domain: `AssignmentStatus`, `AssignmentReason`, `DriverEligibility` (kiểm tra hạn bằng GMT+7, active, is_driver, đệm), `RentalAssignmentPolicy`.
+- Application: `IAssignmentRepository`, `IAssignmentService`, `IMaintenanceIncidentGateway`, `AssignmentOptions` (cấu hình đệm, cờ kiểm tra hạng bằng), các record/DTO chuẩn.
+- Infrastructure: `NpgsqlAssignmentRepository`, `DriverLock` (advisory lock 1002), khóa xe theo thứ tự ID tăng dần chống deadlock, xử lý đổi xe cập nhật `rentals.vehicle_id` dời `vehicle_bookings`, tự động mở phiếu bảo dưỡng sự cố `vehicle_maintenance` khi xe hỏng (`breakdown`/`accident`), ánh xạ lỗi `23P01` -> `DRIVER_BUSY` (409) / `VEHICLE_UNAVAILABLE` (409).
+- WebApi: `RentalAssignmentsController` với 5 endpoints chuẩn Swagger metadata, phân quyền `CustomerService`, mapping message trong `ApiSuccessResponseFilter`, endpoint cũ `POST /api/rentals/{id}/assignments` được đánh dấu `[Obsolete]` kèm header `Deprecation: true`.
+- Kiểm thử: 100% tests pass bao gồm Domain tests, Schema integration tests, Concurrency 20x loop test không flaky, API contract tests. Xem [thay đổi](../changes/2026-10-04-assignment-vehicle-swap.md) và [ADR-003](decisions/ADR-003-vehicle-and-driver-assignments.md).
+
+## Tìm xe và availability (FR-010 / BE-10) — 2026-10-04
+
+Đã triển khai toàn diện module tìm xe và kiểm tra tính khả dụng theo Clean Architecture:
+- Migration `0011_vehicle_bookings_and_availability.sql`: ràng buộc `ck_vehicles_status`, bảng `vehicle_bookings` với gist exclusion constraint (`ex_vehicle_bookings_no_overlap`), trigger đồng bộ từ `hour_rental_detail`, `longterm_rental_contract`, `rentals`, và view `v_vehicle_maintenance_blocks`.
+- Domain: `TimeRange` value object với đệm đối xứng 60 phút, `AvailabilityReason`, `BookingStatusRules`.
+- Application: `IVehicleSearchRepository`, `IVehicleAvailabilityService`, `IDriverAvailability`, `VehicleSearchService`, `AvailabilityOptions` (`ValidateOnStart`), `BusinessRuleException` với extension `code`.
+- Infrastructure: `NpgsqlVehicleSearchRepository` với tìm kiếm filter/sort/paging và index gist, `NpgsqlVehicleAvailabilityService` với advisory lock 1001, `NpgsqlDriverAvailability`.
+- WebApi: `VehicleSearchController` (5 endpoints công khai và nội bộ), rate limiter `public-search`, ánh xạ message trong `ApiSuccessResponseFilter`.
+- Sửa `CreateRentalAsync`: dùng `VehicleLock.AcquireAsync` + `AssertAvailableAsync` và bắt lỗi `23P01`.
+- Kiểm thử: 159 tests pass 100% bao gồm schema tests, integration tests, concurrency tests (đua tranh), và API contract tests. Xem [thay đổi](../changes/2026-10-04-vehicle-availability.md) và [ADR-002](decisions/ADR-002-vehicle-bookings-buffer.md).
 
 ## Subscription — 2026-10-03
 
