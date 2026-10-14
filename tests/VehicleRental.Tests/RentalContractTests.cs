@@ -1,3 +1,4 @@
+using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
@@ -22,7 +23,7 @@ public sealed class RentalContractTests(PostgresFixture db) : IClassFixture<Post
         Assert.Equal(saved, await store.GetRentalForUserAsync(rental.Id, email, false, true, false, default));
         Assert.Null(await store.GetRentalForUserAsync(rental.Id, other, false, true, false, default));
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveRentalContractAsync(rental.Id, "https://example.com/replaced.pdf", signedAt, default));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => store.CreateRentalAsync(email, vehicle, null, "hourly", start, start.AddHours(2), false, null, false, default));
+        await Assert.ThrowsAsync<ConflictException>(() => store.CreateRentalAsync(email, vehicle, null, "hourly", start, start.AddHours(2), false, null, false, default));
         await Seed.ScalarAsync(db.DataSource, "UPDATE vehicles SET rental_price_longterm=9999 WHERE id=$1", vehicle);
         Assert.Equal(1000m, (await store.GetRentalAsync(rental.Id, default))!.MonthlyPriceSnapshot);
     }

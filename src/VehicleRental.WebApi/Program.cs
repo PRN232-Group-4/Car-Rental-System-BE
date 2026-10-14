@@ -26,6 +26,16 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using System.Security.Claims;
 using System.Text;
+using Car_Rental_System_BE.Application.Availability;
+using Car_Rental_System_BE.Infrastructure.Availability;
+using Car_Rental_System_BE.Application.Assignments;
+using Car_Rental_System_BE.Infrastructure.Assignments;
+using Car_Rental_System_BE.Application.Lifecycle;
+using Car_Rental_System_BE.Infrastructure.Lifecycle;
+using Car_Rental_System_BE.Application.Loyalty;
+using Car_Rental_System_BE.Infrastructure.Loyalty;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
@@ -72,6 +82,25 @@ builder.Services.AddOptions<GoogleAuthOptions>()
     .ValidateOnStart();
 builder.Services.Configure<CloudinaryOptions>(builder.Configuration.GetSection(CloudinaryOptions.SectionName));
 builder.Services.Configure<PayOsOptions>(builder.Configuration.GetSection(PayOsOptions.SectionName));
+builder.Services.AddOptions<AvailabilityOptions>()
+    .Bind(builder.Configuration.GetSection(AvailabilityOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy("public-search", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
+});
+
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedHost | ForwardedHeaders.XForwardedProto;
@@ -129,6 +158,61 @@ builder.Services.AddSingleton<RedisRefreshTokenStore>();
 builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddSingleton<IAccessTokenIssuer>(provider => provider.GetRequiredService<JwtTokenService>());
 builder.Services.AddSingleton<IRefreshTokenStore>(provider => provider.GetRequiredService<RedisRefreshTokenStore>());
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<IVehicleSearchRepository, NpgsqlVehicleSearchRepository>();
+builder.Services.AddScoped<IVehicleAvailabilityService, NpgsqlVehicleAvailabilityService>();
+builder.Services.AddScoped<IDriverAvailability, NpgsqlDriverAvailability>();
+builder.Services.AddScoped<VehicleSearchService>();
+builder.Services.Configure<AssignmentOptions>(builder.Configuration.GetSection(AssignmentOptions.SectionName));
+builder.Services.AddScoped<NpgsqlAssignmentRepository>();
+builder.Services.AddScoped<IAssignmentRepository>(sp => sp.GetRequiredService<NpgsqlAssignmentRepository>());
+builder.Services.AddScoped<IMaintenanceIncidentGateway>(sp => sp.GetRequiredService<NpgsqlAssignmentRepository>());
+builder.Services.AddScoped<IAssignmentService>(sp =>
+{
+    var repo = sp.GetRequiredService<IAssignmentRepository>();
+    var vehicleAvailability = sp.GetRequiredService<IVehicleAvailabilityService>();
+    var timeProvider = sp.GetRequiredService<TimeProvider>();
+    var options = sp.GetRequiredService<IOptions<AssignmentOptions>>().Value;
+    return new AssignmentService(repo, vehicleAvailability, options, timeProvider);
+});
+
+builder.Services.Configure<RentalOptions>(builder.Configuration.GetSection(RentalOptions.SectionName));
+builder.Services.Configure<RentalCancellationOptions>(builder.Configuration.GetSection(RentalCancellationOptions.SectionName));
+builder.Services.AddOptions<LoyaltyOptions>()
+    .Bind(builder.Configuration.GetSection(LoyaltyOptions.SectionName))
+    .Validate(options =>
+    {
+        options.Validate();
+        return true;
+    }, "Loyalty options configuration validation failed.")
+    .ValidateOnStart();
+builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<LoyaltyOptions>>().Value);
+builder.Services.AddScoped<ILoyaltyRepository, NpgsqlLoyaltyRepository>();
+builder.Services.AddScoped<ILoyaltyService, LoyaltyService>();
+builder.Services.AddScoped<ILoyaltyRedemption>(sp => (LoyaltyService)sp.GetRequiredService<ILoyaltyService>());
+
+builder.Services.AddScoped<NpgsqlRentalLifecycleRepository>();
+builder.Services.AddScoped<IRentalLifecycleRepository>(sp => sp.GetRequiredService<NpgsqlRentalLifecycleRepository>());
+builder.Services.AddScoped<IRentalPaymentGate, RentalPaymentGateAdapter>();
+builder.Services.AddScoped<IInvoiceGateway, InvoiceGatewayAdapter>();
+builder.Services.AddScoped<ISubscriptionUsage, SubscriptionUsageAdapter>();
+builder.Services.AddScoped<ILoyaltyAward, LoyaltyAwardAdapter>();
+builder.Services.AddScoped<IRentalEventSink, RentalEventSink>();
+builder.Services.AddScoped<ICurrentCustomer, CurrentCustomerService>();
+builder.Services.AddScoped<IRentalQueries, NpgsqlRentalQueries>();
+builder.Services.AddScoped<IRentalLifecycleService>(sp =>
+{
+    var repo = sp.GetRequiredService<IRentalLifecycleRepository>();
+    var paymentGate = sp.GetRequiredService<IRentalPaymentGate>();
+    var invoiceGateway = sp.GetRequiredService<IInvoiceGateway>();
+    var subscriptionUsage = sp.GetRequiredService<ISubscriptionUsage>();
+    var loyaltyAward = sp.GetRequiredService<ILoyaltyAward>();
+    var eventSink = sp.GetRequiredService<IRentalEventSink>();
+    var rOptions = sp.GetRequiredService<IOptions<RentalOptions>>().Value;
+    var cOptions = sp.GetRequiredService<IOptions<RentalCancellationOptions>>().Value;
+    var timeProvider = sp.GetRequiredService<TimeProvider>();
+    return new RentalLifecycleService(repo, paymentGate, invoiceGateway, subscriptionUsage, loyaltyAward, eventSink, rOptions, cOptions, timeProvider);
+});
 var googleAuthentication = builder.Configuration.GetSection(GoogleAuthOptions.SectionName).Get<GoogleAuthOptions>() ?? new GoogleAuthOptions();
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 var authentication = builder.Services.AddAuthentication(options =>
@@ -249,7 +333,27 @@ if (!app.Environment.IsProduction())
     app.UseSwaggerUI();
 }
 
+app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
+{
+    var exception = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+    app.Logger.LogError(exception, "Unhandled request exception for {Method} {Path}.", context.Request.Method, context.Request.Path);
+    var status = exception switch
+    {
+        Car_Rental_System_BE.Application.Common.Errors.BusinessRuleException bre => bre.StatusCode,
+        KeyNotFoundException => StatusCodes.Status404NotFound,
+        ArgumentException or InvalidOperationException => StatusCodes.Status400BadRequest,
+        _ => StatusCodes.Status500InternalServerError
+    };
+    var detail = status == StatusCodes.Status500InternalServerError ? "An unexpected server error occurred." : exception?.Message;
+    Dictionary<string, object?>? extensions = null;
+    if (exception is Car_Rental_System_BE.Application.Common.Errors.BusinessRuleException businessEx)
+    {
+        extensions = new Dictionary<string, object?> { ["code"] = businessEx.Code };
+    }
+    await Results.Problem(detail, statusCode: status, extensions: extensions).ExecuteAsync(context);
+}));
 app.UseHttpsRedirection();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
