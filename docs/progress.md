@@ -1,5 +1,16 @@
 # Tiến độ
 
+## BE-27 (FR-029) Loyalty Phase 1 (Điểm thưởng) — 2026-10-14
+
+Hiện thực toàn diện module Loyalty Phase 1 theo đặc tả `specs/FR-029-loyalty.md`:
+1. **Migration 0018 (`0018_loyalty.sql`)**: Tạo bảng `customer_loyalty_transactions`, triggers `trg_clt_before_insert` (tính balance_after dưới khóa dòng FOR UPDATE) và `trg_clt_after_insert` (đồng bộ `customers.loyalty_point`), immutability triggers chặn UPDATE/DELETE/TRUNCATE, partial unique indexes chặn cộng đôi khi retry/concurrency, view đối soát `v_loyalty_reconciliation`, nạp số dư đầu kỳ idempotent.
+2. **Domain Layer**: `LoyaltyDomainRules` tính toán phân hạng (`Member`, `Silver`, `Gold`, `Platinum`), hệ số nhân (1.0x, 1.1x, 1.25x, 1.5x), tích điểm theo net rent, báo giá tiêu điểm và thẩm định quy tắc; 23 unit tests xanh 100%.
+3. **Application Layer**: `LoyaltyOptions` (POCO + ValidateOnStart), `LoyaltyContracts` (DTOs/Interfaces), `LoyaltyService` thực hiện nghiệp vụ tóm tắt, lịch sử, điều chỉnh điểm thủ công, báo giá quy đổi; 7 unit tests xanh 100%.
+4. **Infrastructure Layer**: `NpgsqlLoyaltyRepository` ánh xạ lỗi DB (23514 -> 409 INSUFFICIENT_POINTS, 23505 -> Idempotent DTO, AwardForRentalAsync ON CONFLICT DO NOTHING); cập nhật `LoyaltyAwardAdapter` tính điểm chuẩn xác theo net rent và gỡ bỏ hoàn toàn lệnh update trực tiếp `customers.loyalty_point`.
+5. **WebApi Layer**: `LoyaltyController` (`GET /api/loyalty/me`, `GET /api/loyalty/me/transactions`, `GET /api/customers/{id}/loyalty`, `POST /api/customers/{id}/loyalty/adjustments`, `GET /api/loyalty/redemption-quote`, `GET /api/admin/loyalty/reconciliation`); chuẩn hóa messages trong `ApiSuccessResponseFilter`; đăng ký DI trong `Program.cs`. 7 controller tests xanh 100%.
+6. **Kiểm thử tích hợp & Concurrency**: 5 kịch bản tích hợp hoàn tất (tích điểm khi complete, 2 request complete song song chỉ ghi 1 dòng, 200 thao tác ngẫu nhiên không gây drift, đơn subscription không tích điểm, kiểm tra số dư âm và idempotency). Toàn bộ 49/49 loyalty tests xanh 100%.
+7. Xem [ADR-005](decisions/ADR-005-loyalty-ledger.md) và [change](../changes/2026-10-14-be-27-loyalty-phase1.md).
+
 ## Rule pagination — 2026-10-10
 
 AGENTS.md và Definition of Done bắt buộc mọi API list dùng page=1/pageSize=20, pageSize tối đa 100, data có items/page/pageSize/totalCount, validation tại HTTP và Application. NFR-008/API reference/ADR-003 đã đồng bộ. Đây là thay đổi rule/tài liệu; các API cũ còn trả array chưa được chuyển đổi trong lượt này. Kiểm tra diff/link tài liệu, không chạy lại build/test do không sửa runtime. Xem [change](../changes/2026-10-10-list-pagination-rule.md).
