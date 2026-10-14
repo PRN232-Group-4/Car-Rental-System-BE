@@ -1,6 +1,8 @@
 using Car_Rental_System_BE.Application.Lifecycle;
+using Car_Rental_System_BE.Application.Loyalty;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using VehicleRental.Domain.Loyalty;
 
 namespace Car_Rental_System_BE.Infrastructure.Lifecycle;
 
@@ -183,41 +185,26 @@ public sealed class SubscriptionUsageAdapter(NpgsqlDataSource dataSource) : ISub
     }
 }
 
-public sealed class LoyaltyAwardAdapter(NpgsqlDataSource dataSource, ILogger<LoyaltyAwardAdapter> logger) : ILoyaltyAward
+public sealed class LoyaltyAwardAdapter(
+    ILoyaltyRepository loyaltyRepo,
+    ILogger<LoyaltyAwardAdapter> logger,
+    LoyaltyOptions? options = null) : ILoyaltyAward
 {
+    private readonly LoyaltyOptions _options = options ?? new LoyaltyOptions();
+
     public async Task AwardPointsAsync(int customerId, int rentalId, decimal basisAmount, CancellationToken ct)
     {
         if (basisAmount <= 0) return;
-        var points = (int)Math.Floor(basisAmount / 10000m);
-        if (points <= 0) return;
 
         try
         {
-            // Award points by updating customer loyalty points
-            await using var cmd = dataSource.CreateCommand("""
-                UPDATE customers
-                SET loyalty_point = COALESCE(loyalty_point, 0) + $2
-                WHERE id = $1
-                """);
-            cmd.Parameters.AddWithValue(customerId);
-            cmd.Parameters.AddWithValue(points);
-            await cmd.ExecuteNonQueryAsync(ct);
+            var lifetimeEarned = await loyaltyRepo.GetLifetimeEarnedAsync(customerId, ct);
+            var tiers = _options.ToTierConfigs();
+            var earnResult = LoyaltyDomainRules.CalculateEarn(basisAmount, lifetimeEarned, _options.VndPerPoint, tiers);
+            if (earnResult.EarnedPoints <= 0) return;
 
-            // If table customer_loyalty_transactions exists, record ledger entry
-            await using var ledgerCmd = dataSource.CreateCommand("""
-                DO $$
-                BEGIN
-                    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'customer_loyalty_transactions') THEN
-                        INSERT INTO customer_loyalty_transactions(customer_id, rental_id, type, points, reason, ref_type, ref_id)
-                        VALUES($1, $2, 'earn', $3, 'Rental completion reward', 'rental', $2)
-                        ON CONFLICT DO NOTHING;
-                    END IF;
-                END $$;
-                """);
-            ledgerCmd.Parameters.AddWithValue(customerId);
-            ledgerCmd.Parameters.AddWithValue(rentalId);
-            ledgerCmd.Parameters.AddWithValue(points);
-            await ledgerCmd.ExecuteNonQueryAsync(ct);
+            var reason = $"Rental #{rentalId} completed ({earnResult.Multiplier:F2}x {earnResult.TierName} tier)";
+            await loyaltyRepo.AwardForRentalAsync(customerId, rentalId, earnResult.EarnedPoints, reason, null, null, ct);
         }
         catch (Exception ex)
         {

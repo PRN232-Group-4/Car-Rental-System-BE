@@ -210,6 +210,12 @@ public sealed class ApiSuccessResponseFilter : IAsyncAlwaysRunResultFilter
         ["RentalQueries.MineDetail"] = "Rental detail retrieved successfully.",
         ["RentalQueries.List"] = "Operational rentals retrieved successfully.",
         ["RentalQueries.Detail"] = "Operational rental detail retrieved successfully.",
-        ["RentalQueries.Overdue"] = "Overdue rentals retrieved successfully."
+        ["RentalQueries.Overdue"] = "Overdue rentals retrieved successfully.",
+        ["Loyalty.GetMySummary"] = "Loyalty summary retrieved successfully.",
+        ["Loyalty.ListMyTransactions"] = "Loyalty transactions retrieved successfully.",
+        ["Loyalty.GetCustomerSummary"] = "Loyalty summary retrieved successfully.",
+        ["Loyalty.AdjustCustomerPoints"] = "Loyalty points adjusted successfully.",
+        ["Loyalty.GetRedemptionQuote"] = "Redemption quote retrieved successfully.",
+        ["Loyalty.GetReconciliation"] = "Loyalty reconciliation report retrieved successfully."
     };
 }

@@ -1,4 +1,5 @@
 # Changelog
+- 2026-10-14 — [Sổ cái điểm thưởng & Tích điểm (FR-029 / BE-27 Phase 1)](2026-10-14-be-27-loyalty-phase1.md)
 - 2026-10-10 — [Rule pagination cho API danh sách](2026-10-10-list-pagination-rule.md)
 - 2026-10-10 — [Customer directory và Cloudinary evidence uploads](2026-10-10-customer-directory-media.md)
 - 2026-10-07 — [Khôi phục tên project VehicleRental.WebApi](2026-10-07-webapi-project-name.md)
