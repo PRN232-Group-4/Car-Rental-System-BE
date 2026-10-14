@@ -356,10 +356,4 @@ public sealed class RentalLifecycleIntegrationTests(PostgresFixture db) : IClass
             "SELECT amount FROM payments WHERE rental_id=$1 AND type='refund'", rId))!;
         Assert.Equal(676_000m, refundAmount);
     }
-
-    private sealed class SettableTimeProvider(DateTime initialUtc) : TimeProvider
-    {
-        public DateTime UtcNow { get; set; } = initialUtc;
-        public override DateTimeOffset GetUtcNow() => new(UtcNow, TimeSpan.Zero);
-    }
 }

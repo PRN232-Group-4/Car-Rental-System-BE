@@ -90,7 +90,7 @@ public sealed class NpgsqlLoyaltyRepository(NpgsqlDataSource dataSource, TimePro
     public async Task<LoyaltyTransactionDto> InsertAdjustmentAsync(
         int customerId, int points, string reason, string? idempotencyKey, string? createdBy, CancellationToken ct)
     {
-        var now = _time.GetUtcNow().UtcDateTime;
+        var now = DateTime.SpecifyKind(_time.GetUtcNow().UtcDateTime, DateTimeKind.Unspecified);
 
         try
         {
@@ -154,7 +154,7 @@ public sealed class NpgsqlLoyaltyRepository(NpgsqlDataSource dataSource, TimePro
         int customerId, int rentalId, int points, string reason, DbConnection? cn = null, DbTransaction? tx = null, CancellationToken ct = default)
     {
         if (points <= 0) return null;
-        var now = _time.GetUtcNow().UtcDateTime;
+        var now = DateTime.SpecifyKind(_time.GetUtcNow().UtcDateTime, DateTimeKind.Unspecified);
 
         NpgsqlCommand cmd;
         if (cn is NpgsqlConnection npgsqlConn)
