@@ -233,7 +233,8 @@ public sealed class RentalLifecycleService(
 
         if (!rental.IsSubscription)
         {
-            await loyaltyAward.AwardPointsAsync(rental.CustomerId, id, newTotalPrice, ct);
+            var netRentBasis = Math.Max(0m, newTotalPrice - newVatPrice - rental.DepositPrice);
+            await loyaltyAward.AwardPointsAsync(rental.CustomerId, id, netRentBasis, ct);
         }
 
         await eventSink.PublishStatusChangedAsync(
