@@ -1,3 +1,7 @@
 # FR-027 — Báo sự cố
-- **Status:** Not started; **Priority:** P2; **Milestone:** M7
-Customer report gắn rental/maintenance. Acceptance: ownership, status lifecycle, attachments safe.
+- **Status:** Staff/Driver implemented; Customer reporting not started; **Priority:** P1; **Milestone:** M7
+
+Staff báo damage riêng; Driver báo breakdown cho rental đang renting mình được phân công. Lưu reporter_staff_id, vehicle_id, rental_id, mô tả, image_urls. Manager/Admin đọc toàn bộ; nhân viên đọc report mình tạo.
+Lifecycle: open → assigned (Manager giao Maintenance) → resolved. Breakdown resolved qua đổi xe/tài; damage resolve sau bảo trì hoàn tất hoặc Manager review nếu không cần bảo trì. Không tự tính phí. Xem FR-031.
+
+2026-10-10: `POST /api/media/report` cho Admin/Manager/Staff/Maintenance/CustomerService/Driver có claim `staff_id` upload JPEG/PNG/GIF/WebP tối đa 10 MB lên Cloudinary. Gửi `secureUrl` trong `imageUrls` khi tạo report; upload không tạo report, không bỏ qua kiểm tra rental/driver ở API tạo report.

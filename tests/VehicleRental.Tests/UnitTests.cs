@@ -1,13 +1,16 @@
+using Car_Rental_System_BE.WebApi.Controllers;
+using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.Application.DTOs.Accounts;
+using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Application.DTOs.Organization;
+using Car_Rental_System_BE.Application.DTOs.Payments;
+using Car_Rental_System_BE.Infrastructure.Services.Payments;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
-using Car_Rental_System_BE.Application.Operations;
-using Car_Rental_System_BE.Application.Payments;
-using Car_Rental_System_BE.Controllers;
-using Car_Rental_System_BE.Infrastructure.Payments;
-using Car_Rental_System_BE.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -22,6 +25,31 @@ namespace VehicleRental.Tests;
 
 public sealed class UnitTests
 {
+    [Theory]
+    [InlineData(5, false)]
+    [InlineData(6, true)]
+    [InlineData(20, true)]
+    [InlineData(21, false)]
+    public void Password_boundaries_are_consistent_across_account_and_staff_requests(int length, bool valid)
+    {
+        var password = new string('a', length);
+        object[] requests =
+        [
+            new StartRegistrationRequest("customer@example.test", "Customer", password),
+            new LoginRequest("customer@example.test", password),
+            new PasswordResetCompleteRequest("customer@example.test", "123456", password),
+            new ChangePasswordRequest("old-password", password),
+            new CreateStaffRequest("staff@example.test", "Staff", password, null, null, null, null, false, null, null, null, null, null)
+        ];
+        foreach (var request in requests)
+        {
+            var errors = ValidateParameters(request);
+            Assert.Equal(valid, errors.Count == 0);
+            if (!valid)
+                Assert.Contains(errors, error => error.ErrorMessage == "Mật khẩu phải có từ 6 đến 20 ký tự.");
+        }
+    }
+
     [Fact]
     public void PayOs_webhook_signature_is_verified()
     {
@@ -71,7 +99,7 @@ public sealed class UnitTests
             Assert.NotNull(authorization);
             Assert.NotNull(authorization!.Policy);
             var options = new AuthorizationOptions();
-            Car_Rental_System_BE.Authentication.AuthorizationPolicies.Configure(options);
+            Car_Rental_System_BE.WebApi.Middlewares.Authentication.AuthorizationPolicies.Configure(options);
             var policy = options.GetPolicy(authorization.Policy!);
             var roles = Assert.Single(policy!.Requirements.OfType<Microsoft.AspNetCore.Authorization.Infrastructure.RolesAuthorizationRequirement>()).AllowedRoles;
             Assert.Contains("Manager", roles);
@@ -97,9 +125,50 @@ public sealed class UnitTests
         // Regression: a non-null DeclaredType made the serializer cast the envelope back to the
         // action's return type, so endpoints like GET /api/vehicles failed with InvalidCastException.
         Assert.Null(wrapped.DeclaredType);
-        var envelope = Assert.IsType<ApiSuccessResponse>(wrapped.Value);
+        var envelope = Assert.IsType<ApiResponse>(wrapped.Value);
         Assert.True(envelope.IsSuccess);
         Assert.IsType<VehiclePage>(envelope.Data);
+    }
+
+    [Fact]
+    public async Task PayOs_gateway_reads_payment_link_status()
+    {
+        string? requestedUrl = null;
+        var requestHeaders = new Dictionary<string, string>();
+        var gateway = Gateway(request =>
+        {
+            requestedUrl = request.RequestUri!.ToString();
+            foreach (var header in request.Headers) requestHeaders[header.Key] = string.Join(",", header.Value);
+            return Json("""{"code":"00","desc":"success","data":{"orderCode":123,"status":"PENDING"}}""");
+        });
+
+        Assert.Equal("PENDING", await gateway.GetPaymentStatusAsync(123, CancellationToken.None));
+        Assert.Equal("https://api-merchant.payos.vn/v2/payment-requests/123", requestedUrl);
+        Assert.Equal("id", requestHeaders["x-client-id"]);
+        Assert.Equal("key", requestHeaders["x-api-key"]);
+    }
+
+    [Fact]
+    public async Task PayOs_gateway_returns_null_when_status_is_unknown()
+    {
+        // Không tra được thì phải là null để phía gọi KHÔNG đổi trạng thái hoá đơn thành 'cancelled'.
+        Assert.Null(await Gateway(_ => Json("""{"code":"00","data":{"status":"PAID"}}""", status: 401)).GetPaymentStatusAsync(1, CancellationToken.None));
+        Assert.Null(await Gateway(_ => Json("""{"code":"231","desc":"order existed"}""")).GetPaymentStatusAsync(1, CancellationToken.None));
+    }
+
+    private static PayOsPaymentGateway Gateway(Func<HttpRequestMessage, HttpResponseMessage> respond) =>
+        new(new HttpClient(new StubHandler(respond)) { BaseAddress = new Uri("https://api-merchant.payos.vn/") },
+            Options.Create(new PayOsOptions { Enabled = true, ClientId = "id", ApiKey = "key", ChecksumKey = "checksum", ReturnUrl = "https://return.test/", CancelUrl = "https://cancel.test/" }));
+
+    private static HttpResponseMessage Json(string body, int status = 200) => new((System.Net.HttpStatusCode)status)
+    {
+        Content = new StringContent(body, Encoding.UTF8, "application/json"),
+    };
+
+    private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(respond(request));
     }
 
     /// <summary>Validates the validation attributes MVC reads from a request record's primary constructor parameters.</summary>

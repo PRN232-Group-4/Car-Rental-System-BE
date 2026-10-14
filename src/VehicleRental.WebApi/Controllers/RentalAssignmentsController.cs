@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Car_Rental_System_BE.Application.Assignments;
-using Car_Rental_System_BE.Authentication;
+using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 

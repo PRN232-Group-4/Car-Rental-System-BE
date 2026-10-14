@@ -1,11 +1,64 @@
-using Car_Rental_System_BE.Application.Organization;
-using Car_Rental_System_BE.Infrastructure;
+using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Application.DTOs.Organization;
+using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
 namespace VehicleRental.Tests;
 
 public sealed class StaffAuthorizationTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Management_can_move_staff_without_changing_specialty(bool admin)
+    {
+        var repository = new NpgsqlStaffRepository(db.DataSource);
+        var department = (int)(await Seed.ScalarAsync(db.DataSource, "INSERT INTO departments(name) VALUES('Assignment') RETURNING id"))!;
+        var employee = await repository.CreateAsync(new($"assign-{Guid.NewGuid():N}@test.local", "Employee", "password", null,
+            null, null, null, false, null, null, null, null, null, "Maintenance"), "hash", default);
+        var accounts = new NpgsqlAccountRepository(db.DataSource);
+        var before = (await accounts.FindByEmailAsync(employee.Email, default))!;
+        var assigned = await repository.AssignDepartmentAsync(employee.UserId, department, admin, default);
+        Assert.Equal(department, assigned.DepartmentId);
+        Assert.Equal("Maintenance", assigned.StaffRole);
+        Assert.Equal(employee.Id, assigned.Id);
+        var after = (await accounts.FindByEmailAsync(employee.Email, default))!;
+        Assert.True(after.AuthorizationVersion > before.AuthorizationVersion);
+        Assert.Equal(before.Roles.Order(), after.Roles.Order());
+
+        await Assert.ThrowsAsync<OrganizationReferenceNotFoundException>(() => repository.AssignDepartmentAsync(employee.UserId, int.MaxValue, admin, default));
+        Assert.Equal(department, (await repository.FindByIdAsync(employee.Id, default))!.DepartmentId);
+    }
+
+    [Fact]
+    public async Task Only_admin_can_assign_manager_even_when_manager_also_has_staff_role()
+    {
+        var repository = new NpgsqlStaffRepository(db.DataSource);
+        var department = (int)(await Seed.ScalarAsync(db.DataSource, "INSERT INTO departments(name) VALUES('Management') RETURNING id"))!;
+        var userId = (int)(await Seed.ScalarAsync(db.DataSource, "INSERT INTO users(email) VALUES($1) RETURNING id", $"manager-{Guid.NewGuid():N}@test.local"))!;
+        await Seed.ScalarAsync(db.DataSource, "INSERT INTO user_roles(user_id,role_id) SELECT $1,id FROM roles WHERE name IN ('Manager','Staff')", userId);
+        await Assert.ThrowsAsync<OrganizationAssignmentForbiddenException>(() => repository.AssignDepartmentAsync(userId, department, false, default));
+        var assigned = await repository.AssignDepartmentAsync(userId, department, true, default);
+        Assert.Equal(department, assigned.DepartmentId);
+        await Assert.ThrowsAsync<OrganizationAssignmentForbiddenException>(() => repository.AssignDepartmentAsync(userId, department, false, default));
+        await Seed.ScalarAsync(db.DataSource, "UPDATE users SET is_active=FALSE WHERE id=$1", userId);
+        await Assert.ThrowsAsync<StaffNotFoundException>(() => repository.AssignDepartmentAsync(userId, department, true, default));
+    }
+
+    [Fact]
+    public async Task Assignment_rejects_customer_missing_user_and_admin_target_for_manager()
+    {
+        var repository = new NpgsqlStaffRepository(db.DataSource);
+        var department = (int)(await Seed.ScalarAsync(db.DataSource, "INSERT INTO departments(name) VALUES('Department') RETURNING id"))!;
+        var userId = (int)(await Seed.ScalarAsync(db.DataSource, "INSERT INTO users(email) VALUES($1) RETURNING id", $"customer-{Guid.NewGuid():N}@test.local"))!;
+        await Seed.ScalarAsync(db.DataSource, "INSERT INTO user_roles(user_id,role_id) SELECT $1,id FROM roles WHERE name='Customer'", userId);
+        await Assert.ThrowsAsync<OrganizationReferenceNotFoundException>(() => repository.AssignDepartmentAsync(userId, department, true, default));
+        await Assert.ThrowsAsync<StaffNotFoundException>(() => repository.AssignDepartmentAsync(int.MaxValue, department, true, default));
+        await Seed.ScalarAsync(db.DataSource, "INSERT INTO user_roles(user_id,role_id) SELECT $1,id FROM roles WHERE name IN ('Admin','Staff')", userId);
+        await Assert.ThrowsAsync<OrganizationAssignmentForbiddenException>(() => repository.AssignDepartmentAsync(userId, department, false, default));
+    }
+
     [Fact]
     public async Task Customer_cannot_book_with_another_customers_subscription()
     {

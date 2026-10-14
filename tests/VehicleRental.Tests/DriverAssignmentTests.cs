@@ -1,4 +1,4 @@
-using Car_Rental_System_BE.Infrastructure;
+using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
 namespace VehicleRental.Tests;
@@ -17,6 +17,8 @@ public sealed class DriverAssignmentTests(PostgresFixture db) : IClassFixture<Po
         await Assert.ThrowsAsync<InvalidOperationException>(() => _operations.AssignAsync(rental.RentalId, driverId, assignedBy, CancellationToken.None));
 
         await _operations.AddInspectionAsync(rental.RentalId, driverId, "pre_rental", true, null, null, null, null, CancellationToken.None);
+        var booked = (await _operations.GetRentalAsync(rental.RentalId, default))!;
+        await _operations.SaveDriverShiftAsync(null,driverId,booked.StartTime!.Value,booked.EndTime!.Value,false,assignedBy,default);
         await _operations.AssignAsync(rental.RentalId, driverId, assignedBy, CancellationToken.None);
 
         var schedule = await _operations.ListDriverScheduleAsync(driverId, DateTime.UtcNow, DateTime.UtcNow.AddDays(1), CancellationToken.None);

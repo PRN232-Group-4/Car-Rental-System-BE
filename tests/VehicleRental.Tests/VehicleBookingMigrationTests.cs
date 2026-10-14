@@ -25,8 +25,8 @@ public sealed class VehicleBookingMigrationTests : IAsyncLifetime
         _db = NpgsqlDataSource.Create(new NpgsqlConnectionStringBuilder(Admin) { Database = _database }.ConnectionString);
         await Run(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "docs", "db", "Init.sql")));
         var all = Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "db", "migrations"), "*.sql").Order(StringComparer.Ordinal).ToList();
-        _migration = await File.ReadAllTextAsync(all.Single(p => Path.GetFileName(p).StartsWith("0011_", StringComparison.Ordinal)));
-        foreach (var path in all.Where(p => string.CompareOrdinal(Path.GetFileName(p), "0011_") < 0))
+        _migration = await File.ReadAllTextAsync(all.Single(p => Path.GetFileName(p).StartsWith("0015_", StringComparison.Ordinal)));
+        foreach (var path in all.Where(p => string.CompareOrdinal(Path.GetFileName(p), "0015_") < 0))
             await Run(await File.ReadAllTextAsync(path));
     }
 

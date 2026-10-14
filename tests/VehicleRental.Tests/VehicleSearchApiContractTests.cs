@@ -3,7 +3,7 @@ using Car_Rental_System_BE.Application.Availability;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Controllers;
 using Car_Rental_System_BE.Domain.Availability;
-using Car_Rental_System_BE.Responses;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -154,7 +154,7 @@ public sealed class VehicleSearchApiContractTests
         });
 
         Assert.True(executed);
-        var wrapped = Assert.IsType<ApiSuccessResponse>(objectResult.Value);
+        var wrapped = Assert.IsType<ApiResponse>(objectResult.Value);
         Assert.Equal(expectedMessage, wrapped.Message);
         Assert.True(wrapped.IsSuccess);
     }

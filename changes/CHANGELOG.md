@@ -1,7 +1,19 @@
 # Changelog
+- 2026-10-10 — [Rule pagination cho API danh sách](2026-10-10-list-pagination-rule.md)
+- 2026-10-10 — [Customer directory và Cloudinary evidence uploads](2026-10-10-customer-directory-media.md)
+- 2026-10-07 — [Khôi phục tên project VehicleRental.WebApi](2026-10-07-webapi-project-name.md)
+- 2026-10-07 — [Sắp xếp source theo layout Domain/Application/Infrastructure/API](2026-10-07-reference-layer-layout.md)
+- 2026-10-07 — [Tách Application Services và query Repositories](2026-10-07-services-repositories.md)
+- 2026-10-07 — [Giới hạn mật khẩu 6–20 ký tự](2026-10-07-password-length.md)
+- 2026-10-07 — [Chuẩn hóa response JSON 6 trường](2026-10-07-api-response-contract.md)
+- 2026-10-07 — [Tài liệu API BE tiếng Việt](2026-10-07-api-documentation.md)
 - 2026-10-06 — [Vòng đời đơn thuê, Quá giờ & Quyết toán (FR-018 / BE-17)](2026-10-06-rental-lifecycle.md)
+- 2026-10-05 — [Rental contract evidence API and price snapshot responses](2026-10-05-rental-contract-api.md)
+- 2026-10-05 — [Facility assignment for Staff and Manager](2026-10-05-facility-assignment.md)
+- 2026-10-05 — [Department assignment for Staff and Manager](2026-10-05-department-assignment.md)
 - 2026-10-04 — [Phân xe, tài xế & Đổi xe (FR-014 / BE-14)](2026-10-04-assignment-vehicle-swap.md)
 - 2026-10-04 — [Tìm xe, kiểm tra availability và đệm đối xứng 60 phút (FR-010 / BE-10)](2026-10-04-vehicle-availability.md)
+- 2026-10-04 — [Staff and driver rating after completed rental](2026-10-04-staff-driver-rating.md)
 - 2026-10-04 — [Google OAuth callback and forwarded headers on Railway](2026-10-04-google-oauth-railway-callback.md)
 - 2026-10-03 — [Mua/gia hạn gói qua PayOS & endpoint "Gói của tôi"](2026-10-03-subscription-plan-payments.md)
 - 2026-10-03 — [Sửa `GET /api/vehicles` 500 và lỗi test hết hạn gói](2026-10-03-vehicle-search-envelope-fixes.md)
@@ -32,3 +44,4 @@
 
 - [Google OAuth callback on Railway](2026-10-04-google-oauth-railway-callback.md)
 
+- 2026-10-04: [Vehicle plates, duty shifts and incident recovery](2026-10-04-operational-recovery.md)

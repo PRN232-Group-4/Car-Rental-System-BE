@@ -1,8 +1,9 @@
 using System.Reflection;
 using Car_Rental_System_BE.Application.Assignments;
-using Car_Rental_System_BE.Authentication;
+using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Controllers;
-using Car_Rental_System_BE.Responses;
+using Car_Rental_System_BE.WebApi.Controllers;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -121,7 +122,7 @@ public sealed class RentalAssignmentsApiContractTests
 
         Assert.True(nextCalled);
         var okResult = Assert.IsType<OkObjectResult>(resultExecutingContext.Result);
-        var response = Assert.IsType<ApiSuccessResponse>(okResult.Value);
+        var response = Assert.IsType<ApiResponse>(okResult.Value);
         Assert.Equal(expectedMessage, response.Message);
     }
 }

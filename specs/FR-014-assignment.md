@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # FR-014 — Phân xe / tài xế (BE-14)
 
 - **Status:** In progress; **Priority:** P0; **Milestone:** M4; **Assignee:** Huy
@@ -179,3 +180,6 @@ KIỂM CHỨNG và dán kết quả thật: dotnet build -warnaserror; dotnet te
 
 BÁO CÁO: file đổi, kết quả lệnh, giả định đã ghi, và các điểm cần Lạc (BE-12/33), Anh/Lạc (BE-15/16 inspections.assignment_id), Kiệt (bảo trì) xác nhận. Gặp mâu thuẫn giữa spec và code: dừng và hỏi, không tự chọn.
 ```
+
+---
+*Ghi chú:* Xem thêm [FR-031](FR-031-operational-recovery.md) và [API frontend](../docs/operational-recovery.md) về quy trình phục hồi sự cố / thay xe của Lạc.

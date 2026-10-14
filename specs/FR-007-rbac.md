@@ -3,11 +3,18 @@
 
 Roles: Customer, Staff (employee marker only), CustomerService, Driver, Maintenance (Technician in UI), Manager, Admin. Department is organizational metadata, not an implicit permission grant. Only Admin assigns staff specialties. Existing Staff accounts require explicit specialty assignment; no automatic CustomerService backfill.
 
+Staff creation passwords follow the same 6–20 character limit as registration/login; invalid lengths return 400 validation. See [password-length change](../changes/2026-10-07-password-length.md).
+
 | Capability | Roles |
 |---|---|
 | Organization/staff CRUD, refund approval, destructive catalog actions | Admin |
+| Read staff/departments; assign Staff to a department | Admin, Manager |
+| Assign Manager to a department (including Manager + Staff targets) | Admin |
+| Assign Staff to a facility | Admin, Manager |
+| Assign Manager to a facility (including Manager + Staff targets) | Admin |
 | Vehicle catalog, subscription plans, rental policies, dashboard | Admin, Manager |
 | License review, rental lifecycle/assignment, invoices, payment/refund requests | Admin, Manager, CustomerService |
+| Customer directory list/detail | Admin, Manager, CustomerService |
 | Inspections | Admin or Maintenance, with own active staff profile |
 | Maintenance management | Admin, Manager, Maintenance |
 | Driver schedule | Admin/Manager all; Driver own assignments |

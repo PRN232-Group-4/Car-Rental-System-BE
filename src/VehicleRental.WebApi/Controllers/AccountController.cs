@@ -1,16 +1,18 @@
-using Car_Rental_System_BE.Application.Registration;
-using Car_Rental_System_BE.Application.Accounts;
-using Car_Rental_System_BE.Infrastructure;
-using Car_Rental_System_BE.Infrastructure.Authentication;
+using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.Application.DTOs.Accounts;
+using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.Application.Services.Exceptions;
+using Car_Rental_System_BE.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
-namespace Car_Rental_System_BE.Controllers;
+namespace Car_Rental_System_BE.WebApi.Controllers;
 
 [ApiController]
 [Route("api/account")]
-public sealed class AccountController(IRegistrationWorkflow registration, IPasswordResetWorkflow passwordResets, IAccountRepository accounts, RedisRefreshTokenStore refreshTokens) : ControllerBase
+public sealed class AccountController(IRegistrationWorkflow registration, IPasswordResetWorkflow passwordResets, IAccountService accounts) : ControllerBase
 {
     [HttpPost("registrations")]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
@@ -22,7 +24,7 @@ public sealed class AccountController(IRegistrationWorkflow registration, IPassw
     }
 
     [HttpPost("registrations/verify")]
-    [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> Verify(VerifyRegistrationRequest request, CancellationToken ct)
     {
         if (!ModelState.IsValid) return ValidationProblem(ModelState);
@@ -87,11 +89,9 @@ public sealed class AccountController(IRegistrationWorkflow registration, IPassw
     public async Task<IActionResult> ChangePassword(ChangePasswordRequest request, CancellationToken ct)
     {
         if (!ModelState.IsValid) return ValidationProblem(ModelState);
-        var account = await CurrentAccountAsync(ct);
-        if (account is null || !PasswordHash.Verify(request.CurrentPassword, account.PasswordHash))
+        var email = User.FindFirstValue(ClaimTypes.Email);
+        if (string.IsNullOrWhiteSpace(email) || !await accounts.ChangePasswordAsync(email, request.CurrentPassword, request.NewPassword, ct))
             return Problem("Mật khẩu hiện tại không chính xác.", statusCode: StatusCodes.Status400BadRequest);
-        await accounts.UpdatePasswordHashAsync(account.Email, PasswordHash.Create(request.NewPassword), ct);
-        await refreshTokens.RevokeAllAsync(account.Email, ct);
         AuthCookies.Clear(Response);
         return NoContent();
     }
@@ -101,16 +101,4 @@ public sealed class AccountController(IRegistrationWorkflow registration, IPassw
         var email = User.FindFirstValue(ClaimTypes.Email);
         return string.IsNullOrWhiteSpace(email) ? null : await accounts.FindByEmailAsync(email, ct);
     }
-}
-
-public sealed record StartRegistrationRequest([param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress] string Email, [param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(120, MinimumLength = 2)] string FullName, [param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(128, MinimumLength = 6)] string Password);
-public sealed record VerifyRegistrationRequest([param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress] string Email, [param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.RegularExpression("^[0-9]{6}$")] string Otp);
-public sealed record ResendRegistrationRequest([param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress] string Email);
-public sealed record PasswordResetStartRequest([param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress] string Email);
-public sealed record PasswordResetCompleteRequest([param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress] string Email, [param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.RegularExpression("^[0-9]{6}$")] string Otp, [param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(128, MinimumLength = 6)] string NewPassword);
-public sealed record UpdateProfileRequest([param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(120, MinimumLength = 2)] string FullName, [param: System.ComponentModel.DataAnnotations.StringLength(50)] string? Gender, [param: System.ComponentModel.DataAnnotations.StringLength(30)] string? Phone);
-public sealed record ChangePasswordRequest([param: System.ComponentModel.DataAnnotations.Required] string CurrentPassword, [param: System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(128, MinimumLength = 6)] string NewPassword);
-public sealed record AccountResponse(string Email, string FullName, string? Gender, string? Phone, string? AvatarUrl, IReadOnlyList<string> Roles, int? StaffId, int? DepartmentId, string? DepartmentName, int? FacilityId)
-{
-    public static AccountResponse From(Account account) => new(account.Email, account.FullName, account.Gender, account.Phone, account.AvatarUrl, account.Roles, account.StaffId, account.DepartmentId, account.DepartmentName, account.FacilityId);
 }

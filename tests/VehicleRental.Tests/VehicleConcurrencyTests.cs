@@ -1,5 +1,5 @@
 using Car_Rental_System_BE.Application.Common.Errors;
-using Car_Rental_System_BE.Infrastructure;
+using Car_Rental_System_BE.Infrastructure.Repositories;
 using Npgsql;
 using Xunit;
 

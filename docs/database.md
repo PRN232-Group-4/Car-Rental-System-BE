@@ -4,7 +4,10 @@ API không chạy migration tự động khi khởi động. PostgreSQL phải c
 
 `users.email` đã unique; đăng ký transaction tạo `users`, `customers` và role `Customer`. Bổ sung index chỉ sau khi có workload thực tế và ghi lý do vào ADR/change.
 
-## Quản lý Lịch Đặt Xe & Tính Khả Dụng (Migration 0011)
+## Migration 0011 (Operational Recovery)
+Thêm vehicles.license_plate (IF NOT EXISTS), driver_shifts, vehicle_replacements; reports thêm tác giả staff/xe/evidence/audit. Unique inspection thành rental + vehicle + type.
+
+## Quản lý Lịch Đặt Xe & Tính Khả Dụng (Migration 0015)
 
 ### 1. Bảng `vehicle_bookings`
 Bảng đồng bộ tự động lưu trữ các khoảng thời gian xe bị chiếm chỗ bởi các lượt thuê đang hoạt động hoặc chuẩn bị nhận xe:
@@ -30,7 +33,7 @@ Biểu diễn khoảng thời gian xe bị chặn do bảo dưỡng:
 Ràng buộc chặt chẽ 4 trạng thái hợp lệ của xe:
 `CHECK (status IN ('available', 'renting', 'maintenance', 'inactive'))`.
 
-## Quản lý Phân Xe, Tài Xế & Đổi Xe (Migration 0012)
+## Quản lý Phân Xe, Tài Xế & Đổi Xe (Migration 0016)
 
 ### 1. Bảng `vehicle_assignments`
 Bảng lưu vết toàn bộ lịch sử phân bổ xe và tài xế cho từng đơn thuê:
@@ -55,4 +58,3 @@ Ràng buộc này bảo đảm ở tầng cơ sở dữ liệu rằng không có
 ### 3. Chỉ mục Hiệu Năng
 - `ix_va_driver_status`: Hỗ trợ tra cứu nhanh lịch làm việc của tài xế theo trạng thái `assigned`.
 - `ix_va_vehicle`: Hỗ trợ truy vấn lịch sử hoạt động của từng phương tiện.
-
