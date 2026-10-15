@@ -1,5 +1,13 @@
 # Tiến độ
 
+## Sửa đăng ký startup availability và rate limiter — 2026-10-15
+
+Khôi phục bind/validation section `Availability` và đăng ký concrete options cho constructor của `NpgsqlVehicleAvailabilityService`/`VehicleSearchService`. Bổ sung `AddRateLimiter` với policy `public-search` 60 request/phút/IP theo FR-010; response 429 dùng envelope chung. Build solution `--no-restore -warnaserror` đạt, 0 warning/error. Nhóm availability/search/assignment có 44/44 test đạt; kiểm tra mở rộng có 88/93 đạt, 5 test message mapping `VehicleSearch.*` thất bại do mapping thiếu sẵn có, ngoài phạm vi startup. Smoke test dùng endpoint localhost giả và tắt migration đã qua DI/middleware, tới kết nối Redis; chưa kiểm chứng HTTP với PostgreSQL/Redis thật hoặc response 429. Xem [change](../changes/2026-10-15-startup-availability-rate-limiter.md).
+
+## Kiểm tra Google Maps và cấu hình Railway — 2026-10-15
+
+Đã đối chiếu adapter, DI, controller, options, hai appsettings và frontend cùng dự án. Backend có Maps/Tracking API nhưng mặc định tắt, trả fallback khi chưa cấp cấu hình ngoài; frontend chưa nối Maps. Bổ sung [hướng dẫn](google-maps-setup.md) với section appsettings, biến Railway `GoogleMaps__Enabled`/`GoogleMaps__ApiKey`, API Legacy, key restrictions và cách phân biệt dữ liệu Google/fallback. Chưa xác nhận triển khai thật hoặc gọi API tính phí; không đổi runtime/config production. Kiểm tra tài liệu với nguồn chính thức Google/Railway/Microsoft; không chạy lại build/test vì chỉ sửa tài liệu. Xem [change](../changes/2026-10-15-google-maps-configuration-audit.md).
+
 ## Localhost startup — 2026-10-14
 
 Development tự dùng PostgreSQL `localhost:5432` và Redis `localhost:6379` theo Docker Compose nếu chưa có connection string riêng. Production không thay đổi. Để chạy đầy đủ, cần có PostgreSQL/Redis đang hoạt động và cấu hình `Jwt__SigningKey`, `Brevo__ApiKey`, `Brevo__SenderEmail`; Swagger dùng `http://localhost:3000/swagger`. Build WebApi pass (0 warning/error). Chưa xác nhận kết nối thật vì Docker CLI và PostgreSQL/Redis local không khả dụng trong môi trường kiểm tra. Xem [thay đổi](../changes/2026-10-14-localhost-startup-defaults.md).
