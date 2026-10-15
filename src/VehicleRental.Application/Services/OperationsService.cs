@@ -82,11 +82,28 @@ public sealed class OperationsService(IOperationsRepository repository) : IOpera
     public Task DeleteVehicleAsync(int id, CancellationToken ct) =>
         repository.DeleteVehicleAsync(id, ct);
 
-    public Task<RentalPolicy> CreatePolicyAsync(RentalPolicy policy, CancellationToken ct) =>
-        repository.CreatePolicyAsync(policy, ct);
+    public async Task<RentalPolicy> CreatePolicyAsync(RentalPolicy policy, CancellationToken ct)
+    {
+        RentalPolicyValidator.Validate(policy);
+        if (policy.VehicleTypeId is { } typeId && !await repository.VehicleTypeExistsAsync(typeId, ct))
+            throw RentalPolicyValidator.InvalidVehicleType();
+        if (await repository.HasActivePolicyAsync(policy.VehicleTypeId, ct))
+            throw RentalPolicyValidator.ActivePolicyExists();
+        return await repository.CreatePolicyAsync(policy, ct);
+    }
 
-    public Task<IReadOnlyList<RentalPolicy>> ListPoliciesAsync(CancellationToken ct) =>
-        repository.ListPoliciesAsync(ct);
+    public async Task<RentalPolicy> SetPolicyStatusAsync(int id, bool isActive, CancellationToken ct)
+    {
+        if (id <= 0) throw new ArgumentOutOfRangeException(nameof(id), "Policy ID must be positive.");
+        return await repository.SetPolicyStatusAsync(id, isActive, ct)
+            ?? throw new KeyNotFoundException("Rental policy was not found.");
+    }
+
+    public Task<RentalPolicyPage> ListPoliciesAsync(int page, int pageSize, CancellationToken ct)
+    {
+        RentalPolicyValidator.ValidatePagination(page, pageSize);
+        return repository.ListPoliciesAsync(page, pageSize, ct);
+    }
 
     public Task<Rental> CreateRentalAsync(string email, int vehicleId, int? policyId, string rentalType, DateTime start, DateTime end, bool subscription, int? subscriptionId, bool hasDriver, CancellationToken ct) =>
         repository.CreateRentalAsync(email, vehicleId, policyId, rentalType, start, end, subscription, subscriptionId, hasDriver, ct);

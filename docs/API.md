@@ -437,8 +437,9 @@ Danh sách xe hiện không tải `detail` như endpoint chi tiết. Dùng `GET 
 
 | Method | Endpoint | Quyền | Body | HTTP / data |
 | --- | --- | --- | --- | --- |
-| GET | `/api/rental-policies` | Management | Không | 200 / `RentalPolicy[]` |
+| GET | `/api/rental-policies` | Management | Query `page=1`, `pageSize=20` | 200 / `RentalPolicyPage` |
 | POST | `/api/rental-policies` | Management | `PolicyRequest` | 201 / `RentalPolicy` |
+| PATCH | `/api/rental-policies/{id}/status` | Management (Admin, Manager) | `PolicyStatusRequest` | 200 / `RentalPolicy` |
 | POST | `/api/rentals/hourly` | Customer | `RentalRequest` | 201 / `Rental` |
 | POST | `/api/rentals/longterm` | Customer | `RentalRequest` | 201 / `Rental` |
 | GET | `/api/rentals/{id}` | RentalRead + phạm vi | Không | 200 / `Rental` |
@@ -450,11 +451,17 @@ Danh sách xe hiện không tải `detail` như endpoint chi tiết. Dùng `GET 
 
 ### Body và quy tắc
 
-`PolicyRequest`: `vehicleTypeId: int?`, `name: string` bắt buộc, `vatRate: decimal` 0–100, `overtimeFeeRate: decimal` 0–100, `depositPercentage: decimal` 0–100, `isActive: bool = true`.
+`PolicyRequest`: `vehicleTypeId: int?` null hoặc ID dương còn tồn tại, `name: string` bắt buộc, `vatRate: decimal` 0–100, `overtimeFeeRate: decimal` 0–100, `depositPercentage: decimal` 0–100, `isActive: bool = true`. Không cho tạo khi có policy active cùng phạm vi loại xe (null là phạm vi chung riêng). Lỗi tham chiếu/trùng active trả 400 với `error.errors.VehicleTypeId`; phải tạm ngưng bản cũ trước. Kiểm tra lại dưới khóa/transaction tại repository.
+
+Danh sách validate `page>=1`, `pageSize` 1–100 tại HTTP/Application, thứ tự ID giảm dần, trả `data={items,page,pageSize,totalCount}`. Mỗi `RentalPolicy` có `rentalCount: int64`: COUNT các đơn có `policy_id` đúng bản đó, gồm mọi trạng thái và loại thuê; chưa dùng = 0. Không suy ra theo loại xe hoặc cộng đơn có policy null. Trang vượt phạm vi trả items rỗng, giữ đúng tổng. POST có count 0; PATCH giữ số đếm hiện tại.
 
 ```json
 { "vehicleTypeId": 1, "name": "Chính sách tiêu chuẩn", "vatRate": 10, "overtimeFeeRate": 20, "depositPercentage": 30, "isActive": true }
 ```
+
+`PolicyStatusRequest`: `{ "isActive": true }` để kích hoạt, `{ "isActive": false }` để tạm ngưng. `id` dương; `isActive` bắt buộc là boolean, không nhận null/string/number. Thiếu/sai dữ liệu trả 400, không tồn tại trả 404, chưa đăng nhập 401, sai quyền 403. Response thành công 200 có policy trong `data` và message `Rental policy status updated successfully.`; success/error đều theo envelope 6 trường.
+
+Chỉ đổi trạng thái bản ghi đích, không đổi điều khoản, không tạo phiên bản, không tự ngừng bản khác và không thay giá rental/invoice cũ. Lặp cùng trạng thái vẫn 200. Kích hoạt bản inactive bị chặn 400 nếu có bản khác active cùng phạm vi. Dữ liệu trùng có sẵn vẫn chọn policy active mới nhất theo loại xe, rồi fallback policy chung. Xem FR-011 và ADR-006.
 
 `RentalRequest`:
 
@@ -714,7 +721,8 @@ Các trường dưới đây nằm trong `data`. `T[]` là array; page có `item
 | `VehiclePage` | `items: Vehicle[]`, `page: int`, `pageSize: int`, `totalCount: int` |
 | `Vehicle` | `id: int`, `vehicleTypeId: int`, `vehicleType: string` (tên), `facilityId: int?`, `facility: string?` (tên), `status: string`, `brand: string?`, `model: string?`, `color: string?`, `yearOfManufacture: int?`, `hourlyPrice: decimal?`, `longtermPrice: decimal?`, `description: string?`, `mainImageUrl: string?`, `location: string?`, `detail: VehicleDetail?`, `licensePlate: string?` |
 | `VehicleDetail` | Cùng các trường `detail` trong [body xe](#body-xe) |
-| `RentalPolicy` | `id: int`, `vehicleTypeId: int?`, `name: string`, `vatRate: decimal`, `overtimeFeeRate: decimal`, `depositPercentage: decimal`, `isActive: bool` |
+| `RentalPolicy` | `id: int`, `vehicleTypeId: int?`, `name: string`, `vatRate: decimal`, `overtimeFeeRate: decimal`, `depositPercentage: decimal`, `isActive: bool`, `rentalCount: long` |
+| `RentalPolicyPage` | `items: RentalPolicy[]`, `page: int`, `pageSize: int`, `totalCount: int` |
 | `Rental` | `id: int`, `customerId: int`, `vehicleId: int`, `rentalType: string`, `status: string`, `isSubscription: bool`, `vatPrice: decimal`, `depositPrice: decimal`, `overtimePrice: decimal`, `totalPrice: decimal`, `startTime: datetime?`, `endTime: datetime?`, `hourlyPriceSnapshot: decimal?`, `monthlyPriceSnapshot: decimal?`, `hasDriver: bool?`, `contractLink: string?`, `signedAt: datetime?` |
 | `Inspection` | `id: int`, `rentalId: int`, `type: string` (`pre_rental`/`post_rental`), `isOk: bool?`, `odometerKm: decimal?`, `fuelBatteryLevel: decimal?`, `damageNotes: string?`, `imageUrls: string?`, `inspectedAt: datetime?`, `staffId: int?`, `vehicleId: int?` |
 | `SubscriptionPlan` | `id: int`, `name: string`, `description: string?`, `price: decimal`, `durationDays: int`, `includedHours: decimal?`, `isActive: bool` |
