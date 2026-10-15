@@ -71,8 +71,41 @@ public sealed class OperationsController(IOperationsService store, IMediaService
     [Authorize(Roles="Admin")] [HttpPut("facilities/{id:int}")] public Task<OrganizationUnit> EditFacility(int id,FacilityRequest x,CancellationToken ct)=>store.SaveFacilityAsync(id,x.Name,x.Address,ct);
     [Authorize(Roles="Admin")] [HttpDelete("facilities/{id:int}")] public async Task<IActionResult> DeleteFacility(int id,CancellationToken ct){await store.DeleteFacilityAsync(id,ct);return NoContent();}
 
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpGet("rental-policies")] public Task<IReadOnlyList<RentalPolicy>> Policies(CancellationToken ct)=>store.ListPoliciesAsync(ct);
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPost("rental-policies")] public async Task<IActionResult> AddPolicy(PolicyRequest x,CancellationToken ct){var p=await store.CreatePolicyAsync(x.ToModel(),ct);return Created($"api/rental-policies/{p.Id}",p);}
+    [Authorize(Policy = AuthorizationPolicies.Management)]
+    [HttpGet("rental-policies")]
+    [ProducesResponseType<RentalPolicyPage>(StatusCodes.Status200OK)]
+    public Task<RentalPolicyPage> Policies([FromQuery, Range(1, int.MaxValue)] int page = 1, [FromQuery, Range(1, 100)] int pageSize = 20, CancellationToken ct = default) =>
+        store.ListPoliciesAsync(page, pageSize, ct);
+
+    [Authorize(Policy = AuthorizationPolicies.Management)]
+    [HttpPost("rental-policies")]
+    [ProducesResponseType<RentalPolicy>(StatusCodes.Status201Created)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> AddPolicy(PolicyRequest x, CancellationToken ct)
+    {
+        try
+        {
+            var policy = await store.CreatePolicyAsync(x.ToModel(), ct);
+            return Created($"api/rental-policies/{policy.Id}", policy);
+        }
+        catch (ValidationException error)
+        {
+            var fields = error.ValidationResult?.MemberNames ?? [];
+            foreach (var field in fields.DefaultIfEmpty("")) ModelState.AddModelError(field, error.Message);
+            return ValidationProblem(ModelState);
+        }
+    }
+
+    /// <summary>Admin/Manager đặt trạng thái áp dụng; giữ nguyên điều khoản và giá của các đơn cũ.</summary>
+    [Authorize(Policy = AuthorizationPolicies.Management)]
+    [HttpPatch("rental-policies/{id:int}/status")]
+    [ProducesResponseType<RentalPolicy>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public Task<RentalPolicy> SetPolicyStatus([FromRoute, Range(1, int.MaxValue)] int id, PolicyStatusRequest request, CancellationToken ct) =>
+        store.SetPolicyStatusAsync(id, request.IsActive!.Value, ct);
 
     [Authorize(Policy=AuthorizationPolicies.Customer)] [HttpPost("rentals/hourly")] public async Task<IActionResult> Hourly(RentalRequest x,CancellationToken ct)=>Created("api/rentals",await store.CreateRentalAsync(Email(),x.VehicleId,x.PolicyId,"hourly",x.StartTime,x.EndTime,x.SubscriptionId is not null,x.SubscriptionId,x.HasDriver,ct));
     [Authorize(Policy=AuthorizationPolicies.Customer)] [HttpPost("rentals/longterm")] public async Task<IActionResult> Longterm(RentalRequest x,CancellationToken ct)=>Created("api/rentals",await store.CreateRentalAsync(Email(),x.VehicleId,x.PolicyId,"longterm",x.StartTime,x.EndTime,x.SubscriptionId is not null,x.SubscriptionId,false,ct));

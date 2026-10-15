@@ -1,5 +1,13 @@
 # Câu hỏi mở và giả định
 
+## Kiểm tra loại xe và số lần thuê chính sách — 2026-10-15
+
+Người dùng xác nhận chặn tạo mới khi loại xe có chính sách đang hoạt động; áp dụng cả scope chung null và khi kích hoạt bản inactive, không tự sửa dữ liệu active trùng đã có. Số lần thuê được hiểu là tổng đơn đã gắn policy, gồm mọi trạng thái (cả hủy), không chỉ đơn hoàn tất; FE ghi rõ cách đếm. Đơn policy null không được tự gán cho một phiên bản. Danh sách thay sang pagination theo ADR-003 vì bổ sung count vào API list.
+
+## Trạng thái chính sách thuê xe — 2026-10-15
+
+Theo yêu cầu bổ sung nút đặt lại status, cho phép Admin/Manager đổi riêng `isActive` của bản ghi được chọn. Không tự ngừng các phiên bản khác; thứ tự ưu tiên active mới nhất theo loại xe rồi policy chung vẫn giữ nguyên. Không sửa điều khoản hoặc snapshot rental đã tạo. Request đồng thời dùng giá trị ghi cuối; xem ADR-006. Ràng buộc chỉ một policy active cho mỗi phạm vi chưa thuộc yêu cầu này.
+
 ## Customer directory và upload — 2026-10-10 assumptions
 
 Danh bạ customer dùng cùng policy CustomerService với duyệt giấy phép (Admin/Manager/CustomerService), bao gồm hồ sơ inactive để phục vụ vận hành; caller lọc `isActive` khi cần. Detail dùng customer ID và chỉ trả thông tin liên hệ/license/loyalty đang có trong schema.

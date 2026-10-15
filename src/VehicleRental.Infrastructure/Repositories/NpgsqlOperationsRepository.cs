@@ -66,8 +66,6 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
         await tx.CommitAsync(ct);
         return (await GetVehicleAsync(vehicleId,ct))!;
     }
-    public async Task<RentalPolicy> CreatePolicyAsync(RentalPolicy x,CancellationToken ct){await using var c=dataSource.CreateCommand("INSERT INTO rental_policies(vehicle_type_id,name,vat_rate,overtime_fee_rate,deposit_percentage,is_active)VALUES($1,$2,$3,$4,$5,$6) RETURNING id,vehicle_type_id,name,vat_rate,overtime_fee_rate,deposit_percentage,is_active");Add(c,x.VehicleTypeId,x.Name,x.VatRate,x.OvertimeFeeRate,x.DepositPercentage,x.IsActive);await using var r=await c.ExecuteReaderAsync(ct);if(!await r.ReadAsync(ct))throw new InvalidOperationException("Rental policy could not be created.");return ReadPolicy(r);}
-    public async Task<IReadOnlyList<RentalPolicy>> ListPoliciesAsync(CancellationToken ct){await using var c=dataSource.CreateCommand("SELECT id,vehicle_type_id,name,vat_rate,overtime_fee_rate,deposit_percentage,is_active FROM rental_policies ORDER BY id");await using var r=await c.ExecuteReaderAsync(ct);var a=new List<RentalPolicy>();while(await r.ReadAsync(ct))a.Add(ReadPolicy(r));return a;}
     public async Task<Rental> CreateRentalAsync(string email,int vehicleId,int? policyId,string type,DateTime start,DateTime end,bool subscription,int? subscriptionId,bool hasDriver,CancellationToken ct)
     {
         if(end<=start)throw new ArgumentException("End time must be after start time.");

@@ -1,5 +1,17 @@
 # Tiến độ
 
+## Kiểm tra loại xe và thống kê chính sách — 2026-10-15
+
+POST xác minh loại xe ở Application và dưới row lock/transaction khi INSERT; chặn tạo khi cùng phạm vi đã có policy active theo xác nhận người dùng. Kích hoạt lại cũng bị chặn khi có bản active khác; scope lock bảo vệ request đồng thời. GET policy đổi sang pagination 1/20 (max100), thêm rentalCount theo policy_id gồm mọi trạng thái, giữ count khi đổi status; migration 0019 thêm index. FE có cột Số lần thuê, phân trang và lỗi inline. Build/test `-warnaserror` và 147 test HTTP/phân quyền/contract đạt; 122 unit FE và 9 E2E đạt. Test PostgreSQL về count/cạnh tranh đã thêm nhưng chưa kiểm chứng do chưa có TEST_DATABASE_ADMIN hợp lệ. Chưa deploy hoặc sửa dữ liệu thật. Xem change 2026-10-15-rental-policy-validation-usage.
+
+## Đổi trạng thái chính sách thuê xe — 2026-10-15
+
+Thêm `PATCH /api/rental-policies/{id}/status` cho Admin/Manager, validate ID dương và boolean bắt buộc, cập nhật nguyên tử riêng `is_active`, trả bản ghi và envelope chuẩn. Điều khoản và giá rental/invoice cũ giữ nguyên. FE có icon kích hoạt/tạm ngưng, xác nhận và khóa gửi lặp. Đã cập nhật FR-011, ADR-006, Swagger và API docs. Build khi chạy test với `-warnaserror` đạt; 126 test HTTP/validation/phân quyền/contract liên quan đạt. Test persistence đã bổ sung nhưng chưa kiểm chứng PostgreSQL: thông tin kết nối test mặc định bị từ chối xác thực; chưa có `TEST_DATABASE_ADMIN` hợp lệ. Xem change `2026-10-15-rental-policy-status.md`.
+
+## Google Maps frontend — 2026-10-15
+
+FE đã tích hợp Maps Embed tại cơ sở/điểm nhận, preview địa chỉ Admin và giao diện đọc GPS xe/hành trình từ API hiện có. Cập nhật [hướng dẫn cấu hình](google-maps-setup.md); key trình duyệt đặt ở môi trường build FE, tách key backend. Chưa cấu hình/kiểm chứng provider thật hoặc deploy Railway. Backend không thay đổi.
+
 ## Sửa đăng ký startup availability và rate limiter — 2026-10-15
 
 Khôi phục bind/validation section `Availability` và đăng ký concrete options cho constructor của `NpgsqlVehicleAvailabilityService`/`VehicleSearchService`. Bổ sung `AddRateLimiter` với policy `public-search` 60 request/phút/IP theo FR-010; response 429 dùng envelope chung. Build solution `--no-restore -warnaserror` đạt, 0 warning/error. Nhóm availability/search/assignment có 44/44 test đạt; kiểm tra mở rộng có 88/93 đạt, 5 test message mapping `VehicleSearch.*` thất bại do mapping thiếu sẵn có, ngoài phạm vi startup. Smoke test dùng endpoint localhost giả và tắt migration đã qua DI/middleware, tới kết nối Redis; chưa kiểm chứng HTTP với PostgreSQL/Redis thật hoặc response 429. Xem [change](../changes/2026-10-15-startup-availability-rate-limiter.md).
