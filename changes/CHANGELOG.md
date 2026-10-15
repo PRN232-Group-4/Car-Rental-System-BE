@@ -1,4 +1,6 @@
 # Changelog
+- 2026-10-15 — [Sửa thiếu AvailabilityOptions và đăng ký rate limiter khi startup](2026-10-15-startup-availability-rate-limiter.md)
+- 2026-10-15 — [Kiểm tra tích hợp Google Maps và hướng dẫn cấu hình Railway](2026-10-15-google-maps-configuration-audit.md)
 - 2026-10-14 — [Mặc định kết nối local cho PostgreSQL và Redis](2026-10-14-localhost-startup-defaults.md)
 - 2026-10-10 — [Định vị GPS, Tích hợp Google Maps, Lộ trình, Geofencing và Cảnh báo](2026-10-10-gps-tracking-and-google-maps.md)
 - 2026-10-10 — [Rule pagination cho API danh sách](2026-10-10-list-pagination-rule.md)

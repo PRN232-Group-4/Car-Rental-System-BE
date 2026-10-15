@@ -3,6 +3,10 @@
 - **Status:** Done; **Priority:** P1; **Milestone:** M2
 - **Change:** [2026-10-10-gps-tracking-and-google-maps.md](../changes/2026-10-10-gps-tracking-and-google-maps.md)
 
+## Kiểm chứng triển khai — 2026-10-15
+
+Backend đã có adapter và endpoint, nhưng appsettings chưa có section `GoogleMaps`; mặc định tắt và dùng fallback nếu không có cấu hình ngoài. Frontend chưa nối SDK hoặc các API Maps/Tracking. Chưa kiểm chứng key/billing/quyền API trên Google Cloud hoặc cấu hình Railway thực tế. Adapter Places/Distance Matrix/Directions đang dùng Legacy; project Google Cloud mới cần kiểm tra quyền Legacy hoặc chuyển adapter sang API mới. Distance Matrix hiện lấy `duration`, chưa gửi `departure_time` hay đọc `duration_in_traffic`, nên tiêu chí ETA theo giao thông chưa được xác nhận. Xem [hướng dẫn cấu hình và kiểm tra kết quả thật](../docs/google-maps-setup.md).
+
 ## Nghiệp vụ và luồng hoạt động
 
 ### 1. Tích hợp Places & Geocoding

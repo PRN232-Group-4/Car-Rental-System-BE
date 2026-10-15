@@ -60,6 +60,10 @@ builder.Services.AddOptions<RegistrationOptions>()
     .Bind(builder.Configuration.GetSection(RegistrationOptions.SectionName))
     .ValidateDataAnnotations()
     .ValidateOnStart();
+builder.Services.AddOptions<AvailabilityOptions>()
+    .Bind(builder.Configuration.GetSection(AvailabilityOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 builder.Services.AddOptions<BrevoOptions>()
     .Bind(builder.Configuration.GetSection(BrevoOptions.SectionName))
     .ValidateDataAnnotations()
@@ -144,6 +148,7 @@ builder.Services.AddScoped<ITrackingService, TrackingService>();
 builder.Services.AddScoped<IMapService, MapService>();
 builder.Services.AddSingleton<IWorkflowStateStore, RedisWorkflowStateStore>();
 builder.Services.AddSingleton(provider => provider.GetRequiredService<IOptions<RegistrationOptions>>().Value);
+builder.Services.AddSingleton(provider => provider.GetRequiredService<IOptions<AvailabilityOptions>>().Value);
 builder.Services.AddSingleton(provider => provider.GetRequiredService<IOptions<GoogleMapsOptions>>().Value);
 builder.Services.AddSingleton(provider => provider.GetRequiredService<IOptions<TelemetryRetentionOptions>>().Value);
 builder.Services.AddScoped(provider =>
@@ -307,6 +312,26 @@ if (googleAuthentication.Enabled)
     });
 }
 builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("public-search", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 60,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        }));
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            ApiResponse.Failure(StatusCodes.Status429TooManyRequests,
+                message: "Bạn đã tìm kiếm quá nhiều lần. Vui lòng thử lại sau một phút."),
+            cancellationToken);
+    };
+});
 
 var app = builder.Build();
 
