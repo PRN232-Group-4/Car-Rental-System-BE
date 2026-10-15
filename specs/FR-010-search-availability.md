@@ -255,6 +255,8 @@ Lỗi: thêm `BusinessRuleException(code, message, status)` + `ConflictException
 
 ## 9. Acceptance criteria
 
+- [x] Composition root bind section `Availability`, validate options khi startup và đăng ký `AvailabilityOptions` cho các service nhận options trực tiếp qua constructor.
+- [x] Đăng ký rate limiter và policy `public-search` 60 request/phút/IP trước khi dùng middleware; request bị giới hạn trả 429 theo envelope API chung.
 - [x] `GET /api/vehicles/search` công khai, đủ bộ lọc, phân trang, sắp xếp; không trả trường nội bộ
 - [x] Đệm 60 phút đối xứng đúng ở tìm kiếm **và** ở tạo rental
 - [x] Xe `maintenance`/`inactive`/có khoảng chặn bảo dưỡng không xuất hiện
