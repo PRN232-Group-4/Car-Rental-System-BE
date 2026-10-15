@@ -8,7 +8,7 @@ Kiểm tra mã nguồn ngày 2026-10-15. Chưa kiểm tra Google Cloud hoặc Ra
 - Các API cần đăng nhập: `GET /api/map/geocode`, `/reverse-geocode`, `/places`, `/distance-matrix`, `/directions` (cùng tiền tố `/api/map`). Xem [API.md](API.md#tích-hợp-google-maps-places-geocoding-distance-matrix-directions).
 - `GET /api/tracking/vehicles/nearby?lat=...&lng=...&includeEta=true` gọi Distance Matrix cho từng xe của trang hiện tại. Kiểm tra điểm trả xe dùng Geocoding khi chi nhánh chưa có tọa độ.
 - Hai file `src/VehicleRental.WebApi/appsettings.json` và `appsettings.Development.json` hiện không có section `GoogleMaps`. Nếu không được biến môi trường/user secrets ghi đè, options mặc định là `Enabled=false`, `ApiKey=""`: backend trả dữ liệu mô phỏng/ước lượng.
-- Frontend cùng thư mục dự án (`Car-Rental-System-FE`): chưa tìm thấy SDK bản đồ, biến Maps, lời gọi `/api/map/*` hoặc `/api/tracking/*` trong `src/`, hay dependency Maps trong `package.json`. Thêm key backend chưa tự tạo bản đồ trên giao diện.
+- Frontend cùng thư mục dự án (`Car-Rental-System-FE`) đã có Maps Embed tại cơ sở, điểm nhận xe khi đặt và preview địa chỉ cơ sở Admin. Form sửa xe đọc `GET /api/tracking/vehicles/{id}/last-position`; vận hành đơn đọc `GET /api/tracking/rentals/{id}/route` theo yêu cầu, hiển thị điểm cuối và lịch sử GPS. Không vẽ đường đi gợi ý thành hành trình thực tế. Key backend không tự bật bản đồ nhúng: FE cần key trình duyệt riêng `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY`. Xem [hướng dẫn frontend](../../Car-Rental-System-FE/docs/google-maps-frontend.md).
 
 Nguồn mã: [options](../src/VehicleRental.Application/DTOs/Options/GoogleMapsOptions.cs), [adapter](../src/VehicleRental.Infrastructure/Services/GoogleMapsClient.cs), [controller](../src/VehicleRental.WebApi/Controllers/MapController.cs), [tracking](../src/VehicleRental.Application/Services/TrackingService.cs).
 
@@ -43,7 +43,9 @@ GoogleMaps__BaseUrl=https://maps.googleapis.com/maps/api/
 
 `BaseUrl` là tùy chọn; giữ dấu `/` cuối đường dẫn nếu khai báo. Thay placeholder bằng key backend trong Railway. Các ngưỡng tùy chọn dùng cùng quy tắc: `GoogleMaps__DefaultSearchRadiusMeters`, `GoogleMaps__RouteDeviationThresholdMeters`, `GoogleMaps__ReturnLocationToleranceMeters`.
 
-Review staged changes và **Deploy** để tiến trình nhận biến mới. `railway.toml` hiện chỉ chứa build Dockerfile, healthcheck và restart policy; key nằm trong Variables của service. Không cần biến `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` cho frontend hiện tại. Xem [Railway Variables](https://docs.railway.com/variables).
+Review staged changes và **Deploy** để tiến trình nhận biến mới. `railway.toml` hiện chỉ chứa build Dockerfile, healthcheck và restart policy; key nằm trong Variables của service. Xem [Railway Variables](https://docs.railway.com/variables).
+
+Riêng bản đồ nhúng FE: bật **Maps Embed API**, dùng key trình duyệt giới hạn website/API và đặt `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY` tại môi trường **build frontend**, rồi build/deploy lại. Nếu Railway chỉ chạy BE còn FE ở Cloudflare, đặt biến tại build Cloudflare. Không đưa key backend vào biến `NEXT_PUBLIC_*`. Thiếu key Embed vẫn có liên kết chỉ đường nhưng chưa có iframe bản đồ.
 
 ## Google Cloud và phiên bản API
 

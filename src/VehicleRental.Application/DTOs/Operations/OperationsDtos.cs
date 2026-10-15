@@ -9,7 +9,8 @@ public sealed record VehicleDetail(
     IReadOnlyList<string>? GalleryImages = null);
 public sealed record Vehicle(int Id, int VehicleTypeId, string VehicleType, int? FacilityId, string? Facility, string Status, string? Brand, string? Model, string? Color, int? YearOfManufacture, decimal? HourlyPrice, decimal? LongtermPrice, string? Description, string? MainImageUrl, string? Location, VehicleDetail? Detail = null, string? LicensePlate = null);
 public sealed record VehiclePage(IReadOnlyList<Vehicle> Items, int Page, int PageSize, int TotalCount);
-public sealed record RentalPolicy(int Id, int? VehicleTypeId, string Name, decimal VatRate, decimal OvertimeFeeRate, decimal DepositPercentage, bool IsActive);
+public sealed record RentalPolicy(int Id, int? VehicleTypeId, string Name, decimal VatRate, decimal OvertimeFeeRate, decimal DepositPercentage, bool IsActive, long RentalCount = 0);
+public sealed record RentalPolicyPage(IReadOnlyList<RentalPolicy> Items, int Page, int PageSize, int TotalCount);
 public sealed record Rental(int Id, int CustomerId, int VehicleId, string RentalType, string Status, bool IsSubscription, decimal VatPrice, decimal DepositPrice, decimal OvertimePrice, decimal TotalPrice, DateTime? StartTime, DateTime? EndTime, decimal? HourlyPriceSnapshot = null, decimal? MonthlyPriceSnapshot = null, bool? HasDriver = null, string? ContractLink = null, DateTime? SignedAt = null);
 public sealed record DriverScheduleEntry(int AssignmentId, int RentalId, int VehicleId, int DriverStaffId, string DriverName, DateTime StartTime, DateTime EndTime, string RentalStatus);
 public sealed record Inspection(int Id, int RentalId, string Type, bool? IsOk, decimal? OdometerKm, decimal? FuelBatteryLevel, string? DamageNotes, string? ImageUrls, DateTime? InspectedAt, int? StaffId = null, int? VehicleId = null);

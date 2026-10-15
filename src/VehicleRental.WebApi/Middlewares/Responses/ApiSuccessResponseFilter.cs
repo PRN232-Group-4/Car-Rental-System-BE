@@ -161,6 +161,7 @@ public sealed class ApiSuccessResponseFilter : IAsyncAlwaysRunResultFilter
         ["Operations.DeleteFacility"] = "Facility deleted successfully.",
         ["Operations.Policies"] = "Rental policies retrieved successfully.",
         ["Operations.AddPolicy"] = "Rental policy created successfully.",
+        ["Operations.SetPolicyStatus"] = "Rental policy status updated successfully.",
         ["Operations.Hourly"] = "Hourly rental created successfully.",
         ["Operations.Longterm"] = "Long-term rental created successfully.",
         ["Operations.SaveContract"] = "Signed long-term rental contract recorded successfully.",

@@ -7,7 +7,12 @@ public sealed record FacilityRequest([param:Required,StringLength(255,MinimumLen
 public sealed record LicenseRequest([param:Required,StringLength(255)]string Number,[param:Required,StringLength(255)]string Type,DateOnly? IssueDate,DateOnly ExpiryDate,[param:Url] string? ImageUrl);
 public sealed record LicenseReviewRequest([param:RegularExpression("^(approved|rejected)$",ErrorMessage="Status must be approved or rejected.")]string Status);
 public sealed record VehicleRequest([param:Range(1,int.MaxValue)]int VehicleTypeId,int? FacilityId,[param:Required] string Status,string? Brand,string? Model,string? Color,int? YearOfManufacture,[param:Range(0,double.MaxValue)]decimal? HourlyPrice,[param:Range(0,double.MaxValue)]decimal? LongtermPrice,string? Description,[param:Url]string? MainImageUrl,string? Location,VehicleDetail? Detail=null,[param:StringLength(255)]string? LicensePlate=null){public Vehicle ToModel()=>new(0,VehicleTypeId,"",FacilityId,null,Status.ToLowerInvariant(),Brand,Model,Color,YearOfManufacture,HourlyPrice,LongtermPrice,Description,MainImageUrl,Location,Detail,LicensePlate);}
-public sealed record PolicyRequest(int? VehicleTypeId,[param:Required] string Name,[param:Range(0,100)]decimal VatRate,[param:Range(0,100)]decimal OvertimeFeeRate,[param:Range(0,100)]decimal DepositPercentage,bool IsActive=true){public RentalPolicy ToModel()=>new(0,VehicleTypeId,Name,VatRate,OvertimeFeeRate,DepositPercentage,IsActive);}
+public sealed record PolicyRequest([param:Range(1,int.MaxValue)]int? VehicleTypeId,[param:Required] string Name,[param:Range(0,100)]decimal VatRate,[param:Range(0,100)]decimal OvertimeFeeRate,[param:Range(0,100)]decimal DepositPercentage,bool IsActive=true){public RentalPolicy ToModel()=>new(0,VehicleTypeId,Name,VatRate,OvertimeFeeRate,DepositPercentage,IsActive);}
+public sealed record PolicyStatusRequest
+{
+    [Required]
+    public bool? IsActive { get; init; }
+}
 public sealed record RentalRequest([param:Range(1,int.MaxValue)]int VehicleId,int? PolicyId,DateTime StartTime,DateTime EndTime,int? SubscriptionId,bool HasDriver=false);
 public sealed record AssignmentRequest([param:Range(1,int.MaxValue)]int? DriverStaffId);
 public sealed record RentalContractRequest([param:Required,Url,StringLength(255)]string ContractLink, DateTime SignedAt);

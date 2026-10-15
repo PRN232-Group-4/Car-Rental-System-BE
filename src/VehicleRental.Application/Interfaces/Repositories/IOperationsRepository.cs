@@ -29,7 +29,10 @@ public interface IOperationsRepository
     Task<Vehicle> SaveVehicleAsync(int? id, Vehicle vehicle, CancellationToken ct);
     Task DeleteVehicleAsync(int id, CancellationToken ct);
     Task<RentalPolicy> CreatePolicyAsync(RentalPolicy policy, CancellationToken ct);
-    Task<IReadOnlyList<RentalPolicy>> ListPoliciesAsync(CancellationToken ct);
+    Task<bool> VehicleTypeExistsAsync(int id, CancellationToken ct);
+    Task<bool> HasActivePolicyAsync(int? vehicleTypeId, CancellationToken ct);
+    Task<RentalPolicy?> SetPolicyStatusAsync(int id, bool isActive, CancellationToken ct);
+    Task<RentalPolicyPage> ListPoliciesAsync(int page, int pageSize, CancellationToken ct);
     Task<Rental> CreateRentalAsync(string email, int vehicleId, int? policyId, string rentalType, DateTime start, DateTime end, bool subscription, int? subscriptionId, bool hasDriver, CancellationToken ct);
     Task<Rental> SaveRentalContractAsync(int id, string contractLink, DateTime signedAt, CancellationToken ct);
     Task<Rental?> GetRentalAsync(int id, CancellationToken ct);
