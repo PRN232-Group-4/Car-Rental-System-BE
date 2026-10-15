@@ -10,6 +10,7 @@ using Car_Rental_System_BE.Domain.Entities;
 using Car_Rental_System_BE.Domain.Interfaces;
 using Car_Rental_System_BE.Infrastructure.Persistence;
 using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Services;
 using Car_Rental_System_BE.Infrastructure.Services.Authentication;
 using Car_Rental_System_BE.Infrastructure.Services.Media;
 using Car_Rental_System_BE.Infrastructure.Services.Payments;
@@ -82,25 +83,8 @@ builder.Services.AddOptions<GoogleAuthOptions>()
     .ValidateOnStart();
 builder.Services.Configure<CloudinaryOptions>(builder.Configuration.GetSection(CloudinaryOptions.SectionName));
 builder.Services.Configure<PayOsOptions>(builder.Configuration.GetSection(PayOsOptions.SectionName));
-builder.Services.AddOptions<AvailabilityOptions>()
-    .Bind(builder.Configuration.GetSection(AvailabilityOptions.SectionName))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
-
-builder.Services.AddRateLimiter(options =>
-{
-    options.AddPolicy("public-search", httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 60,
-                Window = TimeSpan.FromMinutes(1),
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                QueueLimit = 0
-            }));
-});
-
+builder.Services.Configure<GoogleMapsOptions>(builder.Configuration.GetSection(GoogleMapsOptions.SectionName));
+builder.Services.Configure<TelemetryRetentionOptions>(builder.Configuration.GetSection(TelemetryRetentionOptions.SectionName));
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedHost | ForwardedHeaders.XForwardedProto;
@@ -110,6 +94,9 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 
 var connectionString = builder.Configuration.GetConnectionString("RentalDatabase") ?? builder.Configuration["DATABASE_URL"];
+if (string.IsNullOrWhiteSpace(connectionString) && builder.Environment.IsDevelopment())
+    connectionString = "Host=localhost;Port=5432;Database=car_rental;Username=postgres;Password=postgres";
+
 if (!string.IsNullOrWhiteSpace(connectionString))
 {
     builder.Services.AddSingleton<NpgsqlDataSource>(_ => NpgsqlDataSource.Create(ToNpgsqlConnectionString(connectionString)));
@@ -117,9 +104,13 @@ if (!string.IsNullOrWhiteSpace(connectionString))
         .Bind(builder.Configuration.GetSection(DatabaseMigrationOptions.SectionName));
     builder.Services.AddHostedService<DatabaseMigrationHostedService>();
     builder.Services.AddHostedService<SubscriptionExpiryHostedService>();
+    builder.Services.AddHostedService<TelemetryRetentionHostedService>();
 }
 
 var redisConnection = builder.Configuration["Redis:ConnectionString"] ?? builder.Configuration["REDIS_URL"];
+if (string.IsNullOrWhiteSpace(redisConnection) && builder.Environment.IsDevelopment())
+    redisConnection = "localhost:6379";
+
 if (string.IsNullOrWhiteSpace(redisConnection))
     throw new InvalidOperationException("Redis:ConnectionString (or REDIS_URL) must be configured.");
 
@@ -129,12 +120,18 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 });
 builder.Services.AddHttpClient<IBrevoEmailSender, BrevoEmailSender>();
 builder.Services.AddHttpClient<IPaymentGateway, PayOsPaymentGateway>(client => client.BaseAddress = new Uri("https://api-merchant.payos.vn/"));
+builder.Services.AddHttpClient<IGoogleMapsClient, GoogleMapsClient>(client =>
+{
+    var baseUrl = builder.Configuration["GoogleMaps:BaseUrl"];
+    client.BaseAddress = new Uri(!string.IsNullOrWhiteSpace(baseUrl) ? baseUrl : "https://maps.googleapis.com/maps/api/");
+});
 builder.Services.AddScoped<IUserRepository, NpgsqlUserRepository>();
 builder.Services.AddScoped<IAccountRepository, NpgsqlAccountRepository>();
 builder.Services.AddScoped<ICustomerRepository, NpgsqlCustomerRepository>();
 builder.Services.AddScoped<IStaffRepository, NpgsqlStaffRepository>();
 builder.Services.AddScoped<IOperationsRepository, NpgsqlOperationsRepository>();
 builder.Services.AddScoped<IPaymentRepository, NpgsqlPaymentRepository>();
+builder.Services.AddScoped<ITrackingRepository, NpgsqlTrackingRepository>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IUserService, UserService>();
@@ -143,8 +140,12 @@ builder.Services.AddScoped<IOperationsService, OperationsService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IMediaService, MediaService>();
 builder.Services.AddScoped<ISessionService, SessionService>();
+builder.Services.AddScoped<ITrackingService, TrackingService>();
+builder.Services.AddScoped<IMapService, MapService>();
 builder.Services.AddSingleton<IWorkflowStateStore, RedisWorkflowStateStore>();
 builder.Services.AddSingleton(provider => provider.GetRequiredService<IOptions<RegistrationOptions>>().Value);
+builder.Services.AddSingleton(provider => provider.GetRequiredService<IOptions<GoogleMapsOptions>>().Value);
+builder.Services.AddSingleton(provider => provider.GetRequiredService<IOptions<TelemetryRetentionOptions>>().Value);
 builder.Services.AddScoped(provider =>
 {
     var options = provider.GetRequiredService<IOptions<PayOsOptions>>().Value;
