@@ -8,7 +8,7 @@ GitHub secret: `RAILWAY_TOKEN`; repository variable: `RAILWAY_SERVICE_NAME`. Rel
 
 ## Chạy và xem connection log bằng CLI
 
-Khởi động dependencies local: `docker compose up db redis -d`. Trong PowerShell, đặt `Brevo__ApiKey`, `Brevo__SenderEmail`, rồi chạy `dotnet run`. Console phải có `Redis connection established`; khi lỗi sẽ in tên biến cấu hình cần kiểm tra và stack trace, không in secret. Dừng/xem log dependencies: `docker compose logs -f db redis`.
+Khởi động dependencies local: `docker compose up db redis -d`. Trong PowerShell, đặt `Jwt__SigningKey` (ít nhất 32 ký tự ngẫu nhiên), `Brevo__ApiKey`, `Brevo__SenderEmail`, rồi chạy `dotnet run --project src\VehicleRental.WebApi\VehicleRental.WebApi.csproj`. Ở Development, API mặc định kết nối PostgreSQL `localhost:5432` và Redis `localhost:6379` theo cấu hình Compose; các service này vẫn phải được khởi động trước. Swagger có tại `http://localhost:3000/swagger`. Console phải có `Redis connection established`; khi lỗi sẽ in tên biến cấu hình cần kiểm tra và stack trace, không in secret. Dừng/xem log dependencies: `docker compose logs -f db redis`.
 
 `Redis:ConnectionString=localhost:6379` chỉ là địa chỉ, không tự khởi động Redis. Với local Docker chạy `docker compose up redis -d`; kiểm tra bằng `docker compose ps redis`. Nếu dùng Redis cloud, thay bằng endpoint/password/TLS do nhà cung cấp cấp.
 

@@ -1,15 +1,21 @@
 # Tiến độ
 
-## BE-27 (FR-029) Loyalty Phase 1 (Điểm thưởng) — 2026-10-14
+## Localhost startup — 2026-10-14
 
-Hiện thực toàn diện module Loyalty Phase 1 theo đặc tả `specs/FR-029-loyalty.md`:
-1. **Migration 0018 (`0018_loyalty.sql`)**: Tạo bảng `customer_loyalty_transactions`, triggers `trg_clt_before_insert` (tính balance_after dưới khóa dòng FOR UPDATE) và `trg_clt_after_insert` (đồng bộ `customers.loyalty_point`), immutability triggers chặn UPDATE/DELETE/TRUNCATE, partial unique indexes chặn cộng đôi khi retry/concurrency, view đối soát `v_loyalty_reconciliation`, nạp số dư đầu kỳ idempotent.
-2. **Domain Layer**: `LoyaltyDomainRules` tính toán phân hạng (`Member`, `Silver`, `Gold`, `Platinum`), hệ số nhân (1.0x, 1.1x, 1.25x, 1.5x), tích điểm theo net rent, báo giá tiêu điểm và thẩm định quy tắc; 23 unit tests xanh 100%.
-3. **Application Layer**: `LoyaltyOptions` (POCO + ValidateOnStart), `LoyaltyContracts` (DTOs/Interfaces), `LoyaltyService` thực hiện nghiệp vụ tóm tắt, lịch sử, điều chỉnh điểm thủ công, báo giá quy đổi; 7 unit tests xanh 100%.
-4. **Infrastructure Layer**: `NpgsqlLoyaltyRepository` ánh xạ lỗi DB (23514 -> 409 INSUFFICIENT_POINTS, 23505 -> Idempotent DTO, AwardForRentalAsync ON CONFLICT DO NOTHING); cập nhật `LoyaltyAwardAdapter` tính điểm chuẩn xác theo net rent và gỡ bỏ hoàn toàn lệnh update trực tiếp `customers.loyalty_point`.
-5. **WebApi Layer**: `LoyaltyController` (`GET /api/loyalty/me`, `GET /api/loyalty/me/transactions`, `GET /api/customers/{id}/loyalty`, `POST /api/customers/{id}/loyalty/adjustments`, `GET /api/loyalty/redemption-quote`, `GET /api/admin/loyalty/reconciliation`); chuẩn hóa messages trong `ApiSuccessResponseFilter`; đăng ký DI trong `Program.cs`. 7 controller tests xanh 100%.
-6. **Kiểm thử tích hợp & Concurrency**: 5 kịch bản tích hợp hoàn tất (tích điểm khi complete, 2 request complete song song chỉ ghi 1 dòng, 200 thao tác ngẫu nhiên không gây drift, đơn subscription không tích điểm, kiểm tra số dư âm và idempotency). Toàn bộ 49/49 loyalty tests xanh 100%.
-7. Xem [ADR-005](decisions/ADR-005-loyalty-ledger.md) và [change](../changes/2026-10-14-be-27-loyalty-phase1.md).
+Development tự dùng PostgreSQL `localhost:5432` và Redis `localhost:6379` theo Docker Compose nếu chưa có connection string riêng. Production không thay đổi. Để chạy đầy đủ, cần có PostgreSQL/Redis đang hoạt động và cấu hình `Jwt__SigningKey`, `Brevo__ApiKey`, `Brevo__SenderEmail`; Swagger dùng `http://localhost:3000/swagger`. Build WebApi pass (0 warning/error). Chưa xác nhận kết nối thật vì Docker CLI và PostgreSQL/Redis local không khả dụng trong môi trường kiểm tra. Xem [thay đổi](../changes/2026-10-14-localhost-startup-defaults.md).
+
+## Định vị GPS, Tích hợp Google Maps, Lộ trình và Cảnh báo — 2026-10-10
+
+Bổ sung đầy đủ các module tính năng:
+1. API nhận tọa độ GPS telemetry (`POST /api/tracking/ingest`), kiểm soát và xác thực thiết bị qua API key hash (`tracking_devices`), cập nhật vị trí tức thời (`vehicle_last_positions`) và lưu trữ lịch sử vị trí (`vehicle_positions`).
+2. Chính sách lưu giữ dữ liệu: dọn dẹp dữ liệu vị trí cũ hơn số ngày quy định định kỳ qua `TelemetryRetentionHostedService` và API thủ công (`POST /api/tracking/retention/purge`).
+3. Tích hợp Google Maps API: Places (`/api/map/places`), Geocoding & Reverse Geocoding (`/api/map/geocode`, `/api/map/reverse-geocode`), Distance Matrix (`/api/map/distance-matrix`), Directions (`/api/map/directions`) với cơ chế fallback ngoại tuyến/mô phỏng an toàn.
+4. Truy vấn xe theo bán kính (`GET /api/tracking/vehicles/nearby`) sử dụng công thức khoảng cách Haversine trên SQL và tính khoảng cách/ETA thực tế qua Google Maps API.
+5. Tổng hợp lộ trình chuyến thuê (`GET /api/tracking/rentals/{rentalId}/route`) gồm quãng đường, thời gian, vận tốc trung bình/tối đa và danh sách tọa độ.
+6. Quản lý vùng địa lý (`geofences`) và phát hiện chuyển đổi trạng thái ENTER/EXIT (`geofence_events`). Tự động cảnh báo khi vào vùng cấm hoặc rời vùng cho phép (`tracking_alerts`).
+7. Cảnh báo xe đi lệch lộ trình (route deviation) dựa trên khoảng cách tới polyline dự kiến và kiểm tra trả sai điểm (`POST /api/tracking/rentals/{rentalId}/verify-dropoff`) đối chiếu với trạm quy định của đơn vị cho thuê.
+
+Toàn bộ API danh sách tuân thủ quy tắc phân trang (`page`, `pageSize`, `items`, `totalCount`) và hợp đồng envelope 6 trường bắt buộc. Thêm migration `0015_vehicle_tracking_and_geofencing.sql`, tài liệu [FR-033](../specs/FR-033-telemetry-and-device-control.md), [FR-034](../specs/FR-034-google-maps-places-and-eta.md), [FR-035](../specs/FR-035-routes-geofencing-and-alerts.md) và change log [2026-10-10-gps-tracking-and-google-maps.md](../changes/2026-10-10-gps-tracking-and-google-maps.md).
 
 ## Rule pagination — 2026-10-10
 
