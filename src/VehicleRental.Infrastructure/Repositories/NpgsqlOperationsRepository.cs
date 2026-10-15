@@ -1,12 +1,16 @@
+using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.DTOs.Organization;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Domain.Availability;
+using Car_Rental_System_BE.Infrastructure.Availability;
 using Npgsql;
 
 namespace Car_Rental_System_BE.Infrastructure.Repositories;
 
-public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSource) : IOperationsRepository
+public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSource, TimeProvider? timeProvider = null) : IOperationsRepository
 {
+    private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
     public async Task<CustomerLicense?> GetLicenseAsync(string email, CancellationToken ct)
     {
         await using var cmd = dataSource.CreateCommand("SELECT c.license_number,c.license_type,c.license_issue_date,c.license_expiry_date,c.license_img,COALESCE(c.license_status,'pending') FROM customers c JOIN users u ON u.id=c.user_id WHERE u.email=$1");
@@ -64,7 +68,76 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
     }
     public async Task<RentalPolicy> CreatePolicyAsync(RentalPolicy x,CancellationToken ct){await using var c=dataSource.CreateCommand("INSERT INTO rental_policies(vehicle_type_id,name,vat_rate,overtime_fee_rate,deposit_percentage,is_active)VALUES($1,$2,$3,$4,$5,$6) RETURNING id,vehicle_type_id,name,vat_rate,overtime_fee_rate,deposit_percentage,is_active");Add(c,x.VehicleTypeId,x.Name,x.VatRate,x.OvertimeFeeRate,x.DepositPercentage,x.IsActive);await using var r=await c.ExecuteReaderAsync(ct);if(!await r.ReadAsync(ct))throw new InvalidOperationException("Rental policy could not be created.");return ReadPolicy(r);}
     public async Task<IReadOnlyList<RentalPolicy>> ListPoliciesAsync(CancellationToken ct){await using var c=dataSource.CreateCommand("SELECT id,vehicle_type_id,name,vat_rate,overtime_fee_rate,deposit_percentage,is_active FROM rental_policies ORDER BY id");await using var r=await c.ExecuteReaderAsync(ct);var a=new List<RentalPolicy>();while(await r.ReadAsync(ct))a.Add(ReadPolicy(r));return a;}
-    public async Task<Rental> CreateRentalAsync(string email,int vehicleId,int? policyId,string type,DateTime start,DateTime end,bool subscription,int? subscriptionId,bool hasDriver,CancellationToken ct){if(end<=start)throw new ArgumentException("End time must be after start time.");await using var cn=await dataSource.OpenConnectionAsync(ct);await using var tx=await cn.BeginTransactionAsync(ct);await LockOperationsAsync(cn,tx,ct);var customer=await ScalarAsync(cn,tx,"SELECT c.id FROM customers c JOIN users u ON u.id=c.user_id WHERE u.email=$1",email,ct);if(customer is not int cid)throw new KeyNotFoundException();if(subscription){var needed=(decimal)(end-start).TotalHours;await using var sub=new NpgsqlCommand("SELECT remaining_hours FROM customer_subscriptions WHERE id=$1 AND customer_id=$2 AND status='active' AND start_date<=CURRENT_DATE AND end_date>=CURRENT_DATE FOR UPDATE",cn,tx);Add(sub,subscriptionId,cid);await using var sr=await sub.ExecuteReaderAsync(ct);if(!await sr.ReadAsync(ct))throw new KeyNotFoundException("Active subscription was not found.");var remaining=sr.IsDBNull(0)?(decimal?)null:sr.GetDecimal(0);await sr.CloseAsync();if(remaining is not null&&remaining<needed)throw new InvalidOperationException("Subscription does not have enough remaining hours.");if(remaining is not null){await using var deduct=new NpgsqlCommand("UPDATE customer_subscriptions SET remaining_hours=remaining_hours-$1 WHERE id=$2",cn,tx);Add(deduct,needed,subscriptionId);await deduct.ExecuteNonQueryAsync(ct);}}if(!subscription){await using var license=new NpgsqlCommand("SELECT license_status FROM customers WHERE id=$1",cn,tx);license.Parameters.AddWithValue(cid);if(!string.Equals((await license.ExecuteScalarAsync(ct))?.ToString(),"approved",StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("An approved driver license is required.");}await RequireAvailableVehicleAsync(cn,tx,vehicleId,start,end,null,ct);var conflict=await ScalarAsync(cn,tx,"SELECT EXISTS(SELECT 1 FROM rentals r LEFT JOIN hour_rental_detail h ON h.rental_id=r.id LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id WHERE r.vehicle_id=$1 AND r.status NOT IN ('cancelled','completed') AND COALESCE(h.start_time,l.start_time)<$3 AND COALESCE(h.end_time,l.end_time)>$2)",new object?[]{vehicleId,start,end},ct);if(conflict is true)throw new InvalidOperationException("Vehicle is unavailable.");var price=await ScalarAsync(cn,tx,type=="hourly"?"SELECT rental_price_hourly FROM vehicles WHERE id=$1":"SELECT rental_price_longterm FROM vehicles WHERE id=$1",vehicleId,ct);if(price is not decimal unit)throw new KeyNotFoundException();var hours=(decimal)(end-start).TotalHours;var total=type=="hourly"?unit*hours:unit*Math.Max(1,Math.Ceiling(hours/(24*30)));decimal vat=0,deposit=0;if(policyId is not null){await using var po=new NpgsqlCommand("SELECT vat_rate,deposit_percentage FROM rental_policies WHERE id=$1 AND is_active=true",cn,tx);po.Parameters.AddWithValue(policyId.Value);await using var rr=await po.ExecuteReaderAsync(ct);if(!await rr.ReadAsync(ct))throw new InvalidOperationException("Policy is not active.");vat=total*rr.GetDecimal(0)/100;deposit=total*rr.GetDecimal(1)/100;}var rentalId=await ScalarAsync(cn,tx,"INSERT INTO rentals(customer_id,vehicle_id,policy_id,customer_subscription_id,is_subscription,rental_type,status,vat_price,deposit_price,total_price)VALUES($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9) RETURNING id",new object?[]{cid,vehicleId,policyId,subscriptionId,subscription,type,vat,deposit,total+vat},ct);if(rentalId is not int rid)throw new InvalidOperationException();if(type=="hourly"){await using var d=new NpgsqlCommand("INSERT INTO hour_rental_detail(rental_id,start_time,end_time,has_driver,hourly_price_snapshot)VALUES($1,$2,$3,$4,$5)",cn,tx);Add(d,rid,start,end,hasDriver,unit);await d.ExecuteNonQueryAsync(ct);}else{await using var d=new NpgsqlCommand("INSERT INTO longterm_rental_contract(rental_id,start_time,end_time,monthly_price_snapshot)VALUES($1,$2,$3,$4)",cn,tx);Add(d,rid,start,end,unit);await d.ExecuteNonQueryAsync(ct);}if(!subscription){await using var inv=new NpgsqlCommand("INSERT INTO invoices(rental_id,invoice_number,amount,vat_amount)VALUES($1,$2,$3,$4)",cn,tx);Add(inv,rid,$"INV-{DateTime.UtcNow:yyyyMMdd}-{rid}",total+vat+deposit,vat);await inv.ExecuteNonQueryAsync(ct);}await tx.CommitAsync(ct);return (await GetRentalAsync(rid,ct))!;}
+    public async Task<Rental> CreateRentalAsync(string email,int vehicleId,int? policyId,string type,DateTime start,DateTime end,bool subscription,int? subscriptionId,bool hasDriver,CancellationToken ct)
+    {
+        if(end<=start)throw new ArgumentException("End time must be after start time.");
+        await using var cn=await dataSource.OpenConnectionAsync(ct);
+        await using var tx=await cn.BeginTransactionAsync(ct);
+        await VehicleLock.AcquireAsync(cn, tx, vehicleId, ct);
+        var customer=await ScalarAsync(cn,tx,"SELECT c.id FROM customers c JOIN users u ON u.id=c.user_id WHERE u.email=$1",email,ct);
+        if(customer is not int cid)throw new KeyNotFoundException();
+        if(subscription){
+            var needed=(decimal)(end-start).TotalHours;
+            await using var sub=new NpgsqlCommand("SELECT remaining_hours FROM customer_subscriptions WHERE id=$1 AND customer_id=$2 AND status='active' AND start_date<=CURRENT_DATE AND end_date>=CURRENT_DATE FOR UPDATE",cn,tx);
+            Add(sub,subscriptionId,cid);
+            await using var sr=await sub.ExecuteReaderAsync(ct);
+            if(!await sr.ReadAsync(ct))throw new KeyNotFoundException("Active subscription was not found.");
+            var remaining=sr.IsDBNull(0)?(decimal?)null:sr.GetDecimal(0);
+            await sr.CloseAsync();
+            if(remaining is not null&&remaining<needed)throw new InvalidOperationException("Subscription does not have enough remaining hours.");
+            if(remaining is not null){
+                await using var deduct=new NpgsqlCommand("UPDATE customer_subscriptions SET remaining_hours=remaining_hours-$1 WHERE id=$2",cn,tx);
+                Add(deduct,needed,subscriptionId);
+                await deduct.ExecuteNonQueryAsync(ct);
+            }
+        }
+        if(!subscription){
+            await using var license=new NpgsqlCommand("SELECT license_status FROM customers WHERE id=$1",cn,tx);
+            license.Parameters.AddWithValue(cid);
+            if(!string.Equals((await license.ExecuteScalarAsync(ct))?.ToString(),"approved",StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("An approved driver license is required.");
+        }
+        var availability = await VehicleAvailabilityChecks.EvaluateAsync(cn, tx, vehicleId, new TimeRange(start, end), null, 60, ct);
+        VehicleAvailabilityChecks.ThrowIfBlocked(availability, vehicleId);
+        var price=await ScalarAsync(cn,tx,type=="hourly"?"SELECT rental_price_hourly FROM vehicles WHERE id=$1":"SELECT rental_price_longterm FROM vehicles WHERE id=$1",vehicleId,ct);
+        if(price is not decimal unit)throw new KeyNotFoundException();
+        var hours=(decimal)(end-start).TotalHours;
+        var total=type=="hourly"?unit*hours:unit*Math.Max(1,Math.Ceiling(hours/(24*30)));
+        decimal vat=0,deposit=0;
+        if(policyId is not null){
+            await using var po=new NpgsqlCommand("SELECT vat_rate,deposit_percentage FROM rental_policies WHERE id=$1 AND is_active=true",cn,tx);
+            po.Parameters.AddWithValue(policyId.Value);
+            await using var rr=await po.ExecuteReaderAsync(ct);
+            if(!await rr.ReadAsync(ct))throw new InvalidOperationException("Policy is not active.");
+            vat=total*rr.GetDecimal(0)/100;
+            deposit=total*rr.GetDecimal(1)/100;
+        }
+        var rentalId=await ScalarAsync(cn,tx,"INSERT INTO rentals(customer_id,vehicle_id,policy_id,customer_subscription_id,is_subscription,rental_type,status,vat_price,deposit_price,total_price)VALUES($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9) RETURNING id",new object?[]{cid,vehicleId,policyId,subscriptionId,subscription,type,vat,deposit,total+vat},ct);
+        if(rentalId is not int rid)throw new InvalidOperationException();
+        try
+        {
+            if(type=="hourly"){
+                await using var d=new NpgsqlCommand("INSERT INTO hour_rental_detail(rental_id,start_time,end_time,has_driver,hourly_price_snapshot)VALUES($1,$2,$3,$4,$5)",cn,tx);
+                Add(d,rid,start,end,hasDriver,unit);
+                await d.ExecuteNonQueryAsync(ct);
+            }else{
+                await using var d=new NpgsqlCommand("INSERT INTO longterm_rental_contract(rental_id,start_time,end_time,monthly_price_snapshot)VALUES($1,$2,$3,$4)",cn,tx);
+                Add(d,rid,start,end,unit);
+                await d.ExecuteNonQueryAsync(ct);
+            }
+        }
+        catch (PostgresException ex) when (ex.SqlState == "23P01")
+        {
+            throw new ConflictException("VEHICLE_UNAVAILABLE", $"Vehicle {vehicleId} is unavailable for the requested period (exclusion violation).");
+        }
+        if(!subscription){
+            await using var inv=new NpgsqlCommand("INSERT INTO invoices(rental_id,invoice_number,amount,vat_amount)VALUES($1,$2,$3,$4)",cn,tx);
+            Add(inv,rid,$"INV-{_time.GetUtcNow():yyyyMMdd}-{rid}",total+vat+deposit,vat);
+            await inv.ExecuteNonQueryAsync(ct);
+        }
+        await tx.CommitAsync(ct);
+        return (await GetRentalAsync(rid,ct))!;
+    }
     public async Task<Rental?> GetRentalAsync(int id,CancellationToken ct){await using var c=dataSource.CreateCommand("SELECT r.id,r.customer_id,r.vehicle_id,r.rental_type,r.status,r.is_subscription,r.vat_price,r.deposit_price,r.overtime_price,r.total_price,COALESCE(h.start_time,l.start_time),COALESCE(h.end_time,l.end_time),h.hourly_price_snapshot,l.monthly_price_snapshot,h.has_driver,l.contract_link,l.signed_at FROM rentals r LEFT JOIN hour_rental_detail h ON h.rental_id=r.id LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id WHERE r.id=$1");c.Parameters.AddWithValue(id);await using var r=await c.ExecuteReaderAsync(ct);return await r.ReadAsync(ct)?ReadRental(r):null;}
     public async Task<IReadOnlyList<DriverScheduleEntry>> ListDriverScheduleAsync(int? driver,DateTime from,DateTime to,CancellationToken ct)
     {

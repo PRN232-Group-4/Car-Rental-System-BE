@@ -77,11 +77,19 @@ public sealed class OperationsController(IOperationsService store, IMediaService
     [Authorize(Policy=AuthorizationPolicies.Customer)] [HttpPost("rentals/hourly")] public async Task<IActionResult> Hourly(RentalRequest x,CancellationToken ct)=>Created("api/rentals",await store.CreateRentalAsync(Email(),x.VehicleId,x.PolicyId,"hourly",x.StartTime,x.EndTime,x.SubscriptionId is not null,x.SubscriptionId,x.HasDriver,ct));
     [Authorize(Policy=AuthorizationPolicies.Customer)] [HttpPost("rentals/longterm")] public async Task<IActionResult> Longterm(RentalRequest x,CancellationToken ct)=>Created("api/rentals",await store.CreateRentalAsync(Email(),x.VehicleId,x.PolicyId,"longterm",x.StartTime,x.EndTime,x.SubscriptionId is not null,x.SubscriptionId,false,ct));
     [Authorize(Policy=AuthorizationPolicies.RentalRead)] [HttpGet("rentals/{id:int}")] public async Task<IActionResult> Rental(int id,CancellationToken ct)=>await store.GetRentalForUserAsync(id,Email(),AuthorizationPolicies.CanReadAllRentals(User),User.IsInRole("Customer"),User.IsInRole("Driver"),ct) is { } x?Ok(x):Problem("Rental was not found.", statusCode: StatusCodes.Status404NotFound);
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPost("rentals/{id:int}/assignments")] public async Task<IActionResult> Assign(int id,AssignmentRequest x,CancellationToken ct){await store.AssignAsync(id,x.DriverStaffId,Email(),ct);return NoContent();}
+    [Obsolete("Use POST /api/rentals/{id}/assignments/driver instead.")]
+    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPost("rentals/{id:int}/assignments")] public async Task<IActionResult> Assign(int id,AssignmentRequest x,CancellationToken ct){Response.Headers.Append("Deprecation","true");await store.AssignAsync(id,x.DriverStaffId,Email(),ct);return NoContent();}
     [Authorize(Policy=AuthorizationPolicies.DriverSchedule)] [HttpGet("drivers/schedule")] [ProducesResponseType<IReadOnlyList<DriverScheduleEntry>>(StatusCodes.Status200OK)] [ProducesResponseType(StatusCodes.Status400BadRequest)] public async Task<IActionResult> DriverSchedule([FromQuery]int? driverStaffId,[FromQuery]DateTime from,[FromQuery]DateTime to,CancellationToken ct){if(to<=from)return Problem("End time must be after start time.",statusCode:StatusCodes.Status400BadRequest);if(!AuthorizationPolicies.CanManage(User)){var own=AuthorizationPolicies.StaffId(User);if(own is null || (driverStaffId is not null && driverStaffId!=own))return Forbid();driverStaffId=own;}return Ok(await store.ListDriverScheduleAsync(driverStaffId,from,to,ct));}
     [Authorize(Policy=AuthorizationPolicies.Inspection)] [HttpPost("rentals/{id:int}/inspections/pre")] public Task<IActionResult> Pre(int id,InspectionRequest x,CancellationToken ct)=>Inspect(id,x,"pre_rental",ct);
     [Authorize(Policy=AuthorizationPolicies.Inspection)] [HttpPost("rentals/{id:int}/inspections/post")] public Task<IActionResult> Post(int id,InspectionRequest x,CancellationToken ct)=>Inspect(id,x,"post_rental",ct);
-    [Authorize(Policy=AuthorizationPolicies.CustomerService)] [HttpPost("rentals/{id:int}/status/{status}")] public Task<Rental> Status(int id,string status,CancellationToken ct)=>store.ChangeRentalStatusAsync(id,status,ct);
+    [Obsolete("Use dedicated lifecycle endpoints: POST /api/rentals/{id}/confirm, start, return, complete, cancel instead.")]
+    [Authorize(Policy=AuthorizationPolicies.CustomerService)]
+    [HttpPost("rentals/{id:int}/status/{status}")]
+    public async Task<Rental> Status(int id,string status,CancellationToken ct)
+    {
+        Response.Headers.Append("Deprecation","true");
+        return await store.ChangeRentalStatusAsync(id,status,ct);
+    }
 
     [HttpGet("subscription-plans")] public Task<IReadOnlyList<SubscriptionPlan>> Plans([FromQuery]bool all,CancellationToken ct)=>store.ListPlansAsync(!(all && AuthorizationPolicies.CanManage(User)),ct);
     [HttpGet("subscription-plans/{id:int}")] public async Task<IActionResult> Plan(int id,CancellationToken ct)=>await store.GetPlanAsync(id,ct) is { } x?Ok(x):Problem("Subscription plan was not found.", statusCode: StatusCodes.Status404NotFound);
