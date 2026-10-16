@@ -178,7 +178,8 @@ public sealed partial class NpgsqlOperationsRepository
             var (start, end) = AssignmentPeriod(rental);
             await RequireAvailableVehicleAsync(cn, tx, vehicle, start, end, rentalId, ct);
         }
-        else if (rental.Status != (type == "pre_rental" ? "pending" : "renting"))
+        else if (type == "pre_rental" ? rental.Status is not ("pending" or "pre_inspection")
+            : rental.Status is not ("renting" or "post_inspection"))
             throw new InvalidOperationException("Inspection is not allowed in this rental state.");
         if (await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM inspections WHERE rental_id=$1 AND vehicle_id=$2 AND inspection_type=$3)", ct, rentalId, vehicle, type) is true)
             throw new InvalidOperationException("Inspection evidence already exists for this vehicle.");
@@ -186,7 +187,9 @@ public sealed partial class NpgsqlOperationsRepository
         var id = (int)(await ValueAsync(cn, tx, "INSERT INTO inspections(rental_id,vehicle_id,staff_id,inspection_type,is_ok,odometer_km,fuel_battery_level,damage_notes,img_urls,inspected_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id", ct,
             rentalId, vehicle, staff, type, ok, odo, fuel, notes, images, inspectedAt))!;
         if (!ok) await ValueAsync(cn, tx, "UPDATE vehicles SET status='maintenance' WHERE id=$1", ct, vehicle);
-        if (replacementVehicle is null && (type == "post_rental" || ok))
+        if (replacementVehicle is null &&
+            ((type == "pre_rental" && ok && rental.Status == "pending") ||
+             (type == "post_rental" && rental.Status == "renting")))
             await ValueAsync(cn, tx, "UPDATE rentals SET status=$2 WHERE id=$1", ct, rentalId, type == "pre_rental" ? "pre_inspection" : "post_inspection");
         await tx.CommitAsync(ct);
         return new(id, rentalId, type, ok, odo, fuel, notes, images, inspectedAt, staff, vehicle);

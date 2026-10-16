@@ -32,6 +32,7 @@ using Car_Rental_System_BE.Infrastructure.Availability;
 using Car_Rental_System_BE.Application.Assignments;
 using Car_Rental_System_BE.Infrastructure.Assignments;
 using Car_Rental_System_BE.Application.Lifecycle;
+using Car_Rental_System_BE.Application.Handovers;
 using Car_Rental_System_BE.Infrastructure.Lifecycle;
 using Car_Rental_System_BE.Application.Loyalty;
 using Car_Rental_System_BE.Infrastructure.Loyalty;
@@ -134,6 +135,8 @@ builder.Services.AddScoped<IAccountRepository, NpgsqlAccountRepository>();
 builder.Services.AddScoped<ICustomerRepository, NpgsqlCustomerRepository>();
 builder.Services.AddScoped<IStaffRepository, NpgsqlStaffRepository>();
 builder.Services.AddScoped<IOperationsRepository, NpgsqlOperationsRepository>();
+builder.Services.AddScoped<IRentalEditingRepository, NpgsqlOperationsRepository>();
+builder.Services.AddScoped<IRentalEditingService, RentalEditingService>();
 builder.Services.AddScoped<IPaymentRepository, NpgsqlPaymentRepository>();
 builder.Services.AddScoped<ITrackingRepository, NpgsqlTrackingRepository>();
 builder.Services.AddScoped<IAccountService, AccountService>();
@@ -205,7 +208,9 @@ builder.Services.AddScoped<ISubscriptionUsage, SubscriptionUsageAdapter>();
 builder.Services.AddScoped<ILoyaltyAward, LoyaltyAwardAdapter>();
 builder.Services.AddScoped<IRentalEventSink, RentalEventSink>();
 builder.Services.AddScoped<ICurrentCustomer, CurrentCustomerService>();
-builder.Services.AddScoped<IRentalQueries, NpgsqlRentalQueries>();
+builder.Services.AddScoped<IRentalQueryRepository, NpgsqlRentalQueries>();
+builder.Services.AddScoped<IRentalQueries, RentalQueryService>();
+builder.Services.AddScoped<IHandoverService, HandoverService>();
 builder.Services.AddScoped<IRentalLifecycleService>(sp =>
 {
     var repo = sp.GetRequiredService<IRentalLifecycleRepository>();
@@ -359,25 +364,6 @@ if (!app.Environment.IsProduction())
     app.UseSwaggerUI();
 }
 
-app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
-{
-    var exception = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
-    app.Logger.LogError(exception, "Unhandled request exception for {Method} {Path}.", context.Request.Method, context.Request.Path);
-    var status = exception switch
-    {
-        Car_Rental_System_BE.Application.Common.Errors.BusinessRuleException bre => bre.StatusCode,
-        KeyNotFoundException => StatusCodes.Status404NotFound,
-        ArgumentException or InvalidOperationException => StatusCodes.Status400BadRequest,
-        _ => StatusCodes.Status500InternalServerError
-    };
-    var detail = status == StatusCodes.Status500InternalServerError ? "An unexpected server error occurred." : exception?.Message;
-    Dictionary<string, object?>? extensions = null;
-    if (exception is Car_Rental_System_BE.Application.Common.Errors.BusinessRuleException businessEx)
-    {
-        extensions = new Dictionary<string, object?> { ["code"] = businessEx.Code };
-    }
-    await Results.Problem(detail, statusCode: status, extensions: extensions).ExecuteAsync(context);
-}));
 app.UseHttpsRedirection();
 app.UseRateLimiter();
 app.UseAuthentication();

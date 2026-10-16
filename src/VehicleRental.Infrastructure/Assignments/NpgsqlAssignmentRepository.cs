@@ -115,6 +115,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
         {
             // Lock vehicle (1001)
             await VehicleLock.AcquireAsync(connection, tx, rental.VehicleId, ct);
+            await RequireCurrentScheduleAsync(connection, tx, rental, ct);
 
             // Lock driver (1002) if provided
             if (driverStaffId is not null)
@@ -238,6 +239,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
             var secondId = Math.Max(rental.VehicleId, newVehicleId);
             await VehicleLock.AcquireAsync(connection, tx, firstId, ct);
             await VehicleLock.AcquireAsync(connection, tx, secondId, ct);
+            await RequireCurrentScheduleAsync(connection, tx, rental, ct);
 
             int? currentAssignmentId = null;
             int? currentDriverId = null;
@@ -529,6 +531,28 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
         cmd.Parameters.AddWithValue("id", vehicleId);
         cmd.Parameters.AddWithValue("typeId", requiredTypeId);
         return (bool)(await cmd.ExecuteScalarAsync(ct))!;
+    }
+
+    private static async Task RequireCurrentScheduleAsync(NpgsqlConnection connection, NpgsqlTransaction tx,
+        RentalScheduleInfo expected, CancellationToken ct)
+    {
+        // The Application snapshot can predate an edit that was waiting on the same vehicle lock.
+        // Read again after taking that lock and keep the rental row locked until assignment commit.
+        await using var command = new NpgsqlCommand("""
+            SELECT r.vehicle_id,r.status,r.customer_id,COALESCE(h.has_driver,false),
+                COALESCE(h.start_time,l.start_time),COALESCE(h.end_time,l.end_time)
+            FROM rentals r LEFT JOIN hour_rental_detail h ON h.rental_id=r.id
+            LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id
+            WHERE r.id=$1 FOR UPDATE OF r
+            """, connection, tx);
+        command.Parameters.AddWithValue(expected.RentalId);
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+            throw new NotFoundException("RENTAL_NOT_FOUND", "Rental was not found.");
+        if (reader.GetInt32(0) != expected.VehicleId || reader.GetString(1) != expected.Status ||
+            reader.GetInt32(2) != expected.CustomerId || reader.GetBoolean(3) != expected.HasDriver ||
+            reader.IsDBNull(4) || reader.IsDBNull(5) || reader.GetDateTime(4) != expected.StartTime || reader.GetDateTime(5) != expected.EndTime)
+            throw new ConflictException("RENTAL_CHANGED", "Rental terms changed. Reload the rental before assigning or replacing a vehicle.");
     }
 
     private static AssignmentResponse ReadAssignmentResponse(NpgsqlDataReader reader)

@@ -35,9 +35,9 @@ public sealed class PaymentService(IPaymentRepository repository, IPaymentGatewa
     public async Task<CheckoutResult> CheckoutAsync(int invoiceId, string email, CancellationToken ct)
     {
         RequireGateway();
-        var invoice = await repository.GetInvoiceForCustomerAsync(invoiceId, email, ct);
+        var invoice = await repository.ReserveInvoiceCheckoutAsync(invoiceId, email, ct);
         if (invoice is null) throw new PaymentWorkflowException("Invoice was not found.", 404);
-        if (invoice.Status == "paid") throw new PaymentWorkflowException("Invoice is already paid.", 409);
+        if (invoice.Status != "unpaid") throw new PaymentWorkflowException("Only unpaid invoices can be checked out.", 409);
         var description = $"Rental {invoice.InvoiceNumber}";
         return await gateway.CreateCheckoutAsync(new(invoice.InvoiceId, invoice.Amount, description[..Math.Min(25, description.Length)], options.ReturnUrl, options.CancelUrl), ct);
     }

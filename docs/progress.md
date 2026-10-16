@@ -1,5 +1,9 @@
 # Tiến độ
 
+## Sửa đơn trước thuê và bàn giao xe — 2026-10-16
+
+Thêm PUT rental theo ID chỉ trước start, kiểm tra cam kết thanh toán/inspection/assignment/hợp đồng; đồng bộ booking và invoice unpaid nguyên tử. Thêm danh sách/chi tiết/xác nhận handover dùng rental lifecycle, sửa kiểm định sau confirm/return và kiểm tra lại điều kiện start trong transaction. Rental lists validate pagination ở HTTP/Application, offset Int64; sửa truy vấn chi tiết theo schema, response envelope và success messages. Checkout reservation và migration0020 ngăn đổi giá sau phát hành link (invoice unpaid cũ được khóa sửa an toàn khi nâng cấp). **236/236 test chọn lọc đạt**, gồm HTTP/Domain/Application/architecture và PostgreSQL18 tạm; build với -warnaserror đạt. Chưa kiểm chứng PostgreSQL16/PayOS thật, chưa sửa FE hoặc deploy. Xem [change](../changes/2026-10-16-rental-editing-handover.md) và [ADR-007](decisions/ADR-007-rental-editing-and-handover.md).
+
 ## Kiểm tra loại xe và thống kê chính sách — 2026-10-15
 
 POST xác minh loại xe ở Application và dưới row lock/transaction khi INSERT; chặn tạo khi cùng phạm vi đã có policy active theo xác nhận người dùng. Kích hoạt lại cũng bị chặn khi có bản active khác; scope lock bảo vệ request đồng thời. GET policy đổi sang pagination 1/20 (max100), thêm rentalCount theo policy_id gồm mọi trạng thái, giữ count khi đổi status; migration 0019 thêm index. FE có cột Số lần thuê, phân trang và lỗi inline. Build/test `-warnaserror` và 147 test HTTP/phân quyền/contract đạt; 122 unit FE và 9 E2E đạt. Test PostgreSQL về count/cạnh tranh đã thêm nhưng chưa kiểm chứng do chưa có TEST_DATABASE_ADMIN hợp lệ. Chưa deploy hoặc sửa dữ liệu thật. Xem change 2026-10-15-rental-policy-validation-usage.

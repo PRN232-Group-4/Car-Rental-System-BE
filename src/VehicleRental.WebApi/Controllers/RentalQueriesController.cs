@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.ComponentModel.DataAnnotations;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Lifecycle;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
@@ -23,10 +24,12 @@ public sealed class RentalQueriesController(
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Mine(
         [FromQuery] string? tab,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 20,
+        [FromQuery, Range(1, int.MaxValue)] int page = 1,
+        [FromQuery, Range(1, 100)] int pageSize = 20,
         CancellationToken ct = default)
     {
+        RentalQueryValidation.Pagination(page, pageSize);
+        RentalQueryValidation.CustomerTab(tab);
         var email = User.FindFirstValue(ClaimTypes.Email) ?? "";
         var customerId = await currentCustomer.GetCustomerIdByEmailAsync(email, ct);
         if (customerId is null)
@@ -74,15 +77,16 @@ public sealed class RentalQueriesController(
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> List(
         [FromQuery] string? status,
-        [FromQuery] int? customerId,
-        [FromQuery] int? vehicleId,
+        [FromQuery, Range(1, int.MaxValue)] int? customerId,
+        [FromQuery, Range(1, int.MaxValue)] int? vehicleId,
         [FromQuery] DateTime? from,
         [FromQuery] DateTime? to,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 20,
+        [FromQuery, Range(1, int.MaxValue)] int page = 1,
+        [FromQuery, Range(1, 100)] int pageSize = 20,
         CancellationToken ct = default)
     {
         var filter = new OperationalFilter(status, customerId, vehicleId, from, to, page, pageSize);
+        RentalQueryValidation.Operational(filter);
         var result = await rentalQueries.ListOperationalRentalsAsync(filter, ct);
         return Ok(result);
     }
