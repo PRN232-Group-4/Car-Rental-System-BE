@@ -1,4 +1,5 @@
 using Car_Rental_System_BE.Application.DTOs.Payments;
+using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Services.Payments;
 using Npgsql;
@@ -7,6 +8,55 @@ namespace Car_Rental_System_BE.Infrastructure.Repositories;
 
 public sealed class NpgsqlPaymentRepository(NpgsqlDataSource dataSource) : IPaymentRepository
 {
+    public async Task<InvoicePayment?> ReserveInvoiceCheckoutAsync(int invoiceId, string email, CancellationToken ct)
+    {
+        await using var cn = await dataSource.OpenConnectionAsync(ct);
+        await using var tx = await cn.BeginTransactionAsync(ct);
+        await using var find = new NpgsqlCommand("""
+            SELECT i.rental_id FROM invoices i JOIN rentals r ON r.id=i.rental_id
+            JOIN customers c ON c.id=r.customer_id JOIN users u ON u.id=c.user_id
+            WHERE i.id=$1 AND u.email=$2
+            """, cn, tx);
+        find.Parameters.AddWithValue(invoiceId);
+        find.Parameters.AddWithValue(email);
+        if (await find.ExecuteScalarAsync(ct) is not int rentalId) return null;
+        // Same financial lock order as rental editing. The marker commits before calling PayOS.
+        await using var rentalLock = new NpgsqlCommand("SELECT status FROM rentals WHERE id=$1 FOR UPDATE", cn, tx);
+        rentalLock.Parameters.AddWithValue(rentalId);
+        if (await rentalLock.ExecuteScalarAsync(ct) is not string rentalStatus) return null;
+        if (rentalStatus == "cancelled")
+            throw new ConflictException("INVOICE_NOT_PAYABLE", "A cancelled rental cannot be checked out.");
+        try
+        {
+            await using var invoice = new NpgsqlCommand("""
+                SELECT i.rental_id,r.customer_id,i.invoice_number,i.amount,i.status
+                FROM invoices i JOIN rentals r ON r.id=i.rental_id
+                JOIN customers c ON c.id=r.customer_id JOIN users u ON u.id=c.user_id
+                WHERE i.id=$1 AND u.email=$2 AND i.rental_id=$3 FOR UPDATE OF i NOWAIT
+                """, cn, tx);
+            invoice.Parameters.AddWithValue(invoiceId);
+            invoice.Parameters.AddWithValue(email);
+            invoice.Parameters.AddWithValue(rentalId);
+            InvoicePayment result;
+            await using (var reader = await invoice.ExecuteReaderAsync(ct))
+            {
+                if (!await reader.ReadAsync(ct)) return null;
+                if (reader.GetString(4) != "unpaid")
+                    throw new ConflictException("INVOICE_NOT_PAYABLE", "Only unpaid invoices can be checked out.");
+                result = new(invoiceId, reader.GetInt32(0), reader.GetInt32(1), reader.GetString(2), reader.GetDecimal(3), reader.GetString(4));
+            }
+            await using var reserve = new NpgsqlCommand("UPDATE invoices SET checkout_started_at=COALESCE(checkout_started_at,now() AT TIME ZONE 'utc') WHERE id=$1", cn, tx);
+            reserve.Parameters.AddWithValue(invoiceId);
+            await reserve.ExecuteNonQueryAsync(ct);
+            await tx.CommitAsync(ct);
+            return result;
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.LockNotAvailable)
+        {
+            throw new ConflictException("INVOICE_CHECKOUT_BUSY", "The invoice is being processed. Retry after the current payment operation completes.");
+        }
+    }
+
     public async Task<InvoicePayment?> GetInvoiceForCustomerAsync(int invoiceId, string email, CancellationToken ct)
     {
         await using var c = dataSource.CreateCommand("SELECT i.id,i.rental_id,r.customer_id,i.invoice_number,i.amount,i.status FROM invoices i JOIN rentals r ON r.id=i.rental_id JOIN customers cu ON cu.id=r.customer_id JOIN users u ON u.id=cu.user_id WHERE i.id=$1 AND u.email=$2");

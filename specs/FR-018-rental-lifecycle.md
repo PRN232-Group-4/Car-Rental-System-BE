@@ -190,6 +190,8 @@ Mã lỗi: `ILLEGAL_TRANSITION`, `ALREADY_IN_STATE`, `PAYMENT_REQUIRED`, `PRE_IN
 
 ## 10. Acceptance criteria
 
+Bổ sung 2026-10-16: [sửa đơn trước thuê](FR-018-rental-editing.md), [danh sách và xác nhận bàn giao](FR-018-rental-handover.md), [pagination và lọc danh sách](FR-018-rental-query-pagination.md). Quyền staff vận hành trong các API hiện hành là policy CustomerService gồm Admin/Manager/CustomerService. Luồng mới dùng confirm → inspection → assignment → handover confirm; kiểm định sau confirm/return được hỗ trợ. Kết quả kiểm chứng được ghi trong changes/2026-10-16-rental-editing-handover.md.
+
 - [ ] State machine ở Domain, bảng chuyển trạng thái được test đầy đủ; chuyển sai bị từ chối kèm `allowedNext`
 - [ ] `ck_rentals_status`; `rental_status_history` bất biến, đủ actor/lý do
 - [ ] Khách tự hủy theo D2; staff hủy có lý do; xem trước phí hoạt động

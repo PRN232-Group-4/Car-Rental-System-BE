@@ -443,6 +443,19 @@ Danh sách xe hiện không tải `detail` như endpoint chi tiết. Dùng `GET 
 | POST | `/api/rentals/hourly` | Customer | `RentalRequest` | 201 / `Rental` |
 | POST | `/api/rentals/longterm` | Customer | `RentalRequest` | 201 / `Rental` |
 | GET | `/api/rentals/{id}` | RentalRead + phạm vi | Không | 200 / `Rental` |
+| GET | `/api/rentals` | CustomerService | Query status/customerId/vehicleId/from/to/page/pageSize | 200 / `PagedResult<OperationalRentalSummary>` |
+| GET | `/api/rentals/{id}/detail` | CustomerService | Không | 200 / `OperationalRentalDetail` |
+| GET | `/api/rentals/mine` | Customer | Query tab/page/pageSize | 200 / `PagedResult<CustomerRentalSummary>` |
+| GET | `/api/rentals/mine/{id}` | Customer, đơn của mình | Không | 200 / `CustomerRentalDetail` |
+| PUT | `/api/rentals/{id}` | CustomerService | `UpdateRentalRequest` | 200 / `Rental` |
+| POST | `/api/rentals/{id}/confirm` | CustomerService | Không | 200 / `RentalLifecycleResult` |
+| POST | `/api/rentals/{id}/start` | CustomerService | Không | 200 / `RentalLifecycleResult` |
+| POST | `/api/rentals/{id}/return` | CustomerService | `{ "returnedAt": "UTC" }` hoặc null | 200 / `RentalLifecycleResult` |
+| POST | `/api/rentals/{id}/complete` | CustomerService | Không | 200 / `RentalLifecycleResult` |
+| POST | `/api/rentals/{id}/cancel` | Customer chủ đơn / CustomerService | reason/initiator?/waiveFee? | 200 / `RentalLifecycleResult` |
+| GET | `/api/handovers` | CustomerService | Query status/customerId/vehicleId/from/to/page/pageSize | 200 / `PagedResult<HandoverSummary>` |
+| GET | `/api/handovers/{rentalId}` | CustomerService | Không | 200 / `HandoverDetail` |
+| POST | `/api/handovers/{rentalId}/confirm` | CustomerService | Không | 200 / `HandoverConfirmation` |
 | PUT | `/api/rentals/{id}/contract` | CustomerService | `RentalContractRequest` | 200 / `Rental` |
 | POST | `/api/rentals/{id}/assignments` | Management | `AssignmentRequest` | 200 / null |
 | POST | `/api/rentals/{id}/inspections/pre` | Inspection | `InspectionRequest` | 200 / `Inspection` |
@@ -500,7 +513,7 @@ Chỉ longterm ở pending/pre_inspection. URL HTTP(S), tối đa 255; ngày ký
 { "staffId": null, "isOk": true, "odometerKm": 12000, "fuelBatteryLevel": 80, "damageNotes": null, "imageUrls": "https://example.com/inspection.jpg" }
 ```
 
-`staffId` có thể bỏ qua/null; server lấy danh tính từ claim. Nếu gửi ID khác claim thì 403. `odometerKm >= 0`, fuel/battery 0–100, damageNotes tối đa 500. `imageUrls` là **string**, không phải JSON array. Pre-inspection ghi khi rental pending; post-inspection ghi khi renting; không ghi trùng cùng loại inspection cho cùng rental/xe. Inspection fail đưa xe về `maintenance`.
+`staffId` có thể bỏ qua/null; server lấy danh tính từ claim. Nếu gửi ID khác claim thì 403. `odometerKm >= 0`, fuel/battery 0–100, damageNotes tối đa 500. `imageUrls` là **string**, không phải JSON array. Pre-inspection ghi khi rental pending hoặc pre_inspection; post-inspection ghi khi renting hoặc post_inspection; không ghi trùng cùng loại inspection cho cùng rental/xe. Inspection fail đưa xe về `maintenance`. Policy Inspection chỉ gồm Admin/Maintenance có claim staff_id.
 
 ### Vòng đời hiện tại
 
@@ -509,7 +522,29 @@ pending -> pre_inspection -> renting -> post_inspection -> completed
 pending -> cancelled
 ```
 
-Pre-inspection đạt tự đưa rental sang `pre_inspection`; post-inspection tự đưa sang `post_inspection`. Status endpoint kiểm tra transition hợp lệ, chứng từ inspection của xe hiện tại và tài xế khi cần. Chỉ hủy từ pending bằng status endpoint hiện có. Customer không được tự gọi endpoint đổi status. Không có GET danh sách rentals trong controller hiện tại.
+Luồng mới: xác nhận đơn `/confirm` (đơn trực tiếp phải thanh toán) → ghi `/inspections/pre` đạt → phân công xe/tài xế → xác nhận `/api/handovers/{rentalId}/confirm`. Xác nhận bàn giao dùng cùng logic `/start`, chuyển `pre_inspection → renting`, ghi started_at và audit trong transaction. Không cần body. Chỉ bàn giao khi kiểm định và assignment của **xe hiện tại** hợp lệ; tự lái cần GPLX approved/còn hạn. Gọi lại trả 409 ALREADY_IN_STATE. Kiểm định legacy từ pending/renting vẫn tự chuyển trạng thái; xác nhận bàn giao kiểm tra lại payment và tình trạng xe để đường legacy không bỏ qua điều kiện bắt đầu thuê. `/status/{status}` cũ deprecated; dùng endpoint lifecycle riêng cho luồng mới.
+
+### Danh sách đơn và bàn giao
+
+CustomerService là policy gồm **Admin, Manager, CustomerService**, không bao gồm role Staff. `GET /api/rentals` không truyền customerId trả đơn mọi khách; truyền customerId để lọc một khách. `mine` lấy khách từ tài khoản đăng nhập, tab: upcoming/ongoing/completed/cancelled. List mặc định `page=1`, `pageSize=20`; page>=1, pageSize 1..100; sai trả 400 tại HTTP/Application, không tự clamp. `data={items,page,pageSize,totalCount}`, tổng sau lọc; ID giảm dần, trang vượt phạm vi trả items rỗng. Lấy hết bằng cách duyệt trang tới totalCount.
+
+`GET /api/handovers?status=all` trả tất cả đơn chờ/đã bàn giao. Status mặc định `pending` tương ứng rental pre_inspection; `completed` là đã có started_at và rental ở renting/post_inspection/completed. Lịch sử bàn giao không biến mất khi trả xe. Mỗi item: `{ rental: OperationalRentalSummary, status: "pending|completed" }`; detail: `{ rental: OperationalRentalDetail, status }` gồm khách/xe/kiểm định/audit. ID bàn giao là rentalId. Response confirm: `{ rentalId, status: "completed", rentalStatus: "renting" }`; message `Vehicle handover confirmed successfully.` trong envelope 6 trường.
+
+### Chỉ sửa đơn trước khi thuê
+
+`PUT /api/rentals/{id}` yêu cầu đủ bốn trường:
+
+```json
+{ "vehicleId": 1, "startTime": "2026-11-01T02:00:00Z", "endTime": "2026-11-01T06:00:00Z", "hasDriver": false }
+```
+
+- Chỉ pending/pre_inspection và started_at null; renting/post_inspection/completed/cancelled trả **409 RENTAL_NOT_EDITABLE**, kể cả gửi lại dữ liệu cũ. ID/xe dương, UTC, endTime>startTime; lỗi dữ liệu trả 400, không tồn tại trả 404.
+- Giữ customer/type/subscription/policy. Không nhận giá từ client. Cùng xe giữ đơn giá snapshot; đổi xe lấy đơn giá xe mới, kiểm tra tương thích loại xe của policy. Giá/VAT/cọc tính lại theo snapshot tỷ lệ của đơn cũ; invoice unpaid đồng bộ trong transaction.
+- Thay đổi thực tế bị chặn nếu có inspection, assignment active, hợp đồng đã ký, payment attempt, invoice khác unpaid hoặc đã bắt đầu checkout PayOS. Checkout ghi `invoices.checkout_started_at` trước gọi provider, kể cả provider lỗi vẫn giữ khóa sửa (link ngoài có thể đã tồn tại); không tự mở lại bằng redirect/cancel. Cần migration `0020_invoice_checkout_reservation.sql`. Không sửa chứng từ/giao dịch đã cam kết. Xe phải khả dụng, không chồng lịch hoặc maintenance; tự lái phải có GPLX hợp lệ. Longterm không hỗ trợ tài xế.
+- Subscription chỉ cho dịch lịch giữ xe và thời lượng trong hạn gói, không trừ lại giờ; đổi xe/thời lượng cần đặt lại. Booking, rental detail và invoice rollback cùng nhau khi lỗi.
+- Thành công trả 200 `Rental` trong envelope, message `Rental updated successfully.`; các xung đột nghiệp vụ trả 409 với mã trong `error.code`.
+
+Nâng cấp dữ liệu cũ: migration 0020 khóa sửa các invoice unpaid đã tồn tại trước khi thêm marker, vì bản cũ không ghi nhận đã phát hành link PayOS hay chưa. Đơn mới sau migration sửa được trước checkout theo các điều kiện trên. Không tự xóa marker của dữ liệu cũ khi chưa đối soát link ngoài.
 
 ## 9. Gói thuê và gói của khách hàng
 

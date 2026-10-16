@@ -4,7 +4,7 @@ using VehicleRental.Domain.Lifecycle;
 
 namespace Car_Rental_System_BE.Infrastructure.Lifecycle;
 
-public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvider timeProvider) : IRentalQueries
+public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvider timeProvider) : IRentalQueryRepository
 {
     public async Task<PagedResult<CustomerRentalSummary>> ListMyRentalsAsync(
         int customerId,
@@ -13,9 +13,9 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
         int pageSize,
         CancellationToken ct)
     {
-        page = Math.Max(1, page);
-        pageSize = Math.Clamp(pageSize, 1, 100);
-        var offset = (page - 1) * pageSize;
+        RentalQueryValidation.Pagination(page, pageSize);
+        RentalQueryValidation.CustomerTab(tab);
+        var offset = ((long)page - 1) * pageSize;
 
         var statusFilter = tab?.Trim().ToLowerInvariant() switch
         {
@@ -146,7 +146,7 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
         if (hasDriver)
         {
             await using var driverCmd = dataSource.CreateCommand("""
-                SELECT u.fullname, u.avatar_url, s.rating
+                SELECT u.fullname, u.avatar, s.rating
                 FROM vehicle_assignments a
                 JOIN staffs s ON s.id = a.driver_staff_id
                 JOIN users u ON u.id = s.user_id
@@ -305,13 +305,19 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
         OperationalFilter filter,
         CancellationToken ct)
     {
-        var page = Math.Max(1, filter.Page);
-        var pageSize = Math.Clamp(filter.PageSize, 1, 100);
-        var offset = (page - 1) * pageSize;
+        RentalQueryValidation.Operational(filter);
+        var page = filter.Page;
+        var pageSize = filter.PageSize;
+        var offset = ((long)page - 1) * pageSize;
 
         var conditions = new List<string>();
         var parameters = new List<object>();
         var pIdx = 1;
+
+        const string completedHandover = "(r.started_at IS NOT NULL AND r.status IN ('renting','post_inspection','completed'))";
+        if (filter.HandoverStatus == "pending") conditions.Add("r.status = 'pre_inspection'");
+        else if (filter.HandoverStatus == "completed") conditions.Add(completedHandover);
+        else if (filter.HandoverStatus == "all") conditions.Add($"(r.status = 'pre_inspection' OR {completedHandover})");
 
         if (!string.IsNullOrWhiteSpace(filter.Status))
         {
@@ -416,7 +422,7 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                    COALESCE(p.vat_rate, 10) AS vat_rate,
                    r.confirmed_at, r.started_at, r.returned_at, r.completed_at,
                    r.cancelled_at, r.cancelled_by, r.cancel_reason, r.overtime_hours,
-                   COALESCE(u.fullname, u.email), u.email, u.phone_number,
+                   COALESCE(u.fullname, u.email), u.email, u.phone,
                    COALESCE(v.brand, 'Unknown'), COALESCE(v.model, 'Unknown'), v.license_plate,
                    COALESCE(f.name, 'Main Facility'),
                    COALESCE(du.fullname, du.email),
@@ -592,7 +598,7 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
         var now = timeProvider.GetUtcNow().UtcDateTime;
         await using var cmd = dataSource.CreateCommand("""
             SELECT r.id, v.id, v.license_plate, COALESCE(v.model, 'Unknown'),
-                   c.id, COALESCE(u.fullname, u.email), u.phone_number,
+                   c.id, COALESCE(u.fullname, u.email), u.phone,
                    COALESCE(h.end_time, l.end_time) AS sched_end,
                    ROUND(EXTRACT(EPOCH FROM ($1 - COALESCE(h.end_time, l.end_time))) / 60)::int AS overdue_mins,
                    (

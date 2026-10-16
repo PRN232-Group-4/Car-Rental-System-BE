@@ -163,7 +163,8 @@ public sealed record OperationalFilter(
     DateTime? From,
     DateTime? To,
     int Page = 1,
-    int PageSize = 20
+    int PageSize = 20,
+    string? HandoverStatus = null
 );
 
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
