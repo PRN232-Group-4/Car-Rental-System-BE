@@ -11,6 +11,33 @@ public sealed class ApiSuccessResponseOperationFilter : IOperationFilter
 {
     public void Apply(OpenApiOperation operation, OperationFilterContext context)
     {
+        var controller = context.MethodInfo.DeclaringType?.Name;
+        var action = context.MethodInfo.Name;
+        if ((controller == "RentalQueriesController" && action is "List" or "Mine") ||
+            (controller == "HandoversController" && action == "List"))
+        {
+            operation.Description = "Pagination defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Invalid pagination returns 400. data contains items/page/pageSize/totalCount with the count after filtering and before pagination. Results are ordered by rental ID descending; out-of-range pages return empty items.";
+            foreach (var parameter in operation.Parameters.Where(p => p.In == ParameterLocation.Query))
+            {
+                if (parameter.Name == "page")
+                {
+                    parameter.Schema.Minimum = 1;
+                    parameter.Schema.Default = new Microsoft.OpenApi.Any.OpenApiInteger(1);
+                }
+                if (parameter.Name == "pageSize")
+                {
+                    parameter.Schema.Minimum = 1;
+                    parameter.Schema.Maximum = 100;
+                    parameter.Schema.Default = new Microsoft.OpenApi.Any.OpenApiInteger(20);
+                }
+            }
+            if (controller == "HandoversController")
+                operation.Description += " Admin/Manager/CustomerService only. status=pending (default), completed or all. Completed handovers include rentals that have since been returned/completed.";
+        }
+        if (controller == "RentalEditingController")
+            operation.Description = "Admin/Manager/CustomerService only. Updates vehicleId/startTime/endTime/hasDriver before rental start (pending or pre_inspection, started_at null). Times must be UTC. Immutable customer/type/subscription/policy and server-computed prices cannot be supplied. Conflicting bookings, existing inspection/assignment, signed contracts and committed payments block changes with 409. Unpaid invoice and booking are updated in the same transaction.";
+        if (controller == "HandoversController" && action == "Confirm")
+            operation.Description = "Admin/Manager/CustomerService only. Confirms successful delivery using the rental ID, with no body. Requires pre_inspection, a passing inspection for the current vehicle, valid assignment, and an approved non-expired license for self-drive. Atomically starts the rental (renting) and records history; repeated confirmation returns 409.";
         if (context.MethodInfo.DeclaringType?.Name == "OperationsController" && context.MethodInfo.Name == "Policies")
         {
             operation.Summary = "List rental policy versions with rental usage counts (Admin/Manager).";

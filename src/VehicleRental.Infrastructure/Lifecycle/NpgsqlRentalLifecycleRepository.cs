@@ -1,5 +1,7 @@
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Lifecycle;
+using Car_Rental_System_BE.Domain.Availability;
+using Car_Rental_System_BE.Infrastructure.Availability;
 using Npgsql;
 using VehicleRental.Domain.Lifecycle;
 
@@ -70,7 +72,8 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
     public async Task<bool> HasPassingPreInspectionAsync(int rentalId, CancellationToken ct)
     {
         await using var cmd = dataSource.CreateCommand("""
-            SELECT EXISTS(SELECT 1 FROM inspections WHERE rental_id = $1 AND inspection_type = 'pre_rental' AND is_ok = true)
+            SELECT EXISTS(SELECT 1 FROM inspections i JOIN rentals r ON r.id=i.rental_id AND r.vehicle_id=i.vehicle_id
+                WHERE i.rental_id = $1 AND i.inspection_type = 'pre_rental' AND i.is_ok = true)
             """);
         cmd.Parameters.AddWithValue(rentalId);
         return (bool)(await cmd.ExecuteScalarAsync(ct))!;
@@ -79,7 +82,8 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
     public async Task<bool> HasPostInspectionAsync(int rentalId, CancellationToken ct)
     {
         await using var cmd = dataSource.CreateCommand("""
-            SELECT EXISTS(SELECT 1 FROM inspections WHERE rental_id = $1 AND inspection_type = 'post_rental')
+            SELECT EXISTS(SELECT 1 FROM inspections i JOIN rentals r ON r.id=i.rental_id AND r.vehicle_id=i.vehicle_id
+                WHERE i.rental_id = $1 AND i.inspection_type = 'post_rental')
             """);
         cmd.Parameters.AddWithValue(rentalId);
         return (bool)(await cmd.ExecuteScalarAsync(ct))!;
@@ -88,7 +92,8 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
     public async Task<bool> IsPostInspectionOkAsync(int rentalId, CancellationToken ct)
     {
         await using var cmd = dataSource.CreateCommand("""
-            SELECT COALESCE((SELECT is_ok FROM inspections WHERE rental_id = $1 AND inspection_type = 'post_rental' ORDER BY id DESC LIMIT 1), false)
+            SELECT COALESCE((SELECT i.is_ok FROM inspections i JOIN rentals r ON r.id=i.rental_id AND r.vehicle_id=i.vehicle_id
+                WHERE i.rental_id = $1 AND i.inspection_type = 'post_rental' ORDER BY i.id DESC LIMIT 1), false)
             """);
         cmd.Parameters.AddWithValue(rentalId);
         return (bool)(await cmd.ExecuteScalarAsync(ct))!;
@@ -98,9 +103,9 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
     {
         await using var cmd = dataSource.CreateCommand("""
             SELECT EXISTS(
-                SELECT 1 FROM vehicle_assignments
-                WHERE rental_id = $1 AND status = 'assigned'
-                  AND ($2 = false OR driver_staff_id IS NOT NULL)
+                SELECT 1 FROM vehicle_assignments a JOIN rentals r ON r.id=a.rental_id AND r.vehicle_id=a.vehicle_id
+                WHERE a.rental_id = $1 AND a.status = 'assigned'
+                  AND ($2 = false OR a.driver_staff_id IS NOT NULL)
             )
             """);
         cmd.Parameters.AddWithValue(rentalId);
@@ -148,7 +153,7 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
             WHERE id = $1
             """, conn, tx);
         cmd.Parameters.AddWithValue(rentalId);
-        cmd.Parameters.AddWithValue(confirmedAt);
+        cmd.Parameters.Add(Sql.Timestamp("", confirmedAt));
         await cmd.ExecuteNonQueryAsync(ct);
 
         await InsertHistoryAsync(conn, tx, rentalId, "pending", "pre_inspection", actor, "Rental confirmed", ct);
@@ -160,21 +165,33 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
 
+        // Dispatch mutations take this lock; newer assignments and vehicle swaps use VehicleLock.
+        // Acquire both before the rental row and recheck evidence inside this transaction.
+        await using (var dispatchLock = new NpgsqlCommand("SELECT pg_advisory_xact_lock(724232001::bigint)", conn, tx))
+            await dispatchLock.ExecuteNonQueryAsync(ct);
+        await VehicleLock.AcquireAsync(conn, tx, vehicleId, ct);
+
         await using (var lockCmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock($1)", conn, tx))
         {
             lockCmd.Parameters.AddWithValue(rentalId);
             await lockCmd.ExecuteNonQueryAsync(ct);
         }
 
-        await using (var checkCmd = new NpgsqlCommand("SELECT status FROM rentals WHERE id = $1 FOR UPDATE", conn, tx))
+        await using (var checkCmd = new NpgsqlCommand("SELECT status,vehicle_id FROM rentals WHERE id = $1 FOR UPDATE", conn, tx))
         {
             checkCmd.Parameters.AddWithValue(rentalId);
-            var curStatus = (string?)(await checkCmd.ExecuteScalarAsync(ct));
+            await using var reader = await checkCmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct)) throw new NotFoundException("RENTAL_NOT_FOUND", "Rental was not found.");
+            var curStatus = reader.GetString(0);
             if (curStatus == "renting")
                 throw new ConflictException("ALREADY_IN_STATE", "Rental is already started.");
             if (curStatus != "pre_inspection")
                 throw new ConflictException("ILLEGAL_TRANSITION", $"Rental cannot be started from {curStatus}.");
+            if (reader.GetInt32(1) != vehicleId)
+                throw new ConflictException("RENTAL_CHANGED", "The assigned vehicle changed. Reload the rental before confirming handover.");
         }
+
+        await RequireStartEvidenceAsync(conn, tx, rentalId, vehicleId, startedAt, ct);
 
         await using var cmdRental = new NpgsqlCommand("""
             UPDATE rentals
@@ -182,7 +199,7 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
             WHERE id = $1
             """, conn, tx);
         cmdRental.Parameters.AddWithValue(rentalId);
-        cmdRental.Parameters.AddWithValue(startedAt);
+        cmdRental.Parameters.Add(Sql.Timestamp("", startedAt));
         await cmdRental.ExecuteNonQueryAsync(ct);
 
         await using var cmdVehicle = new NpgsqlCommand("""
@@ -195,6 +212,41 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
 
         await InsertHistoryAsync(conn, tx, rentalId, "pre_inspection", "renting", actor, "Rental started", ct);
         await tx.CommitAsync(ct);
+    }
+
+    private static async Task RequireStartEvidenceAsync(NpgsqlConnection conn, NpgsqlTransaction tx, int rentalId,
+        int vehicleId, DateTime startedAt, CancellationToken ct)
+    {
+        await using var command = new NpgsqlCommand("""
+            SELECT
+                EXISTS(SELECT 1 FROM inspections i WHERE i.rental_id=r.id AND i.vehicle_id=r.vehicle_id
+                    AND i.inspection_type='pre_rental' AND i.is_ok=true),
+                EXISTS(SELECT 1 FROM vehicle_assignments a WHERE a.rental_id=r.id AND a.vehicle_id=r.vehicle_id
+                    AND a.status='assigned' AND (NOT COALESCE(h.has_driver,false) OR a.driver_staff_id IS NOT NULL)),
+                COALESCE(h.has_driver,false) OR (c.license_status='approved'
+                    AND (c.license_expiry_date IS NULL OR c.license_expiry_date>=CURRENT_DATE)),
+                r.is_subscription OR EXISTS(SELECT 1 FROM invoices inv WHERE inv.rental_id=r.id
+                    AND inv.kind='rental' AND inv.status='paid'),
+                LEAST(COALESCE(h.start_time,l.start_time),$2),
+                GREATEST(COALESCE(h.end_time,l.end_time),$2 + interval '1 microsecond')
+            FROM rentals r JOIN customers c ON c.id=r.customer_id
+            LEFT JOIN hour_rental_detail h ON h.rental_id=r.id
+            LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id
+            WHERE r.id=$1
+            FOR SHARE OF c
+            """, conn, tx);
+        command.Parameters.AddWithValue(rentalId);
+        command.Parameters.Add(Sql.Timestamp("", startedAt));
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) throw new ConflictException("CUSTOMER_LICENSE_NOT_VALID", "Rental customer was not found.");
+        if (!reader.GetBoolean(0)) throw new ConflictException("PRE_INSPECTION_REQUIRED", "A passed inspection for the current vehicle is required.");
+        if (!reader.GetBoolean(1)) throw new ConflictException("ASSIGNMENT_REQUIRED", "An active assignment for the current vehicle is required.");
+        if (reader.IsDBNull(2) || !reader.GetBoolean(2)) throw new ConflictException("CUSTOMER_LICENSE_NOT_VALID", "Customer license must be approved and valid for self-drive.");
+        if (!reader.GetBoolean(3)) throw new ConflictException("PAYMENT_REQUIRED", "Direct rental invoice must be paid before handover.");
+        var window = new TimeRange(reader.GetDateTime(4), reader.GetDateTime(5));
+        await reader.CloseAsync();
+        var availability = await VehicleAvailabilityChecks.EvaluateAsync(conn, tx, vehicleId, window, rentalId, 60, ct);
+        VehicleAvailabilityChecks.ThrowIfBlocked(availability, vehicleId);
     }
 
     public async Task UpdateToPostInspectionAsync(int rentalId, DateTime returnedAt, ActorContext actor, CancellationToken ct)
@@ -224,7 +276,7 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
             WHERE id = $1
             """, conn, tx);
         cmd.Parameters.AddWithValue(rentalId);
-        cmd.Parameters.AddWithValue(returnedAt);
+        cmd.Parameters.Add(Sql.Timestamp("", returnedAt));
         await cmd.ExecuteNonQueryAsync(ct);
 
         await InsertHistoryAsync(conn, tx, rentalId, "renting", "post_inspection", actor, "Vehicle returned", ct);

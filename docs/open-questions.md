@@ -1,5 +1,9 @@
 # Câu hỏi mở và giả định
 
+## Sửa rental trước thuê và bàn giao — 2026-10-16
+
+“Trước khi thuê” được hiểu là pending/pre_inspection, chưa started_at; chỉ staff theo policy CustomerService sửa, khách vẫn xem đơn của mình. Chọn phạm vi PUT gồm vehicleId/startTime/endTime/hasDriver; danh tính khách, loại thuê, policy và gói không đổi. Chứng từ hoặc cam kết đã tồn tại chặn thay đổi thay vì tự hủy/ghi đè. Subscription chỉ dịch lịch cùng xe và thời lượng. Bàn giao dùng rentalId và state machine hiện có, không thêm trạng thái delivered. Link PayOS cũ không có bằng chứng phát hành, nên migration0020 khóa các invoice unpaid có sẵn khi nâng cấp lần đầu; không tự bỏ marker, kể cả gateway timeout/cancel. Workflow đối soát và mở lại sửa sau checkout nằm ngoài phạm vi này. Quyết định tại ADR-007.
+
 ## Kiểm tra loại xe và số lần thuê chính sách — 2026-10-15
 
 Người dùng xác nhận chặn tạo mới khi loại xe có chính sách đang hoạt động; áp dụng cả scope chung null và khi kích hoạt bản inactive, không tự sửa dữ liệu active trùng đã có. Số lần thuê được hiểu là tổng đơn đã gắn policy, gồm mọi trạng thái (cả hủy), không chỉ đơn hoàn tất; FE ghi rõ cách đếm. Đơn policy null không được tự gán cho một phiên bản. Danh sách thay sang pagination theo ADR-003 vì bổ sung count vào API list.

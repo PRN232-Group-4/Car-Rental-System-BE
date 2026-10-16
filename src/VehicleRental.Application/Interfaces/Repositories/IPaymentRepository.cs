@@ -5,6 +5,8 @@ namespace Car_Rental_System_BE.Application.Interfaces.Repositories;
 public interface IPaymentRepository
 {
     Task<InvoicePayment?> GetInvoiceForCustomerAsync(int invoiceId, string email, CancellationToken ct);
+    /// <summary>Reserves an owned unpaid invoice before an external checkout; freezes rental edits even if the provider request fails.</summary>
+    Task<InvoicePayment?> ReserveInvoiceCheckoutAsync(int invoiceId, string email, CancellationToken ct);
     Task<IReadOnlyList<InvoiceSummary>> ListInvoicesAsync(string? email, CancellationToken ct);
     Task<InvoiceSummary?> GetInvoiceAsync(int invoiceId, string? email, CancellationToken ct);
     Task<InvoiceSummary> CreateInvoiceForRentalAsync(int rentalId, CancellationToken ct);

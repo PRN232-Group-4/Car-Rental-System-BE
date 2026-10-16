@@ -1,4 +1,5 @@
 # Changelog
+- 2026-10-16 — [Sửa đơn trước thuê và bàn giao xe](2026-10-16-rental-editing-handover.md)
 - 2026-10-15 — [Kiểm tra loại xe và đếm số lần thuê theo chính sách](2026-10-15-rental-policy-validation-usage.md)
 - 2026-10-15 — [Kích hoạt và tạm ngưng chính sách thuê xe](2026-10-15-rental-policy-status.md)
 - 2026-10-15 — [Đồng bộ hướng dẫn Google Maps sau tích hợp frontend](2026-10-15-google-maps-frontend-docs.md)
