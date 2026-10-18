@@ -4,8 +4,9 @@ namespace Car_Rental_System_BE.Application.Interfaces.Services;
 
 public interface IPaymentService
 {
+    Task<PaymentResult> ConfirmCashAsync(int invoiceId, string reviewer, CancellationToken ct);
     Task<IReadOnlyList<InvoiceSummary>> ListInvoicesAsync(string? email, CancellationToken ct);
-    Task<InvoiceSummary?> GetInvoiceAsync(int invoiceId, string? email, CancellationToken ct);
+    Task<InvoiceDetail?> GetInvoiceAsync(int invoiceId, string? email, CancellationToken ct);
     Task<InvoiceSummary> CreateInvoiceForRentalAsync(int rentalId, CancellationToken ct);
     Task<IReadOnlyList<PaymentSummary>> ListPaymentsAsync(string? email, int? invoiceId, CancellationToken ct);
     Task<PaymentResult> RequestRefundAsync(int paymentId, decimal amount, CancellationToken ct);

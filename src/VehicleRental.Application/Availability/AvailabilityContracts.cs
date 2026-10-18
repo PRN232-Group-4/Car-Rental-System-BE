@@ -23,7 +23,7 @@ public sealed record VehicleSearchQuery(
     DateTime? From, DateTime? To, string RentalType = "hourly", int? VehicleTypeId = null, int? FacilityId = null,
     string? Q = null, string? Brand = null, decimal? MinPrice = null, decimal? MaxPrice = null, int? SeatCount = null,
     string? Transmission = null, string? BikeType = null, decimal? MinRangeKm = null, int? YearFrom = null,
-    string? FuelType = null, bool? HasDriver = null, string Sort = "recommended", int Page = 1, int PageSize = 12)
+    string? FuelType = null, bool? HasDriver = null, string Sort = "recommended", int Page = 1, int PageSize = 20)
 {
     public static readonly IReadOnlySet<string> SortValues = new HashSet<string> { "recommended", "price_asc", "price_desc", "newest" };
     public TimeRange? Window => From is { } f && To is { } t ? new TimeRange(f, t) : null;
@@ -85,5 +85,5 @@ public interface IVehicleAvailabilityService
 public interface IDriverAvailability
 {
     /// <summary>Is at least one qualified driver free during <paramref name="window"/> (or, with no window, valid as of <paramref name="nowUtc"/>)?</summary>
-    Task<bool> AnyAvailableAsync(TimeRange? window, DateTime nowUtc, CancellationToken ct);
+    Task<bool> AnyAvailableAsync(TimeRange? window, DateTime nowUtc, CancellationToken ct, int? facilityId = null);
 }

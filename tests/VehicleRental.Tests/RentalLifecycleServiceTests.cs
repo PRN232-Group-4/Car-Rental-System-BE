@@ -106,16 +106,40 @@ public sealed class RentalLifecycleServiceTests
     }
 
     [Fact]
-    public async Task Confirm_throws_PaymentRequired_when_direct_rental_not_paid()
+    public async Task Confirm_opens_payment_when_direct_rental_not_paid()
     {
         var service = CreateService();
         _repo.Entity = CreateDefaultRental(status: RentalStatus.Pending, isSubscription: false);
         _paymentGate.IsPaid = false;
 
-        var ex = await Assert.ThrowsAsync<ConflictException>(() =>
-            service.ConfirmAsync(100, new(1, "staff@test.local", "Staff"), CancellationToken.None));
+        var result = await service.ConfirmAsync(100, new(1, "staff@test.local", "Staff"), CancellationToken.None);
+        Assert.Equal("pre_inspection", result.ToStatus);
+        Assert.True(_repo.UpdatedToPreInspection);
+    }
 
-        Assert.Equal("PAYMENT_REQUIRED", ex.Code);
+    [Fact]
+    public async Task Confirm_records_missing_approval_for_legacy_pre_inspection()
+    {
+        _repo.Entity = CreateDefaultRental(status: RentalStatus.PreInspection) with { ConfirmedAt = null };
+        await CreateService().ConfirmAsync(100, new(1, "staff@test.local", "CustomerService"), default);
+        Assert.True(_repo.UpdatedToPreInspection);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Start_requires_payment_for_direct_rental_only(bool subscription)
+    {
+        _repo.Entity = CreateDefaultRental(status: RentalStatus.PreInspection, isSubscription: subscription);
+        _paymentGate.IsPaid = false;
+        if (subscription)
+            Assert.Equal("renting", (await CreateService().StartAsync(100, new(1, "staff@test.local", "Staff"), default)).ToStatus);
+        else
+        {
+            var error = await Assert.ThrowsAsync<ConflictException>(() => CreateService().StartAsync(100, new(1, "staff@test.local", "Staff"), default));
+            Assert.Equal("PAYMENT_REQUIRED", error.Code);
+            Assert.False(_repo.UpdatedToRenting);
+        }
     }
 
     [Fact]

@@ -136,10 +136,11 @@ public sealed class NpgsqlVehicleSearchRepository(NpgsqlDataSource dataSource) :
             "newest" => "ORDER BY v.year_of_manufacture DESC NULLS LAST, v.id DESC",
             _ => "ORDER BY v.id DESC"
         };
+        var filteredSql = sql.ToString();
         sql.Append($" {orderClause} LIMIT @limit OFFSET @offset");
 
         command.Parameters.AddWithValue("limit", query.PageSize);
-        command.Parameters.AddWithValue("offset", (query.Page - 1) * query.PageSize);
+        command.Parameters.AddWithValue("offset", ((long)query.Page - 1) * query.PageSize);
         command.CommandText = sql.ToString();
 
         var items = new List<VehicleSearchItem>();
@@ -183,6 +184,15 @@ public sealed class NpgsqlVehicleSearchRepository(NpgsqlDataSource dataSource) :
                 priceH, priceL, summary, badges, durationHours));
         }
 
+        await reader.DisposeAsync();
+        if (items.Count == 0)
+        {
+            await using var count = new NpgsqlCommand("SELECT COUNT(*) FROM (" + filteredSql + ") matches", connection);
+            foreach (NpgsqlParameter parameter in command.Parameters)
+                if (parameter.ParameterName is not ("limit" or "offset"))
+                    count.Parameters.Add(parameter.Clone());
+            total = Convert.ToInt32(await count.ExecuteScalarAsync(ct));
+        }
         return new VehicleSearchResult(items, query.Page, query.PageSize, total, appliedWindow);
     }
 

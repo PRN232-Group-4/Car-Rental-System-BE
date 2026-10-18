@@ -137,13 +137,17 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
             await lockCmd.ExecuteNonQueryAsync(ct);
         }
 
-        await using (var checkCmd = new NpgsqlCommand("SELECT status FROM rentals WHERE id = $1 FOR UPDATE", conn, tx))
+        string? previousStatus;
+        await using (var checkCmd = new NpgsqlCommand("SELECT status,confirmed_at FROM rentals WHERE id = $1 FOR UPDATE", conn, tx))
         {
             checkCmd.Parameters.AddWithValue(rentalId);
-            var curStatus = (string?)(await checkCmd.ExecuteScalarAsync(ct));
-            if (curStatus == "pre_inspection")
+            await using var reader = await checkCmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct)) throw new NotFoundException("RENTAL_NOT_FOUND", "Rental was not found.");
+            var curStatus = reader.GetString(0);
+            previousStatus = curStatus;
+            if (curStatus == "pre_inspection" && !reader.IsDBNull(1))
                 throw new ConflictException("ALREADY_IN_STATE", "Rental is already confirmed.");
-            if (curStatus != "pending")
+            if (curStatus is not ("pending" or "pre_inspection"))
                 throw new ConflictException("ILLEGAL_TRANSITION", $"Rental cannot be confirmed from {curStatus}.");
         }
 
@@ -156,7 +160,8 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
         cmd.Parameters.Add(Sql.Timestamp("", confirmedAt));
         await cmd.ExecuteNonQueryAsync(ct);
 
-        await InsertHistoryAsync(conn, tx, rentalId, "pending", "pre_inspection", actor, "Rental confirmed", ct);
+        await InsertHistoryAsync(conn, tx, rentalId, previousStatus, "pre_inspection", actor, "Rental confirmed", ct);
+        await Car_Rental_System_BE.Infrastructure.Repositories.RentalOrderWriter.EnsurePaidAsync(conn, tx, rentalId, ct);
         await tx.CommitAsync(ct);
     }
 

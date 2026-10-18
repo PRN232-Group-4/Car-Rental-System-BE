@@ -183,4 +183,48 @@ public sealed class VehicleSearchIntegrationTests(PostgresFixture db) : IClassFi
             """, sId, T0, T0.AddHours(2));
         Assert.Equal(1, isBusy);
     }
+
+    [Fact]
+    public async Task Facility_driver_filter_excludes_other_branch_inactive_expired_and_buffer_conflicts()
+    {
+        var (customer, vehicle, facility, _) = await SeedFullVehicleAsync();
+        var (_, _, otherFacility, _) = await SeedFullVehicleAsync();
+        async Task<int> Driver(int branch, bool active, string? expiry)
+        {
+            var user = await Seed.ScalarAsync(db.DataSource, "INSERT INTO users(email,is_active) VALUES($1,$2) RETURNING id", $"{Guid.NewGuid():N}@test.local", active);
+            return (int)(await Seed.ScalarAsync(db.DataSource, "INSERT INTO staffs(user_id,facility_id,is_driver,license_expiry_date) VALUES($1,$2,true,$3::date) RETURNING id", user, branch, expiry))!;
+        }
+        var window = new TimeRange(T0, T0.AddHours(2));
+        await Driver(otherFacility, true, "2035-01-01");
+        await Driver(facility, false, "2035-01-01");
+        await Driver(facility, true, "2020-01-01");
+        await Driver(facility, true, null);
+        Assert.False(await _drivers.AnyAvailableAsync(window, T0, default, facility));
+        Assert.True(await _drivers.AnyAvailableAsync(window, T0, default, otherFacility));
+        var driver = await Driver(facility, true, "2035-01-01");
+        Assert.True(await _drivers.AnyAvailableAsync(window, T0, default, facility));
+        var rental = await VehicleBookingSchemaTests.RentalAsync(db.DataSource, customer, vehicle, T0.AddHours(-2), T0.AddMinutes(-30));
+        await Seed.ScalarAsync(db.DataSource, "INSERT INTO vehicle_assignments(rental_id,vehicle_id,driver_staff_id,status) VALUES($1,$2,$3,'assigned')", rental, vehicle, driver);
+        Assert.False(await _drivers.AnyAvailableAsync(window, T0, default, facility));
+        Assert.True(await _drivers.AnyAvailableAsync(new(T0.AddMinutes(30), T0.AddHours(2)), T0, default, facility));
+        await Seed.ScalarAsync(db.DataSource, "UPDATE vehicle_assignments SET status='completed' WHERE rental_id=$1", rental);
+        Assert.True(await _drivers.AnyAvailableAsync(window, T0, default, facility));
+        var later = await VehicleBookingSchemaTests.RentalAsync(db.DataSource, customer, vehicle, T0.AddHours(2).AddMinutes(30), T0.AddHours(4));
+        await Seed.ScalarAsync(db.DataSource, "INSERT INTO vehicle_assignments(rental_id,vehicle_id,driver_staff_id,status) VALUES($1,$2,$3,'assigned')", later, vehicle, driver);
+        Assert.False(await _drivers.AnyAvailableAsync(window, T0, default, facility));
+        var noBuffer = new NpgsqlDriverAvailability(db.DataSource, Microsoft.Extensions.Options.Options.Create(new Car_Rental_System_BE.Application.Assignments.AssignmentOptions { DriverBufferMinutes = 0 }));
+        Assert.True(await noBuffer.AnyAvailableAsync(window, T0, default, facility));
+    }
+
+    [Fact]
+    public async Task Empty_search_page_keeps_filtered_total_and_large_offset_does_not_overflow()
+    {
+        var (_, vehicle, facility, _) = await SeedFullVehicleAsync();
+        var result = await _repo.SearchAsync(new(null, null, FacilityId: facility, Page: int.MaxValue, PageSize: 100), 60, null, default);
+        Assert.Empty(result.Items);
+        Assert.Equal(1, result.TotalCount);
+        var first = await _repo.SearchAsync(new(null, null, FacilityId: facility, PageSize: 1), 60, null, default);
+        Assert.Equal(vehicle, Assert.Single(first.Items).Id);
+        Assert.Equal(1, first.TotalCount);
+    }
 }

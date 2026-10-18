@@ -24,7 +24,7 @@ public sealed class RentalLifecycleService(
             ?? throw new NotFoundException("RENTAL_NOT_FOUND", $"Rental {id} was not found.");
 
         var outcome = RentalStateMachine.Evaluate(rental.Status, RentalTrigger.Confirm);
-        if (outcome is TransitionOutcome.AlreadyInState)
+        if (outcome is TransitionOutcome.AlreadyInState && rental.ConfirmedAt is not null)
         {
             throw new ConflictException("ALREADY_IN_STATE", $"Rental is already in {rental.Status.ToDbString()} status.");
         }
@@ -33,15 +33,6 @@ public sealed class RentalLifecycleService(
         {
             var allowed = string.Join(", ", illegal.AllowedNextStatuses.Select(s => s.ToDbString()));
             throw new ConflictException("ILLEGAL_TRANSITION", $"Cannot transition from {rental.Status.ToDbString()} using confirm. Allowed next: [{allowed}]");
-        }
-
-        if (!rental.IsSubscription)
-        {
-            var isPaid = await paymentGate.IsRentalInvoicePaidAsync(id, ct);
-            if (!isPaid)
-            {
-                throw new ConflictException("PAYMENT_REQUIRED", "Direct rental must be paid before confirmation.");
-            }
         }
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
@@ -90,6 +81,9 @@ public sealed class RentalLifecycleService(
                 throw new ConflictException("CUSTOMER_LICENSE_NOT_VALID", "Customer driver license must be approved and not expired for self-drive.");
             }
         }
+
+        if (!rental.IsSubscription && !await paymentGate.IsRentalInvoicePaidAsync(id, ct))
+            throw new ConflictException("PAYMENT_REQUIRED", "Direct rental must be paid before handover.");
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
         await repository.UpdateToRentingAsync(id, rental.VehicleId, now, actor, ct);

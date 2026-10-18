@@ -4,12 +4,13 @@
 - **Milestone:** M5
 
 ## Mô tả
-Payment của direct rental bắt buộc gắn `invoice_id` (`ck_payments_invoice_rule`). Checkout qua PayOS; webhook xác thực chữ ký và idempotent theo `provider_reference`. Khi PayOS chưa cấu hình, checkout trả 503 và không tạo payment giả.
+Payment của direct rental bắt buộc gắn `invoice_id` (`ck_payments_invoice_rule`). Theo xác nhận 2026-10-18, staff duyệt yêu cầu trước thanh toán. Customer chọn PayOS hoặc tiền mặt khi đặt; checkout PayOS chỉ mở sau duyệt, webhook xác thực chữ ký và idempotent theo `provider_reference`. Tiền mặt cần staff xác nhận thực nhận. Ledger paid, invoice paid và order được ghi nguyên tử theo [FR-036](FR-036-booking-request-paid-order.md). Khi PayOS chưa cấu hình, checkout trả 503 và không tạo payment giả.
 
 ## API
 | Method | Path | Auth | Mô tả |
 |---|---|---|---|
 | POST | `/api/invoices/{invoiceId}/checkout` | Customer (chủ hóa đơn) | Tạo link thanh toán PayOS |
+| POST | `/api/invoices/{invoiceId}/cash-confirmation` | Admin/Manager/CustomerService | Xác nhận thực nhận tiền mặt, ghi audit và phát hành order |
 | POST | `/api/payments/webhooks/payos` | Anonymous (signature-verified) | Nhận webhook, đánh dấu invoice `paid` |
 | GET | `/api/payments` | Customer (của mình), Admin/Manager/CustomerService (tất cả) | Danh sách payment, lọc `invoiceId` |
 

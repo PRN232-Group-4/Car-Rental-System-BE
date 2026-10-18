@@ -1,6 +1,6 @@
 # Tài liệu API — Car Rental System BE
 
-Cập nhật: **10/10/2026**. Tài liệu được đối chiếu với controller, DTO, cấu hình xác thực, response filter và repository trong mã nguồn hiện tại. Các ví dụ dùng dữ liệu minh họa; thay ID, thời gian, email và URL bằng dữ liệu thật trước khi gọi.
+Cập nhật: **18/10/2026**. Tài liệu được đối chiếu với controller, DTO, cấu hình xác thực, response filter và repository trong mã nguồn hiện tại. Các ví dụ dùng dữ liệu minh họa; thay ID, thời gian, email và URL bằng dữ liệu thật trước khi gọi.
 
 ## Mục lục
 
@@ -312,10 +312,12 @@ Phân công members chỉ thay department/facility, giữ specialty và các tr�
 
 | Method | Endpoint | Quyền | Query | HTTP / data |
 | --- | --- | --- | --- | --- |
-| GET | `/api/customers` | CustomerService | `search?`, `isActive?`, `page=1`, `pageSize=20` | 200 / `CustomerPage` |
+| GET | `/api/customers` | CustomerService | `search?`, `isActive?`, `licenseStatus?`, `page=1`, `pageSize=20` | 200 / `CustomerPage` |
 | GET | `/api/customers/{customerId}` | CustomerService | Không | 200 / `CustomerDetail` |
 
 Policy CustomerService gồm **Admin, Manager, CustomerService**. Danh sách tìm chuỗi theo tên/email/điện thoại, không phân biệt hoa thường; `isActive` bỏ qua thì lấy cả tài khoản active và inactive. `page >= 1`, `pageSize` từ 1 đến 100. Dữ liệu sắp xếp theo customer ID; trang vượt phạm vi trả `items=[]` và giữ `totalCount`.
+
+`licenseStatus` tùy chọn nhận `pending`, `approved`, `rejected`, `none` (chữ thường); giá trị khác trả 400. Không truyền thì trả mọi trạng thái. Khách chưa có số GPLX (null/rỗng/chỉ khoảng trắng) có `licenseStatus=none` trong danh sách, dù DB mặc định `pending`; bộ lọc `pending` chỉ lấy hồ sơ đã gửi đang chờ duyệt. Kết hợp tất cả bộ lọc trước phân trang; `totalCount` là tổng sau lọc. Ví dụ `/api/customers?licenseStatus=pending&page=1&pageSize=20`.
 
 `customerId` là **ID bảng customers**, khác `userId`. Chi tiết gồm liên hệ, avatar, trạng thái tài khoản, `license` và `loyalty.points`; không chứa mật khẩu/token. ID không dương trả 400, không tồn tại trả 404. Customer thông thường không được truy cập danh bạ này.
 
@@ -433,6 +435,14 @@ Không gửi trường ô tô cho xe máy hoặc ngược lại; xe gasoline kh�
 
 Danh sách xe hiện không tải `detail` như endpoint chi tiết. Dùng `GET /api/vehicles/{id}` khi cần gallery/thông số đầy đủ.
 
+### Tìm xe khả dụng cho customer
+
+`GET /api/vehicles/search` công khai, trả envelope 6 trường; `data={items,page,pageSize,totalCount,appliedWindow}`. Query `facilityId` dương giới hạn đúng cơ sở; `from`/`to` cùng có hoặc cùng bỏ, giờ UTC, `rentalType=hourly|longterm`, `hasDriver=true|false`. Mặc định `page=1&pageSize=20`, page>=1, pageSize 1..100, sai trả 400 ở HTTP/Application; trang vượt phạm vi vẫn giữ tổng sau lọc.
+
+Khi `hasDriver=true` và chọn cơ sở, cần ít nhất một tài xế thuộc chính cơ sở đó, tài khoản active, GPLX có ngày hết hạn hợp lệ đến cuối thời gian thuê, không có assignment `assigned` trùng giờ kể cả đệm `Assignment:DriverBufferMinutes` (mặc định 60). Không lấy tài xế từ cơ sở khác. Xe vẫn phải trống lịch và không bị bảo dưỡng chặn. Tìm kiếm chưa gán/giữ chỗ tài xế; việc phân công vẫn ở luồng vận hành. Tự lái không cần tài xế rảnh nhưng giữ kiểm tra xe/GPLX khách như hiện tại; longterm hiện chỉ tự lái.
+
+Ví dụ `/api/vehicles/search?facilityId=5&hasDriver=true&rentalType=hourly&from=2027-01-10T01:00:00Z&to=2027-01-10T03:00:00Z&page=1&pageSize=20`.
+
 ## 8. Chính sách và thuê xe
 
 | Method | Endpoint | Quyền | Body | HTTP / data |
@@ -485,11 +495,13 @@ Chỉ đổi trạng thái bản ghi đích, không đổi điều khoản, khô
   "startTime": "2026-10-10T02:00:00Z",
   "endTime": "2026-10-10T05:00:00Z",
   "subscriptionId": null,
-  "hasDriver": false
+  "hasDriver": false,
+  "paymentMethod": "payos"
 }
 ```
 
 - `vehicleId` dương; `policyId`/`subscriptionId` nullable; `hasDriver` mặc định false. Longterm luôn truyền `hasDriver=false` ở server, dù body gửi true.
+- `paymentMethod` là `payos` (mặc định) hoặc `cash`, lưu cho hóa đơn thuê trực tiếp. Customer gửi yêu cầu giữ chỗ xe, chưa phải đơn thuê chính thức; `Rental.id` là mã yêu cầu/vận hành, `orderId` nullable là mã order riêng. Staff duyệt trước thanh toán; PayOS webhook hợp lệ hoặc staff xác nhận thực nhận tiền mặt mới phát hành order paid. Gói đã trả trước phát hành order khi staff duyệt. Xem [FR-036](../specs/FR-036-booking-request-paid-order.md).
 - `endTime > startTime`; xe phải khả dụng, an toàn và không có lịch thuê hoạt động chồng nhau.
 - Thuê trực tiếp (`subscriptionId=null`) cần giấy phép customer đã approved; server tự tạo invoice trong transaction tạo rental.
 - Có `subscriptionId` thì server suy ra `isSubscription=true`, kiểm tra gói active thuộc customer và trừ số giờ thuê nếu gói có giới hạn giờ. Gói này không tạo invoice thuê xe.
@@ -522,11 +534,13 @@ pending -> pre_inspection -> renting -> post_inspection -> completed
 pending -> cancelled
 ```
 
-Luồng mới: xác nhận đơn `/confirm` (đơn trực tiếp phải thanh toán) → ghi `/inspections/pre` đạt → phân công xe/tài xế → xác nhận `/api/handovers/{rentalId}/confirm`. Xác nhận bàn giao dùng cùng logic `/start`, chuyển `pre_inspection → renting`, ghi started_at và audit trong transaction. Không cần body. Chỉ bàn giao khi kiểm định và assignment của **xe hiện tại** hợp lệ; tự lái cần GPLX approved/còn hạn. Gọi lại trả 409 ALREADY_IN_STATE. Kiểm định legacy từ pending/renting vẫn tự chuyển trạng thái; xác nhận bàn giao kiểm tra lại payment và tình trạng xe để đường legacy không bỏ qua điều kiện bắt đầu thuê. `/status/{status}` cũ deprecated; dùng endpoint lifecycle riêng cho luồng mới.
+Luồng mới: staff duyệt yêu cầu `/confirm` → customer thanh toán PayOS hoặc staff xác nhận đã thu tiền mặt → phát hành đơn thuê chính thức; kiểm định `/inspections/pre` đạt và phân công xe/tài xế → xác nhận `/api/handovers/{rentalId}/confirm`. Confirm không yêu cầu paid; ghi confirmed_at để mở thanh toán, legacy pre_inspection chưa có confirmed_at cần duyệt bổ sung. Xác nhận bàn giao dùng cùng logic `/start`, chuyển `pre_inspection → renting`, ghi started_at và audit trong transaction. Không cần body. Chỉ bàn giao trực tiếp khi hóa đơn thuê ban đầu paid, kiểm định và assignment của **xe hiện tại** hợp lệ; tự lái cần GPLX approved/còn hạn. Gọi lại trả 409 ALREADY_IN_STATE. Kiểm định legacy từ pending/renting vẫn tự chuyển trạng thái; xác nhận bàn giao kiểm tra lại payment và tình trạng xe để đường legacy không bỏ qua điều kiện bắt đầu thuê. `/status/{status}` cũ deprecated; dùng endpoint lifecycle riêng cho luồng mới.
 
 ### Danh sách đơn và bàn giao
 
 CustomerService là policy gồm **Admin, Manager, CustomerService**, không bao gồm role Staff. `GET /api/rentals` không truyền customerId trả đơn mọi khách; truyền customerId để lọc một khách. `mine` lấy khách từ tài khoản đăng nhập, tab: upcoming/ongoing/completed/cancelled. List mặc định `page=1`, `pageSize=20`; page>=1, pageSize 1..100; sai trả 400 tại HTTP/Application, không tự clamp. `data={items,page,pageSize,totalCount}`, tổng sau lọc; ID giảm dần, trang vượt phạm vi trả items rỗng. Lấy hết bằng cách duyệt trang tới totalCount.
+
+Không truyền `status` cho danh sách vận hành (hoặc `tab` cho mine) trả mọi trạng thái, gồm completed/cancelled. `OperationalRentalSummary` và `CustomerRentalSummary` có `orderId: integer|null`; `OperationalRentalDetail` và `CustomerRentalDetail` có `orderId` ở cấp detail ngoài cùng. `id`/`rental.id` luôn là mã yêu cầu đặt xe; chỉ `orderId` có giá trị khi đơn chính thức đã phát hành trong rental_orders. Không suy diễn mã đơn từ trạng thái pre_inspection hay invoice unpaid. Chi tiết vận hành có `rental.confirmedAt/startedAt/returnedAt/completedAt/cancelledAt`, `invoice.status` và `history`; chi tiết customer có `status`, `nextAction` và `timeline` để theo dõi trạng thái. Trạng thái enum tại `detail.rental.status` giữ contract JSON hiện tại (0=pending, 1=pre_inspection, 2=renting, 3=post_inspection, 4=completed, 5=cancelled); status của list/customer detail là chuỗi snake_case.
 
 `GET /api/handovers?status=all` trả tất cả đơn chờ/đã bàn giao. Status mặc định `pending` tương ứng rental pre_inspection; `completed` là đã có started_at và rental ở renting/post_inspection/completed. Lịch sử bàn giao không biến mất khi trả xe. Mỗi item: `{ rental: OperationalRentalSummary, status: "pending|completed" }`; detail: `{ rental: OperationalRentalDetail, status }` gồm khách/xe/kiểm định/audit. ID bàn giao là rentalId. Response confirm: `{ rentalId, status: "completed", rentalStatus: "renting" }`; message `Vehicle handover confirmed successfully.` trong envelope 6 trường.
 
@@ -576,9 +590,10 @@ Luồng mua: tạo checkout → mở `checkoutUrl` → PayOS webhook xác nhận
 | Method | Endpoint | Quyền | Body / query | HTTP / data |
 | --- | --- | --- | --- | --- |
 | GET | `/api/invoices` | FinancialRead + phạm vi | Không | 200 / `InvoiceSummary[]` |
-| GET | `/api/invoices/{invoiceId}` | FinancialRead + phạm vi | Không | 200 / `InvoiceSummary` |
+| GET | `/api/invoices/{invoiceId}` | FinancialRead + phạm vi | Không | 200 / `InvoiceDetail` |
 | POST | `/api/rentals/{rentalId}/invoice` | CustomerService | Không | 201 / `InvoiceSummary` |
 | POST | `/api/invoices/{invoiceId}/checkout` | Customer, invoice của mình | Không | 200 / `CheckoutResult` |
+| POST | `/api/invoices/{invoiceId}/cash-confirmation` | CustomerService (Admin/Manager/CustomerService) | Không | 200 / `PaymentResult` |
 | GET | `/api/payments` | FinancialRead + phạm vi | `invoiceId: int?` | 200 / `PaymentSummary[]` |
 | POST | `/api/payments/checkouts/{orderCode}/cancel` | Customer, giao dịch của mình | Không | 200 / `CheckoutCancellation` |
 | POST | `/api/payments/webhooks/payos` | Public, xác minh chữ ký | `PayOsWebhookRequest` | 200 / null |
@@ -588,7 +603,11 @@ Luồng mua: tạo checkout → mở `checkoutUrl` → PayOS webhook xác nhận
 
 Tạo invoice chỉ dành cho rental trực tiếp; rental dùng subscription bị từ chối 400. Rental trực tiếp đã tự tạo invoice khi đặt; dùng GET để tìm invoice thay vì mặc định phải tạo thêm. Repository trả invoice hiện có khi đã tồn tại.
 
-Checkout invoice đã paid trả 409; checkout/purchase trả 503 khi PayOS chưa cấu hình. Sau thanh toán, server kiểm tra số tiền và provider reference khi xử lý webhook.
+Invoice detail trả `canPay` boolean và `paymentBlockedReason` nullable; trước duyệt là false/RENTAL_CONFIRMATION_REQUIRED. Checkout chỉ dành cho invoice chọn payos, unpaid, rental chưa hủy và đã confirmed_at; sai phương thức trả 409 PAYMENT_METHOD_MISMATCH. Invoice overtime không cần duyệt lại. Checkout invoice đã paid trả 409; checkout/purchase trả 503 khi PayOS chưa cấu hình.
+
+Cash-confirmation validate invoiceId dương; lấy đúng amount từ server, ghi người thu/thời gian, không nhận amount hoặc trạng thái do customer gửi. Chưa duyệt/sai phương thức/hủy trả 409, role không được phép trả 403, chưa đăng nhập 401. Gọi lặp trả payment/order đã tồn tại. Webhook PayOS kiểm tra chữ ký, số tiền và provider reference; callback lặp/đồng thời không tạo trùng. Ghi paid ledger, invoice paid và `rental_orders` trong cùng transaction. Không tự tạo order khi mở checkout, chọn phương thức hoặc duyệt yêu cầu chưa trả tiền. Tiền thực nhận từ link legacy trước duyệt vẫn vào ledger, chờ duyệt mới phát hành order. Overtime không tạo order thứ hai. Redirect/status=PAID không xác nhận thanh toán.
+
+Cần migration `0021_rental_orders_and_cash_payment.sql`: thêm invoices.payment_method và rental_orders (mã order riêng, unique rental_id/payment_id, amount/method/payment_status/confirmed_by/created_at); hosted migrator tự đọc file. Backfill yêu cầu có confirmed_at và bằng chứng paid ledger hoặc gói trả trước, bỏ yêu cầu hủy.
 
 Cancel checkout hỏi lại trạng thái PayOS: chỉ chốt cancelled nếu link đã `CANCELLED`/`EXPIRED`; `PAID` hoặc còn pending trả 409; không tra được/không thuộc customer trả 404 theo action/repository. Không tin query param frontend để tự kết luận đã hủy. PayOS không gửi webhook khi khách hủy link; frontend gọi cancel endpoint sau khi về cancelUrl.
 
@@ -766,7 +785,8 @@ Các trường dưới đây nằm trong `data`. `T[]` là array; page có `item
 | `PlanPurchaseStatus` | `orderCode: long`, `status: string` |
 | `CheckoutCancellation` | `orderCode: long`, `status: string` (`cancelled`) |
 | `InvoiceSummary` | `id: int`, `rentalId: int`, `invoiceNumber: string`, `amount: decimal`, `vatAmount: decimal`, `status: string`, `issuedAt: datetime`, `dueAt: datetime?` |
-| `PaymentResult` | `paymentId: int`, `invoiceId: int`, `amount: decimal`, `status: string`, `providerReference: string?` |
+| `InvoiceDetail` | Các trường InvoiceSummary + `canPay: bool`, `paymentBlockedReason: string?`, `paymentMethod: payos/cash`, `orderId: int?` |
+| `PaymentResult` | `paymentId: int`, `invoiceId: int`, `amount: decimal`, `status: string`, `providerReference: string?`, `orderId: int?` |
 | `PaymentSummary` | `id: int`, `rentalId: int?`, `invoiceId: int?`, `type: string?`, `amount: decimal`, `status: string`, `method: string?`, `providerReference: string?`, `paidAt: datetime?`, `createdAt: datetime` |
 | `DriverScheduleEntry` | `assignmentId: int`, `rentalId: int`, `vehicleId: int`, `driverStaffId: int`, `driverName: string`, `startTime: datetime`, `endTime: datetime`, `rentalStatus: string` |
 | `DriverShift` | `id: int`, `driverStaffId: int`, `startTime: datetime`, `endTime: datetime`, `status: string` |
@@ -841,7 +861,7 @@ Không tự đặt `Content-Type` khi gửi FormData; trình duyệt cần tạo
 1. Đăng ký + verify OTP → login.
 2. Customer lưu giấy phép → CustomerService duyệt approved.
 3. Tìm xe trống → POST rental hourly/longterm → lấy rental ID.
-4. GET invoices để lấy invoice của rental → POST checkout → mở checkoutUrl; webhook chốt paid.
+4. GET invoices để lấy invoice của yêu cầu → GET invoice detail: chờ staff POST rental confirm và canPay=true. Với payos: POST checkout → mở checkoutUrl → webhook chốt paid và phát hành order. Với cash: staff thực nhận đủ tiền rồi POST cash-confirmation → paid/order. Customer đọc lại invoice/orderId từ server.
 5. Nếu longterm, nhân viên lưu chứng từ hợp đồng.
 6. Inspection staff ghi pre-inspection đạt; Manager phân công tài xế nếu cần, có ca trực bao phủ.
 7. CustomerService chuyển sang renting.

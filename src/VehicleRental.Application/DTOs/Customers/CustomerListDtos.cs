@@ -7,6 +7,9 @@ public sealed class CustomerListQuery
     [StringLength(255)]
     public string? Search { get; init; }
     public bool? IsActive { get; init; }
+    /// <summary>Optional license filter: pending, approved, rejected, or none (no license number submitted).</summary>
+    [RegularExpression("^(pending|approved|rejected|none)$")]
+    public string? LicenseStatus { get; init; }
     [Range(1, int.MaxValue)]
     public int Page { get; init; } = 1;
     [Range(1, 100)]

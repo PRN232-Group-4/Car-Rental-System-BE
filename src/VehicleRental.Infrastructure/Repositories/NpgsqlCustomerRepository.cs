@@ -8,24 +8,27 @@ public sealed partial class NpgsqlCustomerRepository(NpgsqlDataSource dataSource
 {
     public async Task<CustomerPage> ListAsync(CustomerListQuery query, CancellationToken ct)
     {
+        const string licenseStatus = "CASE WHEN NULLIF(btrim(c.license_number), '') IS NULL THEN 'none' ELSE c.license_status END";
         const string filter = """
             FROM customers c JOIN users u ON u.id = c.user_id
             WHERE ($1::boolean IS NULL OR u.is_active = $1::boolean)
               AND ($2::text IS NULL OR strpos(lower(COALESCE(u.fullname, '')), lower($2)) > 0
                    OR strpos(lower(u.email), lower($2)) > 0
                    OR strpos(lower(COALESCE(u.phone, '')), lower($2)) > 0)
-            """;
+            """ + " AND ($3::text IS NULL OR (" + licenseStatus + ") = $3::text)";
         await using var count = dataSource.CreateCommand("SELECT COUNT(*) " + filter);
         count.Parameters.AddWithValue((object?)query.IsActive ?? DBNull.Value);
         count.Parameters.AddWithValue((object?)query.Search ?? DBNull.Value);
+        count.Parameters.AddWithValue((object?)query.LicenseStatus ?? DBNull.Value);
         var total = Convert.ToInt32(await count.ExecuteScalarAsync(ct));
 
         await using var command = dataSource.CreateCommand("""
             SELECT c.id, c.user_id, u.email, u.fullname, u.phone, u.avatar,
-                   u.is_active, c.license_status, c.loyalty_point
-            """ + " " + filter + " ORDER BY c.id LIMIT $3 OFFSET $4");
+                   u.is_active,
+            """ + " " + licenseStatus + ", c.loyalty_point " + filter + " ORDER BY c.id LIMIT $4 OFFSET $5");
         command.Parameters.AddWithValue((object?)query.IsActive ?? DBNull.Value);
         command.Parameters.AddWithValue((object?)query.Search ?? DBNull.Value);
+        command.Parameters.AddWithValue((object?)query.LicenseStatus ?? DBNull.Value);
         command.Parameters.AddWithValue(query.PageSize);
         command.Parameters.AddWithValue(((long)query.Page - 1) * query.PageSize);
         await using var reader = await command.ExecuteReaderAsync(ct);
