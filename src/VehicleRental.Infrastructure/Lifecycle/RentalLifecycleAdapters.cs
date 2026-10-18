@@ -11,7 +11,7 @@ public sealed class RentalPaymentGateAdapter(NpgsqlDataSource dataSource) : IRen
     public async Task<bool> IsRentalInvoicePaidAsync(int rentalId, CancellationToken ct)
     {
         await using var cmd = dataSource.CreateCommand("""
-            SELECT EXISTS(SELECT 1 FROM invoices WHERE rental_id = $1 AND status = 'paid')
+            SELECT EXISTS(SELECT 1 FROM invoices WHERE rental_id = $1 AND kind='rental' AND status = 'paid')
             """);
         cmd.Parameters.AddWithValue(rentalId);
         return (bool)(await cmd.ExecuteScalarAsync(ct))!;

@@ -14,7 +14,7 @@ public sealed class HandoverIntegrationTests(PostgresFixture db) : IClassFixture
     private NpgsqlRentalLifecycleRepository Repository => new(db.DataSource);
     private NpgsqlOperationsRepository Operations => new(db.DataSource);
     private HandoverService Service => new(new RentalQueryService(new NpgsqlRentalQueries(db.DataSource, TimeProvider.System)),
-        new RentalLifecycleService(Repository, null!, null!, null!, null!, new Events(),
+        new RentalLifecycleService(Repository, new RentalPaymentGateAdapter(db.DataSource), null!, null!, null!, new Events(),
             new RentalOptions(), new RentalCancellationOptions(), TimeProvider.System));
 
     private async Task<int> InspectorAsync()

@@ -1,4 +1,8 @@
 # Changelog
+- 2026-10-18 — [Danh sách Admin và chi tiết theo dõi đơn thuê](2026-10-18-admin-rental-tracking.md)
+- 2026-10-18 — [Duyệt yêu cầu, thu tiền và phát hành đơn thuê chính thức](2026-10-18-booking-request-paid-order.md)
+- 2026-10-18 — [Đặt xe theo cơ sở và email OTP Thong Dong](2026-10-18-facility-booking-otp-email.md)
+- 2026-10-18 — [Lọc khách hàng theo trạng thái GPLX](2026-10-18-customer-license-filter.md)
 - 2026-10-16 — [Sửa đơn trước thuê và bàn giao xe](2026-10-16-rental-editing-handover.md)
 - 2026-10-15 — [Kiểm tra loại xe và đếm số lần thuê theo chính sách](2026-10-15-rental-policy-validation-usage.md)
 - 2026-10-15 — [Kích hoạt và tạm ngưng chính sách thuê xe](2026-10-15-rental-policy-status.md)

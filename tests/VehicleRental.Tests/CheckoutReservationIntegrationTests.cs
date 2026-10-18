@@ -3,6 +3,8 @@ using Car_Rental_System_BE.Application.DTOs.Payments;
 using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Lifecycle;
+using Car_Rental_System_BE.Application.Lifecycle;
 using Xunit;
 
 namespace VehicleRental.Tests;
@@ -23,6 +25,15 @@ public sealed class CheckoutReservationIntegrationTests(PostgresFixture db) : IC
         Assert.NotNull(await payments.GetInvoiceForCustomerAsync(invoiceId, email, default));
         Assert.Equal(DBNull.Value, await Seed.ScalarAsync(db.DataSource, "SELECT checkout_started_at FROM invoices WHERE id=$1", invoiceId));
         var service = new PaymentService(payments, new FailedGateway(), new("https://example.com/return", "https://example.com/cancel"));
+        var before = await payments.GetInvoiceAsync(invoiceId, email, default);
+        Assert.False(before!.CanPay);
+        Assert.Equal("RENTAL_CONFIRMATION_REQUIRED", before.PaymentBlockedReason);
+        var denied = await Assert.ThrowsAsync<ConflictException>(() => service.CheckoutAsync(invoiceId, email, default));
+        Assert.Equal("RENTAL_CONFIRMATION_REQUIRED", denied.Code);
+        Assert.Equal(DBNull.Value, await Seed.ScalarAsync(db.DataSource, "SELECT checkout_started_at FROM invoices WHERE id=$1", invoiceId));
+        await new NpgsqlRentalLifecycleRepository(db.DataSource).UpdateToPreInspectionAsync(rental.Id, DateTime.UtcNow, new(1, "staff@test.local", "CustomerService"), default);
+        rental = rental with { Status = "pre_inspection" };
+        Assert.True((await payments.GetInvoiceAsync(invoiceId, email, default))!.CanPay);
         await Assert.ThrowsAsync<HttpRequestException>(() => service.CheckoutAsync(invoiceId, email, default));
         var marker = Assert.IsType<DateTime>(await Seed.ScalarAsync(db.DataSource, "SELECT checkout_started_at FROM invoices WHERE id=$1", invoiceId));
         Assert.Equal(0, await Seed.CountAsync(db.DataSource, "SELECT COUNT(*) FROM payments WHERE rental_id=$1", rental.Id));
@@ -54,6 +65,23 @@ public sealed class CheckoutReservationIntegrationTests(PostgresFixture db) : IC
             Assert.Equal("INVOICE_NOT_PAYABLE", error.Code);
         }
         Assert.Equal(DBNull.Value, await Seed.ScalarAsync(db.DataSource, "SELECT checkout_started_at FROM invoices WHERE id=$1", invoiceId));
+    }
+
+    [Fact]
+    public async Task Inspection_without_staff_confirmation_does_not_unlock_checkout()
+    {
+        var scenario = await Scenarios.CreateDirectRentalAsync(db.DataSource);
+        var payments = new NpgsqlPaymentRepository(db.DataSource);
+        await Seed.ScalarAsync(db.DataSource, "UPDATE rentals SET status='pre_inspection' WHERE id=$1", scenario.RentalId);
+        var error = await Assert.ThrowsAsync<ConflictException>(() => payments.ReserveInvoiceCheckoutAsync(scenario.InvoiceId, scenario.Email, default));
+        Assert.Equal("RENTAL_CONFIRMATION_REQUIRED", error.Code);
+        var lifecycle = new NpgsqlRentalLifecycleRepository(db.DataSource);
+        await lifecycle.UpdateToPreInspectionAsync(scenario.RentalId, DateTime.UtcNow, new(1, "staff@test.local", "CustomerService"), default);
+        Assert.NotNull(await payments.ReserveInvoiceCheckoutAsync(scenario.InvoiceId, scenario.Email, default));
+        Assert.True((await payments.GetInvoiceAsync(scenario.InvoiceId, scenario.Email, default))!.CanPay);
+        await Seed.ScalarAsync(db.DataSource, "UPDATE rentals SET status='cancelled' WHERE id=$1", scenario.RentalId);
+        Assert.False((await payments.GetInvoiceAsync(scenario.InvoiceId, scenario.Email, default))!.CanPay);
+        Assert.Equal("INVOICE_NOT_PAYABLE", (await Assert.ThrowsAsync<ConflictException>(() => payments.ReserveInvoiceCheckoutAsync(scenario.InvoiceId, scenario.Email, default))).Code);
     }
 
     [Fact]

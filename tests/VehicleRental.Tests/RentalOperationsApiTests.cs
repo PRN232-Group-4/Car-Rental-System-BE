@@ -90,6 +90,18 @@ public sealed class RentalOperationsApiTests : IAsyncLifetime
         Assert.Single(page.GetProperty("items").EnumerateArray());
         Assert.Equal(7, _repository.LastFilter!.CustomerId);
         Assert.Equal("pending", _repository.LastFilter.Status);
+        Assert.Equal(JsonValueKind.Null, page.GetProperty("items")[0].GetProperty("orderId").ValueKind);
+    }
+
+    [Fact]
+    public async Task Admin_default_list_preserves_all_status_scope_and_nullable_official_order_id()
+    {
+        using var response = await Send(HttpMethod.Get, "/api/rentals", "Admin");
+        using var json = await Envelope(response, 200);
+        Assert.Null(_repository.LastFilter!.Status);
+        Assert.Null(_repository.LastFilter.CustomerId);
+        Assert.Null(_repository.LastFilter.HandoverStatus);
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("data").GetProperty("items")[0].GetProperty("orderId").ValueKind);
     }
 
     [Theory]
@@ -215,6 +227,12 @@ public sealed class RentalOperationsApiTests : IAsyncLifetime
         Assert.Equal(1, size.GetProperty("minimum").GetInt32());
         Assert.Equal(100, size.GetProperty("maximum").GetInt32());
         Assert.Equal(20, size.GetProperty("default").GetInt32());
+        foreach (var schemaName in new[] { "OperationalRentalSummary", "OperationalRentalDetail", "CustomerRentalSummary", "CustomerRentalDetail" })
+        {
+            var orderId = json.RootElement.GetProperty("components").GetProperty("schemas").GetProperty(schemaName).GetProperty("properties").GetProperty("orderId");
+            Assert.Equal("integer", orderId.GetProperty("type").GetString());
+            Assert.True(orderId.GetProperty("nullable").GetBoolean());
+        }
     }
 
     private const string ValidEdit = "{\"vehicleId\":1,\"startTime\":\"2032-07-01T08:00:00Z\",\"endTime\":\"2032-07-01T12:00:00Z\",\"hasDriver\":false}";

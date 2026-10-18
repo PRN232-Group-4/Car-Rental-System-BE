@@ -204,9 +204,11 @@ public sealed partial class NpgsqlOperationsRepository
         if ((rental.Status,status) is not (("pending","cancelled") or ("pending","pre_inspection") or
             ("pre_inspection","renting") or ("renting","post_inspection") or ("post_inspection","completed")))
             throw new InvalidOperationException("Invalid rental state transition.");
-        if (status is "pre_inspection" or "renting") await RequirePassedPreAsync(cn, tx, id, rental.VehicleId, ct);
+        if (status == "renting") await RequirePassedPreAsync(cn, tx, id, rental.VehicleId, ct);
         if (status == "renting")
         {
+            if (!rental.IsSubscription && await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM invoices WHERE rental_id=$1 AND kind='rental' AND status='paid')", ct, id) is not true)
+                throw new Car_Rental_System_BE.Application.Common.Errors.ConflictException("PAYMENT_REQUIRED", "Direct rental invoice must be paid before handover.");
             var (start,end) = AssignmentPeriod(rental);
             await RequireAvailableVehicleAsync(cn, tx, rental.VehicleId, start, end, id, ct);
             var driver = await ValueAsync(cn, tx, "SELECT driver_staff_id FROM vehicle_assignments WHERE rental_id=$1 AND status='assigned'", ct, id);
@@ -216,7 +218,8 @@ public sealed partial class NpgsqlOperationsRepository
         }
         if (status is "post_inspection" or "completed" && await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM inspections WHERE rental_id=$1 AND vehicle_id=$2 AND inspection_type='post_rental')", ct, id, rental.VehicleId) is not true)
             throw new InvalidOperationException("Post-inspection is required for the current vehicle.");
-        await ValueAsync(cn, tx, "UPDATE rentals SET status=$2 WHERE id=$1", ct, id, status);
+        await ValueAsync(cn, tx, "UPDATE rentals SET status=$2,confirmed_at=CASE WHEN $2='pre_inspection' THEN COALESCE(confirmed_at,now() AT TIME ZONE 'utc') ELSE confirmed_at END WHERE id=$1", ct, id, status);
+        if (status == "pre_inspection") await RentalOrderWriter.EnsurePaidAsync(cn, tx, id, ct);
         await tx.CommitAsync(ct);
         return rental with { Status = status };
     }

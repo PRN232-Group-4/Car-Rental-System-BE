@@ -66,8 +66,9 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
         await tx.CommitAsync(ct);
         return (await GetVehicleAsync(vehicleId,ct))!;
     }
-    public async Task<Rental> CreateRentalAsync(string email,int vehicleId,int? policyId,string type,DateTime start,DateTime end,bool subscription,int? subscriptionId,bool hasDriver,CancellationToken ct)
+    public async Task<Rental> CreateRentalAsync(string email,int vehicleId,int? policyId,string type,DateTime start,DateTime end,bool subscription,int? subscriptionId,bool hasDriver,CancellationToken ct,string paymentMethod="payos")
     {
+        if(paymentMethod is not ("payos" or "cash"))throw new ArgumentException("PaymentMethod must be payos or cash.");
         if(end<=start)throw new ArgumentException("End time must be after start time.");
         await using var cn=await dataSource.OpenConnectionAsync(ct);
         await using var tx=await cn.BeginTransactionAsync(ct);
@@ -129,14 +130,14 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
             throw new ConflictException("VEHICLE_UNAVAILABLE", $"Vehicle {vehicleId} is unavailable for the requested period (exclusion violation).");
         }
         if(!subscription){
-            await using var inv=new NpgsqlCommand("INSERT INTO invoices(rental_id,invoice_number,amount,vat_amount)VALUES($1,$2,$3,$4)",cn,tx);
-            Add(inv,rid,$"INV-{_time.GetUtcNow():yyyyMMdd}-{rid}",total+vat+deposit,vat);
+            await using var inv=new NpgsqlCommand("INSERT INTO invoices(rental_id,invoice_number,amount,vat_amount,payment_method)VALUES($1,$2,$3,$4,$5)",cn,tx);
+            Add(inv,rid,$"INV-{_time.GetUtcNow():yyyyMMdd}-{rid}",total+vat+deposit,vat,paymentMethod);
             await inv.ExecuteNonQueryAsync(ct);
         }
         await tx.CommitAsync(ct);
         return (await GetRentalAsync(rid,ct))!;
     }
-    public async Task<Rental?> GetRentalAsync(int id,CancellationToken ct){await using var c=dataSource.CreateCommand("SELECT r.id,r.customer_id,r.vehicle_id,r.rental_type,r.status,r.is_subscription,r.vat_price,r.deposit_price,r.overtime_price,r.total_price,COALESCE(h.start_time,l.start_time),COALESCE(h.end_time,l.end_time),h.hourly_price_snapshot,l.monthly_price_snapshot,h.has_driver,l.contract_link,l.signed_at FROM rentals r LEFT JOIN hour_rental_detail h ON h.rental_id=r.id LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id WHERE r.id=$1");c.Parameters.AddWithValue(id);await using var r=await c.ExecuteReaderAsync(ct);return await r.ReadAsync(ct)?ReadRental(r):null;}
+    public async Task<Rental?> GetRentalAsync(int id,CancellationToken ct){await using var c=dataSource.CreateCommand("SELECT r.id,r.customer_id,r.vehicle_id,r.rental_type,r.status,r.is_subscription,r.vat_price,r.deposit_price,r.overtime_price,r.total_price,COALESCE(h.start_time,l.start_time),COALESCE(h.end_time,l.end_time),h.hourly_price_snapshot,l.monthly_price_snapshot,h.has_driver,l.contract_link,l.signed_at,(SELECT o.id FROM rental_orders o WHERE o.rental_id=r.id) FROM rentals r LEFT JOIN hour_rental_detail h ON h.rental_id=r.id LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id WHERE r.id=$1");c.Parameters.AddWithValue(id);await using var r=await c.ExecuteReaderAsync(ct);return await r.ReadAsync(ct)?ReadRental(r):null;}
     public async Task<IReadOnlyList<DriverScheduleEntry>> ListDriverScheduleAsync(int? driver,DateTime from,DateTime to,CancellationToken ct)
     {
         await using var c=dataSource.CreateCommand("SELECT a.id,a.rental_id,a.vehicle_id,a.driver_staff_id,COALESCE(u.fullname,u.email),COALESCE(h.start_time,l.start_time),COALESCE(h.end_time,l.end_time),r.status FROM vehicle_assignments a JOIN rentals r ON r.id=a.rental_id JOIN staffs s ON s.id=a.driver_staff_id JOIN users u ON u.id=s.user_id LEFT JOIN hour_rental_detail h ON h.rental_id=r.id LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id WHERE a.status='assigned' AND r.status NOT IN ('cancelled','completed') AND ($1::int IS NULL OR a.driver_staff_id=$1) AND COALESCE(h.start_time,l.start_time)<$3 AND COALESCE(h.end_time,l.end_time)>$2 ORDER BY COALESCE(h.start_time,l.start_time),a.id");
@@ -166,7 +167,8 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
         await using var command = dataSource.CreateCommand("""
             SELECT r.id,r.customer_id,r.vehicle_id,r.rental_type,r.status,r.is_subscription,
                    r.vat_price,r.deposit_price,r.overtime_price,r.total_price,
-                   COALESCE(h.start_time,l.start_time),COALESCE(h.end_time,l.end_time),h.hourly_price_snapshot,l.monthly_price_snapshot,h.has_driver,l.contract_link,l.signed_at
+                   COALESCE(h.start_time,l.start_time),COALESCE(h.end_time,l.end_time),h.hourly_price_snapshot,l.monthly_price_snapshot,h.has_driver,l.contract_link,l.signed_at,
+                   (SELECT o.id FROM rental_orders o WHERE o.rental_id=r.id)
             FROM rentals r
             LEFT JOIN hour_rental_detail h ON h.rental_id=r.id
             LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id
@@ -209,7 +211,7 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
     private static RentalPolicy ReadPolicy(NpgsqlDataReader r)=>new(r.GetInt32(0),r.IsDBNull(1)?null:r.GetInt32(1),r.GetString(2),r.GetDecimal(3),r.GetDecimal(4),r.GetDecimal(5),r.GetBoolean(6));
     private static SubscriptionPlan ReadPlan(NpgsqlDataReader r)=>new(r.GetInt32(0),r.GetString(1),S(r,2),r.GetDecimal(3),r.GetInt32(4),r.IsDBNull(5)?null:r.GetDecimal(5),r.GetBoolean(6));
     private static CustomerSubscription ReadCustomerSubscription(NpgsqlDataReader r)=>new(r.GetInt32(0),r.GetInt32(1),r.GetInt32(2),r.GetString(3),r.GetFieldValue<DateOnly>(4),r.GetFieldValue<DateOnly>(5),r.IsDBNull(6)?null:r.GetDecimal(6),r.IsDBNull(7)?null:r.GetDecimal(7),r.GetString(8));
-    private static Rental ReadRental(NpgsqlDataReader r)=>new(r.GetInt32(0),r.GetInt32(1),r.GetInt32(2),r.GetString(3),r.GetString(4),r.GetBoolean(5),r.GetDecimal(6),r.GetDecimal(7),r.GetDecimal(8),r.GetDecimal(9),r.IsDBNull(10)?null:r.GetDateTime(10),r.IsDBNull(11)?null:r.GetDateTime(11),r.IsDBNull(12)?null:r.GetDecimal(12),r.IsDBNull(13)?null:r.GetDecimal(13),r.IsDBNull(14)?null:r.GetBoolean(14),r.IsDBNull(15)?null:r.GetString(15),r.IsDBNull(16)?null:r.GetDateTime(16));
+    private static Rental ReadRental(NpgsqlDataReader r)=>new(r.GetInt32(0),r.GetInt32(1),r.GetInt32(2),r.GetString(3),r.GetString(4),r.GetBoolean(5),r.GetDecimal(6),r.GetDecimal(7),r.GetDecimal(8),r.GetDecimal(9),r.IsDBNull(10)?null:r.GetDateTime(10),r.IsDBNull(11)?null:r.GetDateTime(11),r.IsDBNull(12)?null:r.GetDecimal(12),r.IsDBNull(13)?null:r.GetDecimal(13),r.IsDBNull(14)?null:r.GetBoolean(14),r.IsDBNull(15)?null:r.GetString(15),r.IsDBNull(16)?null:r.GetDateTime(16),r.FieldCount>17&&!r.IsDBNull(17)?r.GetInt32(17):null);
     private static Maintenance ReadMaintenance(NpgsqlDataReader r)=>new(r.GetInt32(0),r.GetInt32(1),r.IsDBNull(2)?null:r.GetInt32(2),r.IsDBNull(3)?null:r.GetInt32(3),S(r,4),S(r,5),D(r,6),r.IsDBNull(7)?null:r.GetBoolean(7),S(r,8),r.IsDBNull(9)?null:r.GetDecimal(9));
     private async Task SaveVehicleDetailAsync(NpgsqlConnection cn, NpgsqlTransaction tx, int vehicleId, string type, string fuel, VehicleDetail d, CancellationToken ct)
     {

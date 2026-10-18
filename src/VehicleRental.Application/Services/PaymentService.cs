@@ -11,10 +11,16 @@ namespace Car_Rental_System_BE.Application.Services;
 
 public sealed class PaymentService(IPaymentRepository repository, IPaymentGateway gateway, PaymentCheckoutOptions options) : IPaymentService
 {
+    public Task<PaymentResult> ConfirmCashAsync(int invoiceId, string reviewer, CancellationToken ct)
+    {
+        if (invoiceId < 1) throw new ArgumentOutOfRangeException(nameof(invoiceId));
+        if (string.IsNullOrWhiteSpace(reviewer)) throw new UnauthorizedAccessException();
+        return repository.ConfirmCashAsync(invoiceId, reviewer, ct);
+    }
     public Task<IReadOnlyList<InvoiceSummary>> ListInvoicesAsync(string? email, CancellationToken ct) =>
         repository.ListInvoicesAsync(email, ct);
 
-    public Task<InvoiceSummary?> GetInvoiceAsync(int invoiceId, string? email, CancellationToken ct) =>
+    public Task<InvoiceDetail?> GetInvoiceAsync(int invoiceId, string? email, CancellationToken ct) =>
         repository.GetInvoiceAsync(invoiceId, email, ct);
 
     public Task<InvoiceSummary> CreateInvoiceForRentalAsync(int rentalId, CancellationToken ct) =>

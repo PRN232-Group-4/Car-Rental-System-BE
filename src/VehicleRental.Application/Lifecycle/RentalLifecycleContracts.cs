@@ -86,7 +86,8 @@ public sealed record CustomerRentalSummary(
     DateTime StartTime,
     DateTime EndTime,
     decimal TotalPrice,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    int? OrderId = null
 );
 
 public sealed record CustomerRentalDetail(
@@ -108,7 +109,8 @@ public sealed record CustomerRentalDetail(
     IReadOnlyList<CustomerTimelineDto> Timeline,
     bool CanCancel,
     CancellationPreview? Cancellation,
-    string? NextAction
+    string? NextAction,
+    int? OrderId = null
 );
 
 public sealed record OperationalRentalSummary(
@@ -124,7 +126,8 @@ public sealed record OperationalRentalSummary(
     DateTime EndTime,
     decimal TotalPrice,
     bool HasDriver,
-    string? DriverName
+    string? DriverName,
+    int? OrderId = null
 );
 
 public sealed record OperationalRentalDetail(
@@ -140,7 +143,8 @@ public sealed record OperationalRentalDetail(
     CustomerInvoiceDto? Invoice,
     IReadOnlyList<CustomerInspectionDto> Inspections,
     IReadOnlyList<RentalStatusHistoryEntry> History,
-    RentalSettlementDto? Settlement
+    RentalSettlementDto? Settlement,
+    int? OrderId = null
 );
 
 public sealed record OverdueRentalItem(

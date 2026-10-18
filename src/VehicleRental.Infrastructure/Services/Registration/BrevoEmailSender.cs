@@ -13,7 +13,7 @@ public sealed class BrevoEmailSender(HttpClient client, IOptions<BrevoOptions> o
         var settings = options.Value;
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.brevo.com/v3/smtp/email");
         request.Headers.Add("api-key", settings.ApiKey);
-        request.Content = JsonContent.Create(new { sender = new { email = settings.SenderEmail, name = settings.SenderName }, to = new[] { new { email, name } }, subject = "Mã xác thực đăng ký", textContent = $"Mã OTP của bạn là {otp}. Mã hết hạn sau vài phút. Không chia sẻ mã này." });
+        request.Content = JsonContent.Create(new { sender = new { email = settings.SenderEmail, name = settings.SenderName }, to = new[] { new { email, name } }, subject = "Mã xác thực tài khoản Thong Dong", htmlContent = OtpEmailTemplate.Render(name, otp), textContent = $"Xin chào {name}, mã xác thực Thong Dong của bạn là {otp}. Mã chỉ sử dụng một lần và hết hạn sau vài phút. Không chia sẻ mã này. Nếu bạn không thực hiện yêu cầu, hãy bỏ qua email." });
         using var response = await client.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode) throw new RegistrationException("Không thể gửi email OTP. Hãy thử lại sau.", StatusCodes.Status503ServiceUnavailable);
     }

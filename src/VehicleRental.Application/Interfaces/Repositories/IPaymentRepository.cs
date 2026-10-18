@@ -4,11 +4,12 @@ namespace Car_Rental_System_BE.Application.Interfaces.Repositories;
 
 public interface IPaymentRepository
 {
+    Task<PaymentResult> ConfirmCashAsync(int invoiceId, string reviewer, CancellationToken ct);
     Task<InvoicePayment?> GetInvoiceForCustomerAsync(int invoiceId, string email, CancellationToken ct);
     /// <summary>Reserves an owned unpaid invoice before an external checkout; freezes rental edits even if the provider request fails.</summary>
     Task<InvoicePayment?> ReserveInvoiceCheckoutAsync(int invoiceId, string email, CancellationToken ct);
     Task<IReadOnlyList<InvoiceSummary>> ListInvoicesAsync(string? email, CancellationToken ct);
-    Task<InvoiceSummary?> GetInvoiceAsync(int invoiceId, string? email, CancellationToken ct);
+    Task<InvoiceDetail?> GetInvoiceAsync(int invoiceId, string? email, CancellationToken ct);
     Task<InvoiceSummary> CreateInvoiceForRentalAsync(int rentalId, CancellationToken ct);
     Task<PaymentResult> CompleteInvoiceAsync(int invoiceId, decimal amount, string providerReference, CancellationToken ct);
     Task<IReadOnlyList<PaymentSummary>> ListPaymentsAsync(string? email, int? invoiceId, CancellationToken ct);

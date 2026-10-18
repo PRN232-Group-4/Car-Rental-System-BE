@@ -15,9 +15,21 @@ namespace Car_Rental_System_BE.WebApi.Controllers;
 [Route("api")]
 public sealed class PaymentsController(IPaymentService payments) : ControllerBase
 {
+    /// <summary>Staff confirms actual cash receipt after rental approval; atomically issues the paid order.</summary>
+    [Authorize(Policy = AuthorizationPolicies.CustomerService)]
+    [HttpPost("invoices/{invoiceId:int}/cash-confirmation")]
+    [ProducesResponseType<PaymentResult>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public Task<PaymentResult> ConfirmCash([FromRoute, Range(1, int.MaxValue)] int invoiceId, CancellationToken ct) => payments.ConfirmCashAsync(invoiceId, Email(), ct);
+
     [Authorize(Policy = AuthorizationPolicies.Customer)]
     [HttpPost("invoices/{invoiceId:int}/checkout")]
     [ProducesResponseType<CheckoutResult>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> Checkout(int invoiceId, CancellationToken ct)
     {
@@ -92,7 +104,7 @@ public sealed class PaymentsController(IPaymentService payments) : ControllerBas
 
     [Authorize(Policy = AuthorizationPolicies.FinancialRead)]
     [HttpGet("invoices/{invoiceId:int}")]
-    [ProducesResponseType<InvoiceSummary>(StatusCodes.Status200OK)]
+    [ProducesResponseType<InvoiceDetail>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Invoice(int invoiceId, CancellationToken ct) => await payments.GetInvoiceAsync(invoiceId, Scope(), ct) is { } x ? Ok(x) : Problem("Invoice was not found.", statusCode: StatusCodes.Status404NotFound);
 

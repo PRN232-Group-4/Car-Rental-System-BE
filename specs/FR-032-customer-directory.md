@@ -11,6 +11,13 @@ Danh sách nhận `search` (tối đa 255 ký tự), `isActive` nullable, `page`
 
 Danh sách chỉ chọn khách có bản ghi `customers` nối tới `users` tồn tại. Mỗi item gồm `id`, `userId`, `email`, `fullName`, `phone`, `avatarUrl`, `isActive`, `licenseStatus`, `loyaltyPoint`.
 
+## 2026-10-18 — Lọc hồ sơ GPLX trong Admin
+
+- Danh sách nhận thêm `licenseStatus` tùy chọn: `pending`, `approved`, `rejected`, `none`; giá trị khác trả 400 tại HTTP và Application.
+- Hồ sơ chưa có số GPLX (null/rỗng/chỉ khoảng trắng) được trả và lọc dưới trạng thái `none`, dù DB mặc định `pending`. Vì vậy `pending` chỉ chứa khách đã gửi số GPLX và đang chờ duyệt.
+- Lọc kết hợp với tìm kiếm/tài khoản, áp dụng trước phân trang và tính `totalCount`; không truyền trạng thái vẫn trả mọi khách hàng theo quyền hiện tại.
+- Acceptance: kiểm tra binding/validation/envelope/Swagger và PostgreSQL với nhiều trang, tổng sau lọc, hồ sơ chưa gửi, kết hợp lọc và trang rỗng.
+
 Chi tiết sử dụng **customers.id**, không phải `users.id`. ID dương trả thông tin profile (`id`, `userId`, `email`, `fullName`, `gender`, `phone`, `avatarUrl`, `isActive`), `license` (number/type/issueDate/expiryDate/imageUrl/status) và `loyalty.points`. Khách inactive vẫn xem được. ID không dương trả 400; không có khách hoặc user tham chiếu không tồn tại trả 404. Không trả password hash, authorization version, session hoặc token.
 
 ## Acceptance criteria
