@@ -188,6 +188,16 @@ if (googleAuthentication.Enabled)
 }
 builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
 
+// CORS cho client chạy ở localhost (Flutter web / next dev) cần cookie session.
+// Chỉ cho phép origin localhost/127.0.0.1 nên an toàn ở mọi môi trường: origin khác
+// (kể cả production Internet) vẫn bị chặn. FE production dùng proxy same-origin.
+builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
+    .SetIsOriginAllowed(origin => Uri.TryCreate(origin, UriKind.Absolute, out var uri)
+        && (uri.Host == "localhost" || uri.Host == "127.0.0.1"))
+    .AllowAnyHeader()
+    .AllowAnyMethod()
+    .AllowCredentials()));
+
 var app = builder.Build();
 
 app.Lifetime.ApplicationStarted.Register(() =>
@@ -225,6 +235,11 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
     await Results.Problem(detail, statusCode: status).ExecuteAsync(context);
 }));
 app.UseHttpsRedirection();
+<<<<<<< Updated upstream
+=======
+app.UseCors();
+app.UseRateLimiter();
+>>>>>>> Stashed changes
 app.UseAuthentication();
 app.UseAuthorization();
 
