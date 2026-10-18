@@ -40,7 +40,8 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                    v.id, COALESCE(v.brand, 'Unknown'), COALESCE(v.model, 'Unknown'), v.main_img_url,
                    COALESCE(h.start_time, l.start_time),
                    COALESCE(h.end_time, l.end_time),
-                   r.total_price, r.created_at
+                   r.total_price, r.created_at,
+                   (SELECT o.id FROM rental_orders o WHERE o.rental_id = r.id)
             FROM rentals r
             JOIN vehicles v ON v.id = r.vehicle_id
             LEFT JOIN hour_rental_detail h ON h.rental_id = r.id
@@ -70,7 +71,8 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                 StartTime: reader.GetDateTime(8),
                 EndTime: reader.GetDateTime(9),
                 TotalPrice: reader.GetDecimal(10),
-                CreatedAt: reader.GetDateTime(11)
+                CreatedAt: reader.GetDateTime(11),
+                OrderId: reader.IsDBNull(12) ? null : reader.GetInt32(12)
             ));
         }
 
@@ -88,7 +90,8 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                    COALESCE(h.has_driver, false) AS has_driver,
                    r.total_price - r.vat_price AS rent_price,
                    r.vat_price, r.deposit_price, r.overtime_price, r.total_price,
-                   i.id, i.invoice_number, i.status, i.amount
+                   i.id, i.invoice_number, i.status, i.amount, r.confirmed_at,
+                   (SELECT o.id FROM rental_orders o WHERE o.rental_id = r.id)
             FROM rentals r
             JOIN vehicles v ON v.id = r.vehicle_id
             LEFT JOIN facilities f ON f.id = v.facility_id
@@ -107,6 +110,8 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
         var statusStr = reader.GetString(1);
         var rentalType = reader.GetString(2);
         var isSubscription = reader.GetBoolean(3);
+        var isConfirmed = !reader.IsDBNull(22);
+        var orderId = reader.IsDBNull(23) ? (int?)null : reader.GetInt32(23);
 
         var vehicle = new CustomerVehicleDto(
             Id: reader.GetInt32(4),
@@ -268,8 +273,9 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
 
         var nextAction = statusStr switch
         {
-            "pending" when invoice?.Status != "paid" && !isSubscription => "PAYMENT_REQUIRED",
             "pending" => "WAITING_CONFIRMATION",
+            "pre_inspection" when !isConfirmed => "WAITING_CONFIRMATION",
+            "pre_inspection" when invoice?.Status != "paid" && !isSubscription => "PAYMENT_REQUIRED",
             "pre_inspection" => "PREPARING_VEHICLE",
             "renting" => "ENJOY_YOUR_TRIP",
             "post_inspection" => "PROCESSING_RETURN",
@@ -297,7 +303,8 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
             Timeline: timeline,
             CanCancel: canCancel,
             Cancellation: cancellation,
-            NextAction: nextAction
+            NextAction: nextAction,
+            OrderId: orderId
         );
     }
 
@@ -364,7 +371,8 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                    COALESCE(h.start_time, l.start_time),
                    COALESCE(h.end_time, l.end_time),
                    r.total_price, COALESCE(h.has_driver, false),
-                   COALESCE(du.fullname, du.email)
+                   COALESCE(du.fullname, du.email),
+                   (SELECT o.id FROM rental_orders o WHERE o.rental_id = r.id)
             FROM rentals r
             JOIN customers c ON c.id = r.customer_id
             JOIN users u ON u.id = c.user_id
@@ -400,7 +408,8 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                 EndTime: reader.GetDateTime(9),
                 TotalPrice: reader.GetDecimal(10),
                 HasDriver: reader.GetBoolean(11),
-                DriverName: reader.IsDBNull(12) ? null : reader.GetString(12)
+                DriverName: reader.IsDBNull(12) ? null : reader.GetString(12),
+                OrderId: reader.IsDBNull(13) ? null : reader.GetInt32(13)
             ));
         }
 
@@ -426,7 +435,8 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                    COALESCE(v.brand, 'Unknown'), COALESCE(v.model, 'Unknown'), v.license_plate,
                    COALESCE(f.name, 'Main Facility'),
                    COALESCE(du.fullname, du.email),
-                   i.id, i.invoice_number, i.status, i.amount
+                   i.id, i.invoice_number, i.status, i.amount,
+                   (SELECT o.id FROM rental_orders o WHERE o.rental_id = r.id)
             FROM rentals r
             JOIN customers c ON c.id = r.customer_id
             JOIN users u ON u.id = c.user_id
@@ -484,6 +494,7 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
         var vPlate = reader.IsDBNull(32) ? null : reader.GetString(32);
         var fName = reader.GetString(33);
         var dName = reader.IsDBNull(34) ? null : reader.GetString(34);
+        var orderId = reader.IsDBNull(39) ? (int?)null : reader.GetInt32(39);
 
         CustomerInvoiceDto? invoice = null;
         if (!reader.IsDBNull(35))
@@ -589,7 +600,8 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
             Invoice: invoice,
             Inspections: inspections,
             History: history,
-            Settlement: settlement
+            Settlement: settlement,
+            OrderId: orderId
         );
     }
 

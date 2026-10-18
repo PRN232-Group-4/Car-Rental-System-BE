@@ -25,7 +25,7 @@ public sealed class RentalLifecycleController(
 {
     /// <summary>
     /// Confirms a pending rental and advances it to pre_inspection.
-    /// Direct rentals must have their invoice paid; subscription rentals require no payment.
+    /// Staff approval opens checkout; payment is required later before handover for direct rentals.
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
     [HttpPost("{id:int}/confirm")]

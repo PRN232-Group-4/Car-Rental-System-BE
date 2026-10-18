@@ -46,5 +46,10 @@ public sealed class RentalQueryPaginationIntegrationTests(PostgresFixture db) : 
         var all = await service.ListOperationalRentalsAsync(filter with { Status = null, HandoverStatus = "all", PageSize = 100 }, default);
         Assert.Equal(2, all.TotalCount);
         Assert.Equal(2, all.Items.Count);
+        // The Admin list without a status filter also includes terminal requests.
+        await Seed.ScalarAsync(db.DataSource, "UPDATE rentals SET status='cancelled' WHERE id=$1", first.Id);
+        var unrestricted = await service.ListOperationalRentalsAsync(filter with { Status = null, PageSize = 100 }, default);
+        Assert.Equal(2, unrestricted.TotalCount);
+        Assert.Equal(new[] { "completed", "cancelled" }, unrestricted.Items.Select(x => x.Status));
     }
 }

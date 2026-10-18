@@ -90,6 +90,9 @@ public sealed class CustomerListApiTests : IAsyncLifetime
     [InlineData("pageSize=101")]
     [InlineData("page=2147483648")]
     [InlineData("isActive=maybe")]
+    [InlineData("licenseStatus=unknown")]
+    [InlineData("licenseStatus=Pending")]
+    [InlineData("licenseStatus=%20pending%20")]
     public async Task Invalid_queries_are_400_and_never_reach_repository(string query)
     {
         _repository.Query = null;
@@ -104,12 +107,13 @@ public sealed class CustomerListApiTests : IAsyncLifetime
     [Fact]
     public async Task Query_binding_passes_normalized_search_and_filter_and_limits_search()
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/customers?search=%20Alice%20&isActive=false&page=2&pageSize=5");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/customers?search=%20Alice%20&isActive=false&licenseStatus=pending&page=2&pageSize=5");
         request.Headers.Add("X-Test-Role", "Admin");
         using var response = await _client.SendAsync(request);
         using var json = await AssertEnvelopeAsync(response, 200);
         Assert.Equal("Alice", _repository.Query!.Search);
         Assert.False(_repository.Query.IsActive);
+        Assert.Equal("pending", _repository.Query.LicenseStatus);
         Assert.Equal(2, _repository.Query.Page);
         Assert.Equal(5, _repository.Query.PageSize);
         _repository.Query = null;
@@ -128,7 +132,9 @@ public sealed class CustomerListApiTests : IAsyncLifetime
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var operation = json.RootElement.GetProperty("paths").GetProperty("/api/customers").GetProperty("get");
         var names = operation.GetProperty("parameters").EnumerateArray().Select(p => p.GetProperty("name").GetString()).ToArray();
-        foreach (var name in new[] { "Search", "IsActive", "Page", "PageSize" }) Assert.Contains(name, names);
+        foreach (var name in new[] { "Search", "IsActive", "LicenseStatus", "Page", "PageSize" }) Assert.Contains(name, names);
+        var licenseStatus = operation.GetProperty("parameters").EnumerateArray().Single(p => p.GetProperty("name").GetString() == "LicenseStatus");
+        Assert.Equal(new[] { "pending", "approved", "rejected", "none" }, licenseStatus.GetProperty("schema").GetProperty("enum").EnumerateArray().Select(x => x.GetString()));
         foreach (var code in new[] { "200", "400", "401", "403" })
         {
             var schema = operation.GetProperty("responses").GetProperty(code).GetProperty("content").GetProperty("application/json").GetProperty("schema");

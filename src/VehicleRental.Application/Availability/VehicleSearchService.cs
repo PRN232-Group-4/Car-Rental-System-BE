@@ -15,6 +15,10 @@ public sealed class VehicleSearchService(
 
     public async Task<VehicleSearchResult> SearchAsync(VehicleSearchQuery query, CancellationToken ct)
     {
+        if (query.Page < 1 || query.PageSize is < 1 or > 100)
+            throw new BusinessRuleException("INVALID_PAGINATION", "page must be at least 1 and pageSize between 1 and 100.");
+        if (query.FacilityId <= 0)
+            throw new BusinessRuleException("INVALID_FACILITY", "facilityId must be positive.");
         var now = Now();
         if (query.Sort == "nearest")
             throw new BusinessRuleException("SORT_NOT_SUPPORTED", "Sorting by distance is not supported yet.");
@@ -27,7 +31,7 @@ public sealed class VehicleSearchService(
         bool? driverAvailable = null;
         if (query.HasDriver == true)
         {
-            driverAvailable = await drivers.AnyAvailableAsync(window, now, ct);
+            driverAvailable = await drivers.AnyAvailableAsync(window, now, ct, query.FacilityId);
             if (driverAvailable == false)
                 return new VehicleSearchResult([], query.Page, query.PageSize, 0, Applied(window));
         }

@@ -108,6 +108,23 @@ public sealed class VehicleSearchServiceTests
     }
 
     [Fact]
+    public async Task Search_checks_driver_in_selected_facility_only()
+    {
+        await CreateService().SearchAsync(new(Now.AddHours(1), Now.AddHours(3), FacilityId: 42, HasDriver: true), default);
+        Assert.Equal(42, _drivers.FacilityId);
+    }
+
+    [Theory]
+    [InlineData(0, 20)]
+    [InlineData(1, 0)]
+    [InlineData(1, 101)]
+    public async Task Search_rejects_invalid_pagination(int page, int size)
+    {
+        var error = await Assert.ThrowsAsync<BusinessRuleException>(() => CreateService().SearchAsync(new(null, null, Page: page, PageSize: size), default));
+        Assert.Equal("INVALID_PAGINATION", error.Code);
+    }
+
+    [Fact]
     public async Task CheckAvailability_requires_both_from_and_to()
     {
         var service = CreateService();
@@ -180,9 +197,13 @@ public sealed class VehicleSearchServiceTests
     private sealed class FakeDriverAvailability : IDriverAvailability
     {
         public bool IsAvailable = true;
+        public int? FacilityId;
 
-        public Task<bool> AnyAvailableAsync(TimeRange? window, DateTime nowUtc, CancellationToken ct)
-            => Task.FromResult(IsAvailable);
+        public Task<bool> AnyAvailableAsync(TimeRange? window, DateTime nowUtc, CancellationToken ct, int? facilityId = null)
+        {
+            FacilityId = facilityId;
+            return Task.FromResult(IsAvailable);
+        }
     }
 
     private sealed class TestTimeProvider(DateTime utcNow) : TimeProvider

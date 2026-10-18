@@ -1,5 +1,12 @@
 # FR-010 — Tìm xe và availability (BE-10)
 
+## Cập nhật 2026-10-18 — Chọn cơ sở trước khi đặt xe
+
+- Customer chọn cơ sở, sau đó tự lái/có tài xế rồi mới truy vấn và chọn xe trong cơ sở bằng thẻ xe.
+- Theo xác nhận người dùng, có tài xế nghĩa là cơ sở có tài xế rảnh trong khoảng thuê; không phải xe thuộc đơn pending đã được phân công. `hasDriver=true&facilityId=...` chỉ trả xe khi có staff tài xế active tại đúng cơ sở, GPLX hợp lệ và không trùng assignment kể cả đệm. Chưa tự gán/giữ chỗ tài xế khi khách xem xe.
+- Tự lái dùng các xe khả dụng trong cùng cơ sở, vẫn áp dụng lịch xe/bảo dưỡng. Thuê dài hạn giữ hình thức tự lái theo contract hiện có.
+- Search pagination mặc định 1/20, pageSize 1..100; validate HTTP/Application, offset Int64, totalCount đúng ngay cả trang ngoài phạm vi.
+
 - **Status:** In progress; **Priority:** P0; **Milestone:** M3; **Assignee:** Huy
 - **Phụ thuộc:** BE-09 (vehicles, Done), BE-11 (rental_policies, Done). **Phục vụ:** FE-04 (Huy), BE-12 (Lạc, tạo rental), BE-14, BE-17.
 - **Migration dự kiến:** `0008_vehicle_bookings_and_availability.sql` (đổi số nếu trùng khi merge; xem `db/migrations/README.md`).
@@ -52,7 +59,7 @@ Query (tất cả tùy chọn trừ khi ghi chú):
 | `fuelType` | string | `vehicle_types.fuel_type` |
 | `hasDriver` | bool | `true`: chỉ trả khi còn ít nhất một tài xế khả dụng trong khung giờ; mỗi kết quả có `driverAvailable` |
 | `sort` | `recommended`(mặc định) \| `price_asc` \| `price_desc` \| `newest` | `nearest` **dành riêng** cho BE-36, trả 400 `SORT_NOT_SUPPORTED` cho tới khi có |
-| `page`, `pageSize` | int | `page >= 1`, `1 <= pageSize <= 100` (mặc định 12) |
+| `page`, `pageSize` | int | `page >= 1`, `1 <= pageSize <= 100` (mặc định 20) |
 
 Quy tắc xác thực `from`/`to`: `from < to`; `to - from <= 366 ngày`; `from >= now - 5 phút`; hourly tối thiểu 1 giờ (cấu hình `Availability:MinHourlyMinutes=60`). Vi phạm → 400 `INVALID_TIME_RANGE`.
 
@@ -70,7 +77,7 @@ Response `200` (qua `ApiSuccessResponse`), `data`:
     "badges": { "electric": false, "driverAvailable": true, "subscriptionEligible": true },
     "durationHours": 30.0
   }],
-  "page": 1, "pageSize": 12, "totalCount": 120,
+  "page": 1, "pageSize": 20, "totalCount": 120,
   "appliedWindow": { "from": "2026-10-10T02:00:00Z", "to": "2026-10-11T08:00:00Z", "bufferMinutes": 60 }
 }
 ```

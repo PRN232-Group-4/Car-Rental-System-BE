@@ -1,5 +1,23 @@
 # Tiến độ
 
+## Danh sách đơn Admin và mã đơn trên chi tiết theo dõi — 2026-10-18
+
+Tái sử dụng API rental list/detail hiện có cho mọi trạng thái, giữ phân trang 1/20 tối đa100 và tổng sau lọc. Bổ sung orderId nullable vào summary/chi tiết customer/vận hành, tách mã yêu cầu khỏi đơn chính thức; timeline/audit và timestamps có sẵn phục vụ thanh theo dõi. Build -warnaserror và 44/44 test PostgreSQL/HTTP/Application liên quan đạt; chưa deploy. Xem [change](../changes/2026-10-18-admin-rental-tracking.md).
+
+FE đã có bảng Admin/cột xem và trang Đơn thuê của tôi cho customer, dùng thanh tiến trình xanh 5 bước. Đạt 141 unit FE, 20 E2E liên quan qua các lượt, typecheck/ESLint/design lint. Production build FE mới chưa được chạy do automatic approval review gặp giới hạn sử dụng; không tuyên bố build FE mới đạt.
+
+## Yêu cầu đặt xe và đơn thuê đã thanh toán — 2026-10-18
+
+Đã tách rental request và rental_orders theo xác nhận người dùng; duyệt trước thanh toán, PayOS hoặc staff xác nhận thực nhận tiền mặt mới phát hành order nguyên tử. Gói trả trước phát hành lúc duyệt; bàn giao trực tiếp vẫn cần paid. Invoice detail/Swagger/UI và migration 0021 cập nhật. Build -warnaserror, 91 test backend chọn lọc, 126 unit FE và 24 E2E đạt; typecheck/lint/design/build FE đạt. Kiểm tra mở rộng còn 3 lỗi về SQLSTATE immutable và overtime/shortfall, ghi rõ tại [change](../changes/2026-10-18-booking-request-paid-order.md). Chưa deploy hoặc sửa dữ liệu thật. Xem [ADR-008](decisions/ADR-008-booking-request-paid-order.md).
+
+## Đặt xe theo cơ sở và email OTP — 2026-10-18
+
+Tìm xe có tài xế lọc tài xế rảnh theo cơ sở và khoảng đệm, xử lý cả assignment cũ; search pagination theo rule 1/20, offset Int64 và tổng đúng trên trang rỗng. Email OTP HTML responsive dùng phong cách Thong Dong, có text fallback/escape và dùng chung đăng ký/reset. 55 test liên quan đạt với PostgreSQL18 tạm và HTTP giả; build `-warnaserror` đạt. Chưa gửi email thật/deploy. Xem [change](../changes/2026-10-18-facility-booking-otp-email.md).
+
+## Lọc khách hàng theo GPLX — 2026-10-18
+
+`GET /api/customers` hỗ trợ lọc GPLX trước phân trang và tổng; trạng thái `none` phân biệt hồ sơ trống với hồ sơ đã gửi chờ duyệt. Có validation HTTP/Application, Swagger và API docs. Build `-warnaserror` đạt và 35/35 test CustomerList đạt, gồm PostgreSQL18 tạm và HTTP thực tế. Chưa deploy. Xem [change](../changes/2026-10-18-customer-license-filter.md).
+
 ## Sửa đơn trước thuê và bàn giao xe — 2026-10-16
 
 Thêm PUT rental theo ID chỉ trước start, kiểm tra cam kết thanh toán/inspection/assignment/hợp đồng; đồng bộ booking và invoice unpaid nguyên tử. Thêm danh sách/chi tiết/xác nhận handover dùng rental lifecycle, sửa kiểm định sau confirm/return và kiểm tra lại điều kiện start trong transaction. Rental lists validate pagination ở HTTP/Application, offset Int64; sửa truy vấn chi tiết theo schema, response envelope và success messages. Checkout reservation và migration0020 ngăn đổi giá sau phát hành link (invoice unpaid cũ được khóa sửa an toàn khi nâng cấp). **236/236 test chọn lọc đạt**, gồm HTTP/Domain/Application/architecture và PostgreSQL18 tạm; build với -warnaserror đạt. Chưa kiểm chứng PostgreSQL16/PayOS thật, chưa sửa FE hoặc deploy. Xem [change](../changes/2026-10-16-rental-editing-handover.md) và [ADR-007](decisions/ADR-007-rental-editing-and-handover.md).

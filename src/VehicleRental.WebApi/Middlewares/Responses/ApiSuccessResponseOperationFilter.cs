@@ -13,6 +13,26 @@ public sealed class ApiSuccessResponseOperationFilter : IOperationFilter
     {
         var controller = context.MethodInfo.DeclaringType?.Name;
         var action = context.MethodInfo.Name;
+        if (controller == "PaymentsController" && action == "ConfirmCash")
+            operation.Description = "Admin/Manager/CustomerService confirms actual full cash receipt for a cash invoice after rental approval. No client amount or paid flag accepted. Atomically records paid ledger with reviewer audit, marks invoice paid and issues the official rental order. Repeated confirmation returns the same receipt/order. Online invoices, cancelled rentals and unapproved requests return 409.";
+        if (controller == "PaymentsController" && action == "Checkout")
+            operation.Description = "Customer, own invoice only. Rental invoices require prior staff confirmation (confirmed_at present, rental not pending/cancelled); otherwise 409 RENTAL_CONFIRMATION_REQUIRED, without reserving checkout or calling PayOS. Unpaid overtime invoices remain payable after settlement. Payment must complete before handover.";
+        if (controller == "PaymentsController" && action == "Invoice")
+            operation.Description = "Invoice detail includes canPay (boolean) and paymentBlockedReason (null, RENTAL_CONFIRMATION_REQUIRED or INVOICE_NOT_PAYABLE). These are computed by the same policy rechecked under lock at checkout; clients must not enable payment until canPay=true.";
+        if (controller == "RentalLifecycleController" && action == "Confirm")
+            operation.Description = "Admin/Manager/CustomerService confirms a pending rental before payment, writes confirmed_at and advances to pre_inspection. An unpaid direct rental can be confirmed. Legacy pre_inspection without confirmed_at may be explicitly approved here; repeating an existing approval returns 409. Direct rental payment remains mandatory before handover.";
+        if (controller == "VehicleSearchController" && action == "Search")
+        {
+            operation.Description = "Public available-vehicle search. facilityId restricts vehicles to one branch; with hasDriver=true, an active qualified driver at that same branch must be free for the requested window including assignment buffer. Drivers are assigned later, not reserved by search. Pagination defaults to page=1/pageSize=20; page>=1 and pageSize 1..100, invalid values return 400. totalCount is after filtering and remains correct on empty pages.";
+        }
+        if (controller == "CustomersController" && action == "List")
+        {
+            operation.Description = "Admin/Manager/CustomerService only. Optional search, isActive and licenseStatus filters combine before pagination and totalCount. licenseStatus is pending, approved, rejected or none; none means no license number submitted, pending means submitted and awaiting review. Omit filters to list all customers including inactive accounts. Pagination defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Results are ordered by customer ID ascending; out-of-range pages return empty items.";
+            var status = operation.Parameters.FirstOrDefault(p => string.Equals(p.Name, "LicenseStatus", StringComparison.OrdinalIgnoreCase));
+            if (status is not null)
+                status.Schema.Enum = new[] { "pending", "approved", "rejected", "none" }
+                    .Select(value => (Microsoft.OpenApi.Any.IOpenApiAny)new Microsoft.OpenApi.Any.OpenApiString(value)).ToList();
+        }
         if ((controller == "RentalQueriesController" && action is "List" or "Mine") ||
             (controller == "HandoversController" && action == "List"))
         {
@@ -33,7 +53,11 @@ public sealed class ApiSuccessResponseOperationFilter : IOperationFilter
             }
             if (controller == "HandoversController")
                 operation.Description += " Admin/Manager/CustomerService only. status=pending (default), completed or all. Completed handovers include rentals that have since been returned/completed.";
+            if (controller == "RentalQueriesController")
+                operation.Description += " Each item includes nullable orderId for the official paid rental order; id remains the booking request ID. Omit status (and tab for mine) to include all lifecycle states, including completed and cancelled.";
         }
+        if (controller == "RentalQueriesController" && action is "Detail" or "MineDetail")
+            operation.Description = "Rental detail includes status, audit timeline/history and nullable top-level orderId. id (or rental.id) remains the booking request ID; only a persisted official order supplies orderId. A cancelled rental remains cancelled even if a historical paid order exists.";
         if (controller == "RentalEditingController")
             operation.Description = "Admin/Manager/CustomerService only. Updates vehicleId/startTime/endTime/hasDriver before rental start (pending or pre_inspection, started_at null). Times must be UTC. Immutable customer/type/subscription/policy and server-computed prices cannot be supplied. Conflicting bookings, existing inspection/assignment, signed contracts and committed payments block changes with 409. Unpaid invoice and booking are updated in the same transaction.";
         if (controller == "HandoversController" && action == "Confirm")

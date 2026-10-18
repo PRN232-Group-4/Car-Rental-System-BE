@@ -1,5 +1,12 @@
 # FR-018 — Vòng đời đơn thuê: hủy, hoàn tất, quá giờ, quyết toán (BE-17)
 
+## 2026-10-18 — Staff xác nhận trước thanh toán (người dùng xác nhận)
+
+- Đơn mới ở pending; staff theo policy CustomerService xác nhận trước, ghi confirmed_at và chuyển pre_inspection mà không yêu cầu invoice đã paid.
+- Checkout hóa đơn rental chỉ mở sau xác nhận thực sự (confirmed_at có giá trị, không pending/cancelled); kiểm tra trong transaction khóa rental/invoice trước khi ghi checkout marker/gọi PayOS.
+- Hóa đơn bổ sung overtime giữ quy tắc thu sau quyết toán. Không mở checkout cho đơn cancelled hoặc invoice không unpaid.
+- Start/bàn giao đơn trực tiếp vẫn yêu cầu invoice rental paid; subscription giữ quy tắc hiện tại. Legacy pre_inspection chưa có confirmed_at cần staff gọi confirm để xác nhận bổ sung, không tự suy diễn duyệt từ kiểm định.
+
 - **Status:** In progress; **Priority:** P0; **Milestone:** M4; **Assignee:** Huy
 - **Phụ thuộc:** BE-14 (assignment), BE-15 (pre-inspection, Lạc), BE-16 (post-inspection, Anh), BE-18/19 (invoice/payment, Phúc), BE-22 (subscription, Phúc). **Phục vụ:** FE-07 (Huy), FE-15/16 (Trí), BE-27 (loyalty), BE-26 (email), BE-28 (dashboard).
 - **Migration dự kiến:** `0010_rental_lifecycle.sql`.
@@ -29,8 +36,8 @@ pending ──confirm──▶ pre_inspection ──start──▶ renting ─�
 
 | Lệnh | Từ → Đến | Ai được | Điều kiện (409 nếu vi phạm) |
 |---|---|---|---|
-| `confirm` | pending → pre_inspection | Admin, Manager, Staff | Đơn trực tiếp: hóa đơn rental đã `paid` (cổng `IRentalPaymentGate`); đơn theo gói: không yêu cầu thanh toán |
-| `start` | pre_inspection → renting | Admin, Manager, Staff | Có pre-inspection `is_ok = true`; có bản ghi `assigned` (có tài xế nếu `has_driver`); tự lái: GPLX khách `approved` và còn hạn; ghi `started_at`; xe → `renting`, `is_renting = true` |
+| `confirm` | pending → pre_inspection | Policy CustomerService | Duyệt yêu cầu, ghi confirmed_at trước thanh toán; legacy pre_inspection chưa có timestamp được duyệt bổ sung. Đơn theo gói trả trước phát hành order; trực tiếp chờ paid (FR-036) |
+| `start` | pre_inspection → renting | Policy CustomerService | Đơn trực tiếp cần hóa đơn rental paid; có pre-inspection `is_ok = true`; có bản ghi `assigned` (có tài xế nếu `has_driver`); tự lái: GPLX khách `approved` và còn hạn; ghi `started_at`; xe → `renting`, `is_renting = true` |
 | `return` | renting → post_inspection | Admin, Manager, Staff | Ghi `returned_at` (mặc định `now`; staff có thể truyền `returnedAt` trong `[started_at, now]`) |
 | `complete` | post_inspection → completed | Admin, Manager, Staff | Có post-inspection; chạy **quyết toán** (mục 5) trong cùng transaction; ghi `completed_at` |
 | `cancel` | pending/pre_inspection → cancelled | Customer (chủ đơn, chỉ `pending`), Admin, Manager, Staff | Quy tắc hủy mục 4 |

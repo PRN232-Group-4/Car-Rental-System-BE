@@ -1,5 +1,13 @@
 # Câu hỏi mở và giả định
 
+## Yêu cầu đặt xe và order — 2026-10-18, đã xác nhận
+
+Người dùng xác nhận tách yêu cầu đặt xe và đơn thuê chính thức. Staff duyệt yêu cầu rồi mới cho thanh toán. PayOS xác nhận đã nhận tiền thì phát hành order paid; tiền mặt chờ staff xác nhận thực nhận rồi mới phát hành. Customer chọn phương thức trước khi gửi yêu cầu; dùng gói đã trả trước phát hành lúc duyệt. Rental ID giữ làm mã yêu cầu/vận hành hiện có; orderId riêng trả trong invoice/rental detail. Xem ADR-008 và FR-036; không còn giả định thanh toán trước confirm.
+
+## Chọn cơ sở và tài xế khi đặt xe — 2026-10-18
+
+Người dùng xác nhận “có tài xế” nghĩa là có tài xế rảnh tại cơ sở, không phải xe của đơn pending đã được assign. Tìm kiếm lọc staff facility, active, GPLX hợp lệ và assignment không chồng giờ có đệm. Giữ quy trình gán sau khi đặt; chưa giữ chỗ tài xế hoặc tự tạo assignment. Longterm tiếp tục tự lái vì API hiện không lưu hasDriver cho longterm. Email OTP Brevo dùng mẫu xác thực chung cho đăng ký/reset, không gửi email thật khi kiểm thử.
+
 ## Sửa rental trước thuê và bàn giao — 2026-10-16
 
 “Trước khi thuê” được hiểu là pending/pre_inspection, chưa started_at; chỉ staff theo policy CustomerService sửa, khách vẫn xem đơn của mình. Chọn phạm vi PUT gồm vehicleId/startTime/endTime/hasDriver; danh tính khách, loại thuê, policy và gói không đổi. Chứng từ hoặc cam kết đã tồn tại chặn thay đổi thay vì tự hủy/ghi đè. Subscription chỉ dịch lịch cùng xe và thời lượng. Bàn giao dùng rentalId và state machine hiện có, không thêm trạng thái delivered. Link PayOS cũ không có bằng chứng phát hành, nên migration0020 khóa các invoice unpaid có sẵn khi nâng cấp lần đầu; không tự bỏ marker, kể cả gateway timeout/cancel. Workflow đối soát và mở lại sửa sau checkout nằm ngoài phạm vi này. Quyết định tại ADR-007.

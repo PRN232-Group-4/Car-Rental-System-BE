@@ -2,6 +2,7 @@ using Car_Rental_System_BE.Application.Availability;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using System.ComponentModel.DataAnnotations;
 
 namespace Car_Rental_System_BE.Controllers;
 
@@ -72,7 +73,7 @@ public sealed record VehicleSearchRequest(
     DateTime? To = null,
     string RentalType = "hourly",
     int? VehicleTypeId = null,
-    int? FacilityId = null,
+    [Range(1, int.MaxValue)] int? FacilityId = null,
     string? Q = null,
     string? Brand = null,
     decimal? MinPrice = null,
@@ -85,8 +86,8 @@ public sealed record VehicleSearchRequest(
     string? FuelType = null,
     bool? HasDriver = null,
     string Sort = "recommended",
-    int Page = 1,
-    int PageSize = 12)
+    [Range(1, int.MaxValue)] int Page = 1,
+    [Range(1, 100)] int PageSize = 20)
 {
     public VehicleSearchQuery ToQuery() => new(
         From, To, RentalType, VehicleTypeId, FacilityId, Q, Brand, MinPrice, MaxPrice,
