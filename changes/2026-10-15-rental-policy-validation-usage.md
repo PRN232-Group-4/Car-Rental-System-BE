@@ -1,0 +1,9 @@
+# Kiểm tra loại xe, chặn trùng active và đếm số lần thuê
+
+Theo yêu cầu người dùng, policy mới phải tham chiếu loại xe còn tồn tại và bị chặn nếu phạm vi đó đã có policy hoạt động. Null tiếp tục là phạm vi chung riêng. Application validate ID/name/tỷ lệ và kiểm tra tham chiếu/trùng active trước gọi ghi; repository kiểm tra lại tham chiếu dưới row lock và kiểm tra active trong transaction với advisory lock theo scope. Kích hoạt một bản inactive cũng kiểm tra active khác dưới cùng lock; không tự thay trạng thái dữ liệu trùng đã có. Lỗi tạo gắn VehicleTypeId để FE hiển thị inline.
+
+RentalPolicy bổ sung rentalCount (COUNT rentals.policy_id đúng policy, gồm mọi trạng thái, kể cả hủy; không suy ra theo loại xe). POST count0, PATCH status trả count thật. GET danh sách được chuẩn hóa pagination 1/20, pageSize1–100, validate HTTP/Application, ID giảm dần, offset64bit và tổng đúng cả trang rỗng. Migration0019 thêm index policy_id; runner tự phát hiện file SQL. Cập nhật FR-011, ADR-006, Swagger/API/progress/giả định.
+
+Kiểm chứng: solution và toàn bộ test project build với warnaserror; 147 test HTTP/validation/phân quyền/envelope/Swagger liên quan đạt. Bao phủ loại xe không có, ID sai, global null, active trùng, reference biến mất tại thời điểm ghi, count/page metadata, pagination default/boundaries/overflow/empty, validation tại Application. FE có 122 unit và 9 E2E đạt, gồm regression status/count và tạo policy.
+
+Đã thêm test PostgreSQL cho count theo nhiều trạng thái, không gộp cùng loại xe, không đếm policy null, status giữ count và request tạo/kích hoạt song song chỉ một thành công. Chưa chạy được với DB hợp lệ: cấu hình test mặc định đã bị từ chối xác thực và chưa có TEST_DATABASE_ADMIN; không khẳng định kiểm chứng SQL thực tế. Chưa deploy/migrate production. GET thay response shape nên cần triển khai FE/BE cùng nhau; FE có adapter đọc array cũ và hiển thị thiếu dữ liệu thay vì bịa count0.

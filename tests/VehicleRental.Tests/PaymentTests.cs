@@ -1,4 +1,4 @@
-using Car_Rental_System_BE.Infrastructure;
+using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
 namespace VehicleRental.Tests;
@@ -62,14 +62,14 @@ public sealed class PaymentTests(PostgresFixture db) : IClassFixture<PostgresFix
     {
         var (scenario, _) = await PaidScenarioAsync();
 
-        var user = await Seed.ScalarAsync(db.DataSource,"INSERT INTO users(email) VALUES($1) RETURNING id",$"inspector-{Guid.NewGuid():N}@test.local");
-        var staff = (int)(await Seed.ScalarAsync(db.DataSource,"INSERT INTO staffs(user_id) VALUES($1) RETURNING id",user))!;
+        var user = await Seed.ScalarAsync(db.DataSource, "INSERT INTO users(email) VALUES($1) RETURNING id", $"inspector-{Guid.NewGuid():N}@test.local");
+        var staff = (int)(await Seed.ScalarAsync(db.DataSource, "INSERT INTO staffs(user_id) VALUES($1) RETURNING id", user))!;
 
         await _operations.AddInspectionAsync(scenario.RentalId, staff, "pre_rental", true, null, null, null, null, CancellationToken.None);
         await _operations.ChangeRentalStatusAsync(scenario.RentalId, "renting", CancellationToken.None);
         await _operations.AddInspectionAsync(scenario.RentalId, staff, "post_rental", true, null, null, null, null, CancellationToken.None);
 
-        Assert.Equal(0, await Seed.CountAsync(db.DataSource,"SELECT COUNT(*) FROM payments WHERE rental_id=$1 AND type='refund'",scenario.RentalId));
+        Assert.Equal(0, await Seed.CountAsync(db.DataSource, "SELECT COUNT(*) FROM payments WHERE rental_id=$1 AND type='refund'", scenario.RentalId));
     }
 
     private async Task<(DirectRental Scenario, int PaymentId)> PaidScenarioAsync()

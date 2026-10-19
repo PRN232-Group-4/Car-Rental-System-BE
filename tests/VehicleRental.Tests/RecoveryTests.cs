@@ -1,5 +1,6 @@
-using Car_Rental_System_BE.Application.Operations;
-using Car_Rental_System_BE.Infrastructure;
+using Car_Rental_System_BE.Application.Common.Errors;
+using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
 namespace VehicleRental.Tests;
@@ -134,7 +135,7 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         var maintenance=await store.SaveMaintenanceAsync(null,new(0,vehicle,null,technician,"scheduled","repair",DateOnly.FromDateTime(DateTime.UtcNow),false,"Brakes",null),default);
         var (_,customer)=await Seed.CustomerAsync(db.DataSource);
         var start=DateTime.UtcNow.AddHours(1);
-        await Assert.ThrowsAsync<InvalidOperationException>(()=>store.CreateRentalAsync(customer,vehicle,null,"hourly",start,start.AddHours(1),false,null,false,default));
+        await Assert.ThrowsAsync<ConflictException>(()=>store.CreateRentalAsync(customer,vehicle,null,"hourly",start,start.AddHours(1),false,null,false,default));
         var catalog=await store.SearchVehiclesAsync(null,null,null,start,start.AddHours(1),1,100,default);
         Assert.DoesNotContain(catalog.Items,x=>x.Id==vehicle);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>store.SaveMaintenanceAsync(maintenance.Id,maintenance with { Status="completed",IsSafe=true },default,other));

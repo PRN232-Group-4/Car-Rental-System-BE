@@ -5,6 +5,8 @@
 
 ## Quy tắc
 
+Mật khẩu đăng nhập phải từ 6 đến 20 ký tự, bao gồm hai mốc; ngoài khoảng trả 400 validation trước khi truy xuất account/Redis. Tài khoản cũ có mật khẩu dài hơn 20 ký tự cần reset về giới hạn mới; không cắt ngắn mật khẩu để xác thực.
+
 `access_token` là JWT ngắn hạn và `refresh_token` là token opaque dài hạn; cả hai ở cookie `HttpOnly`, `Secure`, `SameSite=Lax`. Redis chỉ lưu hash refresh token. Refresh token là single-use và phải rotation khi gọi refresh. Logout/revoke xóa refresh-token record; access token cùng session id bị vô hiệu ngay.
 
 ## Acceptance criteria
@@ -12,6 +14,7 @@
 - [x] JWT bearer đọc `access_token` từ HttpOnly cookie và kiểm tra session id trong Redis.
 - [x] Google OAuth tạo/đảm bảo customer và trả cùng cặp token cookie.
 - [x] Login, refresh rotation, logout, logout-all và revoke token khi đổi/reset mật khẩu.
+- [x] Login chấp nhận độ dài 6/20 để tiếp tục xác thực; từ chối 5/21 ký tự bằng 400 có envelope validation. Xem [change](../changes/2026-10-07-password-length.md).
 - [ ] CSRF cho endpoint state-changing cookie-auth.
 
 ## Phân quyền cập nhật 2026-10-03

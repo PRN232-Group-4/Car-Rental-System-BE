@@ -1,12 +1,20 @@
-using Car_Rental_System_BE.Infrastructure;
-using Car_Rental_System_BE.Infrastructure.Authentication;
-using Car_Rental_System_BE.Application.Registration;
-using Car_Rental_System_BE.Application.Accounts;
-using Car_Rental_System_BE.Application.Organization;
-using Car_Rental_System_BE.Application.Operations;
-using Car_Rental_System_BE.Application.Payments;
-using Car_Rental_System_BE.Infrastructure.Payments;
-using Car_Rental_System_BE.Authentication;
+using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.Application.DTOs.Accounts;
+using Car_Rental_System_BE.Application.DTOs.Options;
+using Car_Rental_System_BE.Application.Interfaces.External;
+using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.Application.Services;
+using Car_Rental_System_BE.Domain.Entities;
+using Car_Rental_System_BE.Domain.Interfaces;
+using Car_Rental_System_BE.Infrastructure.Persistence;
+using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Services;
+using Car_Rental_System_BE.Infrastructure.Services.Authentication;
+using Car_Rental_System_BE.Infrastructure.Services.Media;
+using Car_Rental_System_BE.Infrastructure.Services.Payments;
+using Car_Rental_System_BE.Infrastructure.Services.Registration;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -18,8 +26,18 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using System.Security.Claims;
-using Car_Rental_System_BE.Responses;
 using System.Text;
+using Car_Rental_System_BE.Application.Availability;
+using Car_Rental_System_BE.Infrastructure.Availability;
+using Car_Rental_System_BE.Application.Assignments;
+using Car_Rental_System_BE.Infrastructure.Assignments;
+using Car_Rental_System_BE.Application.Lifecycle;
+using Car_Rental_System_BE.Application.Handovers;
+using Car_Rental_System_BE.Infrastructure.Lifecycle;
+using Car_Rental_System_BE.Application.Loyalty;
+using Car_Rental_System_BE.Infrastructure.Loyalty;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
@@ -32,11 +50,19 @@ builder.Logging.AddSimpleConsole(options =>
 // Add services to the container.
 builder.Services.AddControllers(options => options.Filters.Add<ApiSuccessResponseFilter>());
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options => options.OperationFilter<ApiSuccessResponseOperationFilter>());
+builder.Services.AddSwaggerGen(options =>
+{
+    options.OperationFilter<ApiSuccessResponseOperationFilter>();
+    options.SchemaFilter<PasswordRequestSchemaFilter>();
+});
 
 builder.Services.AddProblemDetails();
 builder.Services.AddOptions<RegistrationOptions>()
     .Bind(builder.Configuration.GetSection(RegistrationOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+builder.Services.AddOptions<AvailabilityOptions>()
+    .Bind(builder.Configuration.GetSection(AvailabilityOptions.SectionName))
     .ValidateDataAnnotations()
     .ValidateOnStart();
 builder.Services.AddOptions<BrevoOptions>()
@@ -62,6 +88,8 @@ builder.Services.AddOptions<GoogleAuthOptions>()
     .ValidateOnStart();
 builder.Services.Configure<CloudinaryOptions>(builder.Configuration.GetSection(CloudinaryOptions.SectionName));
 builder.Services.Configure<PayOsOptions>(builder.Configuration.GetSection(PayOsOptions.SectionName));
+builder.Services.Configure<GoogleMapsOptions>(builder.Configuration.GetSection(GoogleMapsOptions.SectionName));
+builder.Services.Configure<TelemetryRetentionOptions>(builder.Configuration.GetSection(TelemetryRetentionOptions.SectionName));
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedHost | ForwardedHeaders.XForwardedProto;
@@ -71,6 +99,9 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 
 var connectionString = builder.Configuration.GetConnectionString("RentalDatabase") ?? builder.Configuration["DATABASE_URL"];
+if (string.IsNullOrWhiteSpace(connectionString) && builder.Environment.IsDevelopment())
+    connectionString = "Host=localhost;Port=5432;Database=car_rental;Username=postgres;Password=postgres";
+
 if (!string.IsNullOrWhiteSpace(connectionString))
 {
     builder.Services.AddSingleton<NpgsqlDataSource>(_ => NpgsqlDataSource.Create(ToNpgsqlConnectionString(connectionString)));
@@ -78,9 +109,13 @@ if (!string.IsNullOrWhiteSpace(connectionString))
         .Bind(builder.Configuration.GetSection(DatabaseMigrationOptions.SectionName));
     builder.Services.AddHostedService<DatabaseMigrationHostedService>();
     builder.Services.AddHostedService<SubscriptionExpiryHostedService>();
+    builder.Services.AddHostedService<TelemetryRetentionHostedService>();
 }
 
 var redisConnection = builder.Configuration["Redis:ConnectionString"] ?? builder.Configuration["REDIS_URL"];
+if (string.IsNullOrWhiteSpace(redisConnection) && builder.Environment.IsDevelopment())
+    redisConnection = "localhost:6379";
+
 if (string.IsNullOrWhiteSpace(redisConnection))
     throw new InvalidOperationException("Redis:ConnectionString (or REDIS_URL) must be configured.");
 
@@ -90,17 +125,105 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 });
 builder.Services.AddHttpClient<IBrevoEmailSender, BrevoEmailSender>();
 builder.Services.AddHttpClient<IPaymentGateway, PayOsPaymentGateway>(client => client.BaseAddress = new Uri("https://api-merchant.payos.vn/"));
+builder.Services.AddHttpClient<IGoogleMapsClient, GoogleMapsClient>(client =>
+{
+    var baseUrl = builder.Configuration["GoogleMaps:BaseUrl"];
+    client.BaseAddress = new Uri(!string.IsNullOrWhiteSpace(baseUrl) ? baseUrl : "https://maps.googleapis.com/maps/api/");
+});
 builder.Services.AddScoped<IUserRepository, NpgsqlUserRepository>();
 builder.Services.AddScoped<IAccountRepository, NpgsqlAccountRepository>();
+builder.Services.AddScoped<ICustomerRepository, NpgsqlCustomerRepository>();
 builder.Services.AddScoped<IStaffRepository, NpgsqlStaffRepository>();
 builder.Services.AddScoped<IOperationsRepository, NpgsqlOperationsRepository>();
+builder.Services.AddScoped<IRentalEditingRepository, NpgsqlOperationsRepository>();
+builder.Services.AddScoped<IRentalEditingService, RentalEditingService>();
 builder.Services.AddScoped<IPaymentRepository, NpgsqlPaymentRepository>();
-builder.Services.AddScoped<IRegistrationWorkflow, RedisRegistrationWorkflow>();
-builder.Services.AddScoped<IPasswordResetWorkflow, RedisPasswordResetWorkflow>();
+builder.Services.AddScoped<ITrackingRepository, NpgsqlTrackingRepository>();
+builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<ICustomerService, CustomerService>();
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IStaffService, StaffService>();
+builder.Services.AddScoped<IOperationsService, OperationsService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IMediaService, MediaService>();
+builder.Services.AddScoped<ISessionService, SessionService>();
+builder.Services.AddScoped<ITrackingService, TrackingService>();
+builder.Services.AddScoped<IMapService, MapService>();
+builder.Services.AddSingleton<IWorkflowStateStore, RedisWorkflowStateStore>();
+builder.Services.AddSingleton(provider => provider.GetRequiredService<IOptions<RegistrationOptions>>().Value);
+builder.Services.AddSingleton(provider => provider.GetRequiredService<IOptions<AvailabilityOptions>>().Value);
+builder.Services.AddSingleton(provider => provider.GetRequiredService<IOptions<GoogleMapsOptions>>().Value);
+builder.Services.AddSingleton(provider => provider.GetRequiredService<IOptions<TelemetryRetentionOptions>>().Value);
+builder.Services.AddScoped(provider =>
+{
+    var options = provider.GetRequiredService<IOptions<PayOsOptions>>().Value;
+    return new PaymentCheckoutOptions(options.ReturnUrl, options.CancelUrl);
+});
+builder.Services.AddScoped<IRegistrationWorkflow, RegistrationService>();
+builder.Services.AddScoped<IPasswordResetWorkflow, PasswordResetService>();
 builder.Services.AddSingleton<IImageStorage, CloudinaryImageStorage>();
 builder.Services.AddHostedService<RedisConnectionHostedService>();
 builder.Services.AddSingleton<RedisRefreshTokenStore>();
 builder.Services.AddSingleton<JwtTokenService>();
+builder.Services.AddSingleton<IAccessTokenIssuer>(provider => provider.GetRequiredService<JwtTokenService>());
+builder.Services.AddSingleton<IRefreshTokenStore>(provider => provider.GetRequiredService<RedisRefreshTokenStore>());
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<IVehicleSearchRepository, NpgsqlVehicleSearchRepository>();
+builder.Services.AddScoped<IVehicleAvailabilityService, NpgsqlVehicleAvailabilityService>();
+builder.Services.AddScoped<IDriverAvailability, NpgsqlDriverAvailability>();
+builder.Services.AddScoped<VehicleSearchService>();
+builder.Services.Configure<AssignmentOptions>(builder.Configuration.GetSection(AssignmentOptions.SectionName));
+builder.Services.AddScoped<NpgsqlAssignmentRepository>();
+builder.Services.AddScoped<IAssignmentRepository>(sp => sp.GetRequiredService<NpgsqlAssignmentRepository>());
+builder.Services.AddScoped<IMaintenanceIncidentGateway>(sp => sp.GetRequiredService<NpgsqlAssignmentRepository>());
+builder.Services.AddScoped<IAssignmentService>(sp =>
+{
+    var repo = sp.GetRequiredService<IAssignmentRepository>();
+    var vehicleAvailability = sp.GetRequiredService<IVehicleAvailabilityService>();
+    var timeProvider = sp.GetRequiredService<TimeProvider>();
+    var options = sp.GetRequiredService<IOptions<AssignmentOptions>>().Value;
+    return new AssignmentService(repo, vehicleAvailability, options, timeProvider);
+});
+
+builder.Services.Configure<RentalOptions>(builder.Configuration.GetSection(RentalOptions.SectionName));
+builder.Services.Configure<RentalCancellationOptions>(builder.Configuration.GetSection(RentalCancellationOptions.SectionName));
+builder.Services.AddOptions<LoyaltyOptions>()
+    .Bind(builder.Configuration.GetSection(LoyaltyOptions.SectionName))
+    .Validate(options =>
+    {
+        options.Validate();
+        return true;
+    }, "Loyalty options configuration validation failed.")
+    .ValidateOnStart();
+builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<LoyaltyOptions>>().Value);
+builder.Services.AddScoped<ILoyaltyRepository, NpgsqlLoyaltyRepository>();
+builder.Services.AddScoped<ILoyaltyService, LoyaltyService>();
+builder.Services.AddScoped<ILoyaltyRedemption>(sp => (LoyaltyService)sp.GetRequiredService<ILoyaltyService>());
+
+builder.Services.AddScoped<NpgsqlRentalLifecycleRepository>();
+builder.Services.AddScoped<IRentalLifecycleRepository>(sp => sp.GetRequiredService<NpgsqlRentalLifecycleRepository>());
+builder.Services.AddScoped<IRentalPaymentGate, RentalPaymentGateAdapter>();
+builder.Services.AddScoped<IInvoiceGateway, InvoiceGatewayAdapter>();
+builder.Services.AddScoped<ISubscriptionUsage, SubscriptionUsageAdapter>();
+builder.Services.AddScoped<ILoyaltyAward, LoyaltyAwardAdapter>();
+builder.Services.AddScoped<IRentalEventSink, RentalEventSink>();
+builder.Services.AddScoped<ICurrentCustomer, CurrentCustomerService>();
+builder.Services.AddScoped<IRentalQueryRepository, NpgsqlRentalQueries>();
+builder.Services.AddScoped<IRentalQueries, RentalQueryService>();
+builder.Services.AddScoped<IHandoverService, HandoverService>();
+builder.Services.AddScoped<IRentalLifecycleService>(sp =>
+{
+    var repo = sp.GetRequiredService<IRentalLifecycleRepository>();
+    var paymentGate = sp.GetRequiredService<IRentalPaymentGate>();
+    var invoiceGateway = sp.GetRequiredService<IInvoiceGateway>();
+    var subscriptionUsage = sp.GetRequiredService<ISubscriptionUsage>();
+    var loyaltyAward = sp.GetRequiredService<ILoyaltyAward>();
+    var eventSink = sp.GetRequiredService<IRentalEventSink>();
+    var rOptions = sp.GetRequiredService<IOptions<RentalOptions>>().Value;
+    var cOptions = sp.GetRequiredService<IOptions<RentalCancellationOptions>>().Value;
+    var timeProvider = sp.GetRequiredService<TimeProvider>();
+    return new RentalLifecycleService(repo, paymentGate, invoiceGateway, subscriptionUsage, loyaltyAward, eventSink, rOptions, cOptions, timeProvider);
+});
 var googleAuthentication = builder.Configuration.GetSection(GoogleAuthOptions.SectionName).Get<GoogleAuthOptions>() ?? new GoogleAuthOptions();
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 var authentication = builder.Services.AddAuthentication(options =>
@@ -133,13 +256,13 @@ var authentication = builder.Services.AddAuthentication(options =>
             {
                 var sessionId = context.Principal?.FindFirstValue("sid") ?? context.Principal?.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sid);
                 var email = context.Principal?.FindFirstValue(ClaimTypes.Email) ?? context.Principal?.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Email);
-                var tokens = context.HttpContext.RequestServices.GetRequiredService<RedisRefreshTokenStore>();
+                var tokens = context.HttpContext.RequestServices.GetRequiredService<IRefreshTokenStore>();
                 if (string.IsNullOrWhiteSpace(sessionId) || string.IsNullOrWhiteSpace(email) || !await tokens.IsActiveAsync(sessionId, email, context.HttpContext.RequestAborted))
                 {
                     context.Fail("The token session is no longer active.");
                     return;
                 }
-                var accounts = context.HttpContext.RequestServices.GetRequiredService<IAccountRepository>();
+                var accounts = context.HttpContext.RequestServices.GetRequiredService<IAccountService>();
                 var account = await accounts.FindByEmailAsync(email, context.HttpContext.RequestAborted);
                 if (!AuthorizationPolicies.IsCurrentAccount(context.Principal!, account))
                     context.Fail("Account permissions have changed. Sign in again.");
@@ -165,7 +288,12 @@ if (googleAuthentication.Enabled)
     {
         options.ClientId = googleAuthentication.ClientId;
         options.ClientSecret = googleAuthentication.ClientSecret;
-        options.CallbackPath = "/signin-google";
+        // Đặt callback dưới /api/* để proxy của FE (Cloudflare worker ở prod, rewrite của next dev)
+        // chuyển tiếp được request callback. Nhờ vậy các cookie của quá trình OAuth thuộc origin FE.
+        options.CallbackPath = "/api/auth/google/callback";
+        // Mặc định CorrelationCookie là SameSite=None (buộc Secure) → hỏng khi dev qua http.
+        // Callback là điều hướng GET top-level từ accounts.google.com nên Lax vẫn gửi cookie.
+        options.CorrelationCookie.SameSite = SameSiteMode.Lax;
         options.SignInScheme = "External";
         options.Events.OnCreatingTicket = async context =>
         {
@@ -173,20 +301,42 @@ if (googleAuthentication.Enabled)
             if (string.IsNullOrWhiteSpace(email)) { context.Fail("Google did not return a verified email."); return; }
             var name = context.Principal?.FindFirstValue(ClaimTypes.Name) ?? email;
             await using var scope = context.HttpContext.RequestServices.CreateAsyncScope();
-            var users = scope.ServiceProvider.GetRequiredService<IUserRepository>();
+            var users = scope.ServiceProvider.GetRequiredService<IUserService>();
             await users.EnsureGoogleCustomerAsync(email.Trim().ToLowerInvariant(), name, context.HttpContext.RequestAborted);
         };
-        options.Events.OnRemoteFailure = async context =>
+        options.Events.OnRemoteFailure = context =>
         {
             var logger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("GoogleAuthentication");
             logger.LogWarning(context.Failure, "Google OAuth callback failed.");
             context.HandleResponse();
-            await Results.Problem("Google sign-in could not be completed. Please try again.", statusCode: StatusCodes.Status400BadRequest)
-                .ExecuteAsync(context.HttpContext);
+            // Khách bấm huỷ ở màn hình Google cũng rơi vào đây → trả về trang đăng nhập kèm cờ lỗi
+            // thay vì trang JSON 400.
+            context.Response.Redirect($"{googleAuthentication.SuccessRedirectUrl.TrimEnd('/')}/login?google=error");
+            return Task.CompletedTask;
         };
     });
 }
 builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("public-search", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 60,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        }));
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            ApiResponse.Failure(StatusCodes.Status429TooManyRequests,
+                message: "Bạn đã tìm kiếm quá nhiều lần. Vui lòng thử lại sau một phút."),
+            cancellationToken);
+    };
+});
 
 // CORS cho client chạy ở localhost (Flutter web / next dev) cần cookie session.
 // Chỉ cho phép origin localhost/127.0.0.1 nên an toàn ở mọi môi trường: origin khác
@@ -212,7 +362,11 @@ app.Lifetime.ApplicationStarted.Register(() =>
 });
 
 // Configure the HTTP request pipeline.
-app.UseForwardedHeaders();
+// Phải truyền options từ DI: overload không tham số tạo ForwardedHeadersOptions mặc định
+// (không có XForwardedHost, chỉ tin loopback) nên X-Forwarded-Host của FE worker bị bỏ qua →
+// Request.Host = host nội bộ, làm redirect_uri của Google trỏ về domain BE.
+app.UseForwardedHeaders(app.Services.GetRequiredService<IOptions<ForwardedHeadersOptions>>().Value);
+app.UseApiResponseErrors();
 
 if (!app.Environment.IsProduction())
 {
@@ -220,26 +374,9 @@ if (!app.Environment.IsProduction())
     app.UseSwaggerUI();
 }
 
-app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
-{
-    var exception = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
-    app.Logger.LogError(exception, "Unhandled request exception for {Method} {Path}.", context.Request.Method, context.Request.Path);
-    var status = exception switch
-    {
-        UnauthorizedAccessException => StatusCodes.Status403Forbidden,
-        KeyNotFoundException => StatusCodes.Status404NotFound,
-        ArgumentException or InvalidOperationException => StatusCodes.Status400BadRequest,
-        _ => StatusCodes.Status500InternalServerError
-    };
-    var detail = status == StatusCodes.Status500InternalServerError ? "An unexpected server error occurred." : exception?.Message;
-    await Results.Problem(detail, statusCode: status).ExecuteAsync(context);
-}));
 app.UseHttpsRedirection();
-<<<<<<< Updated upstream
-=======
 app.UseCors();
 app.UseRateLimiter();
->>>>>>> Stashed changes
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -248,16 +385,16 @@ app.MapGet("/", () => Results.Redirect(app.Environment.IsProduction() ? "/health
 app.MapGet("/health", async (NpgsqlDataSource? dataSource, CancellationToken cancellationToken) =>
 {
     if (dataSource is null)
-        return Results.Problem("ConnectionStrings:RentalDatabase is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
+        return Results.Json(ApiResponse.Failure(StatusCodes.Status503ServiceUnavailable, message: "ConnectionStrings:RentalDatabase is not configured."), statusCode: StatusCodes.Status503ServiceUnavailable);
 
     try
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        return Results.Ok(ApiSuccessResponse.Create(new { status = "Healthy" }, "Service is healthy."));
+        return Results.Ok(ApiResponse.Create(new { status = "Healthy" }, "Service is healthy."));
     }
     catch (NpgsqlException)
     {
-        return Results.Problem("Database is unavailable.", statusCode: StatusCodes.Status503ServiceUnavailable);
+        return Results.Json(ApiResponse.Failure(StatusCodes.Status503ServiceUnavailable, message: "Database is unavailable."), statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 });
 

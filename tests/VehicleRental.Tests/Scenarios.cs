@@ -1,4 +1,4 @@
-using Car_Rental_System_BE.Infrastructure;
+using Car_Rental_System_BE.Infrastructure.Repositories;
 using Npgsql;
 
 namespace VehicleRental.Tests;
@@ -8,13 +8,13 @@ internal sealed record DirectRental(int CustomerId, string Email, int RentalId, 
 internal static class Scenarios
 {
     /// <summary>Direct hourly rental, 2 hours, price 100/h, VAT 10%, deposit 20% => invoice 260, deposit 40.</summary>
-    public static async Task<DirectRental> CreateDirectRentalAsync(NpgsqlDataSource db, decimal hourly = 100m, decimal vatRate = 10m, decimal depositPercentage = 20m)
+    public static async Task<DirectRental> CreateDirectRentalAsync(NpgsqlDataSource db, decimal hourly = 100m, decimal vatRate = 10m, decimal depositPercentage = 20m, string paymentMethod = "payos")
     {
         var (customerId, email) = await Seed.CustomerAsync(db);
         var vehicle = await Seed.VehicleAsync(db, hourly: hourly);
         var policy = await Seed.PolicyAsync(db, vatRate: vatRate, depositPercentage: depositPercentage);
         var start = DateTime.UtcNow.AddHours(1);
-        var rental = await new NpgsqlOperationsRepository(db).CreateRentalAsync(email, vehicle, policy, "hourly", start, start.AddHours(2), false, null, false, CancellationToken.None);
+        var rental = await new NpgsqlOperationsRepository(db).CreateRentalAsync(email, vehicle, policy, "hourly", start, start.AddHours(2), false, null, false, CancellationToken.None, paymentMethod);
         var invoiceId = (int)(await Seed.ScalarAsync(db, "SELECT id FROM invoices WHERE rental_id=$1", rental.Id))!;
         var amount = (decimal)(await Seed.ScalarAsync(db, "SELECT amount FROM invoices WHERE id=$1", invoiceId))!;
         var deposit = (decimal)(await Seed.ScalarAsync(db, "SELECT deposit_price FROM rentals WHERE id=$1", rental.Id))!;

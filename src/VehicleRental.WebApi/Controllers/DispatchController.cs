@@ -1,18 +1,21 @@
+using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Application.DTOs.Organization;
+using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.Domain.Entities;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
-using Car_Rental_System_BE.Application.Operations;
-using Car_Rental_System_BE.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Car_Rental_System_BE.Controllers;
+namespace Car_Rental_System_BE.WebApi.Controllers;
 
 [ApiController]
 [Route("api")]
 [ProducesResponseType(StatusCodes.Status400BadRequest)]
 [ProducesResponseType(StatusCodes.Status403Forbidden)]
 [ProducesResponseType(StatusCodes.Status404NotFound)]
-public sealed class DispatchController(IOperationsRepository store) : ControllerBase
+public sealed class DispatchController(IOperationsService store) : ControllerBase
 {
     /// <summary>Manager/Admin creates a driver's duty shift.</summary>
     [Authorize(Policy=AuthorizationPolicies.Management)]
@@ -110,11 +113,3 @@ public sealed class DispatchController(IOperationsRepository store) : Controller
 
     private string Email()=>User.FindFirstValue(ClaimTypes.Email)??throw new UnauthorizedAccessException();
 }
-
-public sealed record DriverShiftRequest([param:Range(1,int.MaxValue)] int DriverStaffId, DateTime StartTime, DateTime EndTime, bool Cancelled=false);
-public sealed record IncidentReportRequest([param:Required,RegularExpression("^(damage|breakdown)$")] string Type,
-    [param:Required,StringLength(4000,MinimumLength=1)] string Description, [param:StringLength(8000)] string? ImageUrls=null);
-public sealed record ReportMaintenanceRequest([param:Range(1,int.MaxValue)] int AssignedStaffId,
-    [param:Range(1,int.MaxValue)] int? FacilityId, DateOnly ScheduledDate);
-public sealed record VehicleReplacementRequest([param:Range(1,int.MaxValue)] int VehicleId,
-    [param:Range(1,int.MaxValue)] int? DriverStaffId, [param:Range(1,int.MaxValue)] int? ReportId);

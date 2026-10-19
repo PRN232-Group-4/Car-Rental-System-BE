@@ -1,12 +1,16 @@
+using Car_Rental_System_BE.WebApi.Controllers;
+using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.Application.DTOs.Accounts;
+using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Application.DTOs.Organization;
+using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Application.Services;
+using Car_Rental_System_BE.Domain.Entities;
+using Car_Rental_System_BE.Domain.Services;
+using Car_Rental_System_BE.Infrastructure.Services.Authentication;
 using System.IdentityModel.Tokens.Jwt;
 using System.Reflection;
 using System.Security.Claims;
-using Car_Rental_System_BE.Application.Accounts;
-using Car_Rental_System_BE.Application.Operations;
-using Car_Rental_System_BE.Application.Organization;
-using Car_Rental_System_BE.Authentication;
-using Car_Rental_System_BE.Controllers;
-using Car_Rental_System_BE.Infrastructure.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -18,6 +22,22 @@ namespace VehicleRental.Tests;
 
 public sealed class AuthorizationTests
 {
+    [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("Manager", true)]
+    [InlineData("Staff", false)]
+    [InlineData("Customer", false)]
+    [InlineData("Driver", false)]
+    public async Task Department_assignment_requires_management(string role, bool allowed)
+    {
+        Assert.Equal(allowed, await AuthorizeEndpoint<DepartmentMembersController>("Assign", Principal(role)));
+        Assert.Equal(allowed, await AuthorizeEndpoint<FacilityMembersController>("Assign", Principal(role)));
+        Assert.Equal(allowed, await AuthorizeEndpoint<OperationsController>("Departments", Principal(role)));
+        Assert.Equal(allowed, await AuthorizeEndpoint<StaffController>("List", Principal(role)));
+        foreach (var action in new[] { "Create", "Update", "Deactivate" })
+            Assert.Equal(role == "Admin", await AuthorizeEndpoint<StaffController>(action, Principal(role)));
+    }
+
     [Theory]
     [InlineData("AddVehicle", "Driver", false)]
     [InlineData("AddVehicle", "Staff", false)]
@@ -34,6 +54,12 @@ public sealed class AuthorizationTests
     [InlineData("ReviewLicense", "CustomerService", true)]
     [InlineData("Hourly", "Staff", false)]
     [InlineData("Hourly", "Customer", true)]
+    [InlineData("SaveContract", "Customer", false)]
+    [InlineData("SaveContract", "Driver", false)]
+    [InlineData("SaveContract", "Maintenance", false)]
+    [InlineData("SaveContract", "CustomerService", true)]
+    [InlineData("SaveContract", "Manager", true)]
+    [InlineData("SaveContract", "Admin", true)]
     [InlineData("DriverSchedule", "CustomerService", false)]
     [InlineData("DriverSchedule", "Driver", true)]
     [InlineData("Policies", "CustomerService", false)]
@@ -161,7 +187,7 @@ public sealed class AuthorizationTests
     {
         var store = DispatchProxy.Create<IOperationsRepository, RepositorySpy>();
         spy = (RepositorySpy)store;
-        return new(store) { ControllerContext = new() { HttpContext = new DefaultHttpContext { User = principal } } };
+        return new(new Car_Rental_System_BE.Application.Services.OperationsService(store), null!) { ControllerContext = new() { HttpContext = new DefaultHttpContext { User = principal } } };
     }
 
     public class RepositorySpy : DispatchProxy
