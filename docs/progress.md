@@ -1,5 +1,9 @@
 # Tiến độ
 
+## Mapbox thay Google Maps — 2026-10-20
+
+Đã thay provider FE/BE bằng Mapbox, giữ quyền/route API và GPS thật; `/places` dùng pagination trên tối đa10 address matches. Bỏ fallback tọa độ/ETA giả, thêm lỗi503/502/404 và422 khi thiếu vị trí cơ sở. Build backend -warnaserror đạt, 84 tests HTTP/provider/tracking/response đạt; FE 512 unit tests, typecheck/ESLint/design lint và static export đạt. 6 E2E đạt (provider mock, gồm vẽ tuyến/ETA, đổi chi nhánh và các panel Admin). Chưa cấp token thật và chưa deploy; xem [setup](mapbox-setup.md) và [change](../changes/2026-10-20-mapbox-migration.md).
+
 ## Danh sách đơn Admin và mã đơn trên chi tiết theo dõi — 2026-10-18
 
 Tái sử dụng API rental list/detail hiện có cho mọi trạng thái, giữ phân trang 1/20 tối đa100 và tổng sau lọc. Bổ sung orderId nullable vào summary/chi tiết customer/vận hành, tách mã yêu cầu khỏi đơn chính thức; timeline/audit và timestamps có sẵn phục vụ thanh theo dõi. Build -warnaserror và 44/44 test PostgreSQL/HTTP/Application liên quan đạt; chưa deploy. Xem [change](../changes/2026-10-18-admin-rental-tracking.md).
@@ -57,7 +61,7 @@ Bổ sung đầy đủ các module tính năng:
 6. Quản lý vùng địa lý (`geofences`) và phát hiện chuyển đổi trạng thái ENTER/EXIT (`geofence_events`). Tự động cảnh báo khi vào vùng cấm hoặc rời vùng cho phép (`tracking_alerts`).
 7. Cảnh báo xe đi lệch lộ trình (route deviation) dựa trên khoảng cách tới polyline dự kiến và kiểm tra trả sai điểm (`POST /api/tracking/rentals/{rentalId}/verify-dropoff`) đối chiếu với trạm quy định của đơn vị cho thuê.
 
-Toàn bộ API danh sách tuân thủ quy tắc phân trang (`page`, `pageSize`, `items`, `totalCount`) và hợp đồng envelope 6 trường bắt buộc. Thêm migration `0015_vehicle_tracking_and_geofencing.sql`, tài liệu [FR-033](../specs/FR-033-telemetry-and-device-control.md), [FR-034](../specs/FR-034-google-maps-places-and-eta.md), [FR-035](../specs/FR-035-routes-geofencing-and-alerts.md) và change log [2026-10-10-gps-tracking-and-google-maps.md](../changes/2026-10-10-gps-tracking-and-google-maps.md).
+Toàn bộ API danh sách tuân thủ quy tắc phân trang (`page`, `pageSize`, `items`, `totalCount`) và hợp đồng envelope 6 trường bắt buộc. Thêm migration `0015_vehicle_tracking_and_geofencing.sql`, tài liệu [FR-033](../specs/FR-033-telemetry-and-device-control.md), [FR-034](../specs/FR-034-mapbox-places-and-eta.md), [FR-035](../specs/FR-035-routes-geofencing-and-alerts.md) và change log [2026-10-10-gps-tracking-and-google-maps.md](../changes/2026-10-10-gps-tracking-and-google-maps.md).
 
 ## Rule pagination — 2026-10-10
 

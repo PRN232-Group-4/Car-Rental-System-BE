@@ -33,7 +33,7 @@
 - API tra cứu sự kiện geofence: `GET /api/geofences/events` có phân trang chuẩn.
 
 ### 3. Cảnh báo xe đi lệch lộ trình (Route Deviation Alert)
-- Khi nhận tọa độ mới của xe đang trong chuyến thuê có lộ trình đăng ký/dự kiến (qua Google Maps Directions polyline):
+- Khi nhận tọa độ mới của xe đang trong chuyến thuê có lộ trình đăng ký/dự kiến (qua Mapbox Directions polyline precision5):
   - Tính toán khoảng cách vuông góc nhỏ nhất từ vị trí xe tới các đoạn thẳng của đường đi dự kiến.
   - Nếu khoảng cách vượt ngưỡng cho phép (cấu hình mặc định 500m), hệ thống kích hoạt cảnh báo `route_deviation` mức cảnh báo (Warning).
   - Ghi nhận thông tin chi tiết: tọa độ hiện tại, tọa độ dự kiến gần nhất, khoảng cách lệch (mét).

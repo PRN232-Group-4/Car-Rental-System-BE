@@ -2,7 +2,7 @@ using Car_Rental_System_BE.Application.DTOs.Map;
 
 namespace Car_Rental_System_BE.Application.Interfaces.External;
 
-public interface IGoogleMapsClient
+public interface IMapClient
 {
     Task<GeocodeResult?> GeocodeAsync(string address, CancellationToken ct);
     Task<GeocodeResult?> ReverseGeocodeAsync(double lat, double lng, CancellationToken ct);

@@ -181,6 +181,8 @@ public sealed record PlaceSearchResult(
     double Lat,
     double Lng);
 
+public sealed record PlaceSearchPage(IReadOnlyList<PlaceSearchResult> Items, int Page, int PageSize, int TotalCount);
+
 public sealed record DistanceMatrixResult(
     double OriginLat,
     double OriginLng,

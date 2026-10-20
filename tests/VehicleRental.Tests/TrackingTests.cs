@@ -104,8 +104,8 @@ public sealed class TrackingTests
     public async Task Ingestion_requires_valid_device_authentication()
     {
         var repo = new FakeTrackingRepository();
-        var client = new FakeGoogleMapsClient();
-        var service = new TrackingService(repo, client, new GoogleMapsOptions(), new TelemetryRetentionOptions());
+        var client = new FakeMapClient();
+        var service = new TrackingService(repo, client, new MapboxOptions(), new TelemetryRetentionOptions());
 
         var req = new IngestPositionsRequest(new[]
         {
@@ -120,8 +120,8 @@ public sealed class TrackingTests
     public async Task Ingestion_accepts_valid_batch_and_triggers_prohibited_geofence_alert()
     {
         var repo = new FakeTrackingRepository();
-        var client = new FakeGoogleMapsClient();
-        var service = new TrackingService(repo, client, new GoogleMapsOptions(), new TelemetryRetentionOptions());
+        var client = new FakeMapClient();
+        var service = new TrackingService(repo, client, new MapboxOptions(), new TelemetryRetentionOptions());
 
         // Register active device
         var reg = await service.RegisterDeviceAsync(new RegisterDeviceRequest("DEV-01", 101, "Test Tracker"), CancellationToken.None);
@@ -149,8 +149,8 @@ public sealed class TrackingTests
     public async Task DropoffVerification_detects_wrong_return_point()
     {
         var repo = new FakeTrackingRepository();
-        var client = new FakeGoogleMapsClient();
-        var service = new TrackingService(repo, client, new GoogleMapsOptions { ReturnLocationToleranceMeters = 300 }, new TelemetryRetentionOptions());
+        var client = new FakeMapClient();
+        var service = new TrackingService(repo, client, new MapboxOptions { ReturnLocationToleranceMeters = 300 }, new TelemetryRetentionOptions());
 
         // Setup rental with facility at (10.7769, 106.7009)
         repo.SeedRental(501, 101, 10, "renting", "Facility Downtown", 10.7769, 106.7009);
@@ -173,8 +173,8 @@ public sealed class TrackingTests
     public async Task RentalRoute_summarizes_trip_distance_and_metrics()
     {
         var repo = new FakeTrackingRepository();
-        var client = new FakeGoogleMapsClient();
-        var service = new TrackingService(repo, client, new GoogleMapsOptions(), new TelemetryRetentionOptions());
+        var client = new FakeMapClient();
+        var service = new TrackingService(repo, client, new MapboxOptions(), new TelemetryRetentionOptions());
 
         var start = DateTime.UtcNow.AddHours(-1);
         var end = DateTime.UtcNow;
@@ -201,11 +201,41 @@ public sealed class TrackingTests
     public async Task Telemetry_retention_purges_older_positions()
     {
         var repo = new FakeTrackingRepository();
-        var client = new FakeGoogleMapsClient();
-        var service = new TrackingService(repo, client, new GoogleMapsOptions(), new TelemetryRetentionOptions { RetentionDays = 30 });
+        var client = new FakeMapClient();
+        var service = new TrackingService(repo, client, new MapboxOptions(), new TelemetryRetentionOptions { RetentionDays = 30 });
 
         var result = await service.PurgeTelemetryAsync(15, CancellationToken.None);
         Assert.Equal(repo.PurgedCount, result.DeletedPositionsCount);
+    }
+
+    [Fact]
+    public async Task Nearby_keeps_real_distance_but_no_invented_ETA_when_Mapbox_fails()
+    {
+        var repo = new FakeTrackingRepository();
+        await repo.UpsertLastPositionAsync(101, "device", new PositionDto(10.77, 106.7, DateTimeOffset.UtcNow), null, default);
+        var service = new TrackingService(repo, new FakeMapClient { MatrixFailure = new Car_Rental_System_BE.Application.Common.Errors.BusinessRuleException("MAP_NOT_CONFIGURED", "Unavailable", 503) }, new MapboxOptions(), new TelemetryRetentionOptions());
+        var result = await service.GetNearbyVehiclesAsync(10.771, 106.701, 5000, true, 1, 20, default);
+        var item = Assert.Single(result.Items);
+        Assert.Null(item.RouteMeters); Assert.Null(item.EtaSeconds); Assert.True(item.StraightLineMeters > 0);
+    }
+
+    [Fact]
+    public async Task Nearby_does_not_swallow_cancellation()
+    {
+        var repo = new FakeTrackingRepository();
+        await repo.UpsertLastPositionAsync(101, "device", new PositionDto(10.77, 106.7, DateTimeOffset.UtcNow), null, default);
+        var service = new TrackingService(repo, new FakeMapClient { MatrixFailure = new OperationCanceledException() }, new MapboxOptions(), new TelemetryRetentionOptions());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.GetNearbyVehiclesAsync(10.771, 106.701, 5000, true, 1, 20, default));
+    }
+
+    [Fact]
+    public async Task Dropoff_cannot_verify_against_an_invented_facility_position()
+    {
+        var repo = new FakeTrackingRepository();
+        repo.SeedRental(501, 101, 10, "renting", "Facility", null, null);
+        var service = new TrackingService(repo, new FakeMapClient { NoGeocode = true }, new MapboxOptions(), new TelemetryRetentionOptions());
+        var error = await Assert.ThrowsAsync<Car_Rental_System_BE.Application.Common.Errors.BusinessRuleException>(() => service.VerifyDropoffLocationAsync(501, 10.7769, 106.7009, default));
+        Assert.Equal(422, error.StatusCode);
     }
 
     private sealed class FakeTrackingRepository : ITrackingRepository
@@ -220,7 +250,7 @@ public sealed class TrackingTests
 
         public int PurgedCount { get; private set; }
 
-        public void SeedRental(int rentalId, int vehicleId, int facilityId, string status, string facilityName, double lat, double lng, DateTime? start = null, DateTime? end = null)
+        public void SeedRental(int rentalId, int vehicleId, int facilityId, string status, string facilityName, double? lat, double? lng, DateTime? start = null, DateTime? end = null)
         {
             _rentals[rentalId] = (vehicleId, facilityId, status, facilityName, lat, lng, start, end);
         }
@@ -379,10 +409,12 @@ public sealed class TrackingTests
             Task.FromResult<int?>(_rentals.FirstOrDefault(x => x.Value.VehicleId == vehicleId && x.Value.Status == "renting").Key);
     }
 
-    private sealed class FakeGoogleMapsClient : IGoogleMapsClient
+    private sealed class FakeMapClient : IMapClient
     {
+        public Exception? MatrixFailure { get; init; }
+        public bool NoGeocode { get; init; }
         public Task<GeocodeResult?> GeocodeAsync(string address, CancellationToken ct) =>
-            Task.FromResult<GeocodeResult?>(new GeocodeResult(address, 10.7769, 106.7009, "mock_place"));
+            Task.FromResult<GeocodeResult?>(NoGeocode ? null : new GeocodeResult(address, 10.7769, 106.7009, "mock_place"));
 
         public Task<GeocodeResult?> ReverseGeocodeAsync(double lat, double lng, CancellationToken ct) =>
             Task.FromResult<GeocodeResult?>(new GeocodeResult($"Address at ({lat}, {lng})", lat, lng, "mock_place"));
@@ -392,6 +424,7 @@ public sealed class TrackingTests
 
         public Task<DistanceMatrixResult> GetDistanceMatrixAsync(double originLat, double originLng, double destLat, double destLng, CancellationToken ct)
         {
+            if (MatrixFailure is not null) throw MatrixFailure;
             var dist = new GeoPoint(originLat, originLng).DistanceToMeters(new GeoPoint(destLat, destLng));
             return Task.FromResult(new DistanceMatrixResult(originLat, originLng, destLat, destLng, dist, dist / 10.0, "OK"));
         }

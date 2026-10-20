@@ -75,7 +75,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     }
 
     /// <summary>
-    /// Searches for vehicles within a geographic radius, optionally computing Google Maps road distance and ETA.
+    /// Searches for vehicles within a geographic radius, optionally computing Mapbox road distance and ETA.
     /// </summary>
     [Authorize]
     [HttpGet("vehicles/nearby")]
@@ -118,6 +118,9 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     [Authorize]
     [HttpPost("rentals/{rentalId:int}/verify-dropoff")]
     [ProducesResponseType<DropoffVerificationResult>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> VerifyDropoff(
         int rentalId,
         [FromQuery] double? currentLat,
