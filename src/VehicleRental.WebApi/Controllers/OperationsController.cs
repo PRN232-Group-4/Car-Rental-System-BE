@@ -12,7 +12,7 @@ namespace Car_Rental_System_BE.WebApi.Controllers;
 
 [ApiController]
 [Route("api")]
-public sealed class OperationsController(IOperationsService store, IMediaService media) : ControllerBase
+public sealed class OperationsController(IOperationsService store, IMediaService media, IOperationsCompletionService? completion = null) : ControllerBase
 {
     /// <summary>Admin, Manager or CustomerService records signed long-term contract evidence.</summary>
     [Authorize(Policy=AuthorizationPolicies.CustomerService)]
@@ -66,9 +66,9 @@ public sealed class OperationsController(IOperationsService store, IMediaService
     [Authorize(Roles="Admin")] [HttpPost("departments")] public async Task<IActionResult> AddDepartment(NameRequest x,CancellationToken ct){var d=await store.SaveDepartmentAsync(null,x.Name,ct);return Created($"api/departments/{d.Id}",d);}
     [Authorize(Roles="Admin")] [HttpPut("departments/{id:int}")] public Task<OrganizationUnit> EditDepartment(int id,NameRequest x,CancellationToken ct)=>store.SaveDepartmentAsync(id,x.Name,ct);
     [Authorize(Roles="Admin")] [HttpDelete("departments/{id:int}")] public async Task<IActionResult> DeleteDepartment(int id,CancellationToken ct){await store.DeleteDepartmentAsync(id,ct);return NoContent();}
-    [HttpGet("facilities")] public Task<IReadOnlyList<OrganizationUnit>> Facilities(CancellationToken ct)=>store.ListFacilitiesAsync(ct);
-    [Authorize(Roles="Admin")] [HttpPost("facilities")] public async Task<IActionResult> AddFacility(FacilityRequest x,CancellationToken ct){var f=await store.SaveFacilityAsync(null,x.Name,x.Address,ct);return Created($"api/facilities/{f.Id}",f);}
-    [Authorize(Roles="Admin")] [HttpPut("facilities/{id:int}")] public Task<OrganizationUnit> EditFacility(int id,FacilityRequest x,CancellationToken ct)=>store.SaveFacilityAsync(id,x.Name,x.Address,ct);
+    [HttpGet("facilities")] [ProducesResponseType<OperationsPage<OrganizationUnit>>(StatusCodes.Status200OK)] public Task<OperationsPage<OrganizationUnit>> Facilities([FromQuery,Range(1,int.MaxValue)]int page=1,[FromQuery,Range(1,100)]int pageSize=20,CancellationToken ct=default)=>store.ListFacilitiesAsync(page,pageSize,ct);
+    [Authorize(Roles="Admin")] [HttpPost("facilities")] public async Task<IActionResult> AddFacility(FacilityRequest x,CancellationToken ct){var f=await store.SaveFacilityAsync(null,x.Name,x.Address,ct,x.Phone);return Created($"api/facilities/{f.Id}",f);}
+    [Authorize(Roles="Admin")] [HttpPut("facilities/{id:int}")] public Task<OrganizationUnit> EditFacility(int id,FacilityRequest x,CancellationToken ct)=>store.SaveFacilityAsync(id,x.Name,x.Address,ct,x.Phone);
     [Authorize(Roles="Admin")] [HttpDelete("facilities/{id:int}")] public async Task<IActionResult> DeleteFacility(int id,CancellationToken ct){await store.DeleteFacilityAsync(id,ct);return NoContent();}
 
     [Authorize(Policy = AuthorizationPolicies.Management)]
@@ -85,7 +85,7 @@ public sealed class OperationsController(IOperationsService store, IMediaService
     {
         try
         {
-            var policy = await store.CreatePolicyAsync(x.ToModel(), ct);
+            var policy = await store.CreatePolicyAsync(x.ToModel() with { ManagedBy = AuthorizationPolicies.StaffId(User) }, ct);
             return Created($"api/rental-policies/{policy.Id}", policy);
         }
         catch (ValidationException error)
@@ -112,7 +112,7 @@ public sealed class OperationsController(IOperationsService store, IMediaService
     [Authorize(Policy=AuthorizationPolicies.RentalRead)] [HttpGet("rentals/{id:int}")] public async Task<IActionResult> Rental(int id,CancellationToken ct)=>await store.GetRentalForUserAsync(id,Email(),AuthorizationPolicies.CanReadAllRentals(User),User.IsInRole("Customer"),User.IsInRole("Driver"),ct) is { } x?Ok(x):Problem("Rental was not found.", statusCode: StatusCodes.Status404NotFound);
     [Obsolete("Use POST /api/rentals/{id}/assignments/driver instead.")]
     [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPost("rentals/{id:int}/assignments")] public async Task<IActionResult> Assign(int id,AssignmentRequest x,CancellationToken ct){Response.Headers.Append("Deprecation","true");await store.AssignAsync(id,x.DriverStaffId,Email(),ct);return NoContent();}
-    [Authorize(Policy=AuthorizationPolicies.DriverSchedule)] [HttpGet("drivers/schedule")] [ProducesResponseType<IReadOnlyList<DriverScheduleEntry>>(StatusCodes.Status200OK)] [ProducesResponseType(StatusCodes.Status400BadRequest)] public async Task<IActionResult> DriverSchedule([FromQuery]int? driverStaffId,[FromQuery]DateTime from,[FromQuery]DateTime to,CancellationToken ct){if(to<=from)return Problem("End time must be after start time.",statusCode:StatusCodes.Status400BadRequest);if(!AuthorizationPolicies.CanManage(User)){var own=AuthorizationPolicies.StaffId(User);if(own is null || (driverStaffId is not null && driverStaffId!=own))return Forbid();driverStaffId=own;}return Ok(await store.ListDriverScheduleAsync(driverStaffId,from,to,ct));}
+    [Authorize(Policy=AuthorizationPolicies.DriverSchedule)] [HttpGet("drivers/schedule")] [ProducesResponseType<OperationsPage<DriverScheduleEntry>>(StatusCodes.Status200OK)] [ProducesResponseType(StatusCodes.Status400BadRequest)] public async Task<IActionResult> DriverSchedule([FromQuery]int? driverStaffId,[FromQuery]DateTime from,[FromQuery]DateTime to,[FromQuery]OperationsPagination pagination,CancellationToken ct){if(to<=from)return Problem("End time must be after start time.",statusCode:StatusCodes.Status400BadRequest);if(!AuthorizationPolicies.CanManage(User)){var own=AuthorizationPolicies.StaffId(User);if(own is null || (driverStaffId is not null && driverStaffId!=own))return Forbid();driverStaffId=own;}return Ok(await Completion.DriverScheduleAsync(driverStaffId,from,to,pagination,ct));}
     [Authorize(Policy=AuthorizationPolicies.Inspection)] [HttpPost("rentals/{id:int}/inspections/pre")] public Task<IActionResult> Pre(int id,InspectionRequest x,CancellationToken ct)=>Inspect(id,x,"pre_rental",ct);
     [Authorize(Policy=AuthorizationPolicies.Inspection)] [HttpPost("rentals/{id:int}/inspections/post")] public Task<IActionResult> Post(int id,InspectionRequest x,CancellationToken ct)=>Inspect(id,x,"post_rental",ct);
     [Obsolete("Use dedicated lifecycle endpoints: POST /api/rentals/{id}/confirm, start, return, complete, cancel instead.")]
@@ -130,7 +130,12 @@ public sealed class OperationsController(IOperationsService store, IMediaService
     [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPut("subscription-plans/{id:int}")] public Task<SubscriptionPlan> EditPlan(int id,PlanRequest x,CancellationToken ct)=>store.SavePlanAsync(id,x.ToModel(),ct);
     [Authorize(Roles="Admin")] [HttpDelete("subscription-plans/{id:int}")] public async Task<IActionResult> DeletePlan(int id,CancellationToken ct){await store.DeletePlanAsync(id,ct);return NoContent();}
     [Authorize(Policy=AuthorizationPolicies.Customer)] [HttpGet("customer-subscriptions")] public Task<IReadOnlyList<CustomerSubscription>> CustomerSubscriptions(CancellationToken ct)=>store.ListCustomerSubscriptionsAsync(Email(),ct);
-    [Authorize(Policy=AuthorizationPolicies.Maintenance)] [HttpGet("maintenance")] public Task<IReadOnlyList<Maintenance>> MaintenanceList([FromQuery]int? vehicleId,[FromQuery]string? status,CancellationToken ct)=>store.ListMaintenanceAsync(vehicleId,status,ct);
+    /// <summary>List maintenance with optional createdAt range [from,to); page=1/pageSize=20, maximum 100.</summary>
+    [Authorize(Policy=AuthorizationPolicies.Maintenance)] [HttpGet("maintenance")]
+    [ProducesResponseType<OperationsPage<Maintenance>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public Task<OperationsPage<Maintenance>> MaintenanceList([FromQuery]int? vehicleId,[FromQuery]string? status,[FromQuery]DateTime? from,[FromQuery]DateTime? to,[FromQuery]OperationsPagination pagination,CancellationToken ct)
+        => Completion.MaintenanceAsync(vehicleId,status,from,to,pagination,ct);
     [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPost("maintenance")] public async Task<IActionResult> AddMaintenance(MaintenanceRequest x,CancellationToken ct){var m=await store.SaveMaintenanceAsync(null,x.ToModel(),ct);return Created($"api/maintenance/{m.Id}",m);}
     [Authorize(Policy=AuthorizationPolicies.Maintenance)] [HttpPut("maintenance/{id:int}")] public async Task<IActionResult> EditMaintenance(int id,MaintenanceRequest x,CancellationToken ct)
     {
@@ -138,7 +143,6 @@ public sealed class OperationsController(IOperationsService store, IMediaService
         if (!AuthorizationPolicies.CanManage(User) && technician is null) return Forbid();
         return Ok(await store.SaveMaintenanceAsync(id,x.ToModel(),ct,technician));
     }
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpGet("dashboard")] public Task<object> Dashboard([FromQuery]DateTime? from,[FromQuery]DateTime? to,CancellationToken ct)=>store.DashboardAsync(from,to,ct);
     private async Task<IActionResult> Inspect(int id, InspectionRequest request, string type, CancellationToken ct)
     {
         var staffId = AuthorizationPolicies.StaffId(User);
@@ -164,9 +168,28 @@ public sealed class OperationsController(IOperationsService store, IMediaService
 
     [Authorize(Policy=AuthorizationPolicies.Management)]
     [HttpGet("staff/{staffId:int}/ratings")]
-    [ProducesResponseType<IReadOnlyList<StaffRating>>(StatusCodes.Status200OK)]
-    public Task<IReadOnlyList<StaffRating>> StaffRatings(int staffId, CancellationToken ct) =>
-        store.ListStaffRatingsAsync(staffId, ct);
+    [ProducesResponseType<OperationsPage<StaffRating>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public Task<OperationsPage<StaffRating>> StaffRatings([Range(1,int.MaxValue)] int staffId, [FromQuery] OperationsPagination pagination, CancellationToken ct) =>
+        Completion.RatingsAsync(staffId, pagination, ct);
+
+    /// <summary>Admin/Manager moderates a rating; reason and authenticated actor are retained.</summary>
+    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPatch("ratings/{id:int}")]
+    [ProducesResponseType<StaffRating>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)] [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)] [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public Task<StaffRating> ModerateRating([Range(1,int.MaxValue)] int id, RatingModerationRequest request, CancellationToken ct)
+        => Completion.ModerateRatingAsync(id,request,Email(),ct);
+
+    /// <summary>Admin/Manager publishes or replaces the management reply to a rating.</summary>
+    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPost("ratings/{id:int}/reply")]
+    [ProducesResponseType<StaffRating>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)] [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)] [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public Task<StaffRating> ReplyRating([Range(1,int.MaxValue)] int id, RatingReplyRequest request, CancellationToken ct)
+        => Completion.ReplyRatingAsync(id,request,Email(),ct);
+
+    private IOperationsCompletionService Completion => completion ?? throw new InvalidOperationException("Operations completion service is not configured.");
 
     private string Email()=>User.FindFirstValue(ClaimTypes.Email)??throw new UnauthorizedAccessException();
 }

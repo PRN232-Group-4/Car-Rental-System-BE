@@ -8,7 +8,7 @@ public interface IOperationsService
     Task<IReadOnlyList<DriverShift>> ListDriverShiftsAsync(int? driverId, DateTime from, DateTime to, CancellationToken ct);
     Task<IncidentReport> CreateReportAsync(int rentalId, int staffId, bool driverOnly, string type, string description, string? images, CancellationToken ct);
     Task<IReadOnlyList<IncidentReport>> ListReportsAsync(int? staffId, int? rentalId, CancellationToken ct);
-    Task<Maintenance> AssignReportMaintenanceAsync(int reportId, int technicianId, int? facilityId, DateOnly scheduledDate, CancellationToken ct);
+    Task<Maintenance> AssignReportMaintenanceAsync(int reportId, int technicianId, int? facilityId, DateOnly scheduledDate, CancellationToken ct, string? maintenanceType = null, string? description = null, string? actor = null);
     Task ResolveReportAsync(int reportId, string actor, CancellationToken ct);
     Task<Inspection> InspectReplacementAsync(int rentalId, int vehicleId, int staffId, bool isOk, decimal? odometer, decimal? fuel, string? notes, string? images, CancellationToken ct);
     Task<Rental> ReplaceVehicleAsync(int rentalId, int vehicleId, int? driverId, int? reportId, string actor, CancellationToken ct);
@@ -18,8 +18,8 @@ public interface IOperationsService
     Task<IReadOnlyList<OrganizationUnit>> ListDepartmentsAsync(CancellationToken ct);
     Task<OrganizationUnit> SaveDepartmentAsync(int? id, string name, CancellationToken ct);
     Task DeleteDepartmentAsync(int id, CancellationToken ct);
-    Task<IReadOnlyList<OrganizationUnit>> ListFacilitiesAsync(CancellationToken ct);
-    Task<OrganizationUnit> SaveFacilityAsync(int? id, string name, string? address, CancellationToken ct);
+    Task<OperationsPage<OrganizationUnit>> ListFacilitiesAsync(int page, int pageSize, CancellationToken ct);
+    Task<OrganizationUnit> SaveFacilityAsync(int? id, string name, string? address, CancellationToken ct, string? phone = null);
     Task DeleteFacilityAsync(int id, CancellationToken ct);
     Task<IReadOnlyList<VehicleType>> ListVehicleTypesAsync(CancellationToken ct);
     Task<VehicleType> SaveVehicleTypeAsync(int? id, string name, string? fuelType, CancellationToken ct, string? type = null);

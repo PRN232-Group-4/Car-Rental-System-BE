@@ -18,7 +18,8 @@ public sealed record Staff(
     DateOnly? LicenseExpiryDate,
     string? LicenseImageUrl,
     decimal? Rating,
-    bool IsActive, string? StaffRole = null);
+    bool IsActive, string? StaffRole = null, string? AvatarUrl = null, string? Gender = null,
+    string? Address = null, int TotalTrips = 0, int? ActiveTripId = null);
 
 public sealed record CreateStaff(
     string Email,
@@ -33,7 +34,7 @@ public sealed record CreateStaff(
     string? LicenseType,
     DateOnly? LicenseIssueDate,
     DateOnly? LicenseExpiryDate,
-    string? LicenseImageUrl, string? StaffRole = null);
+    string? LicenseImageUrl, string? StaffRole = null, string? AvatarUrl = null, string? Gender = null, string? Address = null);
 
 public sealed record UpdateStaff(
     string FullName,
@@ -46,7 +47,7 @@ public sealed record UpdateStaff(
     string? LicenseType,
     DateOnly? LicenseIssueDate,
     DateOnly? LicenseExpiryDate,
-    string? LicenseImageUrl, string? StaffRole = null);
+    string? LicenseImageUrl, string? StaffRole = null, string? AvatarUrl = null, string? Gender = null, string? Address = null);
 
 public sealed record StaffPage(IReadOnlyList<Staff> Items, int Page, int PageSize, int TotalCount);
 

@@ -79,3 +79,8 @@ Chọn `code` là HTTP status dạng số và `status` là chuỗi `success`/`er
 ## Mapbox — 2026-10-20
 
 Người dùng chọn thay toàn bộ Google Maps bằng Mapbox. Mặc định tìm địa chỉ tại Việt Nam và profile driving (không hứa giao thông live). Search Box POI chưa công bố hỗ trợ Việt Nam nên `/places` dùng address search; cần đánh giá coverage với token thật nếu cần POI. Backend geocode permanent do cảnh báo có thể lưu tọa độ; tài khoản phải đủ điều kiện. Chưa có token để xác nhận billing/coverage/domain restrictions hoặc deployment. Quyết định: [ADR-009](decisions/ADR-009-mapbox-provider.md).
+
+
+## API completion — 2026-10-20 assumptions
+
+Revenue tiếp tục theo paid invoice/issued_at như dashboard cũ; không đổi sang net cashflow. Snapshot trạng thái lấy thời điểm cuối kỳ hoặc hiện tại nếu kỳ tương lai, nêu rõ asOf. Bộ lọc cơ sở/loại xe dùng metadata xe hiện tại vì chưa có snapshot lịch sử. Subscription usage dùng giờ lịch thuê + overtime theo đơn; chưa bổ sung ledger hoàn/trừ giờ. Metadata gói trước đây dùng hạn mức gói hiện tại, không giả snapshot. Chưa nhập năm xe/hotline/địa chỉ/tiện nghi thiếu dữ liệu; giữ null/empty. Facility detail đổi sang object để đáp ứng yêu cầu; FE cần đồng bộ adapter. API danh sách được sửa trong đợt này chuẩn hóa pagination theo ADR-003.

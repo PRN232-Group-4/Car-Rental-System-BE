@@ -25,7 +25,8 @@ public sealed partial class NpgsqlOperationsRepository
         await using var command = new NpgsqlCommand("""
             UPDATE rental_policies SET is_active = $2 WHERE id = $1
             RETURNING id, vehicle_type_id, name, vat_rate, overtime_fee_rate, deposit_percentage, is_active,
-                (SELECT COUNT(*) FROM rentals r WHERE r.policy_id=rental_policies.id)
+                (SELECT COUNT(*) FROM rentals r WHERE r.policy_id=rental_policies.id),
+                (SELECT t.name FROM vehicle_types t WHERE t.id=rental_policies.vehicle_type_id), managed_by, created_at
             """, connection, transaction);
         command.Parameters.AddWithValue(id);
         command.Parameters.AddWithValue(isActive);

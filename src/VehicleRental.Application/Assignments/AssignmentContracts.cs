@@ -43,7 +43,10 @@ public sealed record AssignmentResponse(
     DateTime EndsAt,
     DateTime? EndedAt,
     DateTime AssignedAt,
-    string? AssignedBy);
+    string? AssignedBy,
+    string? VehicleName = null,
+    string? LicensePlate = null,
+    int BufferMinutes = 0);
 
 public sealed record VehicleReplacementResult(
     AssignmentResponse Assignment,

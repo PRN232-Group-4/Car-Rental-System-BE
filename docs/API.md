@@ -888,3 +888,43 @@ Nguồn chính:
 - [Vehicle CRUD](vehicle-crud.md), [rental contract](rental-contract-api.md), [staff authorization](staff-authorization.md), [operational recovery](operational-recovery.md), [specs](../specs/README.md).
 
 Khi tài liệu cũ khác mã nguồn (ví dụ callback Google `/signin-google` hoặc DELETE ghi 204), ưu tiên mã nguồn và tài liệu API này ở snapshot hiện tại. Cập nhật tài liệu cùng thay đổi endpoint/DTO/policy tiếp theo.
+
+
+## Hoàn thiện API/field cho frontend — 2026-10-20
+
+Tất cả response giữ envelope 6 trường `code/status/is_success/data/message/error`. API danh sách dưới đây trả `data={items,page,pageSize,totalCount}` (dashboard thêm period/previousPeriod), mặc định page=1/pageSize=20, page>=1 và pageSize=1..100. Sai pagination trả 400 tại HTTP/Application; totalCount sau lọc và trước phân trang; trang vượt giới hạn trả items rỗng.
+
+| Method | Path | Quyền | Input/chức năng |
+|---|---|---|---|
+| GET | `/api/users` | Admin | search, role, isActive, page, pageSize; roles đầy đủ và customerId/staffId nullable |
+| GET | `/api/users/{id}` | Admin | Chi tiết user theo User ID; không trả password/token |
+| PATCH | `/api/users/{id}/status` | Admin | `{isActive,reason}`; bắt buộc boolean và lý do |
+| POST / DELETE | `/api/users/{id}/roles` | Admin | JSON `{role}`; role hợp lệ và có hồ sơ tương ứng |
+| POST | `/api/users/{id}/sessions/revoke` | Admin | Thu hồi phiên của tài khoản đích |
+| PATCH | `/api/ratings/{id}` | Admin/Manager | `{status,reason}`; visible/hidden/reported; lưu audit |
+| POST | `/api/ratings/{id}/reply` | Admin/Manager | `{text}`; trả reply `{text,by,at}` |
+| PATCH | `/api/reports/{id}/status` | Admin/Manager | `{status,reason}`; in_progress/rejected; rejected có thể tiếp nhận lại |
+| GET | `/api/dashboard` | Admin/Manager | Snapshot typed: revenue/renting/maintenance/activeSubscriptions và previous |
+| GET | `/api/dashboard/revenue-series` | Admin/Manager | Theo ngày UTC; bucket/dateIso/total/byGroup/previous và biên kỳ của từng dòng |
+| GET | `/api/dashboard/top-vehicles` | Admin/Manager | vehicleId/name/category/revenue/rentals/hours/utilization/previous |
+| GET | `/api/dashboard/maintenance-vs-revenue` | Admin/Manager | Chi phí bảo dưỡng hoàn thành và doanh thu mỗi xe/kỳ |
+| GET | `/api/dashboard/plan-usage` | Admin/Manager | planId/name/usedHours/includedHours/activeSubscribers/usagePercentage/previous |
+
+Dashboard nhận from/to dạng timestamp có UTC offset, facilityId, vehicleTypeId; các API list thêm page/pageSize. Khoảng nửa mở `[from,to)`, mặc định 30 ngày tới hiện tại, tối đa 366 ngày. previous là khoảng liền trước dài bằng khoảng hiện tại; snapshot có asOf/previousAsOf biểu thị thời điểm quan sát thực tế (không thể biết trạng thái tương lai). Revenue là tổng invoice paid theo issued_at như dashboard cũ, gồm các khoản invoice đã ghi nhận; không ngụ ý dòng tiền ròng sau hoàn tiền. Utilization là % giờ vận hành thực tế trong kỳ; maintenance cost lấy phiếu completed. Plan usage là giờ đặt theo đơn không hủy cộng overtime đã quyết toán; unlimited trả includedHours/usagePercentage=null. Khi lọc cơ sở/loại xe, subscriber thuộc nhóm được xác định qua đơn liên quan. Các số liệu theo cơ sở/loại xe và hạn mức gói hiện tại không có immutable snapshot lịch sử; xem [FR-030](../specs/FR-030-dashboard.md).
+
+Thay đổi tài khoản/quyền ghi audit và tăng authorization_version trước khi thu hồi Redis sessions. Không khóa chính mình hoặc khóa/gỡ Admin hoạt động cuối cùng. Driver role đồng bộ cờ is_driver và đòi GPLX hợp lệ; specialty staff duy trì quy tắc một chuyên môn. Chi tiết: [FR-037](../specs/FR-037-user-administration.md).
+
+Các endpoint đã có được bổ sung:
+
+- `GET /api/reports`: phân trang, filter status/staffId/rentalId; createdAt/resolvedAt/customer/rental/maintenance/history/notes từ bản ghi thật. Lịch sử cũ chưa thu thập giữ rỗng. Resolve/assign maintenance tiếp tục dùng endpoint riêng.
+- `GET /api/staff` và detail: avatarUrl/gender/address/totalTrips/activeTripId. Create/update cho nhập field hồ sơ mới; field mới bỏ trống giữ giá trị đã lưu khi cập nhật.
+- `GET /api/staff/{staffId}/ratings`: Admin/Manager, phân trang; customerName/status/reply/vehicleName/licensePlate. Điểm trung bình chỉ tính rating visible.
+- `GET /api/rentals/mine`: licensePlate/vehicleCategory/canCancel/nextAction/facility/subscriptionHoursUsed. nextAction tuân theo detail (WAITING_CONFIRMATION/PAYMENT_REQUIRED/PREPARING_VEHICLE/ENJOY_YOUR_TRIP/PROCESSING_RETURN/COMPLETED/CANCELLED).
+- `GET /api/rentals/mine/{id}`: facility đổi từ string sang `{id,name,phone}` nullable; pickup.location giữ tên; thêm subscriptionHoursUsed. Giờ theo gói là thời lượng lịch thuê cộng overtime_hours, đơn thường null; không suy diễn lịch sử hoàn giờ chưa tồn tại.
+- `GET /api/vehicles` và detail: supportsSubscription theo hourlyPrice như search; driverAvailable nullable (list có from/to thì kiểm tra tài xế tại cơ sở theo cửa sổ và buffer, không có cửa sổ trả null); features[] lưu thật, nhận thêm features trong POST/PUT. List có seatCount/transmission/batteryCapacity và detail projection; thiếu dữ liệu nguồn vẫn null.
+- `GET/POST/PATCH /api/rental-policies`: vehicleTypeName/managedBy (staff ID nullable)/createdAt. POST lấy managedBy từ staff claim của người tạo; Admin không có staff profile giữ null.
+- `GET /api/maintenance`: phân trang, filter vehicleId/status/from/to theo createdAt; thêm createdAt/rentalId. `POST /api/reports/{id}/maintenance` thêm maintenanceType/description tùy chọn, bỏ trống lấy từ report.
+- Driver assignment response và `GET /api/drivers/schedule`: thêm vehicleName/licensePlate/bufferMinutes; schedule phân trang, Driver chỉ đọc lịch của mình.
+- `GET /api/facilities`: phân trang, thêm phone; POST/PUT facilities nhận phone tối đa 50 ký tự; null khi cập nhật giữ hotline cũ, chuỗi rỗng có thể xóa hotline.
+
+Migration mới: 0022_admin_user_audit.sql, 0023_operations_api_completion.sql, 0024_catalog_contact_fields.sql; triển khai qua migration runner. Xem [FR-038](../specs/FR-038-operations-api-completion.md), [FR-039](../specs/FR-039-frontend-api-completion.md).
