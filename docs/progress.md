@@ -1,5 +1,14 @@
 # Tiến độ
 
+## Hoàn thiện API/field cho frontend — 2026-10-20
+
+Đã bổ sung API quản trị users (directory/detail/status/roles/revoke), kiểm duyệt/phản hồi ratings, trạng thái và chi tiết reports, dashboard typed với bốn chuỗi phân tích/so sánh kỳ trước/bộ lọc cơ sở-loại xe. Bổ sung metadata staff, customer rentals, vehicles, policies, maintenance, driver assignment/schedule và hotline cơ sở; các danh sách được sửa có pagination theo ADR-003. Migration mới 0022/0023/0024; dữ liệu chưa có không được điền giả.
+
+Kiểm chứng: build solution với `-warnaserror` đạt; **325/325 test liên quan đạt** trên HTTP localhost và PostgreSQL18 tạm, gồm Swagger/envelope/auth/validation, SQL/projection, migration, totals/empty pages và concurrency. Test runner dùng cấu hình giới hạn song song để phù hợp max_connections của DB tạm. Cập nhật các test cũ cho quy tắc duyệt trước thanh toán FR-036; giữ nguyên kiểm tra an toàn bàn giao. Không chạy toàn bộ test suite hoặc Docker trong đợt này, chưa deploy/chạy migration lên database ứng dụng.
+
+Contract FE cần đồng bộ: rental detail.facility từ string sang object nullable; reports/ratings/maintenance/driver schedule/facilities trả page object. Giới hạn dữ liệu lịch sử dashboard và semantics subscription usage được mô tả trong API/spec. Xem [change](../changes/2026-10-20-frontend-api-completion.md), [API](API.md), [FR-037](../specs/FR-037-user-administration.md), [FR-038](../specs/FR-038-operations-api-completion.md), [FR-039](../specs/FR-039-frontend-api-completion.md).
+
+
 ## Mapbox thay Google Maps — 2026-10-20
 
 Đã thay provider FE/BE bằng Mapbox, giữ quyền/route API và GPS thật; `/places` dùng pagination trên tối đa10 address matches. Bỏ fallback tọa độ/ETA giả, thêm lỗi503/502/404 và422 khi thiếu vị trí cơ sở. Build backend -warnaserror đạt, 84 tests HTTP/provider/tracking/response đạt; FE 512 unit tests, typecheck/ESLint/design lint và static export đạt. 6 E2E đạt (provider mock, gồm vẽ tuyến/ETA, đổi chi nhánh và các panel Admin). Chưa cấp token thật và chưa deploy; xem [setup](mapbox-setup.md) và [change](../changes/2026-10-20-mapbox-migration.md).

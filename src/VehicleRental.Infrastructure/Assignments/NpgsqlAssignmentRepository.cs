@@ -77,8 +77,10 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
             SELECT va.id, va.rental_id, va.vehicle_id, va.driver_staff_id,
                    COALESCE(u.fullname, u.email) AS driver_name,
                    va.status, va.reason, va.note, va.supersedes_id,
-                   va.starts_at, va.ends_at, va.ended_at, va.assigned_at, va.assigned_by
+                   va.starts_at, va.ends_at, va.ended_at, va.assigned_at, va.assigned_by,
+                   concat_ws(' ',v.brand,v.model), v.license_plate, va.buffer_minutes
             FROM vehicle_assignments va
+            LEFT JOIN vehicles v ON v.id=va.vehicle_id
             LEFT JOIN staffs s ON s.id = va.driver_staff_id
             LEFT JOIN users u ON u.id = s.user_id
             WHERE va.rental_id = @id
@@ -190,6 +192,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
                 driverName = (string?)await nameCmd.ExecuteScalarAsync(ct);
             }
 
+            var vehicleInfo = await VehicleInfoAsync(connection, tx, rental.VehicleId, ct);
             await tx.CommitAsync(ct);
 
             return new AssignmentResponse(
@@ -206,7 +209,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
                 endsAt,
                 null,
                 assignedAt,
-                assignedByEmail);
+                assignedByEmail, vehicleInfo.Name, vehicleInfo.LicensePlate, bufferMinutes);
         }
         catch (PostgresException ex) when (ex.SqlState == "23P01")
         {
@@ -350,6 +353,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
                 driverName = (string?)await nameCmd.ExecuteScalarAsync(ct);
             }
 
+            var vehicleInfo = await VehicleInfoAsync(connection, tx, newVehicleId, ct);
             await tx.CommitAsync(ct);
 
             var response = new AssignmentResponse(
@@ -366,7 +370,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
                 endsAt,
                 null,
                 assignedAt,
-                assignedByEmail);
+                assignedByEmail, vehicleInfo.Name, vehicleInfo.LicensePlate, bufferMinutes);
 
             return new VehicleReplacementResult(response, RequiresInspection: true, maintenanceId);
         }
@@ -555,6 +559,14 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
             throw new ConflictException("RENTAL_CHANGED", "Rental terms changed. Reload the rental before assigning or replacing a vehicle.");
     }
 
+    private static async Task<(string? Name, string? LicensePlate)> VehicleInfoAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int id, CancellationToken ct)
+    {
+        await using var command = new NpgsqlCommand("SELECT NULLIF(concat_ws(' ',brand,model),''),license_plate FROM vehicles WHERE id=$1", connection, transaction);
+        command.Parameters.AddWithValue(id);
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        return await reader.ReadAsync(ct) ? (reader.IsDBNull(0)?null:reader.GetString(0),reader.IsDBNull(1)?null:reader.GetString(1)) : (null,null);
+    }
+
     private static AssignmentResponse ReadAssignmentResponse(NpgsqlDataReader reader)
     {
         return new AssignmentResponse(
@@ -571,6 +583,9 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
             EndsAt: reader.IsDBNull(10) ? DateTime.MinValue : reader.GetDateTime(10),
             EndedAt: reader.IsDBNull(11) ? null : reader.GetDateTime(11),
             AssignedAt: reader.GetDateTime(12),
-            AssignedBy: reader.IsDBNull(13) ? null : reader.GetString(13));
+            AssignedBy: reader.IsDBNull(13) ? null : reader.GetString(13),
+            VehicleName: reader.IsDBNull(14) ? null : reader.GetString(14),
+            LicensePlate: reader.IsDBNull(15) ? null : reader.GetString(15),
+            BufferMinutes: reader.GetInt32(16));
     }
 }

@@ -13,7 +13,11 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
                s.department_id, d.name, s.facility_id, f.name, s.hired_date, s.is_driver,
                s.license_number, s.license_type, s.license_issue_date, s.license_expiry_date,
                s.license_img, s.rating, u.is_active,
-               (SELECT r.name FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=u.id AND r.name IN ('CustomerService','Driver','Maintenance') ORDER BY r.name LIMIT 1)
+               (SELECT r.name FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=u.id AND r.name IN ('CustomerService','Driver','Maintenance') ORDER BY r.name LIMIT 1),
+               u.avatar, u.gender, u.address,
+               (SELECT COUNT(DISTINCT a.rental_id)::integer FROM vehicle_assignments a WHERE a.driver_staff_id=s.id),
+               (SELECT a.rental_id FROM vehicle_assignments a JOIN rentals r ON r.id=a.rental_id
+                WHERE a.driver_staff_id=s.id AND a.status='assigned' AND r.status='renting' ORDER BY a.assigned_at DESC,a.id DESC LIMIT 1)
         FROM staffs s
         JOIN users u ON u.id = s.user_id
         LEFT JOIN departments d ON d.id = s.department_id
@@ -39,7 +43,7 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
         command.Parameters.AddWithValue((object?)isDriver ?? DBNull.Value);
         command.Parameters.AddWithValue((object?)normalizedSearch ?? DBNull.Value);
         command.Parameters.AddWithValue(pageSize);
-        command.Parameters.AddWithValue((page - 1) * pageSize);
+        command.Parameters.AddWithValue(((long)page - 1) * pageSize);
         await using var reader = await command.ExecuteReaderAsync(ct);
         var items = new List<Staff>();
         while (await reader.ReadAsync(ct)) items.Add(Read(reader));
@@ -91,10 +95,13 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
         update.Parameters.AddWithValue(staffId);
         var userIdValue = await update.ExecuteScalarAsync(ct);
         if (userIdValue is not int userId) throw new StaffNotFoundException();
-        await using var user = new NpgsqlCommand("UPDATE users SET fullname = $1, phone = $2 WHERE id = $3", connection, transaction);
+        await using var user = new NpgsqlCommand("UPDATE users SET fullname = $1, phone = $2, avatar=COALESCE($4,avatar), gender=COALESCE($5,gender), address=COALESCE($6,address) WHERE id = $3", connection, transaction);
         user.Parameters.AddWithValue(command.FullName);
         user.Parameters.AddWithValue((object?)command.Phone ?? DBNull.Value);
         user.Parameters.AddWithValue(userId);
+        user.Parameters.AddWithValue((object?)command.AvatarUrl ?? DBNull.Value);
+        user.Parameters.AddWithValue((object?)command.Gender ?? DBNull.Value);
+        user.Parameters.AddWithValue((object?)command.Address ?? DBNull.Value);
         await user.ExecuteNonQueryAsync(ct);
         await EnsureRoleAsync(connection, transaction, userId, "Staff", ct);
         await SetSpecialtyAsync(connection, transaction, userId, command.IsDriver ? "Driver" : command.StaffRole, ct);
@@ -172,11 +179,14 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
 
     private static async Task<int> InsertUserAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CreateStaff command, string passwordHash, CancellationToken ct)
     {
-        await using var user = new NpgsqlCommand("INSERT INTO users (email, fullname, phone, password_hash) VALUES ($1, $2, $3, $4) RETURNING id", connection, transaction);
+        await using var user = new NpgsqlCommand("INSERT INTO users (email, fullname, phone, password_hash, avatar, gender, address) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id", connection, transaction);
         user.Parameters.AddWithValue(command.Email);
         user.Parameters.AddWithValue(command.FullName);
         user.Parameters.AddWithValue((object?)command.Phone ?? DBNull.Value);
         user.Parameters.AddWithValue(passwordHash);
+        user.Parameters.AddWithValue((object?)command.AvatarUrl ?? DBNull.Value);
+        user.Parameters.AddWithValue((object?)command.Gender ?? DBNull.Value);
+        user.Parameters.AddWithValue((object?)command.Address ?? DBNull.Value);
         return (int)(await user.ExecuteScalarAsync(ct))!;
     }
 
@@ -224,7 +234,7 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
         await assign.ExecuteNonQueryAsync(ct);
     }
 
-    private static Staff Read(NpgsqlDataReader reader) => new(reader.GetInt32(0), reader.GetInt32(1), reader.GetString(2), reader.GetString(3), NullableString(reader, 4), NullableInt(reader, 5), NullableString(reader, 6), NullableInt(reader, 7), NullableString(reader, 8), NullableDate(reader, 9), reader.GetBoolean(10), NullableString(reader, 11), NullableString(reader, 12), NullableDate(reader, 13), NullableDate(reader, 14), NullableString(reader, 15), reader.IsDBNull(16) ? null : reader.GetDecimal(16), reader.GetBoolean(17), NullableString(reader, 18));
+    private static Staff Read(NpgsqlDataReader reader) => new(reader.GetInt32(0), reader.GetInt32(1), reader.GetString(2), reader.GetString(3), NullableString(reader, 4), NullableInt(reader, 5), NullableString(reader, 6), NullableInt(reader, 7), NullableString(reader, 8), NullableDate(reader, 9), reader.GetBoolean(10), NullableString(reader, 11), NullableString(reader, 12), NullableDate(reader, 13), NullableDate(reader, 14), NullableString(reader, 15), reader.IsDBNull(16) ? null : reader.GetDecimal(16), reader.GetBoolean(17), NullableString(reader, 18), NullableString(reader, 19), NullableString(reader, 20), NullableString(reader, 21), reader.GetInt32(22), NullableInt(reader, 23));
     private static string? NullableString(NpgsqlDataReader reader, int ordinal) => reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
     private static int? NullableInt(NpgsqlDataReader reader, int ordinal) => reader.IsDBNull(ordinal) ? null : reader.GetInt32(ordinal);
     private static DateOnly? NullableDate(NpgsqlDataReader reader, int ordinal) => reader.IsDBNull(ordinal) ? null : reader.GetFieldValue<DateOnly>(ordinal);

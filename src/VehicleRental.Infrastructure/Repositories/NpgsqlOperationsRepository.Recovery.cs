@@ -237,7 +237,7 @@ public sealed partial class NpgsqlOperationsRepository
             throw new UnauthorizedAccessException("Only the assigned driver can report this trip.");
         if (type == "breakdown" && rental.Status != "renting") throw new InvalidOperationException("Breakdown reports require an ongoing rental.");
         if (rental.Status == "cancelled") throw new InvalidOperationException("Cannot report a cancelled rental.");
-        if (type == "breakdown" && await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM reports WHERE rental_id=$1 AND vehicle_id=$2 AND type='breakdown' AND status IN ('open','assigned'))", ct, rentalId, rental.VehicleId) is true)
+        if (type == "breakdown" && await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM reports WHERE rental_id=$1 AND vehicle_id=$2 AND type='breakdown' AND status IN ('open','in_progress','assigned'))", ct, rentalId, rental.VehicleId) is true)
             throw new InvalidOperationException("An unresolved breakdown already exists for this vehicle.");
         var id = (int)(await ValueAsync(cn, tx, "INSERT INTO reports(rental_id,vehicle_id,reporter_staff_id,type,description,image_urls,status) VALUES($1,$2,$3,$4,$5,$6,'open') RETURNING id", ct,
             rentalId, rental.VehicleId, staffId, type, description, images))!;
@@ -268,26 +268,29 @@ public sealed partial class NpgsqlOperationsRepository
             throw new KeyNotFoundException("Facility was not found.");
     }
 
-    public async Task<Maintenance> AssignReportMaintenanceAsync(int reportId, int technician, int? facility, DateOnly date, CancellationToken ct)
+    public async Task<Maintenance> AssignReportMaintenanceAsync(int reportId, int technician, int? facility, DateOnly date, CancellationToken ct, string? maintenanceType = null, string? description = null, string? actor = null)
     {
         await using var cn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await cn.BeginTransactionAsync(ct);
         await LockOperationsAsync(cn, tx, ct);
-        int vehicle; int rental; string description;
-        await using (var command = new NpgsqlCommand("SELECT vehicle_id,rental_id,description FROM reports WHERE id=$1 AND status='open' AND reporter_staff_id IS NOT NULL FOR UPDATE", cn, tx))
+        if (maintenanceType is not null && (string.IsNullOrWhiteSpace(maintenanceType) || maintenanceType.Length>255)) throw new ArgumentException("Maintenance type must contain 1 to 255 characters.");
+        if (description is not null && (string.IsNullOrWhiteSpace(description) || description.Length>4000)) throw new ArgumentException("Description must contain 1 to 4000 characters.");
+        int vehicle; int rental; string reportDescription;
+        await using (var command = new NpgsqlCommand("SELECT vehicle_id,rental_id,description FROM reports WHERE id=$1 AND status IN ('open','in_progress') AND reporter_staff_id IS NOT NULL FOR UPDATE", cn, tx))
         {
             Add(command, reportId);
             await using var reader = await command.ExecuteReaderAsync(ct);
             if (!await reader.ReadAsync(ct)) throw new InvalidOperationException("An open staff report is required.");
-            vehicle=reader.GetInt32(0); rental=reader.GetInt32(1); description=reader.GetString(2);
+            vehicle=reader.GetInt32(0); rental=reader.GetInt32(1); reportDescription=reader.GetString(2);
         }
-        var maintenance = new Maintenance(0,vehicle,facility,technician,"scheduled","incident",date,false,description,null);
+        var maintenance = new Maintenance(0,vehicle,facility,technician,"scheduled",maintenanceType?.Trim()??"incident",date,false,description?.Trim()??reportDescription,null,RentalId:rental);
         await ValidateMaintenanceAsync(cn, tx, maintenance, ct);
-        var id = (int)(await ValueAsync(cn, tx, "INSERT INTO vehicle_maintenance(vehicle_id,rental_id,assigned_staff_id,facility_id,status,maintenance_type,scheduled_date,is_safe,description) VALUES($1,$2,$3,$4,'scheduled','incident',$5,false,$6) RETURNING id", ct, vehicle,rental,technician,facility,date,description))!;
-        await ValueAsync(cn, tx, "UPDATE reports SET maintenance_id=$2,status='assigned' WHERE id=$1", ct, reportId,id);
+        var id = (int)(await ValueAsync(cn, tx, "INSERT INTO vehicle_maintenance(vehicle_id,rental_id,assigned_staff_id,facility_id,status,maintenance_type,scheduled_date,is_safe,description) VALUES($1,$2,$3,$4,'scheduled',$7,$5,false,$6) RETURNING id", ct, vehicle,rental,technician,facility,date,maintenance.Description,maintenance.MaintenanceType))!;
+        await ValueAsync(cn, tx, "UPDATE reports SET maintenance_id=$2,status='assigned',status_reason=NULL,status_actor=$3 WHERE id=$1", ct, reportId,id,actor);
         await ValueAsync(cn, tx, "UPDATE vehicles SET status='maintenance' WHERE id=$1", ct, vehicle);
+        var createdAt=(DateTime)(await ValueAsync(cn,tx,"SELECT created_at FROM vehicle_maintenance WHERE id=$1",ct,id))!;
         await tx.CommitAsync(ct);
-        return maintenance with { Id=id };
+        return maintenance with { Id=id,CreatedAt=createdAt };
     }
 
     public async Task<Maintenance> SaveMaintenanceAsync(int? id, Maintenance x, CancellationToken ct, int? actingTechnicianId = null)
@@ -311,9 +314,19 @@ public sealed partial class NpgsqlOperationsRepository
         if (x.Status is not ("completed" or "cancelled") || x.IsSafe == false)
             await ValueAsync(cn, tx, "UPDATE vehicles SET status='maintenance' WHERE id=$1", ct,x.VehicleId);
         else if (x.Status == "completed")
-            await ValueAsync(cn, tx, "UPDATE vehicles SET status='available' WHERE id=$1 AND status='maintenance' AND NOT EXISTS(SELECT 1 FROM vehicle_maintenance WHERE vehicle_id=$1 AND (COALESCE(status,'open') NOT IN ('completed','cancelled') OR is_safe=false)) AND NOT EXISTS(SELECT 1 FROM reports WHERE vehicle_id=$1 AND type='breakdown' AND status IN ('open','assigned'))", ct,x.VehicleId);
+            await ValueAsync(cn, tx, "UPDATE vehicles SET status='available' WHERE id=$1 AND status='maintenance' AND NOT EXISTS(SELECT 1 FROM vehicle_maintenance WHERE vehicle_id=$1 AND (COALESCE(status,'open') NOT IN ('completed','cancelled') OR is_safe=false)) AND NOT EXISTS(SELECT 1 FROM reports WHERE vehicle_id=$1 AND type='breakdown' AND status IN ('open','in_progress','assigned','rejected'))", ct,x.VehicleId);
+        await using var metadata = new NpgsqlCommand("SELECT created_at,rental_id FROM vehicle_maintenance WHERE id=$1",cn,tx);
+        Add(metadata,key);
+        DateTime createdAt;
+        int? rentalId;
+        await using(var reader=await metadata.ExecuteReaderAsync(ct))
+        {
+            await reader.ReadAsync(ct);
+            createdAt=DateTime.SpecifyKind(reader.GetDateTime(0),DateTimeKind.Utc);
+            rentalId=reader.IsDBNull(1)?null:reader.GetInt32(1);
+        }
         await tx.CommitAsync(ct);
-        return x with { Id=key };
+        return x with { Id=key,CreatedAt=createdAt,RentalId=rentalId };
     }
 
     public async Task ResolveReportAsync(int id, string actor, CancellationToken ct)
@@ -322,7 +335,7 @@ public sealed partial class NpgsqlOperationsRepository
         await using var tx = await cn.BeginTransactionAsync(ct);
         await LockOperationsAsync(cn, tx, ct);
         // Breakdown reports are resolved by vehicle/driver recovery, never by bypassing it here.
-        if (await ValueAsync(cn, tx, "UPDATE reports SET status='resolved',resolved_by=$2,resolved_at=now() WHERE id=$1 AND type='damage' AND status IN ('open','assigned') AND (maintenance_id IS NULL OR EXISTS(SELECT 1 FROM vehicle_maintenance m WHERE m.id=maintenance_id AND m.status='completed' AND m.is_safe=true)) RETURNING id", ct,id,actor) is not int)
+        if (await ValueAsync(cn, tx, "UPDATE reports SET status='resolved',resolved_by=$2,resolved_at=now(),status_reason=NULL,status_actor=$2 WHERE id=$1 AND type='damage' AND status IN ('open','in_progress','assigned') AND (maintenance_id IS NULL OR EXISTS(SELECT 1 FROM vehicle_maintenance m WHERE m.id=maintenance_id AND m.status='completed' AND m.is_safe=true)) RETURNING id", ct,id,actor) is not int)
             throw new InvalidOperationException("Damage report is not ready to resolve; breakdowns require vehicle recovery.");
         await tx.CommitAsync(ct);
     }
@@ -367,7 +380,7 @@ public sealed partial class NpgsqlOperationsRepository
         await ValueAsync(cn, tx, "INSERT INTO vehicle_replacements(rental_id,report_id,old_vehicle_id,new_vehicle_id,old_driver_staff_id,new_driver_staff_id,replaced_by) VALUES($1,$2,$3,$4,$5,$6,$7)", ct,rentalId,report,rental.VehicleId,vehicle,oldDriver,driver,actor);
         if (report is not null)
         {
-            await ValueAsync(cn, tx, "UPDATE reports SET status='resolved',resolved_by=$2,resolved_at=now() WHERE id=$1", ct,report,actor);
+            await ValueAsync(cn, tx, "UPDATE reports SET status='resolved',resolved_by=$2,resolved_at=now(),status_reason=NULL,status_actor=$2 WHERE id=$1", ct,report,actor);
             await ValueAsync(cn, tx, "UPDATE vehicles SET status='available' WHERE id=$1 AND EXISTS(SELECT 1 FROM vehicle_maintenance WHERE id=(SELECT maintenance_id FROM reports WHERE id=$2) AND status='completed' AND is_safe=true) AND NOT EXISTS(SELECT 1 FROM vehicle_maintenance WHERE vehicle_id=$1 AND (COALESCE(status,'open') NOT IN ('completed','cancelled') OR is_safe=false))", ct,rental.VehicleId,report);
         }
         await tx.CommitAsync(ct);

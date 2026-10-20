@@ -13,6 +13,25 @@ public sealed class ApiSuccessResponseOperationFilter : IOperationFilter
     {
         var controller = context.MethodInfo.DeclaringType?.Name;
         var action = context.MethodInfo.Name;
+        if (controller is "UsersController" or "DashboardController" ||
+            (controller == "OperationsController" && action is "Vehicles" or "StaffRatings" or "MaintenanceList" or "DriverSchedule" or "Facilities") ||
+            (controller == "DispatchController" && action == "Reports"))
+        {
+            operation.Description = (operation.Description ?? "") + " Pagination for list operations defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Invalid values return 400 at HTTP and Application boundaries. data contains items/page/pageSize/totalCount, totalCount is after filters; out-of-range pages retain the count with empty items.";
+            foreach (var parameter in operation.Parameters.Where(p => p.Name.Equals("page", StringComparison.OrdinalIgnoreCase) || p.Name.Equals("pageSize", StringComparison.OrdinalIgnoreCase)))
+            {
+                var size = parameter.Name.Equals("pageSize", StringComparison.OrdinalIgnoreCase);
+                parameter.Schema.Minimum = 1;
+                parameter.Schema.Default = new Microsoft.OpenApi.Any.OpenApiInteger(size ? 20 : 1);
+                if (size) parameter.Schema.Maximum = 100;
+            }
+        }
+        if (controller == "DashboardController")
+            operation.Description += " Admin/Manager only. UTC half-open [from,to), defaults to last 30 days. Every response includes the adjacent previous period; facilityId and vehicleTypeId filter linked vehicle data. Revenue uses paid invoices by issued_at; see FR-030 for metric definitions and historical snapshot limits.";
+        if (controller == "UsersController")
+            operation.Description += " Admin only. Users include full roles and nullable customerId/staffId links. Account and role changes invalidate sessions and retain audit. The last active administrator is protected.";
+        if (controller == "RentalQueriesController" && action is "Mine" or "MineDetail")
+            operation.Description += " Customer fields include persisted facility {id,name,phone}, subscriptionHoursUsed and list/detail-aligned canCancel/nextAction; unknown contact and vehicle metadata remain null.";
         if (controller == "MapController")
         {
             operation.Description = "Mapbox provider. Missing configuration returns 503, upstream failures 502/503, no route 404. No simulated coordinates or ETA. Provider IDs are Mapbox IDs.";

@@ -208,6 +208,25 @@ public sealed class RentalOperationsApiTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Customer_metadata_contract_preserves_contact_actions_and_hours_over_http()
+    {
+        using var response=await Send(HttpMethod.Get,"/api/rentals/mine","Customer");
+        using var json=await Envelope(response,200);
+        var item=json.RootElement.GetProperty("data").GetProperty("items")[0];
+        Assert.True(item.GetProperty("canCancel").GetBoolean());
+        Assert.Equal("car",item.GetProperty("vehicleCategory").GetString());
+        Assert.Equal("51A-12345",item.GetProperty("licensePlate").GetString());
+        Assert.Equal(3m,item.GetProperty("subscriptionHoursUsed").GetDecimal());
+        Assert.Equal("WAITING_CONFIRMATION",item.GetProperty("nextAction").GetString());
+        Assert.Equal("0901234567",item.GetProperty("facility").GetProperty("phone").GetString());
+        using var detailResponse=await Send(HttpMethod.Get,"/api/rentals/mine/1","Customer");
+        using var detailJson=await Envelope(detailResponse,200);
+        var detail=detailJson.RootElement.GetProperty("data");
+        Assert.Equal(JsonValueKind.Object,detail.GetProperty("facility").ValueKind);
+        Assert.Equal(3m,detail.GetProperty("subscriptionHoursUsed").GetDecimal());
+    }
+
+    [Fact]
     public async Task Swagger_documents_new_routes_pagination_and_required_envelope()
     {
         using var json = JsonDocument.Parse(await _client.GetStringAsync("/swagger/v1/swagger.json"));
@@ -265,6 +284,11 @@ public sealed class RentalOperationsApiTests : IAsyncLifetime
         protected override object? Invoke(MethodInfo? method, object?[]? args)
         {
             Calls++;
+            if(method!.Name=="ListMyRentalsAsync")
+                return Task.FromResult(new PagedResult<CustomerRentalSummary>([new(1,"pending","hourly",true,1,"Brand","Model",null,DateTime.UtcNow,DateTime.UtcNow.AddHours(3),0,DateTime.UtcNow,
+                    LicensePlate:"51A-12345",VehicleCategory:"car",CanCancel:true,NextAction:"WAITING_CONFIRMATION",Facility:new(1,"Branch","0901234567"),SubscriptionHoursUsed:3)],1,(int)args![2]!, (int)args[3]!));
+            if(method.Name=="GetMyRentalDetailAsync")
+                return Task.FromResult<CustomerRentalDetail?>(new(1,"pending","hourly",true,new(1,"Brand","Model",null,null),new(1,"Branch","0901234567"),DateTime.UtcNow,DateTime.UtcNow.AddHours(3),false,new("Facility","Branch"),null,new(0,0,0,0,0),null,[],null,[],true,null,"WAITING_CONFIRMATION",SubscriptionHoursUsed:3));
             if (method!.Name == "ListOperationalRentalsAsync")
             {
                 var filter = (OperationalFilter)args![0]!;

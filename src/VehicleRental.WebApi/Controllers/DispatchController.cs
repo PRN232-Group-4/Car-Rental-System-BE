@@ -15,7 +15,7 @@ namespace Car_Rental_System_BE.WebApi.Controllers;
 [ProducesResponseType(StatusCodes.Status400BadRequest)]
 [ProducesResponseType(StatusCodes.Status403Forbidden)]
 [ProducesResponseType(StatusCodes.Status404NotFound)]
-public sealed class DispatchController(IOperationsService store) : ControllerBase
+public sealed class DispatchController(IOperationsService store, IOperationsCompletionService? completion = null) : ControllerBase
 {
     /// <summary>Manager/Admin creates a driver's duty shift.</summary>
     [Authorize(Policy=AuthorizationPolicies.Management)]
@@ -65,12 +65,12 @@ public sealed class DispatchController(IOperationsService store) : ControllerBas
     /// <summary>Manager/Admin reviews incident reports; other staff see their own reports.</summary>
     [Authorize(Roles="Admin,Manager,Staff,Maintenance,CustomerService,Driver")]
     [HttpGet("reports")]
-    [ProducesResponseType<IReadOnlyList<IncidentReport>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Reports([FromQuery] int? rentalId, CancellationToken ct)
+    [ProducesResponseType<OperationsPage<IncidentReport>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Reports([FromQuery] int? rentalId, [FromQuery] string? status, [FromQuery] OperationsPagination pagination, CancellationToken ct)
     {
         var staff=AuthorizationPolicies.CanManage(User)?null:AuthorizationPolicies.StaffId(User);
         if (!AuthorizationPolicies.CanManage(User) && staff is null) return Forbid();
-        return Ok(await store.ListReportsAsync(staff,rentalId,ct));
+        return Ok(await Completion.ReportsAsync(staff,rentalId,status,pagination,ct));
     }
 
     /// <summary>Manager/Admin assigns a report to an active Maintenance technician.</summary>
@@ -79,7 +79,7 @@ public sealed class DispatchController(IOperationsService store) : ControllerBas
     [ProducesResponseType<Maintenance>(StatusCodes.Status201Created)]
     public async Task<IActionResult> AssignMaintenance(int id, ReportMaintenanceRequest request, CancellationToken ct)
     {
-        var maintenance=await store.AssignReportMaintenanceAsync(id,request.AssignedStaffId,request.FacilityId,request.ScheduledDate,ct);
+        var maintenance=await store.AssignReportMaintenanceAsync(id,request.AssignedStaffId,request.FacilityId,request.ScheduledDate,ct,request.MaintenanceType,request.Description,Email());
         return Created($"api/maintenance/{maintenance.Id}",maintenance);
     }
 
@@ -92,6 +92,13 @@ public sealed class DispatchController(IOperationsService store) : ControllerBas
         await store.ResolveReportAsync(id,Email(),ct);
         return NoContent();
     }
+
+    /// <summary>Admin/Manager accepts an open report or rejects an unassigned report with a reason.</summary>
+    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPatch("reports/{id:int}/status")]
+    [ProducesResponseType<IncidentReport>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public Task<IncidentReport> SetReportStatus([Range(1,int.MaxValue)] int id, ReportStatusRequest request, CancellationToken ct)
+        => Completion.SetReportStatusAsync(id,request,Email(),ct);
 
     /// <summary>Inspection staff checks a candidate replacement before Manager dispatches it.</summary>
     [Authorize(Policy=AuthorizationPolicies.Inspection)]
@@ -111,5 +118,6 @@ public sealed class DispatchController(IOperationsService store) : ControllerBas
     public Task<Rental> ReplaceVehicle(int id, VehicleReplacementRequest request, CancellationToken ct)
         => store.ReplaceVehicleAsync(id,request.VehicleId,request.DriverStaffId,request.ReportId,Email(),ct);
 
+    private IOperationsCompletionService Completion => completion ?? throw new InvalidOperationException("Operations completion service is not configured.");
     private string Email()=>User.FindFirstValue(ClaimTypes.Email)??throw new UnauthorizedAccessException();
 }

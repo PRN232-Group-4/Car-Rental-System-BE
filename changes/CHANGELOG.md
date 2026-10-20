@@ -1,4 +1,9 @@
 # Changelog
+
+- 2026-10-20 — [Hoàn thiện API/field cho frontend](2026-10-20-frontend-api-completion.md)
+- 2026-10-20 — [Quản trị user và hồ sơ staff](2026-10-20-user-administration.md)
+- 2026-10-20 — [Kiểm duyệt ratings và xử lý reports](2026-10-20-operations-api-completion.md)
+- 2026-10-20 — [Dashboard analytics và so sánh kỳ](2026-10-20-dashboard-analytics.md)
 - 2026-10-20 — [Chuyển toàn bộ bản đồ sang Mapbox](2026-10-20-mapbox-migration.md)
 - 2026-10-18 — [Danh sách Admin và chi tiết theo dõi đơn thuê](2026-10-18-admin-rental-tracking.md)
 - 2026-10-18 — [Duyệt yêu cầu, thu tiền và phát hành đơn thuê chính thức](2026-10-18-booking-request-paid-order.md)

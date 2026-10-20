@@ -36,16 +36,17 @@ public sealed partial class NpgsqlOperationsRepository
         if (await HasActivePolicyInScopeAsync(connection, transaction, policy.VehicleTypeId, null, ct))
             throw RentalPolicyValidator.ActivePolicyExists();
         await using var command = new NpgsqlCommand("""
-            INSERT INTO rental_policies(vehicle_type_id,name,vat_rate,overtime_fee_rate,deposit_percentage,is_active)
-            VALUES($1,$2,$3,$4,$5,$6)
-            RETURNING id,vehicle_type_id,name,vat_rate,overtime_fee_rate,deposit_percentage,is_active
+            INSERT INTO rental_policies(vehicle_type_id,name,vat_rate,overtime_fee_rate,deposit_percentage,is_active,managed_by)
+            VALUES($1,$2,$3,$4,$5,$6,$7)
+            RETURNING id,vehicle_type_id,name,vat_rate,overtime_fee_rate,deposit_percentage,is_active,
+                0::bigint, (SELECT t.name FROM vehicle_types t WHERE t.id=rental_policies.vehicle_type_id), managed_by, created_at
             """, connection, transaction);
-        Add(command, policy.VehicleTypeId, policy.Name, policy.VatRate, policy.OvertimeFeeRate, policy.DepositPercentage, policy.IsActive);
+        Add(command, policy.VehicleTypeId, policy.Name, policy.VatRate, policy.OvertimeFeeRate, policy.DepositPercentage, policy.IsActive, policy.ManagedBy);
         RentalPolicy result;
         await using (var reader = await command.ExecuteReaderAsync(ct))
         {
             if (!await reader.ReadAsync(ct)) throw new InvalidOperationException("Rental policy could not be created.");
-            result = ReadPolicy(reader);
+            result = ReadPolicyWithCount(reader);
         }
         await transaction.CommitAsync(ct);
         return result;
@@ -60,7 +61,8 @@ public sealed partial class NpgsqlOperationsRepository
         var totalCount = Convert.ToInt32(await total.ExecuteScalarAsync(ct));
         await using var command = new NpgsqlCommand("""
             SELECT p.id,p.vehicle_type_id,p.name,p.vat_rate,p.overtime_fee_rate,p.deposit_percentage,p.is_active,
-                (SELECT COUNT(*) FROM rentals r WHERE r.policy_id=p.id) AS rental_count
+                (SELECT COUNT(*) FROM rentals r WHERE r.policy_id=p.id) AS rental_count,
+                (SELECT t.name FROM vehicle_types t WHERE t.id=p.vehicle_type_id), p.managed_by, p.created_at
             FROM rental_policies p ORDER BY p.id DESC LIMIT $1 OFFSET $2
             """, connection, transaction);
         command.Parameters.AddWithValue(pageSize);
@@ -72,7 +74,7 @@ public sealed partial class NpgsqlOperationsRepository
         return new RentalPolicyPage(items, page, pageSize, totalCount);
     }
 
-    private static RentalPolicy ReadPolicyWithCount(NpgsqlDataReader reader) => ReadPolicy(reader) with { RentalCount = reader.GetInt64(7) };
+    private static RentalPolicy ReadPolicyWithCount(NpgsqlDataReader reader) => ReadPolicy(reader) with { RentalCount = reader.GetInt64(7), VehicleTypeName = S(reader,8), ManagedBy = reader.IsDBNull(9)?null:reader.GetInt32(9), CreatedAt = reader.GetDateTime(10) };
 
     private static async Task LockPolicyScopeAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int? typeId, CancellationToken ct)
     {

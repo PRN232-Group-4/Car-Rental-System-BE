@@ -131,9 +131,9 @@ public sealed class AuthorizationTests
     {
         var controller = Controller(Principal("Driver", 7), out var calls);
         var from = DateTime.UtcNow;
-        Assert.IsType<ForbidResult>(await controller.DriverSchedule(8, from, from.AddDays(1), default));
+        Assert.IsType<ForbidResult>(await controller.DriverSchedule(8, from, from.AddDays(1), new(), default));
         Assert.Empty(calls.Calls);
-        await controller.DriverSchedule(null, from, from.AddDays(1), default);
+        await controller.DriverSchedule(null, from, from.AddDays(1), new(), default);
         Assert.Equal(7, calls.Calls.Single().Arguments[0]);
     }
 
@@ -187,12 +187,14 @@ public sealed class AuthorizationTests
     {
         var store = DispatchProxy.Create<IOperationsRepository, RepositorySpy>();
         spy = (RepositorySpy)store;
-        return new(new Car_Rental_System_BE.Application.Services.OperationsService(store), null!) { ControllerContext = new() { HttpContext = new DefaultHttpContext { User = principal } } };
+        var completion = DispatchProxy.Create<IOperationsCompletionRepository, RepositorySpy>();
+        ((RepositorySpy)completion).Calls = spy.Calls;
+        return new(new Car_Rental_System_BE.Application.Services.OperationsService(store), null!, new Car_Rental_System_BE.Application.Services.OperationsCompletionService(completion)) { ControllerContext = new() { HttpContext = new DefaultHttpContext { User = principal } } };
     }
 
     public class RepositorySpy : DispatchProxy
     {
-        public List<(string Method, object?[] Arguments)> Calls { get; } = [];
+        public List<(string Method, object?[] Arguments)> Calls { get; set; } = [];
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
         {
             Calls.Add((targetMethod!.Name, args!));
@@ -200,6 +202,7 @@ public sealed class AuthorizationTests
             {
                 "AddInspectionAsync" => Task.FromResult(new Inspection(1, 1, "pre_rental", true, null, null, null, null, null)),
                 "ListDriverScheduleAsync" => Task.FromResult<IReadOnlyList<DriverScheduleEntry>>([]),
+                "DriverScheduleAsync" => Task.FromResult(new OperationsPage<DriverScheduleEntry>([],1,20,0)),
                 _ => throw new NotSupportedException(targetMethod.Name)
             };
         }
