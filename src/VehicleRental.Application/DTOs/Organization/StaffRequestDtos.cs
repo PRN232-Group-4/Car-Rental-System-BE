@@ -17,9 +17,10 @@ public sealed record CreateStaffRequest(
     [param: StringLength(255)] string? LicenseType,
     DateOnly? LicenseIssueDate,
     DateOnly? LicenseExpiryDate,
-    [param: Url, StringLength(255)] string? LicenseImageUrl, [param: RegularExpression("^(CustomerService|Driver|Maintenance)$")] string? StaffRole = null)
+    [param: Url, StringLength(255)] string? LicenseImageUrl, [param: RegularExpression("^(CustomerService|Driver|Maintenance)$")] string? StaffRole = null,
+    [param: Url, StringLength(255)] string? AvatarUrl = null, [param: StringLength(255)] string? Gender = null, [param: StringLength(500)] string? Address = null)
 {
-    public CreateStaff ToCommand() => new(Email.Trim().ToLowerInvariant(), FullName.Trim(), Password, Phone?.Trim(), DepartmentId, FacilityId, HiredDate, IsDriver, LicenseNumber?.Trim(), LicenseType?.Trim(), LicenseIssueDate, LicenseExpiryDate, LicenseImageUrl?.Trim(), StaffRole);
+    public CreateStaff ToCommand() => new(Email.Trim().ToLowerInvariant(), FullName.Trim(), Password, Phone?.Trim(), DepartmentId, FacilityId, HiredDate, IsDriver, LicenseNumber?.Trim(), LicenseType?.Trim(), LicenseIssueDate, LicenseExpiryDate, LicenseImageUrl?.Trim(), StaffRole, AvatarUrl?.Trim(), Gender?.Trim(), Address?.Trim());
 }
 
 public sealed record UpdateStaffRequest(
@@ -33,7 +34,8 @@ public sealed record UpdateStaffRequest(
     [param: StringLength(255)] string? LicenseType,
     DateOnly? LicenseIssueDate,
     DateOnly? LicenseExpiryDate,
-    [param: Url, StringLength(255)] string? LicenseImageUrl, [param: RegularExpression("^(CustomerService|Driver|Maintenance)$")] string? StaffRole = null)
+    [param: Url, StringLength(255)] string? LicenseImageUrl, [param: RegularExpression("^(CustomerService|Driver|Maintenance)$")] string? StaffRole = null,
+    [param: Url, StringLength(255)] string? AvatarUrl = null, [param: StringLength(255)] string? Gender = null, [param: StringLength(500)] string? Address = null)
 {
-    public UpdateStaff ToCommand() => new(FullName.Trim(), Phone?.Trim(), DepartmentId, FacilityId, HiredDate, IsDriver, LicenseNumber?.Trim(), LicenseType?.Trim(), LicenseIssueDate, LicenseExpiryDate, LicenseImageUrl?.Trim(), StaffRole);
+    public UpdateStaff ToCommand() => new(FullName.Trim(), Phone?.Trim(), DepartmentId, FacilityId, HiredDate, IsDriver, LicenseNumber?.Trim(), LicenseType?.Trim(), LicenseIssueDate, LicenseExpiryDate, LicenseImageUrl?.Trim(), StaffRole, AvatarUrl?.Trim(), Gender?.Trim(), Address?.Trim());
 }

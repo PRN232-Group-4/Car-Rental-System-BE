@@ -2,10 +2,13 @@ using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Application.Validators;
+using Car_Rental_System_BE.Application.Availability;
+using Car_Rental_System_BE.Application.Lifecycle;
+using Car_Rental_System_BE.Domain.Availability;
 
 namespace Car_Rental_System_BE.Application.Services;
 
-public sealed class OperationsService(IOperationsRepository repository) : IOperationsService
+public sealed class OperationsService(IOperationsRepository repository, IDriverAvailability? drivers = null, TimeProvider? timeProvider = null) : IOperationsService
 {
     public Task<DriverShift> SaveDriverShiftAsync(int? id, int driverId, DateTime start, DateTime end, bool cancelled, string actor, CancellationToken ct) =>
         repository.SaveDriverShiftAsync(id, driverId, start, end, cancelled, actor, ct);
@@ -19,8 +22,13 @@ public sealed class OperationsService(IOperationsRepository repository) : IOpera
     public Task<IReadOnlyList<IncidentReport>> ListReportsAsync(int? staffId, int? rentalId, CancellationToken ct) =>
         repository.ListReportsAsync(staffId, rentalId, ct);
 
-    public Task<Maintenance> AssignReportMaintenanceAsync(int reportId, int technicianId, int? facilityId, DateOnly scheduledDate, CancellationToken ct) =>
-        repository.AssignReportMaintenanceAsync(reportId, technicianId, facilityId, scheduledDate, ct);
+    public Task<Maintenance> AssignReportMaintenanceAsync(int reportId, int technicianId, int? facilityId, DateOnly scheduledDate, CancellationToken ct, string? maintenanceType = null, string? description = null, string? actor = null)
+    {
+        if (reportId < 1 || technicianId < 1 || facilityId is < 1) throw new ArgumentException("Report, technician and facility IDs must be positive.");
+        if (maintenanceType is not null && (string.IsNullOrWhiteSpace(maintenanceType) || maintenanceType.Length > 255)) throw new ArgumentException("Maintenance type must contain 1 to 255 characters.");
+        if (description is not null && (string.IsNullOrWhiteSpace(description) || description.Length > 4000)) throw new ArgumentException("Description must contain 1 to 4000 characters.");
+        return repository.AssignReportMaintenanceAsync(reportId, technicianId, facilityId, scheduledDate, ct, maintenanceType, description, actor);
+    }
 
     public Task ResolveReportAsync(int reportId, string actor, CancellationToken ct) =>
         repository.ResolveReportAsync(reportId, actor, ct);
@@ -52,11 +60,17 @@ public sealed class OperationsService(IOperationsRepository repository) : IOpera
     public Task DeleteDepartmentAsync(int id, CancellationToken ct) =>
         repository.DeleteDepartmentAsync(id, ct);
 
-    public Task<IReadOnlyList<OrganizationUnit>> ListFacilitiesAsync(CancellationToken ct) =>
-        repository.ListFacilitiesAsync(ct);
+    public Task<OperationsPage<OrganizationUnit>> ListFacilitiesAsync(int page, int pageSize, CancellationToken ct)
+    {
+        RentalQueryValidation.Pagination(page,pageSize);
+        return repository.ListFacilitiesAsync(page,pageSize,ct);
+    }
 
-    public Task<OrganizationUnit> SaveFacilityAsync(int? id, string name, string? address, CancellationToken ct) =>
-        repository.SaveFacilityAsync(id, name, address, ct);
+    public Task<OrganizationUnit> SaveFacilityAsync(int? id, string name, string? address, CancellationToken ct, string? phone = null)
+    {
+        if(phone?.Length>50) throw new ArgumentException("Phone must contain at most 50 characters.");
+        return repository.SaveFacilityAsync(id, name, address, ct, phone);
+    }
 
     public Task DeleteFacilityAsync(int id, CancellationToken ct) =>
         repository.DeleteFacilityAsync(id, ct);
@@ -70,8 +84,27 @@ public sealed class OperationsService(IOperationsRepository repository) : IOpera
     public Task DeleteVehicleTypeAsync(int id, CancellationToken ct) =>
         repository.DeleteVehicleTypeAsync(id, ct);
 
-    public Task<VehiclePage> SearchVehiclesAsync(int? typeId, int? facilityId, string? status, DateTime? from, DateTime? to, int page, int pageSize, CancellationToken ct) =>
-        repository.SearchVehiclesAsync(typeId, facilityId, status, from, to, page, pageSize, ct);
+    public async Task<VehiclePage> SearchVehiclesAsync(int? typeId, int? facilityId, string? status, DateTime? from, DateTime? to, int page, int pageSize, CancellationToken ct)
+    {
+        RentalQueryValidation.Pagination(page, pageSize);
+        if (typeId <= 0 || facilityId <= 0) throw new ArgumentException("VehicleTypeId and FacilityId must be positive.");
+        if (from.HasValue != to.HasValue || (from.HasValue && to <= from)) throw new ArgumentException("Both from and to are required and to must be after from.");
+        var result = await repository.SearchVehiclesAsync(typeId, facilityId, status, from, to, page, pageSize, ct);
+        if (from is null || to is null || drivers is null) return result;
+        var items = new List<Vehicle>();
+        var availableByFacility = new Dictionary<int, bool>();
+        foreach (var vehicle in result.Items)
+        {
+            var key = vehicle.FacilityId ?? 0;
+            if (!availableByFacility.TryGetValue(key, out var available))
+            {
+                available = await drivers.AnyAvailableAsync(new TimeRange(from.Value, to.Value), (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime, ct, vehicle.FacilityId);
+                availableByFacility[key] = available;
+            }
+            items.Add(vehicle with { DriverAvailable = available });
+        }
+        return result with { Items = items };
+    }
 
     public Task<Vehicle?> GetVehicleAsync(int id, CancellationToken ct) =>
         repository.GetVehicleAsync(id, ct);

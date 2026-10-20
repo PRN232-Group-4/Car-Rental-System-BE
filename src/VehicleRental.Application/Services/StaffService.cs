@@ -10,8 +10,11 @@ namespace Car_Rental_System_BE.Application.Services;
 
 public sealed class StaffService(IStaffRepository repository, IRefreshTokenStore sessions) : IStaffService
 {
-    public Task<StaffPage> SearchAsync(string? search, bool? isDriver, int page, int pageSize, CancellationToken ct) =>
-        repository.SearchAsync(search, isDriver, page, pageSize, ct);
+    public Task<StaffPage> SearchAsync(string? search, bool? isDriver, int page, int pageSize, CancellationToken ct)
+    {
+        if (page < 1 || pageSize is < 1 or > 100) throw new ArgumentException("Page must be positive and pageSize must be between 1 and 100.");
+        return repository.SearchAsync(search, isDriver, page, pageSize, ct);
+    }
     public Task<Staff?> FindByIdAsync(int staffId, CancellationToken ct) => repository.FindByIdAsync(staffId, ct);
 
     public Task<Staff> CreateAsync(CreateStaff command, CancellationToken ct)

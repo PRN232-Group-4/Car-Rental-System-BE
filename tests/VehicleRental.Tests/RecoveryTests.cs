@@ -54,7 +54,13 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         Assert.Equal("maintenance",(await store.GetVehicleAsync(rental.VehicleId,default))!.Status);
         Assert.Empty(await store.ListMaintenanceAsync(rental.VehicleId,null,default));
         Assert.Equal(0,await Seed.CountAsync(db.DataSource,"SELECT COUNT(*) FROM payments WHERE rental_id=$1",rental.Id));
-        await Assert.ThrowsAsync<InvalidOperationException>(()=>store.ChangeRentalStatusAsync(rental.Id,"pre_inspection",default));
+        // FR-036 permits approval before payment/inspection; approval must not bypass unsafe handover.
+        var confirmed=await store.ChangeRentalStatusAsync(rental.Id,"pre_inspection",default);
+        Assert.Equal("pre_inspection",confirmed.Status);
+        Assert.IsType<DateTime>(await Seed.ScalarAsync(db.DataSource,"SELECT confirmed_at FROM rentals WHERE id=$1",rental.Id));
+        Assert.Equal(0,await Seed.CountAsync(db.DataSource,"SELECT COUNT(*) FROM rental_orders WHERE rental_id=$1",rental.Id));
+        await Assert.ThrowsAsync<InvalidOperationException>(()=>store.ChangeRentalStatusAsync(rental.Id,"renting",default));
+        Assert.Equal("maintenance",(await store.GetVehicleAsync(rental.VehicleId,default))!.Status);
         var candidate=await ReplacementAsync(rental.VehicleId);
         await store.InspectReplacementAsync(rental.Id,candidate,inspector,true,null,null,null,null,default);
         var recovered=await store.ReplaceVehicleAsync(rental.Id,candidate,null,null,Manager,default);
@@ -90,8 +96,12 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         var inspector=await StaffAsync(technician:true);
         await ShiftAsync(oldDriver,rental);
         await ShiftAsync(newDriver,rental);
+        await store.ChangeRentalStatusAsync(rental.Id,"pre_inspection",default);
         await store.AddInspectionAsync(rental.Id,inspector,"pre_rental",true,null,null,null,null,default);
         await store.AssignAsync(rental.Id,oldDriver,Manager,default);
+        var unpaid=await Assert.ThrowsAsync<ConflictException>(()=>store.ChangeRentalStatusAsync(rental.Id,"renting",default));
+        Assert.Equal("PAYMENT_REQUIRED",unpaid.Code);
+        await Scenarios.CompleteInvoiceAsync(db.DataSource,scenario.InvoiceId,scenario.InvoiceAmount);
         await store.ChangeRentalStatusAsync(rental.Id,"renting",default);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>store.CreateReportAsync(rental.Id,newDriver,true,"breakdown","Engine stopped",null,default));
         var report=await store.CreateReportAsync(rental.Id,oldDriver,true,"breakdown","Engine stopped",null,default);

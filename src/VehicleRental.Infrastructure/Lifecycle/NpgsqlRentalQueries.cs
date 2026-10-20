@@ -41,9 +41,16 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                    COALESCE(h.start_time, l.start_time),
                    COALESCE(h.end_time, l.end_time),
                    r.total_price, r.created_at,
-                   (SELECT o.id FROM rental_orders o WHERE o.rental_id = r.id)
+                   (SELECT o.id FROM rental_orders o WHERE o.rental_id = r.id),
+                   v.license_plate, vt.type, f.id, f.name, f.phone, r.confirmed_at, i.status,
+                   CASE WHEN r.is_subscription THEN
+                       EXTRACT(EPOCH FROM (COALESCE(h.end_time,l.end_time)-COALESCE(h.start_time,l.start_time)))/3600
+                       + r.overtime_hours ELSE NULL END
             FROM rentals r
             JOIN vehicles v ON v.id = r.vehicle_id
+            JOIN vehicle_types vt ON vt.id = v.vehicle_type_id
+            LEFT JOIN facilities f ON f.id = v.facility_id
+            LEFT JOIN invoices i ON i.rental_id = r.id AND i.kind = 'rental'
             LEFT JOIN hour_rental_detail h ON h.rental_id = r.id
             LEFT JOIN longterm_rental_contract l ON l.rental_id = r.id
             WHERE r.customer_id = $1 {statusFilter}
@@ -72,7 +79,13 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                 EndTime: reader.GetDateTime(9),
                 TotalPrice: reader.GetDecimal(10),
                 CreatedAt: reader.GetDateTime(11),
-                OrderId: reader.IsDBNull(12) ? null : reader.GetInt32(12)
+                OrderId: reader.IsDBNull(12) ? null : reader.GetInt32(12),
+                LicensePlate: reader.IsDBNull(13) ? null : reader.GetString(13),
+                VehicleCategory: reader.IsDBNull(14) ? null : reader.GetString(14),
+                CanCancel: reader.GetString(1) == "pending" && reader.GetDateTime(8) > timeProvider.GetUtcNow().UtcDateTime,
+                NextAction: NextAction(reader.GetString(1), !reader.IsDBNull(18), reader.IsDBNull(19) ? null : reader.GetString(19), reader.GetBoolean(3)),
+                Facility: reader.IsDBNull(15) ? null : new CustomerFacilityDto(reader.GetInt32(15), reader.GetString(16), reader.IsDBNull(17) ? null : reader.GetString(17)),
+                SubscriptionHoursUsed: reader.IsDBNull(20) ? null : reader.GetDecimal(20)
             ));
         }
 
@@ -84,14 +97,17 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
         await using var cmd = dataSource.CreateCommand("""
             SELECT r.id, r.status, r.rental_type, r.is_subscription,
                    v.id, COALESCE(v.brand, 'Unknown'), COALESCE(v.model, 'Unknown'), v.main_img_url, v.color,
-                   COALESCE(f.name, 'Main Facility') AS facility_name,
+                   f.name AS facility_name,
                    COALESCE(h.start_time, l.start_time) AS start_time,
                    COALESCE(h.end_time, l.end_time) AS end_time,
                    COALESCE(h.has_driver, false) AS has_driver,
                    r.total_price - r.vat_price AS rent_price,
                    r.vat_price, r.deposit_price, r.overtime_price, r.total_price,
                    i.id, i.invoice_number, i.status, i.amount, r.confirmed_at,
-                   (SELECT o.id FROM rental_orders o WHERE o.rental_id = r.id)
+                   (SELECT o.id FROM rental_orders o WHERE o.rental_id = r.id), f.id, f.phone,
+                   CASE WHEN r.is_subscription THEN
+                       EXTRACT(EPOCH FROM (COALESCE(h.end_time,l.end_time)-COALESCE(h.start_time,l.start_time)))/3600
+                       + r.overtime_hours ELSE NULL END
             FROM rentals r
             JOIN vehicles v ON v.id = r.vehicle_id
             LEFT JOIN facilities f ON f.id = v.facility_id
@@ -121,7 +137,9 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
             Color: reader.IsDBNull(8) ? null : reader.GetString(8)
         );
 
-        var facility = reader.GetString(9);
+        var facilityName = reader.IsDBNull(9) ? null : reader.GetString(9);
+        var facility = reader.IsDBNull(24) ? null : new CustomerFacilityDto(reader.GetInt32(24), facilityName!, reader.IsDBNull(25) ? null : reader.GetString(25));
+        var subscriptionHoursUsed = reader.IsDBNull(26) ? (decimal?)null : reader.GetDecimal(26);
         var start = reader.GetDateTime(10);
         var end = reader.GetDateTime(11);
         var hasDriver = reader.GetBoolean(12);
@@ -271,18 +289,7 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
             );
         }
 
-        var nextAction = statusStr switch
-        {
-            "pending" => "WAITING_CONFIRMATION",
-            "pre_inspection" when !isConfirmed => "WAITING_CONFIRMATION",
-            "pre_inspection" when invoice?.Status != "paid" && !isSubscription => "PAYMENT_REQUIRED",
-            "pre_inspection" => "PREPARING_VEHICLE",
-            "renting" => "ENJOY_YOUR_TRIP",
-            "post_inspection" => "PROCESSING_RETURN",
-            "completed" => "COMPLETED",
-            "cancelled" => "CANCELLED",
-            _ => null
-        };
+        var nextAction = NextAction(statusStr, isConfirmed, invoice?.Status, isSubscription);
 
         return new CustomerRentalDetail(
             Id: rId,
@@ -294,7 +301,7 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
             Start: start,
             End: end,
             HasDriver: hasDriver,
-            Pickup: new CustomerPickupDto("Facility", facility),
+            Pickup: new CustomerPickupDto("Facility", facilityName),
             Driver: driver,
             Price: price,
             Invoice: invoice,
@@ -304,9 +311,23 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
             CanCancel: canCancel,
             Cancellation: cancellation,
             NextAction: nextAction,
-            OrderId: orderId
+            OrderId: orderId,
+            SubscriptionHoursUsed: subscriptionHoursUsed
         );
     }
+
+    private static string? NextAction(string status, bool confirmed, string? invoiceStatus, bool subscription) => status switch
+    {
+        "pending" => "WAITING_CONFIRMATION",
+        "pre_inspection" when !confirmed => "WAITING_CONFIRMATION",
+        "pre_inspection" when invoiceStatus != "paid" && !subscription => "PAYMENT_REQUIRED",
+        "pre_inspection" => "PREPARING_VEHICLE",
+        "renting" => "ENJOY_YOUR_TRIP",
+        "post_inspection" => "PROCESSING_RETURN",
+        "completed" => "COMPLETED",
+        "cancelled" => "CANCELLED",
+        _ => null
+    };
 
     public async Task<PagedResult<OperationalRentalSummary>> ListOperationalRentalsAsync(
         OperationalFilter filter,

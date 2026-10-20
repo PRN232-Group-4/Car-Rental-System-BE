@@ -74,13 +74,21 @@ public sealed class StaffAuthorizationTests(PostgresFixture db) : IClassFixture<
     }
 
     [Fact]
-    public async Task Lifecycle_cannot_bypass_inspection_using_status_endpoint()
+    public async Task Lifecycle_confirmation_is_allowed_but_status_endpoint_cannot_bypass_inspections()
     {
         var operations = new NpgsqlOperationsRepository(db.DataSource);
         var rental = await Scenarios.CreateDirectRentalAsync(db.DataSource);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => operations.ChangeRentalStatusAsync(rental.RentalId, "pre_inspection", default));
+        // FR-036 permits staff approval before payment or pre-inspection, but does not
+        // issue a paid order or permit handover without the required inspection.
+        var confirmed = await operations.ChangeRentalStatusAsync(rental.RentalId, "pre_inspection", default);
+        Assert.Equal("pre_inspection", confirmed.Status);
+        Assert.NotNull(await Seed.ScalarAsync(db.DataSource, "SELECT confirmed_at FROM rentals WHERE id=$1", rental.RentalId));
+        Assert.Equal(0, await Seed.CountAsync(db.DataSource, "SELECT COUNT(*) FROM rental_orders WHERE rental_id=$1", rental.RentalId));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => operations.ChangeRentalStatusAsync(rental.RentalId, "renting", default));
         await Seed.ScalarAsync(db.DataSource, "UPDATE rentals SET status='renting' WHERE id=$1", rental.RentalId);
         await Assert.ThrowsAsync<InvalidOperationException>(() => operations.ChangeRentalStatusAsync(rental.RentalId, "post_inspection", default));
+        await Seed.ScalarAsync(db.DataSource, "UPDATE rentals SET status='post_inspection' WHERE id=$1", rental.RentalId);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => operations.ChangeRentalStatusAsync(rental.RentalId, "completed", default));
     }
 
     [Fact]

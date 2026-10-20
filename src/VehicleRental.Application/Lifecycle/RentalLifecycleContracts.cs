@@ -73,6 +73,7 @@ public sealed record CustomerPriceDto(decimal Rent, decimal Vat, decimal Deposit
 public sealed record CustomerInvoiceDto(int Id, string Number, string Status, decimal Amount);
 public sealed record CustomerInspectionDto(string Type, bool IsOk, decimal? OdometerKm, decimal? FuelBatteryLevel, string? DamageNotes, string? ImgUrls, DateTime InspectedAt);
 public sealed record CustomerTimelineDto(string To, DateTime At, string Actor, string? Reason);
+public sealed record CustomerFacilityDto(int Id, string Name, string? Phone);
 
 public sealed record CustomerRentalSummary(
     int Id,
@@ -87,7 +88,13 @@ public sealed record CustomerRentalSummary(
     DateTime EndTime,
     decimal TotalPrice,
     DateTime CreatedAt,
-    int? OrderId = null
+    int? OrderId = null,
+    string? LicensePlate = null,
+    string? VehicleCategory = null,
+    bool CanCancel = false,
+    string? NextAction = null,
+    CustomerFacilityDto? Facility = null,
+    decimal? SubscriptionHoursUsed = null
 );
 
 public sealed record CustomerRentalDetail(
@@ -96,7 +103,7 @@ public sealed record CustomerRentalDetail(
     string RentalType,
     bool IsSubscription,
     CustomerVehicleDto Vehicle,
-    string Facility,
+    CustomerFacilityDto? Facility,
     DateTime Start,
     DateTime End,
     bool HasDriver,
@@ -110,7 +117,8 @@ public sealed record CustomerRentalDetail(
     bool CanCancel,
     CancellationPreview? Cancellation,
     string? NextAction,
-    int? OrderId = null
+    int? OrderId = null,
+    decimal? SubscriptionHoursUsed = null
 );
 
 public sealed record OperationalRentalSummary(
