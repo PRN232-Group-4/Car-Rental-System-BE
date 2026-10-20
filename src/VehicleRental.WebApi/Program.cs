@@ -88,7 +88,12 @@ builder.Services.AddOptions<GoogleAuthOptions>()
     .ValidateOnStart();
 builder.Services.Configure<CloudinaryOptions>(builder.Configuration.GetSection(CloudinaryOptions.SectionName));
 builder.Services.Configure<PayOsOptions>(builder.Configuration.GetSection(PayOsOptions.SectionName));
-builder.Services.Configure<GoogleMapsOptions>(builder.Configuration.GetSection(GoogleMapsOptions.SectionName));
+builder.Services.AddOptions<MapboxOptions>()
+    .Bind(builder.Configuration.GetSection(MapboxOptions.SectionName))
+    .ValidateDataAnnotations()
+    .Validate(o => o.DrivingProfile is "driving" or "driving-traffic", "Mapbox:DrivingProfile must be driving or driving-traffic.")
+    .Validate(o => !o.Enabled || o.AccessToken?.Trim().StartsWith("pk.", StringComparison.Ordinal) == true, "Mapbox:AccessToken must be a public token (pk.) when enabled.")
+    .ValidateOnStart();
 builder.Services.Configure<TelemetryRetentionOptions>(builder.Configuration.GetSection(TelemetryRetentionOptions.SectionName));
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
@@ -125,11 +130,10 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 });
 builder.Services.AddHttpClient<IBrevoEmailSender, BrevoEmailSender>();
 builder.Services.AddHttpClient<IPaymentGateway, PayOsPaymentGateway>(client => client.BaseAddress = new Uri("https://api-merchant.payos.vn/"));
-builder.Services.AddHttpClient<IGoogleMapsClient, GoogleMapsClient>(client =>
+builder.Services.AddHttpClient<IMapClient, MapboxClient>(client =>
 {
-    var baseUrl = builder.Configuration["GoogleMaps:BaseUrl"];
-    client.BaseAddress = new Uri(!string.IsNullOrWhiteSpace(baseUrl) ? baseUrl : "https://maps.googleapis.com/maps/api/");
-});
+    client.Timeout = TimeSpan.FromSeconds(15);
+}).RemoveAllLoggers(); // Provider query strings contain access_token.
 builder.Services.AddScoped<IUserRepository, NpgsqlUserRepository>();
 builder.Services.AddScoped<IAccountRepository, NpgsqlAccountRepository>();
 builder.Services.AddScoped<ICustomerRepository, NpgsqlCustomerRepository>();
@@ -152,7 +156,7 @@ builder.Services.AddScoped<IMapService, MapService>();
 builder.Services.AddSingleton<IWorkflowStateStore, RedisWorkflowStateStore>();
 builder.Services.AddSingleton(provider => provider.GetRequiredService<IOptions<RegistrationOptions>>().Value);
 builder.Services.AddSingleton(provider => provider.GetRequiredService<IOptions<AvailabilityOptions>>().Value);
-builder.Services.AddSingleton(provider => provider.GetRequiredService<IOptions<GoogleMapsOptions>>().Value);
+builder.Services.AddSingleton(provider => provider.GetRequiredService<IOptions<MapboxOptions>>().Value);
 builder.Services.AddSingleton(provider => provider.GetRequiredService<IOptions<TelemetryRetentionOptions>>().Value);
 builder.Services.AddScoped(provider =>
 {

@@ -2,6 +2,7 @@ using Car_Rental_System_BE.Application.DTOs.Map;
 using Car_Rental_System_BE.Application.Interfaces.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel.DataAnnotations;
 
 namespace Car_Rental_System_BE.WebApi.Controllers;
 
@@ -10,6 +11,8 @@ namespace Car_Rental_System_BE.WebApi.Controllers;
 [Authorize]
 [ProducesResponseType(StatusCodes.Status400BadRequest)]
 [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+[ProducesResponseType(StatusCodes.Status502BadGateway)]
+[ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
 public sealed class MapController(IMapService mapService) : ControllerBase
 {
     /// <summary>
@@ -41,23 +44,25 @@ public sealed class MapController(IMapService mapService) : ControllerBase
     }
 
     /// <summary>
-    /// Searches for places/addresses using Google Places API with optional geographical bias.
+    /// Searches Vietnamese addresses using Mapbox Geocoding v6 (up to 10 provider matches; no POI guarantee).
     /// </summary>
     [HttpGet("places")]
-    [ProducesResponseType<IReadOnlyList<PlaceSearchResult>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<PlaceSearchPage>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Places(
         [FromQuery] string query,
         [FromQuery] double? lat,
         [FromQuery] double? lng,
         [FromQuery] double? radius,
-        CancellationToken ct)
+        [FromQuery, Range(1, int.MaxValue)] int page = 1,
+        [FromQuery, Range(1, 100)] int pageSize = 20,
+        CancellationToken ct = default)
     {
-        var places = await mapService.SearchPlacesAsync(query, lat, lng, radius, ct);
+        var places = await mapService.SearchPlacesAsync(query, lat, lng, radius, page, pageSize, ct);
         return Ok(places);
     }
 
     /// <summary>
-    /// Calculates driving distance and estimated time of arrival (ETA) between two points using Google Distance Matrix API.
+    /// Calculates road distance and estimated duration using Mapbox Matrix API.
     /// </summary>
     [HttpGet("distance-matrix")]
     [ProducesResponseType<DistanceMatrixResult>(StatusCodes.Status200OK)]
@@ -73,7 +78,7 @@ public sealed class MapController(IMapService mapService) : ControllerBase
     }
 
     /// <summary>
-    /// Computes full driving directions, turn-by-turn waypoints, and polyline using Google Directions API.
+    /// Computes driving route geometry and duration using Mapbox Directions API (precision-5 polyline).
     /// </summary>
     [HttpGet("directions")]
     [ProducesResponseType<DirectionsResult>(StatusCodes.Status200OK)]

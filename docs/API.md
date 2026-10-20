@@ -729,15 +729,17 @@ Dashboard trả `revenue`, `renting`, `maintenance`, `activeSubscriptions`. `fro
 | GET | `/api/tracking/alerts` | Management | `rentalId: int?`, `vehicleId: int?`, `isResolved: bool?`, `page: int=1`, `pageSize: int=20` | 200 / `TrackingAlertPage` |
 | POST | `/api/tracking/alerts/{alertId}/resolve` | Management | Không | 200 / `TrackingAlertDto` |
 
-### Tích hợp Google Maps (Places, Geocoding, Distance Matrix, Directions)
+### Tích hợp Mapbox (Geocoding v6, Matrix v1, Directions v5)
 
 | Method | Endpoint | Quyền | Body / query | HTTP / data |
 | --- | --- | --- | --- | --- |
 | GET | `/api/map/geocode` | Authenticated | `address: string` | 200 / `GeocodeResult` |
 | GET | `/api/map/reverse-geocode` | Authenticated | `lat: double`, `lng: double` | 200 / `GeocodeResult` |
-| GET | `/api/map/places` | Authenticated | `query: string`, `lat: double?`, `lng: double?`, `radius: double?` | 200 / `PlaceSearchResult[]` |
+| GET | `/api/map/places` | Authenticated | `query: string`, `lat: double?`, `lng: double?`, `radius: double?`, `page: int=1`, `pageSize: int=20` | 200 / `PlaceSearchPage` |
 | GET | `/api/map/distance-matrix` | Authenticated | `originLat: double`, `originLng: double`, `destLat: double`, `destLng: double` | 200 / `DistanceMatrixResult` |
 | GET | `/api/map/directions` | Authenticated | `originLat: double`, `originLng: double`, `destLat: double`, `destLng: double` | 200 / `DirectionsResult` |
+
+Mapbox dùng longitude,latitude trong request; DTO vẫn Lat/Lng, mét/giây và polyline precision5. `PlaceId` là ID Mapbox. `/places` tìm địa chỉ Việt Nam (không phải POI Search Box); data có `items`, `page`, `pageSize`, `totalCount`, `page>=1`, `pageSize=1..100`, default1/20, validation HTTP và Application. Upstream tối đa10 matches, tổng là số matches sau lọc radius; giữ thứ tự relevance từ provider, page vượt phạm vi trả items rỗng. lat/lng cần đủ cặp, radius cần tâm. Missing config503; upstream502/503; không tìm địa chỉ/tuyến404; không sinh dữ liệu giả. ETA mặc định profile driving, không hứa giao thông live. Nearby giữ khoảng cách Haversine, để road distance/ETA null nếu Mapbox lỗi. Verify-dropoff thiếu vị trí đích trả422. Xem [cấu hình](mapbox-setup.md).
 
 ### Quản lý thiết bị định vị (Devices)
 

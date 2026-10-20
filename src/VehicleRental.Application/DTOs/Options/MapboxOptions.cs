@@ -2,13 +2,15 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Car_Rental_System_BE.Application.DTOs.Options;
 
-public sealed class GoogleMapsOptions
+public sealed class MapboxOptions
 {
-    public const string SectionName = "GoogleMaps";
+    public const string SectionName = "Mapbox";
 
-    public string ApiKey { get; init; } = "";
-    public string BaseUrl { get; init; } = "https://maps.googleapis.com/maps/api/";
+    public string AccessToken { get; init; } = "";
     public bool Enabled { get; init; }
+    public string DrivingProfile { get; init; } = "driving";
+    // Drop-off alerts can persist geocoded coordinates. Requires eligible Mapbox billing.
+    public bool PermanentGeocoding { get; init; } = true;
 
     [Range(100, 50000)]
     public double DefaultSearchRadiusMeters { get; init; } = 5000.0;

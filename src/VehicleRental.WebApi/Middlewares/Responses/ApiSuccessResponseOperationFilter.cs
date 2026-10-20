@@ -13,6 +13,20 @@ public sealed class ApiSuccessResponseOperationFilter : IOperationFilter
     {
         var controller = context.MethodInfo.DeclaringType?.Name;
         var action = context.MethodInfo.Name;
+        if (controller == "MapController")
+        {
+            operation.Description = "Mapbox provider. Missing configuration returns 503, upstream failures 502/503, no route 404. No simulated coordinates or ETA. Provider IDs are Mapbox IDs.";
+            if (action == "Places")
+            {
+                operation.Description += " Vietnam address search via Geocoding v6, not POI search. Provider returns at most 10 matches; items/page/pageSize/totalCount paginate that match set, not the global catalog. Defaults page=1/pageSize=20; page>=1, pageSize 1..100. lat/lng must be supplied together; radius requires both and filters by meters.";
+                foreach (var parameter in operation.Parameters.Where(p => p.Name is "page" or "pageSize"))
+                {
+                    parameter.Schema.Minimum = 1;
+                    parameter.Schema.Default = new Microsoft.OpenApi.Any.OpenApiInteger(parameter.Name == "page" ? 1 : 20);
+                    if (parameter.Name == "pageSize") parameter.Schema.Maximum = 100;
+                }
+            }
+        }
         if (controller == "PaymentsController" && action == "ConfirmCash")
             operation.Description = "Admin/Manager/CustomerService confirms actual full cash receipt for a cash invoice after rental approval. No client amount or paid flag accepted. Atomically records paid ledger with reviewer audit, marks invoice paid and issues the official rental order. Repeated confirmation returns the same receipt/order. Online invoices, cancelled rentals and unapproved requests return 409.";
         if (controller == "PaymentsController" && action == "Checkout")

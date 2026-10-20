@@ -75,3 +75,7 @@ Admin/Manager/CustomerService records externally signed documents by HTTP(S) URL
 ## Response contract — 2026-10-07 assumptions
 
 Chọn `code` là HTTP status dạng số và `status` là chuỗi `success`/`error` vì người dùng chưa quy định kiểu/giá trị của hai trường này. `is_success` luôn boolean theo yêu cầu explicit. Quyết định được ghi tại [ADR-002](decisions/ADR-002-api-response-envelope.md); có thể bổ sung mã lỗi nghiệp vụ riêng sau nếu cần.
+
+## Mapbox — 2026-10-20
+
+Người dùng chọn thay toàn bộ Google Maps bằng Mapbox. Mặc định tìm địa chỉ tại Việt Nam và profile driving (không hứa giao thông live). Search Box POI chưa công bố hỗ trợ Việt Nam nên `/places` dùng address search; cần đánh giá coverage với token thật nếu cần POI. Backend geocode permanent do cảnh báo có thể lưu tọa độ; tài khoản phải đủ điều kiện. Chưa có token để xác nhận billing/coverage/domain restrictions hoặc deployment. Quyết định: [ADR-009](decisions/ADR-009-mapbox-provider.md).
