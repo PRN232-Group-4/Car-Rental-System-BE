@@ -1,4 +1,5 @@
 # Changelog
+- 2026-10-20 — [Chuyển toàn bộ bản đồ sang Mapbox](2026-10-20-mapbox-migration.md)
 - 2026-10-18 — [Danh sách Admin và chi tiết theo dõi đơn thuê](2026-10-18-admin-rental-tracking.md)
 - 2026-10-18 — [Duyệt yêu cầu, thu tiền và phát hành đơn thuê chính thức](2026-10-18-booking-request-paid-order.md)
 - 2026-10-18 — [Đặt xe theo cơ sở và email OTP Thong Dong](2026-10-18-facility-booking-otp-email.md)

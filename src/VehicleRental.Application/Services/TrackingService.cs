@@ -1,4 +1,5 @@
 using Car_Rental_System_BE.Application.DTOs.Map;
+using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.DTOs.Options;
 using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
@@ -14,11 +15,11 @@ namespace Car_Rental_System_BE.Application.Services;
 
 public sealed class TrackingService(
     ITrackingRepository repository,
-    IGoogleMapsClient googleMapsClient,
-    GoogleMapsOptions googleMapsOptions,
+    IMapClient mapClient,
+    MapboxOptions mapboxOptions,
     TelemetryRetentionOptions retentionOptions) : ITrackingService
 {
-    private readonly GoogleMapsOptions _googleOptions = googleMapsOptions;
+    private readonly MapboxOptions _mapboxOptions = mapboxOptions;
     private readonly TelemetryRetentionOptions _retention = retentionOptions;
 
     public async Task<IngestPositionsResult> IngestTelemetryAsync(string deviceId, string deviceKey, IngestPositionsRequest request, CancellationToken ct)
@@ -111,7 +112,7 @@ public sealed class TrackingService(
     {
         TrackingValidators.ValidateCoordinates(lat, lng);
         TrackingValidators.ValidatePagination(page, pageSize);
-        var radius = radiusMeters ?? _googleOptions.DefaultSearchRadiusMeters;
+        var radius = radiusMeters ?? _mapboxOptions.DefaultSearchRadiusMeters;
         TrackingValidators.ValidateRadius(radius);
 
         var (rawItems, totalCount) = await repository.FindNearbyVehiclesAsync(lat, lng, radius, page, pageSize, ct);
@@ -126,18 +127,16 @@ public sealed class TrackingService(
             {
                 try
                 {
-                    var matrix = await googleMapsClient.GetDistanceMatrixAsync(vLat, vLng, lat, lng, ct);
-                    if (matrix.DistanceMeters >= 0)
+                    var matrix = await mapClient.GetDistanceMatrixAsync(vLat, vLng, lat, lng, ct);
+                    if (matrix.Status == "OK" && matrix.DistanceMeters >= 0)
                     {
                         routeMeters = matrix.DistanceMeters;
                         etaSeconds = matrix.DurationSeconds;
                     }
                 }
-                catch
+                catch (BusinessRuleException)
                 {
-                    // Fallback to Haversine speed approximation
-                    routeMeters = distanceMeters * 1.3; // road factor
-                    etaSeconds = (routeMeters / 10.0);  // ~36 km/h -> 10 m/s
+                    // Keep real Haversine distance; unavailable road distance/ETA remain null.
                 }
             }
 
@@ -225,8 +224,8 @@ public sealed class TrackingService(
         }
 
         // Determine expected drop-off location
-        double expectedLat = 10.7769; // Default fallback (e.g. City Center)
-        double expectedLng = 106.7009;
+        double? expectedLat = null;
+        double? expectedLng = null;
         string expectedFacilityName = "Designated Facility";
 
         if (rental.Value.FacilityId.HasValue)
@@ -242,7 +241,7 @@ public sealed class TrackingService(
                 }
                 else if (!string.IsNullOrWhiteSpace(facility.Value.Address))
                 {
-                    var geocoded = await googleMapsClient.GeocodeAsync(facility.Value.Address, ct);
+                    var geocoded = await mapClient.GeocodeAsync(facility.Value.Address, ct);
                     if (geocoded != null)
                     {
                         expectedLat = geocoded.Lat;
@@ -252,10 +251,13 @@ public sealed class TrackingService(
             }
         }
 
+        if (!expectedLat.HasValue || !expectedLng.HasValue)
+            throw new BusinessRuleException("FACILITY_LOCATION_UNAVAILABLE", "Chưa xác định được vị trí cơ sở trả xe. Vui lòng cập nhật địa chỉ hoặc tọa độ.", 422);
+
         var currentPoint = new GeoPoint(checkLat, checkLng);
-        var expectedPoint = new GeoPoint(expectedLat, expectedLng);
+        var expectedPoint = new GeoPoint(expectedLat.Value, expectedLng.Value);
         var distance = currentPoint.DistanceToMeters(expectedPoint);
-        var tolerance = _googleOptions.ReturnLocationToleranceMeters;
+        var tolerance = _mapboxOptions.ReturnLocationToleranceMeters;
 
         var isValid = distance <= tolerance;
         TrackingAlertDto? alert = null;
@@ -274,7 +276,7 @@ public sealed class TrackingService(
 
         return new DropoffVerificationResult(
             rentalId, rental.Value.VehicleId, isValid, checkLat, checkLng,
-            expectedLat, expectedLng, Math.Round(distance, 1), tolerance,
+            expectedLat.Value, expectedLng.Value, Math.Round(distance, 1), tolerance,
             expectedFacilityName, statusMessage, alert);
     }
 

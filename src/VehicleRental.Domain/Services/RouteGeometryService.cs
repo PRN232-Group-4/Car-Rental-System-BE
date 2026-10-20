@@ -5,7 +5,7 @@ namespace Car_Rental_System_BE.Domain.Services;
 public static class RouteGeometryService
 {
     /// <summary>
-    /// Decodes a Google Maps encoded polyline string into a list of GeoPoints.
+    /// Decodes a precision-5 encoded polyline string into a list of GeoPoints.
     /// </summary>
     public static IReadOnlyList<GeoPoint> DecodePolyline(string? encodedPolyline)
     {
