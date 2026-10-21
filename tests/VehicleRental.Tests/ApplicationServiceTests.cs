@@ -95,6 +95,7 @@ public sealed class ApplicationServiceTests
             "SetAsync" => SetState(values, args),
             "DeleteAsync" => DeleteState(values, args),
             "GetTimeToLiveAsync" => Task.FromResult<TimeSpan?>(TimeSpan.FromMinutes(5)),
+            "CompareExchangeAsync" => ExchangeState(values, args),
             _ => throw new NotSupportedException(method.Name)
         });
         User? created = null;
@@ -124,6 +125,13 @@ public sealed class ApplicationServiceTests
     { state[(string)args[0]!] = (string)args[1]!; return Task.CompletedTask; }
     private static Task DeleteState(Dictionary<string, string> state, object?[] args)
     { state.Remove((string)args[0]!); return Task.CompletedTask; }
+    private static Task<bool> ExchangeState(Dictionary<string, string> state, object?[] args)
+    {
+        var key = (string)args[0]!;
+        if (state.GetValueOrDefault(key) != (string?)args[1]) return Task.FromResult(false);
+        if (args[2] is string replacement) state[key] = replacement; else state.Remove(key);
+        return Task.FromResult(true);
+    }
     private static Staff StaffMember() => new(1, 17, "staff@test.local", "Staff", null, null, null, null, null,
         null, false, null, null, null, null, null, null, true, "CustomerService");
 

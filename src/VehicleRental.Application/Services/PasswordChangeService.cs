@@ -16,6 +16,7 @@ public sealed class PasswordChangeService(IWorkflowStateStore cache, IAccountRep
     IBrevoEmailSender emails, IRefreshTokenStore sessions, RegistrationOptions options) : IPasswordChangeWorkflow
 {
     private const string Prefix = "password-change:";
+    private readonly PasswordAttemptLimiter passwordAttempts = new(cache, options);
 
     public async Task StartAsync(string email, string currentPassword, CancellationToken ct)
     {
@@ -76,10 +77,22 @@ public sealed class PasswordChangeService(IWorkflowStateStore cache, IAccountRep
 
     private async Task<Account> VerifyCurrentAsync(string email, string currentPassword, CancellationToken ct)
     {
-        var account = await accounts.FindByEmailAsync(email.Trim().ToLowerInvariant(), ct);
-        if (account is null || string.IsNullOrEmpty(currentPassword) || !PasswordHash.Verify(currentPassword, account.PasswordHash))
-            throw new PasswordChangeException("Mật khẩu hiện tại không chính xác.", "currentPassword");
-        return account;
+        try
+        {
+            var lease = await passwordAttempts.ReserveAsync("change", email, ct);
+            var account = await accounts.FindByEmailAsync(email.Trim().ToLowerInvariant(), ct);
+            if (account is null || string.IsNullOrEmpty(currentPassword) || !PasswordHash.Verify(currentPassword, account.PasswordHash))
+            {
+                passwordAttempts.ThrowIfExhausted(lease);
+                throw new PasswordChangeException("Mật khẩu hiện tại không chính xác.", "currentPassword");
+            }
+            await passwordAttempts.SucceedAsync(lease, ct);
+            return account;
+        }
+        catch (AuthenticationLimitException error)
+        {
+            throw new PasswordChangeException(error.Message, "currentPassword", 429);
+        }
     }
 
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));

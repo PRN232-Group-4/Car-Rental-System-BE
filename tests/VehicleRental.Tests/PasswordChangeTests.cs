@@ -79,7 +79,8 @@ public sealed class PasswordChangeTests
     public async Task Incorrect_current_password_cannot_send_or_complete()
     {
         var error = await Assert.ThrowsAsync<PasswordChangeException>(() => service.StartAsync(account.Email, "wrong", default));
-        Assert.Equal("currentPassword", error.Field); Assert.Null(otp); Assert.Empty(state);
+        Assert.Equal("currentPassword", error.Field); Assert.Null(otp);
+        Assert.Contains("password-attempts:change:" + account.Email, state.Keys);
         await service.StartAsync(account.Email, "current", default);
         error = await Assert.ThrowsAsync<PasswordChangeException>(() => service.CompleteAsync(account.Email, "wrong", otp!, "newpass", default));
         Assert.Equal("currentPassword", error.Field); Assert.Empty(writes);

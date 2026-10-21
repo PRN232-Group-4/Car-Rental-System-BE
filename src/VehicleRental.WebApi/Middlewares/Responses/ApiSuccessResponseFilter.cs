@@ -102,6 +102,7 @@ public sealed class ApiSuccessResponseFilter : IAsyncAlwaysRunResultFilter
     // stable message without controllers repeating envelope construction.
     private static readonly IReadOnlyDictionary<string, string> Messages = new Dictionary<string, string>
     {
+        ["NavigationCounts.Get"] = "Pending navigation queue counts retrieved successfully.",
         ["InspectionAssignments.Get"] = "Pre-rental inspection assignment retrieved successfully.",
         ["InspectionAssignments.Assign"] = "Pre-rental inspection technician assigned successfully.",
         ["Staff.CreateFromUser"] = "Employee profile created for the selected account successfully.",

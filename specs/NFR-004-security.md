@@ -1,3 +1,3 @@
 # NFR-004 — Security
 - **Status:** In progress
-Secure cookie, PBKDF2, OTP TTL/attempt/cooldown implemented. Remaining: rate limiter, CSRF, headers, secret scanning.
+Secure cookie, PBKDF2, OTP TTL/attempt/cooldown implemented. Authentication request limits default to 5 requests/60 seconds/IP/instance (password-change endpoints share a budget; other endpoints have separate budgets). Login/current-password checks reserve at most 5 attempts/10 minutes/normalized email in Redis; the fifth failure returns 429, success before lockout resets the counter, expiry permits retry. OTP attempt increments/consumption are atomic and reject the fifth failure; attempt settings cannot exceed 5. Request limits include invalid input. Remaining: distributed IP/email request rate limiting across all flows, CSRF, headers, secret scanning.

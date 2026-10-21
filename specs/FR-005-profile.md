@@ -14,4 +14,5 @@ Customer sửa thông tin/avatar/mật khẩu của chính mình. Cloudinary ava
 - [x] Đổi mật khẩu bắt buộc OTP 6 số riêng (`password-change:`), TTL 10 phút, cooldown 60 giây, tối đa 5 lần sai (theo RegistrationOptions); không dùng OTP đăng ký/reset.
 - [x] OTP chỉ dùng một lần bằng thao tác Redis nguyên tử; mã gắn với hash mật khẩu hiện tại, không đổi hash/thu hồi phiên khi mã sai/hết hạn/thiếu. Gửi lại thay mã cũ; email lấy từ claim, rate limit theo IP.
 - [x] Giao diện hồ sơ customer/admin/staff có gửi/gửi lại OTP, lỗi inline, mật khẩu mới 6–20 ký tự; đổi thành công yêu cầu đăng nhập lại.
+- [x] Gửi OTP và xác nhận đổi mật khẩu dùng chung tối đa 5 request/60 giây/IP/instance. Mật khẩu hiện tại sai ở cả hai endpoint dùng chung counter Redis theo email: 5 lần/10 phút (cấu hình `Registration:MaxPasswordAttempts`, `PasswordAttemptWindowMinutes`), lần sai thứ 5 trả 429; mật khẩu đúng trước ngưỡng reset counter, sau ngưỡng phải đợi hết cửa sổ. Counter độc lập với login và OTP.
 - [ ] Audit thay đổi mật khẩu.

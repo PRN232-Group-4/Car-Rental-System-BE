@@ -35,7 +35,8 @@ public sealed class RegistrationService(
         var otp = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
         var payload = new PendingRegistration(command.FullName.Trim(), HashPassword(command.Password), HashOtp(otp), 0,
             DateTimeOffset.UtcNow.AddSeconds(_options.ResendCooldownSeconds), ipAddress);
-        await cache.SetAsync(key, JsonSerializer.Serialize(payload), TimeSpan.FromMinutes(_options.OtpTtlMinutes), ct);
+        if (!await cache.CompareExchangeAsync(key, existing, JsonSerializer.Serialize(payload), TimeSpan.FromMinutes(_options.OtpTtlMinutes), ct))
+            throw new RegistrationException("Yêu cầu đã thay đổi. Vui lòng thử lại sau.", 429);
         await emailSender.SendOtpAsync(email, payload.FullName, otp, ct);
     }
 
@@ -56,7 +57,8 @@ public sealed class RegistrationService(
         if (ttl is null || ttl <= TimeSpan.Zero)
             throw new RegistrationException("OTP không tồn tại hoặc đã hết hạn.", 400);
         var updated = pending with { OtpHash = HashOtp(otp), Attempts = 0, ResendAfter = DateTimeOffset.UtcNow.AddSeconds(_options.ResendCooldownSeconds), IpAddress = ipAddress };
-        await cache.SetAsync(key, JsonSerializer.Serialize(updated), ttl, ct);
+        if (!await cache.CompareExchangeAsync(key, value, JsonSerializer.Serialize(updated), ttl.Value, ct))
+            throw new RegistrationException("Yêu cầu đã thay đổi. Vui lòng thử lại sau.", 429);
         await emailSender.SendOtpAsync(email, updated.FullName, otp, ct);
     }
 
@@ -64,22 +66,29 @@ public sealed class RegistrationService(
     {
         var email = command.Email.Trim().ToLowerInvariant();
         var key = Prefix + email;
-        var value = await cache.GetAsync(key, ct);
-        if (value is null) throw new RegistrationException("OTP không tồn tại hoặc đã hết hạn.", 400);
-        var pending = JsonSerializer.Deserialize<PendingRegistration>(value!)!;
-        if (pending.Attempts >= _options.MaxVerificationAttempts)
+        for (var retry = 0; retry < 20; retry++)
         {
-            await cache.DeleteAsync(key, ct);
-            throw new RegistrationException("OTP đã bị khóa do nhập sai quá nhiều lần.", 429);
+            var value = await cache.GetAsync(key, ct);
+            var ttl = await cache.GetTimeToLiveAsync(key, ct);
+            if (value is null || ttl is null || ttl <= TimeSpan.Zero)
+                throw new RegistrationException("OTP không tồn tại hoặc đã hết hạn.", 400);
+            var pending = JsonSerializer.Deserialize<PendingRegistration>(value)!;
+            if (pending.Attempts >= _options.MaxVerificationAttempts)
+                throw new RegistrationException("OTP đã bị khóa do nhập sai quá nhiều lần.", 429);
+            if (!CryptographicOperations.FixedTimeEquals(Convert.FromHexString(pending.OtpHash), Convert.FromHexString(HashOtp(command.Otp))))
+            {
+                var updated = pending with { Attempts = pending.Attempts + 1 };
+                if (!await cache.CompareExchangeAsync(key, value, JsonSerializer.Serialize(updated), ttl.Value, ct)) continue;
+                throw updated.Attempts >= _options.MaxVerificationAttempts
+                    ? new RegistrationException("OTP đã bị khóa do nhập sai quá nhiều lần.", 429)
+                    : new RegistrationException("OTP không chính xác.", 400);
+            }
+            if (await users.EmailExistsAsync(email, ct)) throw new RegistrationException("Email đã được sử dụng.", 409);
+            if (!await cache.CompareExchangeAsync(key, value, null, ttl.Value, ct)) continue;
+            await users.CreateCustomerAsync(new User(email, pending.FullName, pending.PasswordHash), ct);
+            return;
         }
-        if (!CryptographicOperations.FixedTimeEquals(Convert.FromHexString(pending.OtpHash), Convert.FromHexString(HashOtp(command.Otp))))
-        {
-            await cache.SetAsync(key, JsonSerializer.Serialize(pending with { Attempts = pending.Attempts + 1 }), await cache.GetTimeToLiveAsync(key, ct), ct);
-            throw new RegistrationException("OTP không chính xác.", 400);
-        }
-        if (await users.EmailExistsAsync(email, ct)) throw new RegistrationException("Email đã được sử dụng.", 409);
-        await users.CreateCustomerAsync(new User(email, pending.FullName, pending.PasswordHash), ct);
-        await cache.DeleteAsync(key, ct);
+        throw new RegistrationException("Có yêu cầu xác nhận khác đang xử lý. Vui lòng thử lại.", 429);
     }
 
     private static string HashOtp(string otp) => Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(otp)));

@@ -1,5 +1,9 @@
 # Changelog
 
+- 2026-10-21 — [Giới hạn tối đa 5 lần cho xác thực](2026-10-21-authentication-attempt-limits.md)
+- 2026-10-21 — [Dot và số việc chờ xử lý trên điều hướng](2026-10-21-navigation-queue-counts.md)
+- 2026-10-21 — [Email thông báo nghiệp vụ theo best effort](2026-10-21-best-effort-operational-emails.md)
+
 - 2026-10-21 — [Đổi mật khẩu bắt buộc OTP email](2026-10-21-password-change-otp.md)
 
 - 2026-10-21 — [Danh sách biên bản và email người bảo trì hiện tại](2026-10-21-inspection-directory-maintenance-emails.md)
