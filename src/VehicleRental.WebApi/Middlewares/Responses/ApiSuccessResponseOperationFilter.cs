@@ -13,6 +13,8 @@ public sealed class ApiSuccessResponseOperationFilter : IOperationFilter
     {
         var controller = context.MethodInfo.DeclaringType?.Name;
         var action = context.MethodInfo.Name;
+        if (controller == "AccountController" && action is "StartPasswordChange" or "ChangePassword")
+            operation.Description = "Authenticated own account only; email comes from claims. POST password/otp validates currentPassword then sends a dedicated 6-digit OTP to the account email (202). POST password requires currentPassword, otp and newPassword (6–20 characters); only a valid unused OTP changes the hash, revokes all sessions and clears auth cookies (200). OTP TTL/cooldown/attempt limit use RegistrationOptions (defaults 10 minutes/60 seconds/5 failures). Resend invalidates the previous code; wrong/expired/missing OTP returns 400, lockout/cooldown/IP rate limit returns 429. OTP consumption and attempt increments are atomic.";
         if(controller=="InspectionsController")
             operation.Description="Admin/Manager/CustomerService/Maintenance only. Lists all persisted pre/post-rental inspections including previous vehicles and closed rentals, with recorded inspectorEmail, vehicleName/licensePlate, evidence/imageUrls and time. Optional inspectionType pre_rental/post_rental and positive rentalId combine before counting. Pagination defaults page=1/pageSize=20; page>=1, pageSize 1..100, invalid input returns 400 at HTTP/Application. data has items/page/pageSize/totalCount, out-of-range pages keep count with empty items. Stable order inspectedAt DESC NULLS LAST then id DESC. Pending work comes from rental operations queues, never fabricated inspection rows.";
         if(controller=="OperationsController" && action is "Vehicles" or "Vehicle")

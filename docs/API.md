@@ -187,6 +187,7 @@ Role `Staff` chỉ đánh dấu nhân viên, không tự cấp toàn bộ quyề
 | POST | `/api/account/password-resets/verify` | Public | `PasswordResetCompleteRequest` | 200 / null |
 | GET | `/api/account/profile` | Login | Không | 200 / `AccountResponse` |
 | PUT | `/api/account/profile` | Login | `UpdateProfileRequest` | 200 / `AccountResponse` |
+| POST | `/api/account/password/otp` | Login | `PasswordChangeStartRequest` | 202 / null |
 | POST | `/api/account/password` | Login | `ChangePasswordRequest` | 200 / null |
 | POST | `/api/auth/login` | Public | `LoginRequest` | 200 / null + Set-Cookie |
 | POST | `/api/auth/refresh` | Cookie refresh | Không | 200 / null + Set-Cookie |
@@ -207,12 +208,15 @@ Callback `GET /api/auth/google/callback` do middleware OAuth xử lý trong `Pro
 | `PasswordResetStartRequest` | `email: string` |
 | `PasswordResetCompleteRequest` | `email: string`; `otp: string` 6 chữ số; `newPassword: string` 6–20 ký tự |
 | `UpdateProfileRequest` | `fullName: string` 2–120; `gender: string?` tối đa 50; `phone: string?` tối đa 30 |
-| `ChangePasswordRequest` | `currentPassword: string` bắt buộc; `newPassword: string` 6–20 |
+| `PasswordChangeStartRequest` | `currentPassword: string` bắt buộc |
+| `ChangePasswordRequest` | `currentPassword: string` bắt buộc; `otp: string` bắt buộc, đúng 6 chữ số; `newPassword: string` 6–20 |
 | `LoginRequest` | `email: string`; `password: string` 6–20; `rememberMe: bool = false` |
 
 Giới hạn mật khẩu bao gồm cả 6 và 20 ký tự; ngoài khoảng trả 400, chi tiết trong `error.errors`, với thông báo `Mật khẩu phải có từ 6 đến 20 ký tự.` Không trim hoặc cắt ngắn mật khẩu. Tài khoản cũ có mật khẩu dài hơn 20 ký tự cần reset về giới hạn mới để đăng nhập.
 
 OTP mặc định hết hạn sau 10 phút, cooldown gửi lại 60 giây và giới hạn kiểm tra sai theo `MaxVerificationAttempts=5`. Resend đăng ký giữ TTL còn lại, không tự kéo dài TTL. User/customer chỉ được tạo sau verify thành công. Email được chuẩn hóa lowercase. Password reset start trả cùng 202 kể cả khi email không tồn tại hoặc còn cooldown.
+
+**Đổi mật khẩu khi đã đăng nhập:** gọi `POST /api/account/password/otp` với `{ "currentPassword": "..." }`. Backend xác minh mật khẩu cũ rồi gửi OTP tới email từ claim; client không chọn email nhận. Sau đó gọi `POST /api/account/password` với `{ "currentPassword": "...", "otp": "012345", "newPassword": "..." }`. Thiếu/sai/hết hạn OTP trả 400, không cập nhật mật khẩu. Lỗi trường nằm trong `error.errors.currentPassword`, `otp`, `newPassword` (validation MVC có thể dùng PascalCase). OTP riêng cho đổi mật khẩu, không dùng mã đăng ký/reset. Gửi lại cùng endpoint OTP sau cooldown thay mã cũ. Redis compare-and-exchange giữ nguyên tử số lần sai và việc tiêu thụ mã một lần. Lỗi gửi email trả 503 và cho phép thử gửi lại. Cooldown/khóa mã trả 429; cả hai endpoint giới hạn tổng 15 request/phút/IP trên mỗi instance. Rate limit phân tán tại edge vẫn theo backlog bảo mật. Thành công trả 200, thu hồi tất cả phiên và xóa cookie; frontend chuyển về đăng nhập.
 
 ```json
 {

@@ -137,6 +137,7 @@ public sealed class ApiSuccessResponseFilter : IAsyncAlwaysRunResultFilter
         ["Account.GetProfile"] = "Profile retrieved successfully.",
         ["Account.UpdateProfile"] = "Profile updated successfully.",
         ["Account.ChangePassword"] = "Password changed successfully.",
+        ["Account.StartPasswordChange"] = "Password change OTP sent successfully.",
         ["ExternalAuth.GoogleComplete"] = "Google sign-in completed successfully.",
         ["Home.GetStatus"] = "Service status retrieved successfully.",
         ["Media.UploadAvatar"] = "Avatar uploaded successfully.",

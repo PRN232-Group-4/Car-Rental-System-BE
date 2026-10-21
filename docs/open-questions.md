@@ -1,5 +1,9 @@
 # Câu hỏi mở và giả định
 
+## OTP đổi mật khẩu — 2026-10-21
+
+Giữ kiểm tra mật khẩu cũ và thêm OTP bắt buộc vào luồng đổi mật khẩu đã đăng nhập, dùng email từ claim và cấu hình RegistrationOptions hiện có. OTP ở namespace riêng với đăng ký/reset. Tài khoản chỉ đăng nhập Google, chưa có hash mật khẩu, vẫn dùng luồng quên mật khẩu để thiết lập mật khẩu trước; không thêm nhánh bỏ qua mật khẩu cũ. FE đếm cooldown mặc định 60 giây; backend là nguồn quyết định khi cấu hình thay đổi. Kiểm thử không gửi email thật. Xem FR-005 và change 2026-10-21-password-change-otp.
+
 ## Yêu cầu đặt xe và order — 2026-10-18, đã xác nhận
 
 Người dùng xác nhận tách yêu cầu đặt xe và đơn thuê chính thức. Staff duyệt yêu cầu rồi mới cho thanh toán. PayOS xác nhận đã nhận tiền thì phát hành order paid; tiền mặt chờ staff xác nhận thực nhận rồi mới phát hành. Customer chọn phương thức trước khi gửi yêu cầu; dùng gói đã trả trước phát hành lúc duyệt. Rental ID giữ làm mã yêu cầu/vận hành hiện có; orderId riêng trả trong invoice/rental detail. Xem ADR-008 và FR-036; không còn giả định thanh toán trước confirm.

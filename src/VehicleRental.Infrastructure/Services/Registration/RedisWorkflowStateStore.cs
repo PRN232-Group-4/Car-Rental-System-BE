@@ -28,4 +28,15 @@ public sealed class RedisWorkflowStateStore(IConnectionMultiplexer redis) : IWor
         ct.ThrowIfCancellationRequested();
         await cache.KeyDeleteAsync(key);
     }
+
+    public async Task<bool> CompareExchangeAsync(string key, string? expected, string? replacement, TimeSpan expiry, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (expiry <= TimeSpan.Zero) return false;
+        var transaction = cache.CreateTransaction();
+        transaction.AddCondition(expected is null ? Condition.KeyNotExists(key) : Condition.StringEqual(key, expected));
+        if (replacement is null) _ = transaction.KeyDeleteAsync(key);
+        else _ = transaction.StringSetAsync(key, replacement, expiry);
+        return await transaction.ExecuteAsync();
+    }
 }

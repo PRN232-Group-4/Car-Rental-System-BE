@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-10-21 — [Đổi mật khẩu bắt buộc OTP email](2026-10-21-password-change-otp.md)
+
 - 2026-10-21 — [Danh sách biên bản và email người bảo trì hiện tại](2026-10-21-inspection-directory-maintenance-emails.md)
 - 2026-10-21 — [Hồ sơ nhân viên từ tài khoản, cơ sở hiện tại và email phân công](2026-10-21-staff-account-facility-identity.md)
 

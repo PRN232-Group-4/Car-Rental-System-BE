@@ -1,5 +1,9 @@
 # Tiến độ
 
+## Đổi mật khẩu có OTP — 2026-10-21
+
+Đã bổ sung gửi OTP cho tài khoản đang đăng nhập và bắt buộc OTP trước khi đổi mật khẩu, dùng workflow/key riêng, TTL/cooldown/giới hạn sai và Redis compare-and-exchange. Mã gắn với mật khẩu hiện tại, email từ claim; sau đổi thu hồi mọi phiên. FE có form dùng chung ở hồ sơ customer/admin/staff. Build backend không warning/error, 82/82 test liên quan đạt; FE 630 unit test, 2 E2E desktop/mobile và build static đạt. Chưa kiểm tra Redis/Brevo thật hoặc Docker (daemon chưa chạy), chưa deploy. Xem [thay đổi](../changes/2026-10-21-password-change-otp.md).
+
 ## Email nhân sự và cơ sở tài khoản — 2026-10-21
 
 Đã thêm hồ sơ nhân viên từ tài khoản có sẵn, lấy Driver từ role thực tế, giữ identity và session invalidation. Hồ sơ tài khoản trả facilityName cho mọi role; phân công kiểm tra/bảo trì trả email nhân viên và tên cơ sở. Build -warnaserror đạt, 76/76 test PostgreSQL/HTTP liên quan đạt không skip, gồm role, validation, envelope, Swagger, account lock và dữ liệu thật. Không thêm migration ngoài 0025 trước đó; chưa deploy/Docker. Xem [thay đổi](../changes/2026-10-21-staff-account-facility-identity.md).

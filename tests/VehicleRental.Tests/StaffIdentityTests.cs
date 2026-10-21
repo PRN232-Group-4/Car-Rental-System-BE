@@ -190,11 +190,12 @@ public sealed class StaffIdentityTests(PostgresFixture db) : IClassFixture<Postg
         builder.Services.AddAuthentication("identity").AddScheme<AuthenticationSchemeOptions,TestAuthentication>("identity",_=>{});
         builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
         builder.Services.AddSingleton<IStaffService>(Service);
-        builder.Services.AddSingleton<IAccountService>(new AccountService(new NpgsqlAccountRepository(db.DataSource),sessions));
+        builder.Services.AddSingleton<IAccountService>(new AccountService(new NpgsqlAccountRepository(db.DataSource)));
         builder.Services.AddSingleton<IOperationsService>(new OperationsService(new NpgsqlOperationsRepository(db.DataSource)));
         builder.Services.AddSingleton<IOperationsCompletionService>(new OperationsCompletionService(new NpgsqlOperationsCompletionRepository(db.DataSource)));
         builder.Services.AddSingleton(DispatchProxy.Create<IRegistrationWorkflow,Unused>());
         builder.Services.AddSingleton(DispatchProxy.Create<IPasswordResetWorkflow,Unused>());
+        builder.Services.AddSingleton(DispatchProxy.Create<IPasswordChangeWorkflow,Unused>());
         builder.Services.AddSingleton(DispatchProxy.Create<IMediaService,Unused>());
         builder.Services.AddControllers(options=>options.Filters.Add<ApiSuccessResponseFilter>()).AddApplicationPart(typeof(StaffController).Assembly);
         builder.Services.AddEndpointsApiExplorer();builder.Services.AddSwaggerGen(options=>options.OperationFilter<ApiSuccessResponseOperationFilter>());

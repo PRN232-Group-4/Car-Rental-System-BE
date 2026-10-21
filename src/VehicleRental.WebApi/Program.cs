@@ -176,6 +176,7 @@ builder.Services.AddScoped(provider =>
 });
 builder.Services.AddScoped<IRegistrationWorkflow, RegistrationService>();
 builder.Services.AddScoped<IPasswordResetWorkflow, PasswordResetService>();
+builder.Services.AddScoped<IPasswordChangeWorkflow, PasswordChangeService>();
 builder.Services.AddSingleton<IImageStorage, CloudinaryImageStorage>();
 builder.Services.AddHostedService<RedisConnectionHostedService>();
 builder.Services.AddSingleton<RedisRefreshTokenStore>();
@@ -335,6 +336,15 @@ builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("password-change", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 15,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        }));
     options.AddPolicy("public-search", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions
@@ -348,7 +358,7 @@ builder.Services.AddRateLimiter(options =>
     {
         await context.HttpContext.Response.WriteAsJsonAsync(
             ApiResponse.Failure(StatusCodes.Status429TooManyRequests,
-                message: "Bạn đã tìm kiếm quá nhiều lần. Vui lòng thử lại sau một phút."),
+                message: "Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau một phút."),
             cancellationToken);
     };
 });
