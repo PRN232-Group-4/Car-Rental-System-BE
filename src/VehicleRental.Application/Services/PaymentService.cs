@@ -9,7 +9,7 @@ using Car_Rental_System_BE.Application.Services.Payments;
 
 namespace Car_Rental_System_BE.Application.Services;
 
-public sealed class PaymentService(IPaymentRepository repository, IPaymentGateway gateway, PaymentCheckoutOptions options) : IPaymentService
+public sealed class PaymentService(IPaymentRepository repository, IPaymentGateway gateway, PaymentCheckoutOptions options, IOperationalNotifications? notifications = null) : IPaymentService
 {
     public Task<PaymentResult> ConfirmCashAsync(int invoiceId, string reviewer, CancellationToken ct)
     {
@@ -32,8 +32,13 @@ public sealed class PaymentService(IPaymentRepository repository, IPaymentGatewa
     public Task<PaymentResult> RequestRefundAsync(int paymentId, decimal amount, CancellationToken ct) =>
         repository.RequestRefundAsync(paymentId, amount, ct);
 
-    public Task<PaymentSummary> ReviewRefundAsync(int refundId, bool approve, string reviewer, CancellationToken ct) =>
-        repository.ReviewRefundAsync(refundId, approve, reviewer, ct);
+    public async Task<PaymentSummary> ReviewRefundAsync(int refundId, bool approve, string reviewer, CancellationToken ct)
+    {
+        var refund = await repository.ReviewRefundAsync(refundId, approve, reviewer, ct);
+        if (notifications is not null && refund.RentalId is int rentalId)
+            await notifications.RefundReviewedAsync(rentalId, refundId, approve);
+        return refund;
+    }
 
     public Task<PlanPurchaseStatus?> GetPlanPurchaseAsync(long orderCode, string email, CancellationToken ct) =>
         repository.GetPlanPurchaseAsync(orderCode, email, ct);

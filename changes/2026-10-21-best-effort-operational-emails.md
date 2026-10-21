@@ -1,0 +1,8 @@
+# Thông báo duyệt và tình trạng đơn thuê — 2026-10-21
+
+- Thêm email Brevo riêng cho nghiệp vụ, dùng cấu hình Brevo hiện có. Gửi sau khi repository lưu/commit, lỗi tra người nhận/gửi/timeout chỉ log loại sự kiện + ID + loại exception; không làm API nghiệp vụ thành công trả lỗi và không nuốt lỗi nghiệp vụ.
+- Bao phủ GPLX approved/rejected; refund approve/reject có rental; confirm/start/return/complete/cancel qua lifecycle sink, handover và legacy status; kết quả pre/post inspection; incident create/in_progress/rejected/assigned/resolved; recovery giải quyết breakdown và đổi xe.
+- Khách nhận email GPLX/rental/refund/inspection; report gửi khách của rental và nhân viên báo cáo còn active, dedup nếu cùng email. Email không gồm bằng lái, ảnh, mô tả nội bộ, lý do review nhạy cảm. Recipient lookup SQL riêng, controller không truy DB trực tiếp. Không thêm endpoint/response contract.
+- Notification timeout 10 giây cho lookup/lần gửi; không dùng request token sau commit. Báo cáo thử từng người nhận độc lập để một địa chỉ lỗi không chặn người còn lại.
+- OTP và subscription reminder giữ nguyên hành vi; không thêm outbox/retry/background guarantee, không gửi email từ GET/list, không gửi invoice receipt/nhắc trả xe theo lịch. Gửi lại cùng GPLX review thành công có thể tạo email lặp như thao tác review hiện hành.
+- Kiểm chứng: 48/48 test email đạt (45 unit và 3 PostgreSQL), trong lượt tổng hợp 154/154 test đạt với build `-warnaserror`. Bao phủ success/provider cancellation và lỗi tra cứu, business error propagation, lifecycle, reports/refunds/inspection và HTTP payload/error adapter; integration kiểm tra commit PostgreSQL thực trước email, lookup recipient/customer/reporter, dedup và inactive. Dùng provider giả lập, chưa gửi email Brevo thật hoặc triển khai.

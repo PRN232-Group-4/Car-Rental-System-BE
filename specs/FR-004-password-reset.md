@@ -11,4 +11,5 @@ Mật khẩu mới khi đổi/reset dùng cùng giới hạn 6–20 ký tự nh�
 - [x] Email OTP dùng cùng HTML thương hiệu Thong Dong và text dự phòng với đăng ký; tiêu đề/nội dung chung cho xác thực tài khoản, không ghi sai mục đích là đăng ký.
 - [x] Redis key riêng cho reset, TTL/cooldown/tối đa số lần sai.
 - [x] Đổi hash và revoke toàn bộ ticket Redis khi thành công.
+- [x] Hai endpoint reset giới hạn riêng từng endpoint tối đa 5 request/60 giây/IP/instance. Lần OTP sai thứ 5 trả 429; khóa giữ tới TTL hoặc phát mã mới sau cooldown. CAS chống mất counter và dùng mã nhiều lần khi xác nhận đồng thời; request OTP vẫn trả 202 cho email không tồn tại/cooldown để tránh enumeration.
 - [ ] Có integration test cho revoke session.

@@ -18,13 +18,13 @@ public sealed class OperationsCompletionValidationTests
         Assert.Throws<ArgumentException>(()=>{ _=service.DriverScheduleAsync(null,DateTime.UtcNow,DateTime.UtcNow.AddHours(1),new(){Page=page,PageSize=size},default); });
     }
     [Fact]
-    public void Rejects_blank_reason_and_invalid_transitions_before_io()
+    public async Task Rejects_blank_reason_and_invalid_transitions_before_io()
     {
         var service=new OperationsCompletionService(null!);
         Assert.Throws<ArgumentException>(()=>{ _=service.ModerateRatingAsync(1,new("hidden"," "),"admin",default); });
         Assert.Throws<ArgumentException>(()=>{ _=service.ModerateRatingAsync(1,new("deleted","reason"),"admin",default); });
         Assert.Throws<ArgumentException>(()=>{ _=service.ReplyRatingAsync(1,new(" "),"admin",default); });
-        Assert.Throws<ArgumentException>(()=>{ _=service.SetReportStatusAsync(1,new("resolved","reason"),"admin",default); });
+        await Assert.ThrowsAsync<ArgumentException>(()=>service.SetReportStatusAsync(1,new("resolved","reason"),"admin",default));
         Assert.Throws<ArgumentException>(()=>{ _=service.MaintenanceAsync(null,null,DateTime.Today,DateTime.Today,new(),default); });
     }
 }

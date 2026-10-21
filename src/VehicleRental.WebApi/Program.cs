@@ -130,6 +130,9 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
     return ConnectionMultiplexer.Connect(ToRedisConfiguration(redisConnection));
 });
 builder.Services.AddHttpClient<IBrevoEmailSender, BrevoEmailSender>();
+builder.Services.AddHttpClient<IOperationalEmailSender, BrevoOperationalEmailSender>();
+builder.Services.AddScoped<IOperationalNotificationRecipients, NpgsqlOperationalNotificationRecipients>();
+builder.Services.AddScoped<IOperationalNotifications, OperationalNotifications>();
 builder.Services.AddHttpClient<IPaymentGateway, PayOsPaymentGateway>(client => client.BaseAddress = new Uri("https://api-merchant.payos.vn/"));
 builder.Services.AddHttpClient<IMapClient, MapboxClient>(client =>
 {
@@ -146,6 +149,8 @@ builder.Services.AddScoped<IInspectionDirectoryService,InspectionDirectoryServic
 builder.Services.AddScoped<IOperationsRepository, NpgsqlOperationsRepository>();
 builder.Services.AddScoped<IUserAdministrationRepository, NpgsqlUserAdministrationRepository>();
 builder.Services.AddScoped<IDashboardRepository, NpgsqlDashboardRepository>();
+builder.Services.AddScoped<INavigationCountsRepository, NpgsqlNavigationCountsRepository>();
+builder.Services.AddScoped<INavigationCountsService, NavigationCountsService>();
 builder.Services.AddScoped<IOperationsCompletionRepository, NpgsqlOperationsCompletionRepository>();
 builder.Services.AddScoped<IRentalEditingRepository, NpgsqlOperationsRepository>();
 builder.Services.AddScoped<IRentalEditingService, RentalEditingService>();
@@ -335,16 +340,8 @@ if (googleAuthentication.Enabled)
 builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
 builder.Services.AddRateLimiter(options =>
 {
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.AddPolicy("password-change", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 15,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0,
-            AutoReplenishment = true
-        }));
+    AuthenticationRateLimits.Configure(options,
+        builder.Configuration.GetSection(RegistrationOptions.SectionName).Get<RegistrationOptions>() ?? new());
     options.AddPolicy("public-search", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions
@@ -354,13 +351,6 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0,
             AutoReplenishment = true
         }));
-    options.OnRejected = async (context, cancellationToken) =>
-    {
-        await context.HttpContext.Response.WriteAsJsonAsync(
-            ApiResponse.Failure(StatusCodes.Status429TooManyRequests,
-                message: "Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau một phút."),
-            cancellationToken);
-    };
 });
 
 var app = builder.Build();

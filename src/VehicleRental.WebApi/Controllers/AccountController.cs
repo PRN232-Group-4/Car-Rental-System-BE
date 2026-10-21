@@ -16,6 +16,8 @@ namespace Car_Rental_System_BE.WebApi.Controllers;
 public sealed class AccountController(IRegistrationWorkflow registration, IPasswordResetWorkflow passwordResets, IAccountService accounts, IPasswordChangeWorkflow passwordChanges) : ControllerBase
 {
     [HttpPost("registrations")]
+    [EnableRateLimiting("authentication")]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Start(StartRegistrationRequest request, CancellationToken ct)
     {
@@ -25,6 +27,8 @@ public sealed class AccountController(IRegistrationWorkflow registration, IPassw
     }
 
     [HttpPost("registrations/verify")]
+    [EnableRateLimiting("authentication")]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> Verify(VerifyRegistrationRequest request, CancellationToken ct)
     {
@@ -34,6 +38,8 @@ public sealed class AccountController(IRegistrationWorkflow registration, IPassw
     }
 
     [HttpPost("registrations/resend")]
+    [EnableRateLimiting("authentication")]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Resend(ResendRegistrationRequest request, CancellationToken ct)
     {
@@ -43,6 +49,8 @@ public sealed class AccountController(IRegistrationWorkflow registration, IPassw
     }
 
     [HttpPost("password-resets")]
+    [EnableRateLimiting("authentication")]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     public async Task<IActionResult> StartPasswordReset(PasswordResetStartRequest request, CancellationToken ct)
     {
@@ -52,6 +60,8 @@ public sealed class AccountController(IRegistrationWorkflow registration, IPassw
     }
 
     [HttpPost("password-resets/verify")]
+    [EnableRateLimiting("authentication")]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> CompletePasswordReset(PasswordResetCompleteRequest request, CancellationToken ct)
     {

@@ -1,10 +1,11 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Interfaces.Services;
 
 namespace Car_Rental_System_BE.Application.Services;
 
-public sealed class OperationsCompletionService(IOperationsCompletionRepository repository) : IOperationsCompletionService
+public sealed class OperationsCompletionService(IOperationsCompletionRepository repository, IOperationalNotifications? notifications = null) : IOperationsCompletionService
 {
     public Task<OperationsPage<DriverScheduleEntry>> DriverScheduleAsync(int? driverId, DateTime from, DateTime to, OperationsPagination pagination, CancellationToken ct)
     {
@@ -18,12 +19,14 @@ public sealed class OperationsCompletionService(IOperationsCompletionRepository 
         if (status is not null and not ("open" or "in_progress" or "assigned" or "resolved" or "rejected")) throw new ArgumentException("Invalid report status.");
         return repository.ReportsAsync(staffId, rentalId, status, pagination, ct);
     }
-    public Task<IncidentReport> SetReportStatusAsync(int id, ReportStatusRequest request, string actor, CancellationToken ct)
+    public async Task<IncidentReport> SetReportStatusAsync(int id, ReportStatusRequest request, string actor, CancellationToken ct)
     {
         if (id < 1 || request.Status is not ("in_progress" or "rejected")) throw new ArgumentException("Status must be in_progress or rejected.");
         RequireText(request.Reason, 2000, "Reason");
         RequireText(actor, 255, "Actor");
-        return repository.SetReportStatusAsync(id, request.Status, request.Reason.Trim(), actor, ct);
+        var report = await repository.SetReportStatusAsync(id, request.Status, request.Reason.Trim(), actor, ct);
+        if (notifications is not null) await notifications.ReportChangedAsync(report.Id, report.Status);
+        return report;
     }
     public Task<OperationsPage<StaffRating>> RatingsAsync(int staffId, OperationsPagination pagination, CancellationToken ct)
     {

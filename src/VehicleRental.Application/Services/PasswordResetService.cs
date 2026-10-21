@@ -31,7 +31,7 @@ public sealed class PasswordResetService(
             return; // Same response prevents enumeration and avoids OTP spam.
         var otp = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
         var pending = new PendingReset(HashOtp(otp), 0, DateTimeOffset.UtcNow.AddSeconds(_options.ResendCooldownSeconds));
-        await cache.SetAsync(key, JsonSerializer.Serialize(pending), TimeSpan.FromMinutes(_options.OtpTtlMinutes), ct);
+        if (!await cache.CompareExchangeAsync(key, value, JsonSerializer.Serialize(pending), TimeSpan.FromMinutes(_options.OtpTtlMinutes), ct)) return;
         await emails.SendOtpAsync(email, account.FullName, otp, ct);
     }
 
@@ -39,22 +39,29 @@ public sealed class PasswordResetService(
     {
         var email = emailInput.Trim().ToLowerInvariant();
         var key = Prefix + email;
-        var value = await cache.GetAsync(key, ct);
-        if (value is null) throw new PasswordResetException("OTP không tồn tại hoặc đã hết hạn.", 400);
-        var pending = JsonSerializer.Deserialize<PendingReset>(value!)!;
-        if (pending.Attempts >= _options.MaxVerificationAttempts)
+        for (var retry = 0; retry < 20; retry++)
         {
-            await cache.DeleteAsync(key, ct);
-            throw new PasswordResetException("OTP đã bị khóa do nhập sai quá nhiều lần.", 429);
+            var value = await cache.GetAsync(key, ct);
+            var ttl = await cache.GetTimeToLiveAsync(key, ct);
+            if (value is null || ttl is null || ttl <= TimeSpan.Zero)
+                throw new PasswordResetException("OTP không tồn tại hoặc đã hết hạn.", 400);
+            var pending = JsonSerializer.Deserialize<PendingReset>(value)!;
+            if (pending.Attempts >= _options.MaxVerificationAttempts)
+                throw new PasswordResetException("OTP đã bị khóa do nhập sai quá nhiều lần.", 429);
+            if (!CryptographicOperations.FixedTimeEquals(Convert.FromHexString(pending.OtpHash), Convert.FromHexString(HashOtp(otp))))
+            {
+                var updated = pending with { Attempts = pending.Attempts + 1 };
+                if (!await cache.CompareExchangeAsync(key, value, JsonSerializer.Serialize(updated), ttl.Value, ct)) continue;
+                throw updated.Attempts >= _options.MaxVerificationAttempts
+                    ? new PasswordResetException("OTP đã bị khóa do nhập sai quá nhiều lần.", 429)
+                    : new PasswordResetException("OTP không chính xác.", 400);
+            }
+            if (!await cache.CompareExchangeAsync(key, value, null, ttl.Value, ct)) continue;
+            await accounts.UpdatePasswordHashAsync(email, PasswordHash.Create(newPassword), ct);
+            await refreshTokens.RevokeAllAsync(email, ct);
+            return;
         }
-        if (!CryptographicOperations.FixedTimeEquals(Convert.FromHexString(pending.OtpHash), Convert.FromHexString(HashOtp(otp))))
-        {
-            await cache.SetAsync(key, JsonSerializer.Serialize(pending with { Attempts = pending.Attempts + 1 }), await cache.GetTimeToLiveAsync(key, ct), ct);
-            throw new PasswordResetException("OTP không chính xác.", 400);
-        }
-        await accounts.UpdatePasswordHashAsync(email, PasswordHash.Create(newPassword), ct);
-        await refreshTokens.RevokeAllAsync(email, ct);
-        await cache.DeleteAsync(key, ct);
+        throw new PasswordResetException("Có yêu cầu xác nhận khác đang xử lý. Vui lòng thử lại.", 429);
     }
 
     private static string HashOtp(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));

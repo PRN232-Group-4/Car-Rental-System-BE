@@ -6,6 +6,8 @@ using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using Car_Rental_System_BE.Application.Services.Exceptions;
 
 namespace Car_Rental_System_BE.WebApi.Controllers;
 
@@ -14,12 +16,16 @@ namespace Car_Rental_System_BE.WebApi.Controllers;
 public sealed class SessionController(ISessionService sessions) : ControllerBase
 {
     [HttpPost("login")]
+    [EnableRateLimiting("authentication")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> Login(LoginRequest request, CancellationToken ct)
     {
         if (!ModelState.IsValid) return ValidationProblem(ModelState);
-        var tokens = await sessions.LoginAsync(request.Email, request.Password, request.RememberMe, ct);
+        SessionTokens? tokens;
+        try { tokens = await sessions.LoginAsync(request.Email, request.Password, request.RememberMe, ct); }
+        catch (AuthenticationLimitException error) { return Problem(error.Message, statusCode: StatusCodes.Status429TooManyRequests); }
         if (tokens is null) return Problem("Email hoặc mật khẩu không chính xác.", statusCode: StatusCodes.Status401Unauthorized);
         WriteTokens(tokens);
         return NoContent();

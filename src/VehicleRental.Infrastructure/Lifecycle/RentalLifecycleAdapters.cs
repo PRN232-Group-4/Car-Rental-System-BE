@@ -1,8 +1,10 @@
 using Car_Rental_System_BE.Application.Lifecycle;
+using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Loyalty;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using VehicleRental.Domain.Loyalty;
+using VehicleRental.Domain.Lifecycle;
 
 namespace Car_Rental_System_BE.Infrastructure.Lifecycle;
 
@@ -213,14 +215,15 @@ public sealed class LoyaltyAwardAdapter(
     }
 }
 
-public sealed class RentalEventSink(ILogger<RentalEventSink> logger) : IRentalEventSink
+public sealed class RentalEventSink(ILogger<RentalEventSink> logger, IOperationalNotifications? notifications = null) : IRentalEventSink
 {
-    public Task PublishStatusChangedAsync(RentalStatusChangedEvent evt, CancellationToken ct)
+    public async Task PublishStatusChangedAsync(RentalStatusChangedEvent evt, CancellationToken ct)
     {
         logger.LogInformation(
-            "Rental status changed: {RentalId} {FromStatus} -> {ToStatus} by {ActorRole} ({ActorEmail}) at {OccurredAt:O}",
-            evt.RentalId, evt.FromStatus, evt.ToStatus, evt.Actor.Role, evt.Actor.Email, evt.OccurredAt);
-        return Task.CompletedTask;
+            "Rental status changed: {RentalId} {FromStatus} -> {ToStatus} by {ActorRole} at {OccurredAt:O}",
+            evt.RentalId, evt.FromStatus, evt.ToStatus, evt.Actor.Role, evt.OccurredAt);
+        if (notifications is not null)
+            await notifications.RentalStatusChangedAsync(evt.RentalId, evt.ToStatus.ToDbString());
     }
 }
 
