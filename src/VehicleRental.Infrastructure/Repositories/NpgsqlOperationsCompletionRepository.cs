@@ -137,11 +137,11 @@ public sealed class NpgsqlOperationsCompletionRepository(NpgsqlDataSource dataSo
         await using var tx=await cn.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead,ct);
         var total=Convert.ToInt32(await Scalar(cn,tx,"SELECT COUNT(*) FROM vehicle_maintenance"+where,ct,vehicleId,status,from,to));
         var rows=new List<Maintenance>();
-        await using (var command=new NpgsqlCommand("SELECT id,vehicle_id,facility_id,assigned_staff_id,status,maintenance_type,scheduled_date,is_safe,description,cost,created_at,rental_id FROM vehicle_maintenance"+where+" ORDER BY id DESC OFFSET $5 LIMIT $6",cn,tx))
+        await using (var command=new NpgsqlCommand("SELECT id,vehicle_id,facility_id,assigned_staff_id,status,maintenance_type,scheduled_date,is_safe,description,cost,created_at,rental_id,(SELECT u.email FROM staffs s JOIN users u ON u.id=s.user_id WHERE s.id=vehicle_maintenance.assigned_staff_id),(SELECT f.name FROM facilities f WHERE f.id=vehicle_maintenance.facility_id) FROM vehicle_maintenance"+where+" ORDER BY id DESC OFFSET $5 LIMIT $6",cn,tx))
         {
             Add(command,vehicleId,status,from,to,((long)pagination.Page-1)*pagination.PageSize,pagination.PageSize);
             await using var r=await command.ExecuteReaderAsync(ct);
-            while(await r.ReadAsync(ct)) rows.Add(new(r.GetInt32(0),r.GetInt32(1),Int(r,2),Int(r,3),S(r,4),S(r,5),r.IsDBNull(6)?null:r.GetFieldValue<DateOnly>(6),r.IsDBNull(7)?null:r.GetBoolean(7),S(r,8),r.IsDBNull(9)?null:r.GetDecimal(9),Stamp(r,10),Int(r,11)));
+            while(await r.ReadAsync(ct)) rows.Add(new(r.GetInt32(0),r.GetInt32(1),Int(r,2),Int(r,3),S(r,4),S(r,5),r.IsDBNull(6)?null:r.GetFieldValue<DateOnly>(6),r.IsDBNull(7)?null:r.GetBoolean(7),S(r,8),r.IsDBNull(9)?null:r.GetDecimal(9),Stamp(r,10),Int(r,11),S(r,12),S(r,13)));
         }
         await tx.CommitAsync(ct);
         return new(rows,pagination.Page,pagination.PageSize,total);

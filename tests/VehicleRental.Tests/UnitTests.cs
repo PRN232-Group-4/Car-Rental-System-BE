@@ -38,7 +38,7 @@ public sealed class UnitTests
             new StartRegistrationRequest("customer@example.test", "Customer", password),
             new LoginRequest("customer@example.test", password),
             new PasswordResetCompleteRequest("customer@example.test", "123456", password),
-            new ChangePasswordRequest("old-password", password),
+            new ChangePasswordRequest("old-password", password, "123456"),
             new CreateStaffRequest("staff@example.test", "Staff", password, null, null, null, null, false, null, null, null, null, null)
         ];
         foreach (var request in requests)

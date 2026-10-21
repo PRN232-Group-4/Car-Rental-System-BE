@@ -17,32 +17,6 @@ namespace VehicleRental.Tests;
 public sealed class ApplicationServiceTests
 {
     [Theory]
-    [InlineData("correct", true)]
-    [InlineData("incorrect", false)]
-    public async Task Password_change_requires_current_password_and_revokes_sessions_after_persistence(string current, bool succeeds)
-    {
-        var calls = new List<string>();
-        var account = new Account(1, "user@test.local", "User", null, null, null, PasswordHash.Create("correct"), ["Customer"]);
-        var repository = Proxy<IAccountRepository>((method, args) =>
-        {
-            calls.Add(method.Name);
-            if (method.Name == "FindByEmailAsync") return Task.FromResult<Account?>(account);
-            Assert.Equal("UpdatePasswordHashAsync", method.Name);
-            Assert.True(PasswordHash.Verify("newpass", (string)args[1]!));
-            return Task.CompletedTask;
-        });
-        var sessions = Proxy<IRefreshTokenStore>((method, args) =>
-        {
-            calls.Add(method.Name);
-            Assert.Equal(account.Email, args[0]);
-            return Task.CompletedTask;
-        });
-        var result = await new AccountService(repository, sessions).ChangePasswordAsync(account.Email, current, "newpass", default);
-        Assert.Equal(succeeds, result);
-        Assert.Equal(succeeds ? ["FindByEmailAsync", "UpdatePasswordHashAsync", "RevokeAllAsync"] : new[] { "FindByEmailAsync" }, calls);
-    }
-
-    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public async Task Organization_assignment_revokes_credentials_without_controller_or_redis(bool department)

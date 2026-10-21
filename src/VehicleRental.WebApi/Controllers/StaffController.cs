@@ -52,6 +52,29 @@ public sealed class StaffController(IStaffService staff) : ControllerBase
         catch (OrganizationReferenceNotFoundException exception) { return Problem(exception.Message, statusCode: StatusCodes.Status400BadRequest); }
     }
 
+    /// <summary>Create an employee profile for an existing active account without replacing its identity, password or specialty.</summary>
+    [HttpPost("from-user")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType<Staff>(StatusCodes.Status201Created)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> CreateFromUser(CreateStaffFromUserRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var created = await staff.CreateFromUserAsync(request.ToCommand(), ct);
+            return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
+        }
+        catch (StaffLicenseException exception) { return LicenseValidationProblem(exception.Message); }
+        catch (ArgumentException exception) { return Problem(exception.Message, statusCode: StatusCodes.Status400BadRequest); }
+        catch (StaffNotFoundException) { return Problem("Tài khoản không tồn tại hoặc đã ngừng hoạt động.", statusCode: StatusCodes.Status404NotFound); }
+        catch (StaffConflictException exception) { return Problem(exception.Message, statusCode: StatusCodes.Status409Conflict); }
+        catch (OrganizationReferenceNotFoundException exception) { return Problem(exception.Message, statusCode: StatusCodes.Status400BadRequest); }
+    }
+
     [HttpPut("{id:int}")]
     [Authorize(Roles = "Admin")]
     [ProducesResponseType<Staff>(StatusCodes.Status200OK)]

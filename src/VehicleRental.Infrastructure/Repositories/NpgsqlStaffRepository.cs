@@ -2,6 +2,7 @@ using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.DTOs.Organization;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Domain.Services;
+using Car_Rental_System_BE.Application.Validators;
 using Npgsql;
 
 namespace Car_Rental_System_BE.Infrastructure.Repositories;
@@ -10,14 +11,16 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
 {
     private const string StaffSelect = """
         SELECT s.id, u.id, u.email, COALESCE(u.fullname, ''), u.phone,
-               s.department_id, d.name, s.facility_id, f.name, s.hired_date, s.is_driver,
+               s.department_id, d.name, s.facility_id, f.name, s.hired_date,
+               EXISTS(SELECT 1 FROM user_roles dr JOIN roles rr ON rr.id=dr.role_id WHERE dr.user_id=u.id AND rr.name='Driver'),
                s.license_number, s.license_type, s.license_issue_date, s.license_expiry_date,
                s.license_img, s.rating, u.is_active,
                (SELECT r.name FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=u.id AND r.name IN ('CustomerService','Driver','Maintenance') ORDER BY r.name LIMIT 1),
                u.avatar, u.gender, u.address,
                (SELECT COUNT(DISTINCT a.rental_id)::integer FROM vehicle_assignments a WHERE a.driver_staff_id=s.id),
                (SELECT a.rental_id FROM vehicle_assignments a JOIN rentals r ON r.id=a.rental_id
-                WHERE a.driver_staff_id=s.id AND a.status='assigned' AND r.status='renting' ORDER BY a.assigned_at DESC,a.id DESC LIMIT 1)
+                WHERE a.driver_staff_id=s.id AND a.status='assigned' AND r.status='renting' ORDER BY a.assigned_at DESC,a.id DESC LIMIT 1),
+               ARRAY(SELECT DISTINCT rr.name FROM user_roles ur JOIN roles rr ON rr.id=ur.role_id WHERE ur.user_id=u.id ORDER BY rr.name)
         FROM staffs s
         JOIN users u ON u.id = s.user_id
         LEFT JOIN departments d ON d.id = s.department_id
@@ -29,7 +32,7 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
         const string filter = """
 
             WHERE u.is_active = TRUE
-              AND ($1::boolean IS NULL OR s.is_driver = $1::boolean)
+              AND ($1::boolean IS NULL OR EXISTS(SELECT 1 FROM user_roles dr JOIN roles rr ON rr.id=dr.role_id WHERE dr.user_id=u.id AND rr.name='Driver') = $1::boolean)
               AND ($2::text IS NULL OR u.email ILIKE '%' || $2 || '%' OR u.fullname ILIKE '%' || $2 || '%'
                    OR u.phone ILIKE '%' || $2 || '%' OR s.license_number ILIKE '%' || $2 || '%')
             """;
@@ -56,6 +59,53 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
         command.Parameters.AddWithValue(staffId);
         await using var reader = await command.ExecuteReaderAsync(ct);
         return await reader.ReadAsync(ct) ? Read(reader) : null;
+    }
+
+    public async Task<Staff> CreateFromUserAsync(CreateStaffFromUser command, CancellationToken ct)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        await using (var dispatcher = new NpgsqlCommand("SELECT pg_advisory_xact_lock(724232001::bigint)", connection, transaction))
+            await dispatcher.ExecuteNonQueryAsync(ct);
+        await using (var account = new NpgsqlCommand("SELECT id FROM users WHERE id=$1 AND is_active FOR UPDATE", connection, transaction))
+        {
+            account.Parameters.AddWithValue(command.UserId);
+            if (await account.ExecuteScalarAsync(ct) is null) throw new StaffNotFoundException();
+        }
+        await using (var existing = new NpgsqlCommand("SELECT EXISTS(SELECT 1 FROM staffs WHERE user_id=$1)", connection, transaction))
+        {
+            existing.Parameters.AddWithValue(command.UserId);
+            if (await existing.ExecuteScalarAsync(ct) is true)
+                throw new StaffConflictException("Tài khoản đã có hồ sơ nhân viên. Hãy mở hồ sơ để cập nhật.");
+        }
+        await ValidateReferencesAsync(connection, transaction, command.DepartmentId, command.FacilityId, ct);
+        bool isDriver;
+        await using (var role = new NpgsqlCommand("SELECT EXISTS(SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=$1 AND r.name='Driver')", connection, transaction))
+        {
+            role.Parameters.AddWithValue(command.UserId);
+            isDriver = await role.ExecuteScalarAsync(ct) is true;
+        }
+        StaffValidator.ValidateDriver(isDriver, command.LicenseNumber, command.LicenseExpiryDate, command.LicenseIssueDate);
+        // Existing account identity and roles are authoritative; no password or specialty replacement.
+        await using var insert = new NpgsqlCommand("""
+            INSERT INTO staffs(user_id,department_id,facility_id,hired_date,is_driver,
+                license_number,license_type,license_issue_date,license_expiry_date,license_img)
+            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id
+            """, connection, transaction);
+        insert.Parameters.AddWithValue(command.UserId);
+        insert.Parameters.AddWithValue((object?)command.DepartmentId ?? DBNull.Value);
+        insert.Parameters.AddWithValue((object?)command.FacilityId ?? DBNull.Value);
+        insert.Parameters.AddWithValue((object?)command.HiredDate ?? DBNull.Value);
+        insert.Parameters.AddWithValue(isDriver);
+        insert.Parameters.AddWithValue(isDriver ? (object?)command.LicenseNumber ?? DBNull.Value : DBNull.Value);
+        insert.Parameters.AddWithValue(isDriver ? (object?)command.LicenseType ?? DBNull.Value : DBNull.Value);
+        insert.Parameters.AddWithValue(isDriver ? (object?)command.LicenseIssueDate ?? DBNull.Value : DBNull.Value);
+        insert.Parameters.AddWithValue(isDriver ? (object?)command.LicenseExpiryDate ?? DBNull.Value : DBNull.Value);
+        insert.Parameters.AddWithValue(isDriver ? (object?)command.LicenseImageUrl ?? DBNull.Value : DBNull.Value);
+        var staffId = (int)(await insert.ExecuteScalarAsync(ct))!;
+        await EnsureRoleAsync(connection, transaction, command.UserId, "Staff", ct);
+        await transaction.CommitAsync(ct);
+        return (await FindByIdAsync(staffId, ct))!;
     }
 
     public async Task<Staff> CreateAsync(CreateStaff command, string passwordHash, CancellationToken ct)
@@ -234,7 +284,7 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
         await assign.ExecuteNonQueryAsync(ct);
     }
 
-    private static Staff Read(NpgsqlDataReader reader) => new(reader.GetInt32(0), reader.GetInt32(1), reader.GetString(2), reader.GetString(3), NullableString(reader, 4), NullableInt(reader, 5), NullableString(reader, 6), NullableInt(reader, 7), NullableString(reader, 8), NullableDate(reader, 9), reader.GetBoolean(10), NullableString(reader, 11), NullableString(reader, 12), NullableDate(reader, 13), NullableDate(reader, 14), NullableString(reader, 15), reader.IsDBNull(16) ? null : reader.GetDecimal(16), reader.GetBoolean(17), NullableString(reader, 18), NullableString(reader, 19), NullableString(reader, 20), NullableString(reader, 21), reader.GetInt32(22), NullableInt(reader, 23));
+    private static Staff Read(NpgsqlDataReader reader) => new(reader.GetInt32(0), reader.GetInt32(1), reader.GetString(2), reader.GetString(3), NullableString(reader, 4), NullableInt(reader, 5), NullableString(reader, 6), NullableInt(reader, 7), NullableString(reader, 8), NullableDate(reader, 9), reader.GetBoolean(10), NullableString(reader, 11), NullableString(reader, 12), NullableDate(reader, 13), NullableDate(reader, 14), NullableString(reader, 15), reader.IsDBNull(16) ? null : reader.GetDecimal(16), reader.GetBoolean(17), NullableString(reader, 18), NullableString(reader, 19), NullableString(reader, 20), NullableString(reader, 21), reader.GetInt32(22), NullableInt(reader, 23)) { Roles = reader.GetFieldValue<string[]>(24) };
     private static string? NullableString(NpgsqlDataReader reader, int ordinal) => reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
     private static int? NullableInt(NpgsqlDataReader reader, int ordinal) => reader.IsDBNull(ordinal) ? null : reader.GetInt32(ordinal);
     private static DateOnly? NullableDate(NpgsqlDataReader reader, int ordinal) => reader.IsDBNull(ordinal) ? null : reader.GetFieldValue<DateOnly>(ordinal);

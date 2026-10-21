@@ -1,0 +1,8 @@
+# Phân công kiểm tra và trạng thái sẵn sàng bàn giao — 2026-10-21
+
+- Thêm GET/PUT `/api/rentals/{id}/inspection-assignment`. Admin/Manager lưu phân công Maintenance active cho xe hiện tại trước evidence; Admin/Manager/CustomerService/Maintenance đọc. Người giao lấy từ principal; validate ID tại HTTP/Application; lỗi quyền, không tồn tại, không hợp lệ và xung đột dùng envelope chung.
+- SQL giữ dispatcher advisory lock và rental row lock cùng inspection/vehicle replacement; không thêm FK, xác minh logical reference. Assignment không thay kết quả kiểm tra hoặc quyền ghi evidence, không tự chuyển status.
+- GET `/api/rentals/{id}` (flat Rental) và `/api/rentals/{id}/detail` (OperationalRentalDetail) có `hasPassingPreInspection`/`hasPostInspection`, tính từ evidence của xe hiện tại giống invariant start/complete. Không suy ra kiểm tra đạt từ trạng thái pre_inspection.
+- Migration mới `0025_inspection_assignments.sql`, runner tự phát hiện. Chưa chạy migration/deploy lên production.
+- Thêm `InspectionAssignmentTests`: persistence/reassignment/current vehicle, target/state/evidence validation, readiness evidence cũ và HTTP auth/envelope/Swagger của route thật. Kiểm tra bổ sung list staff/driver với null search và phân trang để điều tra lỗi danh sách.
+- Kiểm chứng: **110/110 tests pass, 0 skipped** trên PostgreSQL 18 test database độc lập (`Timezone=UTC`), build với warnings-as-errors. Gồm assignment/HTTP thật, staff/driver listing, lifecycle service/integration, operations API và response envelope. Lỗi 500 driver production trong ảnh chưa tái hiện trên code hiện tại; không đưa ra thay đổi backend khi chưa có nguyên nhân xác thực. `git diff --check` sạch; chưa kiểm chứng Docker.

@@ -1,5 +1,13 @@
 # FR-008 — Phòng ban, cơ sở, nhân viên
 
+## Hồ sơ nhân viên từ tài khoản có sẵn — 2026-10-21
+
+Admin chọn email tài khoản đang hoạt động từ user directory; POST `/api/staff/from-user` nhận userId cùng metadata nhân viên (phòng ban/cơ sở/ngày nhận việc và GPLX khi Driver). Email, họ tên, mật khẩu và vai trò được giữ từ tài khoản đã chọn, không tạo user mới. Server lấy Driver từ role lưu thật, không nhận isDriver/staffRole để đổi quyền qua biểu mẫu này; thêm marker Staff và giữ các vai trò đã có. Tài khoản đã có staff profile trả 409, tài khoản không tồn tại/đã khóa trả 404. Validation và tạo profile nằm trong transaction có account lock để chống hai lần tạo và đổi role đồng thời. GPLX bắt buộc với Driver; non-driver không lưu metadata GPLX. Existing POST `/api/staff` vẫn giữ tương thích cho client cũ.
+
+`Staff` response bổ sung `roles` đầy đủ, `isDriver` phản ánh role Driver của tài khoản. Account/profile response có `facilityName` authoritative lấy từ cơ sở liên kết hồ sơ; null khi chưa phân công, đọc được cho mọi tài khoản authenticated qua `/api/account/profile` mà không cần quyền quản trị directory.
+
+Acceptance: [x] chọn existing user, giữ mật khẩu/identity/roles; [x] GPLX theo role Driver; [x] chống tạo trùng đồng thời và logical references; [x] cơ sở profile đúng mọi role; [x] email/tên cơ sở trên phiếu bảo trì; [x] HTTP quyền/validation/envelope/Swagger và PostgreSQL thật. Xem StaffIdentityTests.
+
 ## Department assignment (2026-10-05)
 
 Facility assignment follows the same rules via `PUT /api/facilities/{facilityId}/members/{userId}` (no body). Only facility membership changes; department, roles and other staff fields are preserved. Invalid facility returns 400. Both assignment endpoints invalidate old credentials and accept existing active Staff/Manager accounts only.

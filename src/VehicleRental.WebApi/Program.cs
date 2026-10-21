@@ -33,6 +33,7 @@ using Car_Rental_System_BE.Application.Assignments;
 using Car_Rental_System_BE.Infrastructure.Assignments;
 using Car_Rental_System_BE.Application.Lifecycle;
 using Car_Rental_System_BE.Application.Handovers;
+using Car_Rental_System_BE.Application.Inspections;
 using Car_Rental_System_BE.Infrastructure.Lifecycle;
 using Car_Rental_System_BE.Application.Loyalty;
 using Car_Rental_System_BE.Infrastructure.Loyalty;
@@ -138,6 +139,10 @@ builder.Services.AddScoped<IUserRepository, NpgsqlUserRepository>();
 builder.Services.AddScoped<IAccountRepository, NpgsqlAccountRepository>();
 builder.Services.AddScoped<ICustomerRepository, NpgsqlCustomerRepository>();
 builder.Services.AddScoped<IStaffRepository, NpgsqlStaffRepository>();
+builder.Services.AddScoped<IInspectionAssignmentRepository, NpgsqlInspectionAssignmentRepository>();
+builder.Services.AddScoped<IInspectionAssignmentService, InspectionAssignmentService>();
+builder.Services.AddScoped<IInspectionDirectoryRepository,NpgsqlInspectionDirectoryRepository>();
+builder.Services.AddScoped<IInspectionDirectoryService,InspectionDirectoryService>();
 builder.Services.AddScoped<IOperationsRepository, NpgsqlOperationsRepository>();
 builder.Services.AddScoped<IUserAdministrationRepository, NpgsqlUserAdministrationRepository>();
 builder.Services.AddScoped<IDashboardRepository, NpgsqlDashboardRepository>();
@@ -171,6 +176,7 @@ builder.Services.AddScoped(provider =>
 });
 builder.Services.AddScoped<IRegistrationWorkflow, RegistrationService>();
 builder.Services.AddScoped<IPasswordResetWorkflow, PasswordResetService>();
+builder.Services.AddScoped<IPasswordChangeWorkflow, PasswordChangeService>();
 builder.Services.AddSingleton<IImageStorage, CloudinaryImageStorage>();
 builder.Services.AddHostedService<RedisConnectionHostedService>();
 builder.Services.AddSingleton<RedisRefreshTokenStore>();
@@ -330,6 +336,15 @@ builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("password-change", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 15,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        }));
     options.AddPolicy("public-search", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions
@@ -343,7 +358,7 @@ builder.Services.AddRateLimiter(options =>
     {
         await context.HttpContext.Response.WriteAsJsonAsync(
             ApiResponse.Failure(StatusCodes.Status429TooManyRequests,
-                message: "Bạn đã tìm kiếm quá nhiều lần. Vui lòng thử lại sau một phút."),
+                message: "Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau một phút."),
             cancellationToken);
     };
 });

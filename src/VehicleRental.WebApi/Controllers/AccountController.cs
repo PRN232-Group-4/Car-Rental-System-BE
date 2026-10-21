@@ -7,12 +7,13 @@ using Car_Rental_System_BE.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Car_Rental_System_BE.WebApi.Controllers;
 
 [ApiController]
 [Route("api/account")]
-public sealed class AccountController(IRegistrationWorkflow registration, IPasswordResetWorkflow passwordResets, IAccountService accounts) : ControllerBase
+public sealed class AccountController(IRegistrationWorkflow registration, IPasswordResetWorkflow passwordResets, IAccountService accounts, IPasswordChangeWorkflow passwordChanges) : ControllerBase
 {
     [HttpPost("registrations")]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
@@ -84,16 +85,44 @@ public sealed class AccountController(IRegistrationWorkflow registration, IPassw
     }
 
     [Authorize]
+    [EnableRateLimiting("password-change")]
+    [HttpPost("password/otp")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> StartPasswordChange(PasswordChangeStartRequest request, CancellationToken ct)
+    {
+        if (!ModelState.IsValid) return ValidationProblem(ModelState);
+        var email = User.FindFirstValue(ClaimTypes.Email);
+        if (string.IsNullOrWhiteSpace(email)) return Forbid();
+        try { await passwordChanges.StartAsync(email, request.CurrentPassword, ct); return Accepted(); }
+        catch (PasswordChangeException error) { return PasswordChangeError(error); }
+        catch (RegistrationException error) { return Problem(error.Message, statusCode: error.StatusCode); }
+    }
+
+    [Authorize]
+    [EnableRateLimiting("password-change")]
     [HttpPost("password")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> ChangePassword(ChangePasswordRequest request, CancellationToken ct)
     {
         if (!ModelState.IsValid) return ValidationProblem(ModelState);
         var email = User.FindFirstValue(ClaimTypes.Email);
-        if (string.IsNullOrWhiteSpace(email) || !await accounts.ChangePasswordAsync(email, request.CurrentPassword, request.NewPassword, ct))
-            return Problem("Mật khẩu hiện tại không chính xác.", statusCode: StatusCodes.Status400BadRequest);
+        if (string.IsNullOrWhiteSpace(email)) return Forbid();
+        try { await passwordChanges.CompleteAsync(email, request.CurrentPassword, request.Otp, request.NewPassword, ct); }
+        catch (PasswordChangeException error) { return PasswordChangeError(error); }
         AuthCookies.Clear(Response);
         return NoContent();
+    }
+
+    private IActionResult PasswordChangeError(PasswordChangeException error)
+    {
+        if (error.Field is null) return Problem(error.Message, statusCode: error.StatusCode);
+        ModelState.AddModelError(error.Field, error.Message);
+        return ValidationProblem(modelStateDictionary: ModelState, statusCode: error.StatusCode);
     }
 
     private async Task<Account?> CurrentAccountAsync(CancellationToken ct)

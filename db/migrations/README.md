@@ -1,5 +1,7 @@
 # SQL migrations
 
+`0025_inspection_assignments.sql` lưu trách nhiệm kiểm tra trước thuê theo rental/vehicle, kỹ thuật viên Maintenance và người/thời gian phân công. Migration runner tự phát hiện; không backfill hoặc thay đổi evidence cũ.
+
 `0020_invoice_checkout_reservation.sql` thêm marker checkout_started_at trước khi phát hành link PayOS để khóa sửa điều khoản rental. Lần nâng cấp đầu backfill invoice unpaid cũ (không có lịch sử phát hành link), giữ marker khi provider lỗi; replay không đánh dấu invoice mới. Xem ADR-007 và change 2026-10-16.
 
 `0019_rental_policy_usage.sql` bổ sung index `rentals(policy_id)` cho số lần thuê theo policy. Runner hiện tự tìm các file `*.sql` theo tên; không cần đăng ký thêm trong mã. Migration chỉ thêm index, không chỉnh dữ liệu hay tự tắt policy active trùng có sẵn.

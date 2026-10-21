@@ -4,6 +4,7 @@ namespace Car_Rental_System_BE.Application.Interfaces.Services;
 
 public interface IStaffService
 {
+    Task<Staff> CreateFromUserAsync(CreateStaffFromUser command, CancellationToken ct);
     Task<Staff> AssignFacilityAsync(int userId, int facilityId, bool actorIsAdmin, CancellationToken ct);
     Task<Staff> AssignDepartmentAsync(int userId, int departmentId, bool actorIsAdmin, CancellationToken ct);
     Task<StaffPage> SearchAsync(string? search, bool? isDriver, int page, int pageSize, CancellationToken ct);
