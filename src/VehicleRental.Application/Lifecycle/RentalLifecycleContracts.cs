@@ -152,7 +152,9 @@ public sealed record OperationalRentalDetail(
     IReadOnlyList<CustomerInspectionDto> Inspections,
     IReadOnlyList<RentalStatusHistoryEntry> History,
     RentalSettlementDto? Settlement,
-    int? OrderId = null
+    int? OrderId = null,
+    bool HasPassingPreInspection = false,
+    bool HasPostInspection = false
 );
 
 public sealed record OverdueRentalItem(

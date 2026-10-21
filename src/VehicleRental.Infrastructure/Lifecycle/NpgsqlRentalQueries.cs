@@ -457,7 +457,9 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                    COALESCE(f.name, 'Main Facility'),
                    COALESCE(du.fullname, du.email),
                    i.id, i.invoice_number, i.status, i.amount,
-                   (SELECT o.id FROM rental_orders o WHERE o.rental_id = r.id)
+                   (SELECT o.id FROM rental_orders o WHERE o.rental_id = r.id),
+                   EXISTS(SELECT 1 FROM inspections ip WHERE ip.rental_id=r.id AND ip.vehicle_id=r.vehicle_id AND ip.inspection_type='pre_rental' AND ip.is_ok=true),
+                   EXISTS(SELECT 1 FROM inspections ip WHERE ip.rental_id=r.id AND ip.vehicle_id=r.vehicle_id AND ip.inspection_type='post_rental')
             FROM rentals r
             JOIN customers c ON c.id = r.customer_id
             JOIN users u ON u.id = c.user_id
@@ -516,6 +518,8 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
         var fName = reader.GetString(33);
         var dName = reader.IsDBNull(34) ? null : reader.GetString(34);
         var orderId = reader.IsDBNull(39) ? (int?)null : reader.GetInt32(39);
+        var hasPassingPreInspection = reader.GetBoolean(40);
+        var hasPostInspection = reader.GetBoolean(41);
 
         CustomerInvoiceDto? invoice = null;
         if (!reader.IsDBNull(35))
@@ -622,7 +626,9 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
             Inspections: inspections,
             History: history,
             Settlement: settlement,
-            OrderId: orderId
+            OrderId: orderId,
+            HasPassingPreInspection: hasPassingPreInspection,
+            HasPostInspection: hasPostInspection
         );
     }
 

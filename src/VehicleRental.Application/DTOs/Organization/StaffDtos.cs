@@ -19,7 +19,15 @@ public sealed record Staff(
     string? LicenseImageUrl,
     decimal? Rating,
     bool IsActive, string? StaffRole = null, string? AvatarUrl = null, string? Gender = null,
-    string? Address = null, int TotalTrips = 0, int? ActiveTripId = null);
+    string? Address = null, int TotalTrips = 0, int? ActiveTripId = null)
+{
+    public IReadOnlyList<string> Roles { get; init; } = [];
+}
+
+public sealed record CreateStaffFromUser(
+    int UserId, int? DepartmentId, int? FacilityId, DateOnly? HiredDate,
+    string? LicenseNumber, string? LicenseType, DateOnly? LicenseIssueDate,
+    DateOnly? LicenseExpiryDate, string? LicenseImageUrl);
 
 public sealed record CreateStaff(
     string Email,
