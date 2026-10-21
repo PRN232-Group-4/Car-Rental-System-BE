@@ -1,0 +1,11 @@
+# Audit log directory and role catalog — 2026-10-21
+
+- Add `GET /api/audit-logs` for Admin/Manager with actor/target email/name/ID search, public action filters, stable timestamp/ID ordering and pagination at HTTP/Application boundaries.
+- Normalize legacy account-administration actions to `role_assigned`, `role_removed`, `account_locked`, `account_unlocked`, `session_revoked`. Expose real stored details/status, nullable historical identity/IP metadata and `AUD-{id}` identifiers. Capture remote IP for new account-administration mutations.
+- Add Admin-only role list/detail/create/update/delete endpoints. Names are trimmed and unique ignoring case; protect built-in roles and reject rename/deletion of assigned custom roles. Lists include `isSystem` and `userCount`.
+- Support custom persisted role assignment/removal and filtering through existing user administration APIs, resolving canonical names before built-in invariants. Preserve profile/specialty/last-admin protection, authorization-version invalidation and session revocation. Custom roles do not imply new policy capabilities.
+- Serialize role mutations with account-administration locks and table locks to prevent duplicate names and orphan membership races without changing the authorization model.
+- Add immutable migrations `0026_audit_log_metadata.sql` and `0027_role_catalogue.sql`; the unique index fails explicitly on legacy case-insensitive duplicate role names without deleting data.
+- Update Swagger, contextual success messages, API docs, FR-007/037/041 and assumptions. All responses retain the shared six-field envelope.
+
+Validation: solution build with `--no-restore -warnaserror -m:1` passed with zero warnings/errors. All **197/197 related tests passed, zero skipped**, covering audit HTTP/Application/PostgreSQL and IP writer, role HTTP/Application/PostgreSQL including case-duplicate and assignment/delete races, user administration, authorization, architecture, API response envelopes and staff identity. Tests ran against localhost HTTP hosts and an isolated temporary PostgreSQL 18 cluster with xUnit parallelism limited to two threads; initial sandbox-only connection attempts were blocked, then rerun successfully with localhost access. The temporary cluster was stopped after validation. No deployment or application database migration has been performed.

@@ -148,6 +148,12 @@ builder.Services.AddScoped<IInspectionDirectoryRepository,NpgsqlInspectionDirect
 builder.Services.AddScoped<IInspectionDirectoryService,InspectionDirectoryService>();
 builder.Services.AddScoped<IOperationsRepository, NpgsqlOperationsRepository>();
 builder.Services.AddScoped<IUserAdministrationRepository, NpgsqlUserAdministrationRepository>();
+builder.Services.AddScoped<IAuditLogRepository, NpgsqlAuditLogRepository>();
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IAuditRequestContext, HttpAuditRequestContext>();
+builder.Services.AddScoped<IRoleRepository, NpgsqlRoleRepository>();
+builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<IDashboardRepository, NpgsqlDashboardRepository>();
 builder.Services.AddScoped<INavigationCountsRepository, NpgsqlNavigationCountsRepository>();
 builder.Services.AddScoped<INavigationCountsService, NavigationCountsService>();

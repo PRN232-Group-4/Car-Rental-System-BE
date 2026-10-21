@@ -12,8 +12,8 @@ public sealed class UserAdministrationService(IUserAdministrationRepository repo
         ArgumentNullException.ThrowIfNull(query);
         if (query.Page < 1 || query.PageSize is < 1 or > 100) throw new ArgumentException("Page must be positive and pageSize must be between 1 and 100.");
         if (query.Search?.Length > 255) throw new ArgumentException("Search must contain at most 255 characters.");
-        if (query.Role is not null && !AdministrativeRoles.IsKnown(query.Role)) throw new ArgumentException("Unknown role.");
-        return repository.ListAsync(new UserListQuery { Search = string.IsNullOrWhiteSpace(query.Search) ? null : query.Search.Trim(), Role = query.Role, IsActive = query.IsActive, Page = query.Page, PageSize = query.PageSize }, ct);
+        if (query.Role is not null && (string.IsNullOrWhiteSpace(query.Role) || query.Role.Length > 255)) throw new ArgumentException("Role must contain 1 to 255 characters.");
+        return repository.ListAsync(new UserListQuery { Search = string.IsNullOrWhiteSpace(query.Search) ? null : query.Search.Trim(), Role = query.Role?.Trim(), IsActive = query.IsActive, Page = query.Page, PageSize = query.PageSize }, ct);
     }
 
     public Task<AdministrativeUser?> FindAsync(int id, CancellationToken ct) => repository.FindAsync(id, ct);
@@ -29,8 +29,8 @@ public sealed class UserAdministrationService(IUserAdministrationRepository repo
 
     public async Task<AdministrativeUser> SetRoleAsync(int id, string role, bool assigned, int actorUserId, CancellationToken ct)
     {
-        if (!AdministrativeRoles.IsKnown(role)) throw new ArgumentException("Unknown role.");
-        var user = await repository.SetRoleAsync(id, role, assigned, actorUserId, ct);
+        if (string.IsNullOrWhiteSpace(role) || role.Length > 255 || role.Contains(',')) throw new ArgumentException("Role must contain 1 to 255 characters and cannot contain a comma.");
+        var user = await repository.SetRoleAsync(id, role.Trim(), assigned, actorUserId, ct);
         await sessions.RevokeAllAsync(user.Email, ct);
         return user;
     }

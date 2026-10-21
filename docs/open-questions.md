@@ -88,3 +88,7 @@ Người dùng chọn thay toàn bộ Google Maps bằng Mapbox. Mặc định t
 ## API completion — 2026-10-20 assumptions
 
 Revenue tiếp tục theo paid invoice/issued_at như dashboard cũ; không đổi sang net cashflow. Snapshot trạng thái lấy thời điểm cuối kỳ hoặc hiện tại nếu kỳ tương lai, nêu rõ asOf. Bộ lọc cơ sở/loại xe dùng metadata xe hiện tại vì chưa có snapshot lịch sử. Subscription usage dùng giờ lịch thuê + overtime theo đơn; chưa bổ sung ledger hoàn/trừ giờ. Metadata gói trước đây dùng hạn mức gói hiện tại, không giả snapshot. Chưa nhập năm xe/hotline/địa chỉ/tiện nghi thiếu dữ liệu; giữ null/empty. Facility detail đổi sang object để đáp ứng yêu cầu; FE cần đồng bộ adapter. API danh sách được sửa trong đợt này chuẩn hóa pagination theo ADR-003.
+
+## Audit logs và role catalog — 2026-10-21 assumptions
+
+Audit logs sử dụng nhật ký quản trị tài khoản đã có, mở quyền đọc Management (Admin/Manager); các mutation tài khoản và CRUD role giữ Admin. Chuẩn hóa action lịch sử sang tên public theo yêu cầu, details dùng reason đã lưu và IP lịch sử giữ null. Tạo role là tạo danh mục dùng được cho membership; tên tùy chỉnh không tự tạo policy/capability mới. Bảo vệ role hệ thống và chặn đổi tên/xóa role tùy chỉnh đang gán để giữ tính nhất quán phiên và tham chiếu. Migration unique tên role không tự gộp bản ghi cũ.

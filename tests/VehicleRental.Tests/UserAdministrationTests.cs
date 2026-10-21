@@ -74,7 +74,7 @@ public sealed class UserAdministrationTests : IAsyncLifetime
 
     [Theory]
     [InlineData("page=0")] [InlineData("pageSize=0")] [InlineData("pageSize=101")]
-    [InlineData("role=Unknown")] [InlineData("isActive=bad")]
+    [InlineData("isActive=bad")]
     public async Task Invalid_directory_query_is_rejected_at_HTTP_boundary(string query)
     {
         using var request = Request(HttpMethod.Get, "/api/users?" + query);
@@ -136,7 +136,7 @@ public sealed class UserAdministrationTests : IAsyncLifetime
         var service = new UserAdministrationService(_repository, _sessions);
         await Assert.ThrowsAsync<ArgumentException>(() => service.ListAsync(new() { Page = 0 }, default));
         await Assert.ThrowsAsync<ArgumentException>(() => service.ListAsync(new() { PageSize = 101 }, default));
-        await Assert.ThrowsAsync<ArgumentException>(() => service.SetRoleAsync(2, "root", true, 1, default));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.SetRoleAsync(2, " ", true, 1, default));
         Assert.Null(_repository.Query);
     }
 

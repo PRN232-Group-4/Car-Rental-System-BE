@@ -1,5 +1,9 @@
 # SQL migrations
 
+`0026_audit_log_metadata.sql` bổ sung IP nullable, status mặc định success và index thứ tự thời gian cho nhật ký quản trị tài khoản; dữ liệu cũ không tự có IP.
+
+`0027_role_catalogue.sql` thêm unique index `lower(name)` cho role. Nếu dữ liệu cũ trùng tên không phân biệt hoa thường, migration dừng để xử lý rõ ràng; không tự gộp role hoặc xóa membership.
+
 `0025_inspection_assignments.sql` lưu trách nhiệm kiểm tra trước thuê theo rental/vehicle, kỹ thuật viên Maintenance và người/thời gian phân công. Migration runner tự phát hiện; không backfill hoặc thay đổi evidence cũ.
 
 `0020_invoice_checkout_reservation.sql` thêm marker checkout_started_at trước khi phát hành link PayOS để khóa sửa điều khoản rental. Lần nâng cấp đầu backfill invoice unpaid cũ (không có lịch sử phát hành link), giữ marker khi provider lỗi; replay không đánh dấu invoice mới. Xem ADR-007 và change 2026-10-16.

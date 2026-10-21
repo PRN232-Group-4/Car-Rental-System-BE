@@ -1,10 +1,11 @@
 using Car_Rental_System_BE.Application.DTOs.Accounts;
+using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Npgsql;
 
 namespace Car_Rental_System_BE.Infrastructure.Repositories;
 
-public sealed class NpgsqlUserAdministrationRepository(NpgsqlDataSource dataSource) : IUserAdministrationRepository
+public sealed class NpgsqlUserAdministrationRepository(NpgsqlDataSource dataSource, IAuditRequestContext? auditContext = null) : IUserAdministrationRepository
 {
     private const string Select = """
         SELECT u.id,u.email,COALESCE(u.fullname,''),u.phone,u.avatar,u.gender,u.address,u.is_active,u.created_at,
@@ -14,7 +15,7 @@ public sealed class NpgsqlUserAdministrationRepository(NpgsqlDataSource dataSour
         """;
     private const string Filter = """
          WHERE ($1::text IS NULL OR u.email ILIKE '%'||$1||'%' OR u.fullname ILIKE '%'||$1||'%' OR u.phone ILIKE '%'||$1||'%')
-           AND ($2::text IS NULL OR EXISTS(SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=u.id AND r.name=$2))
+           AND ($2::text IS NULL OR EXISTS(SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=u.id AND lower(r.name)=lower($2)))
            AND ($3::boolean IS NULL OR u.is_active=$3)
         """;
 
@@ -58,7 +59,14 @@ public sealed class NpgsqlUserAdministrationRepository(NpgsqlDataSource dataSour
     public Task<AdministrativeUser> SetRoleAsync(int id, string role, bool assigned, int actorUserId, CancellationToken ct) =>
         MutateAsync(id, actorUserId, assigned ? "role:add" : "role:remove", role, async (connection, transaction) =>
         {
-            if (!AdministrativeRoles.IsKnown(role)) throw new UserAdministrationException(400, "Unknown role.");
+            // Resolve to the stored spelling before applying built-in invariants: e.g.
+            // a request for 'admin' must still run the last active Admin protection.
+            await using (var canonical = new NpgsqlCommand("SELECT name FROM roles WHERE lower(name)=lower($1)", connection, transaction))
+            {
+                canonical.Parameters.AddWithValue(role);
+                role = (string?)await canonical.ExecuteScalarAsync(ct)
+                    ?? throw new UserAdministrationException(400, "Role was not found.");
+            }
             if (assigned) await ValidateRoleProfileAsync(connection, transaction, id, role, ct);
             if (!assigned && role == "Admin") await ProtectLastAdminAsync(connection, transaction, id, ct);
             if (!assigned && role == "Staff" && await ExistsAsync(connection, transaction,
@@ -102,8 +110,8 @@ public sealed class NpgsqlUserAdministrationRepository(NpgsqlDataSource dataSour
         if (await target.ExecuteScalarAsync(ct) is null) throw new UserAdministrationException(404, "User was not found.");
         await mutate(connection, transaction);
         await ExecuteAsync(connection, transaction,
-            "INSERT INTO user_administration_audit(user_id,actor_user_id,action,reason) VALUES($1,$2,$3,$4)", ct,
-            id, actorUserId, action, (object?)reason ?? DBNull.Value);
+            "INSERT INTO user_administration_audit(user_id,actor_user_id,action,reason,ip_address) VALUES($1,$2,$3,$4,$5)", ct,
+            id, actorUserId, action, (object?)reason ?? DBNull.Value, (object?)auditContext?.IpAddress ?? DBNull.Value);
         await using var read = new NpgsqlCommand(Select + " WHERE u.id=$1", connection, transaction);
         read.Parameters.AddWithValue(id);
         AdministrativeUser user;
