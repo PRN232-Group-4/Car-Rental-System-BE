@@ -3,6 +3,8 @@
 
 Roles: Customer, Staff (employee marker only), CustomerService, Driver, Maintenance (Technician in UI), Manager, Admin. Department is organizational metadata, not an implicit permission grant. Only Admin assigns staff specialties. Existing Staff accounts require explicit specialty assignment; no automatic CustomerService backfill.
 
+The Admin-only [role catalog](FR-041-role-catalog.md) supports custom persisted roles and account membership. Custom names do not implicitly grant built-in policy capabilities. Built-in role names are immutable and cannot be deleted; assigned custom roles must be unassigned before rename/deletion. Admin and Manager may read the [account-administration audit directory](FR-037-user-administration.md).
+
 Staff creation passwords follow the same 6–20 character limit as registration/login; invalid lengths return 400 validation. See [password-length change](../changes/2026-10-07-password-length.md).
 
 | Capability | Roles |

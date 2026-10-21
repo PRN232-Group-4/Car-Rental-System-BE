@@ -1,5 +1,11 @@
 # Tiến độ
 
+## Audit logs và CRUD danh mục role — 2026-10-21
+
+Đã thêm `GET /api/audit-logs` cho Admin/Manager với search actor/target, action và phân trang; chuẩn hóa action cũ, trả metadata thật và ghi IP cho mutation quản trị tài khoản mới. Thêm CRUD `/api/roles` cho Admin, tên duy nhất không phân biệt hoa thường, bảo vệ role hệ thống và role đang gán; custom role dùng được qua API gán/gỡ/lọc users, giữ kiểm tra hồ sơ/chuyên môn, Admin cuối cùng và thu hồi phiên. Swagger và tài liệu đã cập nhật.
+
+Kiểm chứng: build solution `-warnaserror` đạt 0 warning/error; **197/197 test liên quan đạt, không skip**, gồm HTTP/Swagger/envelope, Application, PostgreSQL tạm, ghi IP và concurrency gán/xóa role. Database tạm đã dừng. Chưa deploy hoặc chạy migration lên database ứng dụng; cần áp dụng `0026_audit_log_metadata.sql` và `0027_role_catalogue.sql`. Xem [change](../changes/2026-10-21-audit-logs-role-crud.md), [API](API.md), [FR-041](../specs/FR-041-role-catalog.md).
+
 ## Bộ lọc danh mục thuê xe và menu đổi mật khẩu — 2026-10-21
 
 `/find` chuyển sang API search công khai, gửi đúng tiêu chí/ngày giờ UTC, chuẩn hóa URL và ánh xạ nested search DTO lên thẻ xe. Backend thêm phân khúc, sắp xếp tên, tìm tên xe đầy đủ/năm/chi nhánh, tương thích mã hộp số/nhiên liệu với dữ liệu cũ. Menu tài khoản desktop/mobile/customer/admin/driver có lối tắt tới form đổi mật khẩu OTP hiện có. Kiểm chứng: 54/54 test backend Application/HTTP/PostgreSQL, 662/662 unit test frontend và 12/12 E2E Edge desktop/mobile đạt; TypeScript, ESLint các file thay đổi, design lint và production static build đạt. Ba E2E bộ lọc được chạy lại sau đồng bộ giờ picker từ URL và đều đạt. Chưa deploy, cần cập nhật cả FE/BE. Xem [change](../changes/2026-10-21-catalog-filters-account-menu.md).
