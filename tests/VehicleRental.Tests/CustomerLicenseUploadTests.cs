@@ -12,6 +12,7 @@ using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Application.Services.Exceptions;
+using Car_Rental_System_BE.Application.Validators;
 using Car_Rental_System_BE.Infrastructure.Services.Media;
 using Car_Rental_System_BE.Domain.Interfaces;
 using Car_Rental_System_BE.WebApi.Controllers;
@@ -95,6 +96,7 @@ public sealed class CustomerLicenseUploadTests : IAsyncLifetime
     [InlineData("expired")]
     [InlineData("issue-after-expiry")]
     [InlineData("missing-expiry")]
+    [InlineData("missing-issue")]
     [InlineData("missing-file")]
     [InlineData("empty-file")]
     [InlineData("invalid-content")]
@@ -162,12 +164,56 @@ public sealed class CustomerLicenseUploadTests : IAsyncLifetime
     [Fact]
     public async Task Existing_json_url_contract_is_available_on_explicit_url_route()
     {
-        var json = JsonSerializer.Serialize(new { number = "ABC123", type = "B", expiryDate = DateOnly.FromDateTime(DateTime.UtcNow).AddYears(1), imageUrl = "https://example.test/existing.png" });
+        var json = JsonSerializer.Serialize(new { number = "ABC123", type = "B", issueDate = DateOnly.FromDateTime(DateTime.UtcNow), expiryDate = DateOnly.FromDateTime(DateTime.UtcNow).AddYears(1), imageUrl = "https://example.test/existing.png" });
         using var response = await _client.PutAsync("/api/customer/license/url", new StringContent(json, Encoding.UTF8, "application/json"));
         using var body = await Envelope(response, 200, true);
         Assert.Equal("https://example.test/existing.png", body.RootElement.GetProperty("data").GetProperty("imageUrl").GetString());
         Assert.Equal("pending", _repository.License.Status);
         Assert.Equal(0, _images.Uploads);
+    }
+
+    [Theory]
+    [InlineData("number")]
+    [InlineData("type")]
+    [InlineData("issueDate")]
+    [InlineData("expiryDate")]
+    [InlineData("imageUrl")]
+    public async Task Url_submission_requires_every_field(string missing)
+    {
+        var payload = new Dictionary<string, object?>
+        {
+            ["number"] = "ABC123", ["type"] = "B",
+            ["issueDate"] = DateOnly.FromDateTime(DateTime.UtcNow),
+            ["expiryDate"] = DateOnly.FromDateTime(DateTime.UtcNow).AddYears(1),
+            ["imageUrl"] = "https://example.test/existing.png"
+        };
+        payload.Remove(missing);
+        using var response = await _client.PutAsync("/api/customer/license/url",
+            new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"));
+        using var body = await Envelope(response, 400, false);
+        Assert.Contains(body.RootElement.GetProperty("error").GetProperty("errors").EnumerateObject(),
+            field => field.Name.Equals(missing, StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(0, _images.Uploads);
+        Assert.Equal(0, _repository.Saves);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("invalid-url")]
+    public void Application_rejects_missing_or_invalid_image(string? imageUrl)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        Assert.Throws<ArgumentException>(() => CustomerLicenseValidator.Validate(
+            new CustomerLicense("ABC123", "B", today, today.AddYears(1), imageUrl, "pending")));
+    }
+
+    [Fact]
+    public void Application_rejects_missing_issue_date()
+    {
+        Assert.Throws<ArgumentException>(() => CustomerLicenseValidator.Validate(
+            new CustomerLicense("ABC123", "B", null, DateOnly.FromDateTime(DateTime.UtcNow).AddYears(1), "https://example.test/license.png", "pending")));
     }
 
     [Theory]
@@ -216,6 +262,8 @@ public sealed class CustomerLicenseUploadTests : IAsyncLifetime
             schema = json.RootElement.GetProperty("components").GetProperty("schemas").GetProperty(reference.GetString()!.Split('/').Last());
         var file = schema.GetProperty("properties").EnumerateObject().Single(p => p.Name.Equals("file", StringComparison.OrdinalIgnoreCase)).Value;
         Assert.Equal("binary", file.GetProperty("format").GetString());
+        var required = schema.GetProperty("required").EnumerateArray().Select(field => field.GetString()!.ToLowerInvariant()).ToArray();
+        Assert.All(new[] { "number", "type", "issuedate", "expirydate", "file" }, field => Assert.Contains(field, required));
         var envelope = operation.GetProperty("responses").GetProperty("200").GetProperty("content").GetProperty("application/json").GetProperty("schema");
         Assert.Equal(6, envelope.GetProperty("required").GetArrayLength());
         Assert.Equal("boolean", envelope.GetProperty("properties").GetProperty("is_success").GetProperty("type").GetString());
@@ -228,7 +276,7 @@ public sealed class CustomerLicenseUploadTests : IAsyncLifetime
         if (invalid != "missing-type") form.Add(new StringContent("B"), "type");
         var expiry = DateOnly.FromDateTime(DateTime.UtcNow).AddYears(1);
         if (invalid != "missing-expiry") form.Add(new StringContent((invalid == "expired" ? expiry.AddYears(-2) : expiry).ToString("yyyy-MM-dd")), "expiryDate");
-        if (invalid == "issue-after-expiry") form.Add(new StringContent(expiry.AddDays(1).ToString("yyyy-MM-dd")), "issueDate");
+        if (invalid != "missing-issue") form.Add(new StringContent((invalid == "issue-after-expiry" ? expiry.AddDays(1) : DateOnly.FromDateTime(DateTime.UtcNow)).ToString("yyyy-MM-dd")), "issueDate");
         if (invalid != "missing-file")
         {
             var bytes = invalid switch { "invalid-content" => Encoding.UTF8.GetBytes("not an image"), "empty-file" => [], "oversize" => new byte[5 * 1024 * 1024 + 1], _ => Png };

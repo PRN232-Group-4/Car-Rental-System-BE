@@ -1,5 +1,13 @@
 # Tiến độ
 
+## Bộ lọc danh mục thuê xe và menu đổi mật khẩu — 2026-10-21
+
+`/find` chuyển sang API search công khai, gửi đúng tiêu chí/ngày giờ UTC, chuẩn hóa URL và ánh xạ nested search DTO lên thẻ xe. Backend thêm phân khúc, sắp xếp tên, tìm tên xe đầy đủ/năm/chi nhánh, tương thích mã hộp số/nhiên liệu với dữ liệu cũ. Menu tài khoản desktop/mobile/customer/admin/driver có lối tắt tới form đổi mật khẩu OTP hiện có. Kiểm chứng: 54/54 test backend Application/HTTP/PostgreSQL, 662/662 unit test frontend và 12/12 E2E Edge desktop/mobile đạt; TypeScript, ESLint các file thay đổi, design lint và production static build đạt. Ba E2E bộ lọc được chạy lại sau đồng bộ giờ picker từ URL và đều đạt. Chưa deploy, cần cập nhật cả FE/BE. Xem [change](../changes/2026-10-21-catalog-filters-account-menu.md).
+
+## Bắt buộc đầy đủ thông tin GPLX khách hàng — 2026-10-21
+
+Hai form `/driver-license` và `/profile` bắt buộc số GPLX, hạng, ngày cấp, ngày hết hạn và ảnh tải lên; lỗi hiển thị dưới từng trường. `/profile` gửi multipart tới API GPLX, giới hạn ảnh 5 MiB. Backend kiểm tra ngày cấp và ảnh ở HTTP/Application, JSON URL cũng không còn cho thiếu ảnh/ngày. Kiểm chứng: 38/38 test backend GPLX, 24/24 test frontend GPLX/inline-validation đạt; TypeScript và ESLint các file thay đổi đạt, không cảnh báo. Chưa deploy hoặc thử Cloudinary thật. Xem [change](../changes/2026-10-21-required-license-fields.md).
+
 ## Giới hạn xác thực, badge menu và email nghiệp vụ — 2026-10-21
 
 Đã bổ sung giới hạn mặc định 5 request/60 giây/IP/instance cho đăng ký/đăng nhập/reset; gửi OTP và xác nhận đổi mật khẩu dùng chung ngân sách 5. Redis chặn login/currentPassword sai tối đa 5 lần/10 phút theo email chuẩn hóa; OTP khóa ngay lần sai thứ 5, tăng số lần sai và tiêu thụ mã nguyên tử. Thêm API snapshot năm queue cho dot/số trên menu, giữ scope báo cáo theo staff_id của người gọi và quyền từng nghiệp vụ. Email GPLX/hoàn tiền/trạng thái thuê/kiểm tra xe/báo cáo gửi sau commit, lỗi lookup/provider/timeout không làm thao tác nghiệp vụ trả lỗi.
