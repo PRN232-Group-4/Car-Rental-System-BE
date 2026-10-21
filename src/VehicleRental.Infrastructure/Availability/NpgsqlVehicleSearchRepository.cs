@@ -8,12 +8,17 @@ namespace Car_Rental_System_BE.Infrastructure.Availability;
 
 public sealed class NpgsqlVehicleSearchRepository(NpgsqlDataSource dataSource) : IVehicleSearchRepository
 {
+    private const string FuelSql = "translate(lower(trim(t.fuel_type)), 'ĐĂỆẦ', 'đăệầ')";
+    private const string ElectricSql = "(ecd.vehicle_id IS NOT NULL OR emd.vehicle_id IS NOT NULL OR " + FuelSql + " IN ('electric', 'điện', 'thuần điện'))";
+    private const string TypeSql = "COALESCE(NULLIF(lower(trim(t.type)), ''), CASE WHEN cd.vehicle_id IS NOT NULL OR ecd.vehicle_id IS NOT NULL THEN 'car' WHEN md.vehicle_id IS NOT NULL OR emd.vehicle_id IS NOT NULL THEN 'motorbike' END)";
+    private const string TransmissionSql = "CASE WHEN cd.transmission ILIKE '%cvt%' THEN 'cvt' WHEN lower(trim(cd.transmission)) IN ('automatic', 'at') OR cd.transmission ILIKE '%tự động%' THEN 'automatic' WHEN lower(trim(cd.transmission)) IN ('manual', 'mt') OR cd.transmission ILIKE '%số sàn%' THEN 'manual' ELSE lower(trim(cd.transmission)) END";
+
     public async Task<VehicleSearchResult> SearchAsync(VehicleSearchQuery query, int bufferMinutes, bool? driverAvailable, CancellationToken ct)
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
 
         var priceCol = query.RentalType == "longterm" ? "v.rental_price_longterm" : "v.rental_price_hourly";
-        var sql = new StringBuilder("""
+        var sql = new StringBuilder($"""
             SELECT v.id,
                    v.vehicle_type_id, t.name, t.fuel_type,
                    v.brand, v.model, v.year_of_manufacture, v.color,
@@ -24,8 +29,8 @@ public sealed class NpgsqlVehicleSearchRepository(NpgsqlDataSource dataSource) :
                    md.bike_type, md.has_storage_box,
                    COALESCE(ecd.max_range_km, emd.max_range_km),
                    COALESCE(ecd.battery_capacity, emd.battery_capacity),
-                   (ecd.vehicle_id IS NOT NULL OR emd.vehicle_id IS NOT NULL OR (t.fuel_type IS NOT NULL AND (t.fuel_type ILIKE '%điện%' OR t.fuel_type ILIKE '%electric%'))) AS is_electric,
-                   COUNT(*) OVER() AS total_count
+                   COALESCE({ElectricSql}, false) AS is_electric,
+                   COUNT(*) OVER() AS total_count, {TypeSql} AS type
             FROM vehicles v
             JOIN vehicle_types t ON t.id = v.vehicle_type_id
             LEFT JOIN facilities f ON f.id = v.facility_id
@@ -37,6 +42,13 @@ public sealed class NpgsqlVehicleSearchRepository(NpgsqlDataSource dataSource) :
             """);
 
         await using var command = new NpgsqlCommand { Connection = connection };
+
+        if (query.Category is { } category)
+        {
+            sql.Append($" AND {TypeSql} = @categoryType AND COALESCE({ElectricSql}, false) = @categoryElectric");
+            command.Parameters.AddWithValue("categoryType", category.EndsWith("motorbike", StringComparison.Ordinal) ? "motorbike" : "car");
+            command.Parameters.AddWithValue("categoryElectric", category.StartsWith("electric_", StringComparison.Ordinal));
+        }
 
         if (query.Window is { } w)
         {
@@ -77,7 +89,7 @@ public sealed class NpgsqlVehicleSearchRepository(NpgsqlDataSource dataSource) :
 
         if (!string.IsNullOrWhiteSpace(query.Q))
         {
-            sql.Append(" AND (lower(coalesce(v.brand,'')) LIKE @qPattern OR lower(coalesce(v.model,'')) LIKE @qPattern)");
+            sql.Append(" AND lower(concat_ws(' ', v.brand, v.model, v.year_of_manufacture::text, f.name, v.current_location)) LIKE @qPattern");
             command.Parameters.AddWithValue("qPattern", $"%{EscapeLike(query.Q.Trim().ToLowerInvariant())}%");
         }
 
@@ -101,8 +113,14 @@ public sealed class NpgsqlVehicleSearchRepository(NpgsqlDataSource dataSource) :
 
         if (!string.IsNullOrWhiteSpace(query.Transmission))
         {
-            sql.Append(" AND lower(cd.transmission) = lower(@transmission)");
-            command.Parameters.AddWithValue("transmission", query.Transmission.Trim());
+            var transmission = query.Transmission.Trim().ToLowerInvariant();
+            if (transmission == "automatic")
+                sql.Append($" AND ({TransmissionSql}) IN ('automatic', 'cvt')");
+            else
+            {
+                sql.Append($" AND (lower(trim(cd.transmission)) = @transmission OR ({TransmissionSql}) = @transmission)");
+                command.Parameters.AddWithValue("transmission", transmission);
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(query.BikeType))
@@ -125,8 +143,16 @@ public sealed class NpgsqlVehicleSearchRepository(NpgsqlDataSource dataSource) :
 
         if (!string.IsNullOrWhiteSpace(query.FuelType))
         {
-            sql.Append(" AND lower(t.fuel_type) = lower(@fuelType)");
-            command.Parameters.AddWithValue("fuelType", query.FuelType.Trim());
+            var fuel = query.FuelType.Trim().ToLowerInvariant();
+            if (fuel is "electric" or "điện" or "thuần điện")
+                sql.Append($" AND COALESCE({ElectricSql}, false)");
+            else if (fuel is "petrol" or "gasoline" or "xăng")
+                sql.Append($" AND {FuelSql} IN ('petrol', 'gasoline', 'xăng')");
+            else
+            {
+                sql.Append($" AND {FuelSql} = @fuelType");
+                command.Parameters.AddWithValue("fuelType", fuel);
+            }
         }
 
         var orderClause = query.Sort switch
@@ -134,6 +160,7 @@ public sealed class NpgsqlVehicleSearchRepository(NpgsqlDataSource dataSource) :
             "price_asc" => $"ORDER BY {priceCol} ASC NULLS LAST, v.id ASC",
             "price_desc" => $"ORDER BY {priceCol} DESC NULLS LAST, v.id ASC",
             "newest" => "ORDER BY v.year_of_manufacture DESC NULLS LAST, v.id DESC",
+            "name_asc" => "ORDER BY lower(concat_ws(' ', v.brand, v.model)) ASC, v.id ASC",
             _ => "ORDER BY v.id DESC"
         };
         var filteredSql = sql.ToString();
@@ -174,7 +201,7 @@ public sealed class NpgsqlVehicleSearchRepository(NpgsqlDataSource dataSource) :
             var batCap = reader.IsDBNull(19) ? null : reader.GetString(19);
             var isElectric = reader.GetBoolean(20);
 
-            var typeRef = new VehicleTypeRef(vTypeId, vTypeName, fuelType);
+            var typeRef = new VehicleTypeRef(vTypeId, vTypeName, fuelType, reader.IsDBNull(22) ? null : reader.GetString(22));
             var facRef = facId is not null && facName is not null ? new FacilityRef(facId.Value, facName) : null;
             var summary = new VehicleSummary(seatCount, transmission, bikeType, hasBox, maxRange, batCap);
             var badges = new VehicleBadges(isElectric, driverAvailable, priceH is not null);

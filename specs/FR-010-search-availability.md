@@ -1,5 +1,13 @@
 # FR-010 — Tìm xe và availability (BE-10)
 
+## Cập nhật 2026-10-21 — Bộ lọc danh mục thuê xe
+
+- `/find` dùng API tìm kiếm công khai để mọi tiêu chí được áp dụng trước phân trang và đếm tổng.
+- Thêm `category=car|electric_car|motorbike|electric_motorbike` dựa trên loại/nhiên liệu và `sort=name_asc`; `newest` tương ứng đời xe mới nhất trên giao diện.
+- Hộp số nhận mã `automatic|manual|cvt` cùng các giá trị hiển thị cũ; nhiên liệu nhận `petrol|gasoline|electric` cùng `Xăng|Điện`. CVT cũng thuộc nhóm tự động.
+- `seatCount` giữ nghĩa số chỗ tối thiểu. Từ khóa tìm cả tên hãng + mẫu xe, năm sản xuất và chi nhánh. Giờ thuê gửi cặp ISO UTC `from`/`to`.
+- [x] Hồi quy HTTP, Application và PostgreSQL cho bộ lọc, sắp xếp và tổng sau lọc.
+
 ## Cập nhật 2026-10-18 — Chọn cơ sở trước khi đặt xe
 
 - Customer chọn cơ sở, sau đó tự lái/có tài xế rồi mới truy vấn và chọn xe trong cơ sở bằng thẻ xe.

@@ -48,6 +48,7 @@ public sealed class VehicleSearchHttpTests : IAsyncLifetime
     [InlineData("pageSize=0")]
     [InlineData("pageSize=101")]
     [InlineData("facilityId=0")]
+    [InlineData("category=unknown")]
     public async Task Invalid_query_has_validation_envelope_and_never_calls_repository(string query)
     {
         using var response = await _client.GetAsync("/api/vehicles/search?" + query);
@@ -68,6 +69,27 @@ public sealed class VehicleSearchHttpTests : IAsyncLifetime
         Assert.Equal(pageSize, json.RootElement.GetProperty("data").GetProperty("pageSize").GetInt32());
         Assert.Equal("Vehicles retrieved successfully.", json.RootElement.GetProperty("message").GetString());
         Assert.NotNull(_repo.Query);
+    }
+
+    [Fact]
+    public async Task Catalog_filters_bind_to_public_search_query()
+    {
+        using var response = await _client.GetAsync("/api/vehicles/search?category=electric_car&facilityId=3&brand=VinFast&seatCount=5&transmission=cvt&fuelType=electric&minPrice=10&maxPrice=20&q=VF8&sort=name_asc&rentalType=longterm&page=2&pageSize=6");
+        using var json = await Envelope(response, 200);
+        var query = Assert.IsType<VehicleSearchQuery>(_repo.Query);
+        Assert.Equal("electric_car", query.Category);
+        Assert.Equal(3, query.FacilityId);
+        Assert.Equal("VinFast", query.Brand);
+        Assert.Equal(5, query.SeatCount);
+        Assert.Equal("cvt", query.Transmission);
+        Assert.Equal("electric", query.FuelType);
+        Assert.Equal(10m, query.MinPrice);
+        Assert.Equal(20m, query.MaxPrice);
+        Assert.Equal("VF8", query.Q);
+        Assert.Equal("name_asc", query.Sort);
+        Assert.Equal("longterm", query.RentalType);
+        Assert.Equal(2, query.Page);
+        Assert.Equal(6, query.PageSize);
     }
 
     private static async Task<JsonDocument> Envelope(HttpResponseMessage response, int status)

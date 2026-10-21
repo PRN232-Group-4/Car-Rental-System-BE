@@ -353,7 +353,7 @@ Policy CustomerService gồm **Admin, Manager, CustomerService**. Danh sách tì
 | Method | Endpoint | Quyền | Body | HTTP / data |
 | --- | --- | --- | --- | --- |
 | GET | `/api/customer/license` | Customer | Không | 200 / `CustomerLicense` hoặc null |
-| PUT | `/api/customer/license` | Customer | Multipart: `number`, `type`, `issueDate?`, `expiryDate`, `file` | 200 / `CustomerLicense` |
+| PUT | `/api/customer/license` | Customer | Multipart: `number`, `type`, `issueDate`, `expiryDate`, `file` (đều bắt buộc) | 200 / `CustomerLicense` |
 | PUT | `/api/customer/license/url` | Customer | JSON `LicenseRequest` | 200 / `CustomerLicense` |
 | PUT | `/api/customers/{customerId}/license-status` | CustomerService | `LicenseReviewRequest` | 200 / `CustomerLicense` |
 
@@ -381,7 +381,7 @@ await callApi("/api/customer/license", { method: "PUT", body: licenseForm });
 }
 ```
 
-`number` và `type` bắt buộc, tối đa 255. `issueDate` và `imageUrl` nullable; URL phải hợp lệ. `expiryDate` không trước ngày hiện tại UTC. Lưu giấy phép đưa status về `pending`. Duyệt bằng `{ "status": "approved" }` hoặc `{ "status": "rejected" }`. `customerId` là ID hồ sơ customer.
+Tất cả trường đều bắt buộc: `number`, `type` (tối đa 255), `issueDate`, `expiryDate` và ảnh (`file` cho multipart, `imageUrl` hợp lệ cho JSON). Không chấp nhận null/rỗng hoặc thiếu ngày cấp/ảnh. `issueDate` không sau `expiryDate`; `expiryDate` không trước ngày hiện tại UTC. Thiếu dữ liệu trả 400 trước khi upload hoặc lưu. Multipart yêu cầu chọn file mới mỗi lần gửi. Lưu giấy phép đưa status về `pending`. Duyệt bằng `{ "status": "approved" }` hoặc `{ "status": "rejected" }`. `customerId` là ID hồ sơ customer.
 
 ## 7. Loại xe và xe
 
@@ -465,6 +465,8 @@ Danh sách xe hiện không tải `detail` như endpoint chi tiết. Dùng `GET 
 ### Tìm xe khả dụng cho customer
 
 `GET /api/vehicles/search` công khai, trả envelope 6 trường; `data={items,page,pageSize,totalCount,appliedWindow}`. Query `facilityId` dương giới hạn đúng cơ sở; `from`/`to` cùng có hoặc cùng bỏ, giờ UTC, `rentalType=hourly|longterm`, `hasDriver=true|false`. Mặc định `page=1&pageSize=20`, page>=1, pageSize 1..100, sai trả 400 ở HTTP/Application; trang vượt phạm vi vẫn giữ tổng sau lọc.
+
+Bộ lọc danh mục `/find`: `category=car|electric_car|motorbike|electric_motorbike`, `brand`, `seatCount` (số chỗ tối thiểu), `transmission=automatic|manual|cvt` (automatic gồm CVT), `fuelType=petrol|gasoline|electric` (tương thích Xăng/Điện), `minPrice`, `maxPrice` theo hình thức thuê, `q` tìm hãng + mẫu, năm và chi nhánh. `sort=recommended|price_asc|price_desc|newest|name_asc`, có id làm thứ tự phụ ổn định. Tất cả áp dụng trước đếm tổng/phân trang. `vehicleType` trong kết quả thêm `type=car|motorbike` để giao diện nhận diện phân khúc độc lập tên hiển thị.
 
 Khi `hasDriver=true` và chọn cơ sở, cần ít nhất một tài xế thuộc chính cơ sở đó, tài khoản active, GPLX có ngày hết hạn hợp lệ đến cuối thời gian thuê, không có assignment `assigned` trùng giờ kể cả đệm `Assignment:DriverBufferMinutes` (mặc định 60). Không lấy tài xế từ cơ sở khác. Xe vẫn phải trống lịch và không bị bảo dưỡng chặn. Tìm kiếm chưa gán/giữ chỗ tài xế; việc phân công vẫn ở luồng vận hành. Tự lái không cần tài xế rảnh nhưng giữ kiểm tra xe/GPLX khách như hiện tại; longterm hiện chỉ tự lái.
 

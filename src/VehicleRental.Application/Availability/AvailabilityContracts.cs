@@ -23,13 +23,15 @@ public sealed record VehicleSearchQuery(
     DateTime? From, DateTime? To, string RentalType = "hourly", int? VehicleTypeId = null, int? FacilityId = null,
     string? Q = null, string? Brand = null, decimal? MinPrice = null, decimal? MaxPrice = null, int? SeatCount = null,
     string? Transmission = null, string? BikeType = null, decimal? MinRangeKm = null, int? YearFrom = null,
-    string? FuelType = null, bool? HasDriver = null, string Sort = "recommended", int Page = 1, int PageSize = 20)
+    string? FuelType = null, bool? HasDriver = null, string Sort = "recommended", int Page = 1, int PageSize = 20,
+    string? Category = null)
 {
-    public static readonly IReadOnlySet<string> SortValues = new HashSet<string> { "recommended", "price_asc", "price_desc", "newest" };
+    public static readonly IReadOnlySet<string> SortValues = new HashSet<string> { "recommended", "price_asc", "price_desc", "newest", "name_asc" };
+    public static readonly IReadOnlySet<string> CategoryValues = new HashSet<string> { "car", "electric_car", "motorbike", "electric_motorbike" };
     public TimeRange? Window => From is { } f && To is { } t ? new TimeRange(f, t) : null;
 }
 
-public sealed record VehicleTypeRef(int Id, string Name, string? FuelType);
+public sealed record VehicleTypeRef(int Id, string Name, string? FuelType, string? Type = null);
 public sealed record FacilityRef(int Id, string Name);
 public sealed record VehicleSummary(int? SeatCount, string? Transmission, string? BikeType, bool? HasStorageBox, decimal? MaxRangeKm, string? BatteryCapacity);
 public sealed record VehicleBadges(bool Electric, bool? DriverAvailable, bool SubscriptionEligible);

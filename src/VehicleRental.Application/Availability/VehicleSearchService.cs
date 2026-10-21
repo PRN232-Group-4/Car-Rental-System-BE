@@ -19,11 +19,17 @@ public sealed class VehicleSearchService(
             throw new BusinessRuleException("INVALID_PAGINATION", "page must be at least 1 and pageSize between 1 and 100.");
         if (query.FacilityId <= 0)
             throw new BusinessRuleException("INVALID_FACILITY", "facilityId must be positive.");
+        if (query.Category is not null && !VehicleSearchQuery.CategoryValues.Contains(query.Category))
+            throw new BusinessRuleException("INVALID_CATEGORY", "Vui lòng chọn phân khúc phương tiện hợp lệ.");
+        if (query.MinPrice < 0 || query.MaxPrice < 0 || query.MinPrice > query.MaxPrice)
+            throw new BusinessRuleException("INVALID_PRICE_RANGE", "Khoảng giá phải không âm và giá tối đa không nhỏ hơn giá tối thiểu.");
+        if (query.SeatCount <= 0)
+            throw new BusinessRuleException("INVALID_SEAT_COUNT", "Số chỗ ngồi phải lớn hơn 0.");
         var now = Now();
         if (query.Sort == "nearest")
             throw new BusinessRuleException("SORT_NOT_SUPPORTED", "Sorting by distance is not supported yet.");
         if (!VehicleSearchQuery.SortValues.Contains(query.Sort))
-            throw new BusinessRuleException("INVALID_SORT", "Sort must be one of recommended, price_asc, price_desc, newest.");
+            throw new BusinessRuleException("INVALID_SORT", "Sort must be one of recommended, price_asc, price_desc, newest, name_asc.");
         if (query.RentalType is not ("hourly" or "longterm"))
             throw new BusinessRuleException("INVALID_RENTAL_TYPE", "rentalType must be 'hourly' or 'longterm'.");
 

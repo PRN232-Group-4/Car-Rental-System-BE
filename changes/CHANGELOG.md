@@ -1,5 +1,9 @@
 # Changelog
 
+- 2026-10-21 — [Sửa bộ lọc thuê xe và lối tắt đổi mật khẩu](2026-10-21-catalog-filters-account-menu.md)
+
+- 2026-10-21 — [Bắt buộc đầy đủ thông tin GPLX khách hàng](2026-10-21-required-license-fields.md)
+
 - 2026-10-21 — [Giới hạn tối đa 5 lần cho xác thực](2026-10-21-authentication-attempt-limits.md)
 - 2026-10-21 — [Dot và số việc chờ xử lý trên điều hướng](2026-10-21-navigation-queue-counts.md)
 - 2026-10-21 — [Email thông báo nghiệp vụ theo best effort](2026-10-21-best-effort-operational-emails.md)
