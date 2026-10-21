@@ -19,6 +19,18 @@ public sealed class VehicleSearchServiceTests
         => new(_repo, _availability, _drivers, _options, _time);
 
     [Fact]
+    public async Task Search_validates_catalog_filters_and_accepts_name_sort()
+    {
+        await CreateService().SearchAsync(new(null, null, Category: "electric_car", Sort: "name_asc"), default);
+        var category = await Assert.ThrowsAsync<BusinessRuleException>(() => CreateService().SearchAsync(new(null, null, Category: "bad"), default));
+        Assert.Equal("INVALID_CATEGORY", category.Code);
+        var price = await Assert.ThrowsAsync<BusinessRuleException>(() => CreateService().SearchAsync(new(null, null, MinPrice: 20, MaxPrice: 10), default));
+        Assert.Equal("INVALID_PRICE_RANGE", price.Code);
+        var seats = await Assert.ThrowsAsync<BusinessRuleException>(() => CreateService().SearchAsync(new(null, null, SeatCount: 0), default));
+        Assert.Equal("INVALID_SEAT_COUNT", seats.Code);
+    }
+
+    [Fact]
     public async Task Search_with_sort_nearest_throws_SORT_NOT_SUPPORTED()
     {
         var service = CreateService();

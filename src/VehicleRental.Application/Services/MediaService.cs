@@ -21,7 +21,7 @@ public sealed class MediaService(IImageStorage images, IUserRepository users, IO
 
     public async Task<CustomerLicense> SaveCustomerLicenseAsync(string email, CustomerLicense license, Stream content, string fileName, CancellationToken ct)
     {
-        CustomerLicenseValidator.Validate(license);
+        CustomerLicenseValidator.ValidateDetails(license);
         await ImageUploadValidator.ValidateAsync(content, 5 * 1024 * 1024, ct);
         if (await operations.GetLicenseAsync(email, ct) is null)
             throw new KeyNotFoundException("Customer was not found.");

@@ -87,9 +87,10 @@ public sealed record VehicleSearchRequest(
     bool? HasDriver = null,
     string Sort = "recommended",
     [Range(1, int.MaxValue)] int Page = 1,
-    [Range(1, 100)] int PageSize = 20)
+    [Range(1, 100)] int PageSize = 20,
+    [RegularExpression("^(car|electric_car|motorbike|electric_motorbike)$")] string? Category = null)
 {
     public VehicleSearchQuery ToQuery() => new(
         From, To, RentalType, VehicleTypeId, FacilityId, Q, Brand, MinPrice, MaxPrice,
-        SeatCount, Transmission, BikeType, MinRangeKm, YearFrom, FuelType, HasDriver, Sort, Page, PageSize);
+        SeatCount, Transmission, BikeType, MinRangeKm, YearFrom, FuelType, HasDriver, Sort, Page, PageSize, Category);
 }

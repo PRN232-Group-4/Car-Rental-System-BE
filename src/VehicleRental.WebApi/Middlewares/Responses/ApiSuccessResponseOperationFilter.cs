@@ -13,6 +13,8 @@ public sealed class ApiSuccessResponseOperationFilter : IOperationFilter
     {
         var controller = context.MethodInfo.DeclaringType?.Name;
         var action = context.MethodInfo.Name;
+        if (controller == "OperationsController" && action is "SaveLicense" or "SaveLicenseUrl")
+            operation.Description = "Customer submits their own driver license for review. Number, type, issueDate, expiryDate and image are all required. Multipart /customer/license requires a new file; JSON /customer/license/url requires a valid imageUrl. Missing values return 400 before upload or persistence. Issue date must not be after expiry and expiry must not be before today UTC. Successful submission resets status to pending.";
         if (controller == "NavigationCountsController")
             operation.Description = "Admin/Manager/CustomerService/Maintenance/Staff only. A scalar snapshot (no pagination): rentals=pending; inspections=pre_inspection/post_inspection without matching current-vehicle evidence; maintenance=open/scheduled; reports=open staff reports; licenses=submitted pending licenses. Counts match list scope: reports are global for Admin/Manager and restricted to the authenticated staff_id for other staff. Inaccessible queues are zero; Staff only sees own reports. New means awaiting processing, not unread per user.";
         if (controller == "AccountController" && action is "StartPasswordChange" or "ChangePassword")
@@ -74,7 +76,7 @@ public sealed class ApiSuccessResponseOperationFilter : IOperationFilter
             operation.Description = "Admin/Manager/CustomerService confirms a pending rental before payment, writes confirmed_at and advances to pre_inspection. An unpaid direct rental can be confirmed. Legacy pre_inspection without confirmed_at may be explicitly approved here; repeating an existing approval returns 409. Direct rental payment remains mandatory before handover.";
         if (controller == "VehicleSearchController" && action == "Search")
         {
-            operation.Description = "Public available-vehicle search. facilityId restricts vehicles to one branch; with hasDriver=true, an active qualified driver at that same branch must be free for the requested window including assignment buffer. Drivers are assigned later, not reserved by search. Pagination defaults to page=1/pageSize=20; page>=1 and pageSize 1..100, invalid values return 400. totalCount is after filtering and remains correct on empty pages.";
+            operation.Description = "Public available-vehicle search. category=car|electric_car|motorbike|electric_motorbike uses vehicle type and fuel; q searches combined brand/model, year and branch; seatCount is a minimum. transmission=automatic includes CVT; manual/cvt and legacy display values are supported. fuelType accepts petrol/gasoline/electric and Vietnamese display values. sort=recommended|price_asc|price_desc|newest|name_asc has a stable id tie-breaker. Prices use rentalType=hourly|longterm. facilityId restricts vehicles to one branch; with hasDriver=true, an active qualified driver at that same branch must be free for the requested window including assignment buffer. Drivers are assigned later, not reserved by search. Pagination defaults to page=1/pageSize=20; page>=1 and pageSize 1..100, invalid values return 400. totalCount is after filtering and remains correct on empty pages.";
         }
         if (controller == "CustomersController" && action == "List")
         {
