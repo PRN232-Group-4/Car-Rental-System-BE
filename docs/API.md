@@ -978,3 +978,54 @@ Các endpoint đã có được bổ sung:
 - `GET /api/facilities`: phân trang, thêm phone; POST/PUT facilities nhận phone tối đa 50 ký tự; null khi cập nhật giữ hotline cũ, chuỗi rỗng có thể xóa hotline.
 
 Migration mới: 0022_admin_user_audit.sql, 0023_operations_api_completion.sql, 0024_catalog_contact_fields.sql; triển khai qua migration runner. Xem [FR-038](../specs/FR-038-operations-api-completion.md), [FR-039](../specs/FR-039-frontend-api-completion.md).
+
+## Audit logs và danh mục role — 2026-10-21
+
+| Method | Path | Policy/quyền | Input và kết quả |
+|---|---|---|---|
+| GET | `/api/audit-logs` | Management: Admin, Manager | `search`, `action`, `page=1`, `pageSize=20`; trả trang nhật ký quản trị tài khoản. |
+| GET | `/api/roles` | RequireAdmin | `search`, `page=1`, `pageSize=20`; trả trang danh mục role. |
+| GET | `/api/roles/{id}` | RequireAdmin | Chi tiết role; ID dương, thiếu trả 404. |
+| POST | `/api/roles` | RequireAdmin | JSON `{ "name": "Auditor" }`; trả 201 và header Location. |
+| PUT | `/api/roles/{id}` | RequireAdmin | JSON `{ "name": "AuditViewer" }`; cập nhật role tùy chỉnh chưa gán. |
+| DELETE | `/api/roles/{id}` | RequireAdmin | Xóa role tùy chỉnh chưa gán; trả 200, data=null. |
+
+Hai danh sách trả `data={items,totalCount,page,pageSize}`; page>=1, pageSize từ 1 đến 100, mặc định 1/20. HTTP và Application cùng validate; sai trả 400. totalCount sau lọc/trước phân trang; trang vượt phạm vi trả items rỗng và giữ count. Role sắp ID tăng dần; audit sắp timestamp giảm dần rồi ID giảm dần. Mọi response giữ envelope 6 trường kể cả null; chưa đăng nhập trả 401, thiếu quyền trả 403.
+
+Audit search tối đa 255 ký tự, tìm không phân biệt hoa thường theo email/tên/ID của người thao tác và tài khoản đích hoặc mã `AUD-{id}`; action tối đa 40 ký tự, lọc chính xác sau chuẩn hóa. Các action lịch sử `role:add`, `role:remove`, `deactivate`, `activate`, `sessions:revoke` lần lượt được trả thành `role_assigned`, `role_removed`, `account_locked`, `account_unlocked`, `session_revoked`. Action khác giữ nguyên; filter không có kết quả trả trang rỗng.
+
+Ví dụ response audit:
+
+```json
+{
+  "code": 200,
+  "status": "success",
+  "is_success": true,
+  "data": {
+    "items": [{
+      "id": "AUD-1001",
+      "timestamp": "2026-10-21T18:30:00Z",
+      "actorId": 1,
+      "actorEmail": "admin@thongdong.vn",
+      "actorName": "Quản trị viên",
+      "action": "role_assigned",
+      "targetUserId": 42,
+      "targetUser": "staff1@thongdong.vn",
+      "details": "Staff",
+      "ipAddress": "14.238.102.55",
+      "status": "success"
+    }],
+    "totalCount": 1,
+    "page": 1,
+    "pageSize": 20
+  },
+  "message": "Audit logs retrieved successfully.",
+  "error": null
+}
+```
+
+`details` lấy reason đã lưu (với gán/gỡ role là tên role); không tự dựng lời giải thích lịch sử. Metadata người dùng bị thiếu và IP cũ giữ null. Thao tác quản trị tài khoản mới ghi remote IP theo cấu hình forwarded headers hiện có. Các mutation đã commit có status=success; API này không tạo nhật ký thất bại và không cho sửa/xóa nhật ký.
+
+Role trả `{id,name,isSystem,userCount}`. Tên bắt buộc, trim, tối đa 255 ký tự, không chứa dấu phẩy và duy nhất không phân biệt hoa thường; trùng trả 409. Không đổi tên/xóa Admin, Manager, Staff, CustomerService, Driver, Maintenance, Customer; role tùy chỉnh đang có người dùng cũng trả 409 khi đổi tên/xóa. Gửi lại đúng tên hiện tại là idempotent. Role tùy chỉnh có thể gán/gỡ qua `/api/users/{id}/roles` và lọc bằng query role của `/api/users`; hệ thống dùng tên đã lưu và giữ nguyên quy tắc hồ sơ/chuyên môn, bảo vệ Admin cuối cùng và thu hồi phiên. Role tùy chỉnh không tự cấp quyền của policy hệ thống.
+
+Cần áp dụng `0026_audit_log_metadata.sql` và `0027_role_catalogue.sql` trước khi dùng API mới. Migration uniqueness dừng nếu dữ liệu role cũ trùng tên không phân biệt hoa thường; không tự xóa dữ liệu. Xem [FR-037](../specs/FR-037-user-administration.md), [FR-041](../specs/FR-041-role-catalog.md).
