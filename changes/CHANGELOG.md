@@ -1,5 +1,11 @@
 # Changelog
 
+- 2026-10-21 — [Đổi mật khẩu bắt buộc OTP email](2026-10-21-password-change-otp.md)
+
+- 2026-10-21 — [Danh sách biên bản và email người bảo trì hiện tại](2026-10-21-inspection-directory-maintenance-emails.md)
+- 2026-10-21 — [Hồ sơ nhân viên từ tài khoản, cơ sở hiện tại và email phân công](2026-10-21-staff-account-facility-identity.md)
+
+- 2026-10-21 — [Phân công kỹ thuật viên kiểm tra trước thuê và readiness bàn giao](2026-10-21-inspection-dispatch-readiness.md)
 - 2026-10-20 — [Hoàn thiện API/field cho frontend](2026-10-20-frontend-api-completion.md)
 - 2026-10-20 — [Quản trị user và hồ sơ staff](2026-10-20-user-administration.md)
 - 2026-10-20 — [Kiểm duyệt ratings và xử lý reports](2026-10-20-operations-api-completion.md)

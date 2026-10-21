@@ -56,8 +56,15 @@ public sealed class OperationsController(IOperationsService store, IMediaService
     [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPost("vehicle-types")] public async Task<IActionResult> AddType(VehicleTypeRequest x,CancellationToken ct){var t=await store.SaveVehicleTypeAsync(null,x.Name,x.FuelType,ct,x.Type);return Created($"api/vehicle-types/{t.Id}",t);}
     [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPut("vehicle-types/{id:int}")] public Task<VehicleType> EditType(int id,VehicleTypeRequest x,CancellationToken ct)=>store.SaveVehicleTypeAsync(id,x.Name,x.FuelType,ct,x.Type);
     [Authorize(Roles="Admin")] [HttpDelete("vehicle-types/{id:int}")] public async Task<IActionResult> DeleteType(int id,CancellationToken ct){await store.DeleteVehicleTypeAsync(id,ct);return NoContent();}
-    [HttpGet("vehicles")] public Task<VehiclePage> Vehicles([FromQuery]int? vehicleTypeId,[FromQuery]int? facilityId,[FromQuery]string? status,[FromQuery]DateTime? from,[FromQuery]DateTime? to,[FromQuery,Range(1,int.MaxValue)]int page=1,[FromQuery,Range(1,100)]int pageSize=20,CancellationToken ct=default)=>store.SearchVehiclesAsync(vehicleTypeId,facilityId,status,from,to,page,pageSize,ct);
-    [HttpGet("vehicles/{id:int}")] public async Task<IActionResult> Vehicle(int id,CancellationToken ct)=>await store.GetVehicleAsync(id,ct) is { } x?Ok(x):Problem("Vehicle was not found.", statusCode: StatusCodes.Status404NotFound);
+    [HttpGet("vehicles")] public async Task<VehiclePage> Vehicles([FromQuery]int? vehicleTypeId,[FromQuery]int? facilityId,[FromQuery]string? status,[FromQuery]DateTime? from,[FromQuery]DateTime? to,[FromQuery,Range(1,int.MaxValue)]int page=1,[FromQuery,Range(1,100)]int pageSize=20,CancellationToken ct=default)
+    {
+        var result=await store.SearchVehiclesAsync(vehicleTypeId,facilityId,status,from,to,page,pageSize,ct);
+        return result with {Items=result.Items.Select(VehicleForCaller).ToArray()};
+    }
+    [ProducesResponseType<Vehicle>(StatusCodes.Status200OK)]
+    [HttpGet("vehicles/{id:int}")] public async Task<IActionResult> Vehicle(int id,CancellationToken ct)=>await store.GetVehicleAsync(id,ct) is { } x?Ok(VehicleForCaller(x)):Problem("Vehicle was not found.", statusCode: StatusCodes.Status404NotFound);
+    private Vehicle VehicleForCaller(Vehicle vehicle)=>User.Identity?.IsAuthenticated==true && (AuthorizationPolicies.CanManage(User)||User.IsInRole("Maintenance"))
+        ?vehicle:vehicle with {MaintenanceTechnicianEmails=[]};
     [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPost("vehicles")] public async Task<IActionResult> AddVehicle(VehicleRequest x,CancellationToken ct){var v=await store.SaveVehicleAsync(null,x.ToModel(),ct);return Created($"api/vehicles/{v.Id}",v);}
     [Authorize(Policy=AuthorizationPolicies.Management)] [HttpDelete("vehicles/{id:int}")] public async Task<IActionResult> DeleteVehicle(int id,CancellationToken ct){await store.DeleteVehicleAsync(id,ct);return NoContent();}
     [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPut("vehicles/{id:int}")] public Task<Vehicle> EditVehicle(int id,VehicleRequest x,CancellationToken ct)=>store.SaveVehicleAsync(id,x.ToModel(),ct);
@@ -109,6 +116,7 @@ public sealed class OperationsController(IOperationsService store, IMediaService
 
     [Authorize(Policy=AuthorizationPolicies.Customer)] [HttpPost("rentals/hourly")] public async Task<IActionResult> Hourly(RentalRequest x,CancellationToken ct)=>Created("api/rentals",await store.CreateRentalAsync(Email(),x.VehicleId,x.PolicyId,"hourly",x.StartTime,x.EndTime,x.SubscriptionId is not null,x.SubscriptionId,x.HasDriver,ct,x.PaymentMethod));
     [Authorize(Policy=AuthorizationPolicies.Customer)] [HttpPost("rentals/longterm")] public async Task<IActionResult> Longterm(RentalRequest x,CancellationToken ct)=>Created("api/rentals",await store.CreateRentalAsync(Email(),x.VehicleId,x.PolicyId,"longterm",x.StartTime,x.EndTime,x.SubscriptionId is not null,x.SubscriptionId,false,ct,x.PaymentMethod));
+    [ProducesResponseType<Rental>(StatusCodes.Status200OK)]
     [Authorize(Policy=AuthorizationPolicies.RentalRead)] [HttpGet("rentals/{id:int}")] public async Task<IActionResult> Rental(int id,CancellationToken ct)=>await store.GetRentalForUserAsync(id,Email(),AuthorizationPolicies.CanReadAllRentals(User),User.IsInRole("Customer"),User.IsInRole("Driver"),ct) is { } x?Ok(x):Problem("Rental was not found.", statusCode: StatusCodes.Status404NotFound);
     [Obsolete("Use POST /api/rentals/{id}/assignments/driver instead.")]
     [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPost("rentals/{id:int}/assignments")] public async Task<IActionResult> Assign(int id,AssignmentRequest x,CancellationToken ct){Response.Headers.Append("Deprecation","true");await store.AssignAsync(id,x.DriverStaffId,Email(),ct);return NoContent();}

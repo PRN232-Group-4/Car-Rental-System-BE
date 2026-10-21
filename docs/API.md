@@ -1,5 +1,12 @@
 # Tài liệu API — Car Rental System BE
 
+## Bổ sung 21/10/2026: hồ sơ nhân viên và cơ sở hiện tại
+
+- POST `/api/staff/from-user` chỉ Admin: `{userId, departmentId?, facilityId?, hiredDate?, licenseNumber?, licenseType?, licenseIssueDate?, licenseExpiryDate?, licenseImageUrl?}`. userId bắt buộc, các ID phải dương. Trả 201 Staff; 400 validation/reference/GPLX, 404 tài khoản thiếu/khóa, 409 đã có hồ sơ, 401/403 quyền. Giữ identity/password/roles, thêm Staff marker, Driver suy ra từ roles lưu thật; non-driver không lưu GPLX. Response dùng envelope 6 trường và message theo ngữ cảnh.
+- Staff response thêm `roles: string[]`; `isDriver` phản ánh role Driver thực tế. GET staff/drivers vẫn phân trang theo contract chung.
+- GET `/api/account/profile` thêm `facilityName: string|null` từ cơ sở được phân công; mọi role xem cơ sở của chính mình, không mở rộng quyền directory.
+- GET/PUT inspection-assignment thêm `technicianEmail`; GET/POST/PUT maintenance thêm `assignedStaffEmail` và `facilityName` nullable để hiển thị trực tiếp.
+
 Cập nhật: **18/10/2026**. Tài liệu được đối chiếu với controller, DTO, cấu hình xác thực, response filter và repository trong mã nguồn hiện tại. Các ví dụ dùng dữ liệu minh họa; thay ID, thời gian, email và URL bằng dữ liệu thật trước khi gọi.
 
 ## Mục lục
@@ -180,6 +187,7 @@ Role `Staff` chỉ đánh dấu nhân viên, không tự cấp toàn bộ quyề
 | POST | `/api/account/password-resets/verify` | Public | `PasswordResetCompleteRequest` | 200 / null |
 | GET | `/api/account/profile` | Login | Không | 200 / `AccountResponse` |
 | PUT | `/api/account/profile` | Login | `UpdateProfileRequest` | 200 / `AccountResponse` |
+| POST | `/api/account/password/otp` | Login | `PasswordChangeStartRequest` | 202 / null |
 | POST | `/api/account/password` | Login | `ChangePasswordRequest` | 200 / null |
 | POST | `/api/auth/login` | Public | `LoginRequest` | 200 / null + Set-Cookie |
 | POST | `/api/auth/refresh` | Cookie refresh | Không | 200 / null + Set-Cookie |
@@ -200,12 +208,15 @@ Callback `GET /api/auth/google/callback` do middleware OAuth xử lý trong `Pro
 | `PasswordResetStartRequest` | `email: string` |
 | `PasswordResetCompleteRequest` | `email: string`; `otp: string` 6 chữ số; `newPassword: string` 6–20 ký tự |
 | `UpdateProfileRequest` | `fullName: string` 2–120; `gender: string?` tối đa 50; `phone: string?` tối đa 30 |
-| `ChangePasswordRequest` | `currentPassword: string` bắt buộc; `newPassword: string` 6–20 |
+| `PasswordChangeStartRequest` | `currentPassword: string` bắt buộc |
+| `ChangePasswordRequest` | `currentPassword: string` bắt buộc; `otp: string` bắt buộc, đúng 6 chữ số; `newPassword: string` 6–20 |
 | `LoginRequest` | `email: string`; `password: string` 6–20; `rememberMe: bool = false` |
 
 Giới hạn mật khẩu bao gồm cả 6 và 20 ký tự; ngoài khoảng trả 400, chi tiết trong `error.errors`, với thông báo `Mật khẩu phải có từ 6 đến 20 ký tự.` Không trim hoặc cắt ngắn mật khẩu. Tài khoản cũ có mật khẩu dài hơn 20 ký tự cần reset về giới hạn mới để đăng nhập.
 
 OTP mặc định hết hạn sau 10 phút, cooldown gửi lại 60 giây và giới hạn kiểm tra sai theo `MaxVerificationAttempts=5`. Resend đăng ký giữ TTL còn lại, không tự kéo dài TTL. User/customer chỉ được tạo sau verify thành công. Email được chuẩn hóa lowercase. Password reset start trả cùng 202 kể cả khi email không tồn tại hoặc còn cooldown.
+
+**Đổi mật khẩu khi đã đăng nhập:** gọi `POST /api/account/password/otp` với `{ "currentPassword": "..." }`. Backend xác minh mật khẩu cũ rồi gửi OTP tới email từ claim; client không chọn email nhận. Sau đó gọi `POST /api/account/password` với `{ "currentPassword": "...", "otp": "012345", "newPassword": "..." }`. Thiếu/sai/hết hạn OTP trả 400, không cập nhật mật khẩu. Lỗi trường nằm trong `error.errors.currentPassword`, `otp`, `newPassword` (validation MVC có thể dùng PascalCase). OTP riêng cho đổi mật khẩu, không dùng mã đăng ký/reset. Gửi lại cùng endpoint OTP sau cooldown thay mã cũ. Redis compare-and-exchange giữ nguyên tử số lần sai và việc tiêu thụ mã một lần. Lỗi gửi email trả 503 và cho phép thử gửi lại. Cooldown/khóa mã trả 429; cả hai endpoint giới hạn tổng 15 request/phút/IP trên mỗi instance. Rate limit phân tán tại edge vẫn theo backlog bảo mật. Thành công trả 200, thu hồi tất cả phiên và xóa cookie; frontend chuyển về đăng nhập.
 
 ```json
 {
@@ -526,6 +537,27 @@ Chỉ longterm ở pending/pre_inspection. URL HTTP(S), tối đa 255; ngày ký
 ```
 
 `staffId` có thể bỏ qua/null; server lấy danh tính từ claim. Nếu gửi ID khác claim thì 403. `odometerKm >= 0`, fuel/battery 0–100, damageNotes tối đa 500. `imageUrls` là **string**, không phải JSON array. Pre-inspection ghi khi rental pending hoặc pre_inspection; post-inspection ghi khi renting hoặc post_inspection; không ghi trùng cùng loại inspection cho cùng rental/xe. Inspection fail đưa xe về `maintenance`. Policy Inspection chỉ gồm Admin/Maintenance có claim staff_id.
+
+### Danh sách toàn bộ biên bản kiểm tra
+
+`GET /api/inspections` — Admin/Manager/CustomerService/Maintenance. Query tùy chọn `inspectionType=pre_rental|post_rental`, `rentalId` dương; mặc định `page=1&pageSize=20`, page>=1, pageSize 1–100. Giá trị không hợp lệ trả 400 ở HTTP và Application; không clamp. `data` có items/page/pageSize/totalCount; tổng sau lọc, trước pagination; trang vượt phạm vi giữ tổng và items rỗng. Thứ tự `inspected_at DESC NULLS LAST, id DESC` ổn định.
+
+Item: `{ id, rentalId, vehicleId, vehicleName, licensePlate, inspectionType, isOk, inspectorEmail, inspectedAt, odometerKm, fuelBatteryLevel, damageNotes, imageUrls }`. `vehicleId` và metadata/evidence có thể null nếu dữ liệu cũ thiếu; không tự gán xe hiện tại hay email giả. Bao gồm xe cũ và rental completed/cancelled. `imageUrls` là string evidence hiện có. Pending work dùng danh sách rental theo trạng thái, không được đưa vào lịch sử khi chưa ghi biên bản. Success message: `Recorded vehicle inspections retrieved successfully.`
+
+### Email người đang bảo trì xe
+
+`Vehicle.maintenanceTechnicianEmails` là string[] trên GET `/api/vehicles` và GET `/api/vehicles/{id}`. Chỉ authenticated Admin/Manager/Maintenance nhận email; public/customer/Driver/CustomerService nhận `[]`. SQL lấy nhân viên Maintenance active được giao phiếu open/scheduled/in_progress, hoặc completed nhưng is_safe=false; loại cancelled/completed-safe/verified, dedup và sắp xếp email. Thiếu phân công trả `[]`; không dùng email từ phiếu cũ đã kết thúc an toàn.
+
+### Phân công kỹ thuật viên kiểm tra trước thuê
+
+| Method | Path | Quyền | Request / response `data` |
+|---|---|---|---|
+| GET | `/api/rentals/{id}/inspection-assignment` | Admin, Manager, CustomerService, Maintenance | `InspectionAssignment` hoặc null khi chưa phân công cho xe hiện tại |
+| PUT | `/api/rentals/{id}/inspection-assignment` | Management (Admin/Manager) | `{ "technicianStaffId": 3 }` → `InspectionAssignment` |
+
+`InspectionAssignment`: `{ rentalId, vehicleId, technicianStaffId, technicianName, assignedAt, assignedBy, technicianEmail }`. `technicianEmail` lấy từ tài khoản thật, cho phép người đọc không có quyền staff directory hiển thị đúng người nhận việc. `id` và `technicianStaffId` phải dương; staff phải có specialty Maintenance và tài khoản active. Lưu phân công cho rental/xe hiện tại ở pending/pre_inspection, started_at null, trước khi có pre-rental evidence; có thể đổi người trước evidence. Thiếu rental trả 404; technician không hợp lệ trả 400 `TECHNICIAN_NOT_ELIGIBLE`; trạng thái không cho phép trả 409 `INSPECTION_ASSIGNMENT_NOT_ALLOWED`; đã có evidence trả 409 `INSPECTION_ALREADY_RECORDED`. `assignedBy` lấy từ email principal, không nhận từ body. Phân công không ghi evidence, không đổi trạng thái, không thay quyền Inspection hay giả danh người thực hiện. Thay xe không kế thừa phân công của xe cũ. Danh sách ứng viên dùng `/api/staff` phân trang rồi lọc `isActive`/`roles` có Maintenance ở client (không có query staffRole).
+
+GET `/api/rentals/{id}` (flat `Rental`, đang dùng trong Admin) và `/api/rentals/{id}/detail` (nested `OperationalRentalDetail`) có thêm **boolean** `hasPassingPreInspection`, `hasPostInspection`. Hai cờ chỉ tính evidence gắn đúng rental và **vehicle_id hiện tại**. Pre phải is_ok=true, post chỉ yêu cầu đã có evidence (is_ok=false vẫn chuyển quy trình quyết toán kèm damage review theo logic hiện tại). Kết quả kiểm tra xe cũ không mở khóa bàn giao/hoàn tất; server tiếp tục kiểm tra lại khi mutation. API mới dùng envelope 6 trường chung, Swagger công bố request/response/auth và các mã 400/401/403/404/409.
 
 ### Vòng đời hiện tại
 

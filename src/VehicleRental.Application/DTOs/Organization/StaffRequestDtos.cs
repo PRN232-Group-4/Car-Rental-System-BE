@@ -4,6 +4,21 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Car_Rental_System_BE.Application.DTOs.Organization;
 
+public sealed record CreateStaffFromUserRequest(
+    [param: Required, Range(1,int.MaxValue)] int? UserId,
+    [param: Range(1,int.MaxValue)] int? DepartmentId,
+    [param: Range(1,int.MaxValue)] int? FacilityId,
+    DateOnly? HiredDate,
+    [param: StringLength(255)] string? LicenseNumber,
+    [param: StringLength(255)] string? LicenseType,
+    DateOnly? LicenseIssueDate,
+    DateOnly? LicenseExpiryDate,
+    [param: Url,StringLength(255)] string? LicenseImageUrl)
+{
+    public CreateStaffFromUser ToCommand() => new(UserId!.Value, DepartmentId, FacilityId, HiredDate,
+        LicenseNumber?.Trim(), LicenseType?.Trim(), LicenseIssueDate, LicenseExpiryDate, LicenseImageUrl?.Trim());
+}
+
 public sealed record CreateStaffRequest(
     [param: Required, EmailAddress] string Email,
     [param: Required, StringLength(120, MinimumLength = 2)] string FullName,

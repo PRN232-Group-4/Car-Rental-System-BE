@@ -8,6 +8,8 @@ Set `Jwt__SigningKey` (at least 32 random characters), `Jwt__Issuer`, and `Jwt__
 
 OTP chỉ hash SHA-256 trong Redis và không log; password dùng PBKDF2-SHA512 210,000 iterations/salt riêng. Cần rate-limit theo email + IP tại edge trước production (xem backlog).
 
+Đổi mật khẩu đăng nhập bắt buộc mật khẩu cũ và OTP gửi về email từ claim, dùng namespace `password-change:` riêng với hash mật khẩu hiện tại để vô hiệu mã khi mật khẩu đã đổi. Compare-and-exchange Redis chống dùng mã hai lần và mất số lần sai khi có request đồng thời. Cooldown theo tài khoản và TTL/giới hạn sai lấy từ RegistrationOptions; bổ sung rate limit 15 request/phút/IP/instance trên cả gửi và xác nhận. Luồng không log mã/mật khẩu và thu hồi toàn bộ phiên sau khi lưu hash mới.
+
 Cookie session phải `Secure`, `HttpOnly`, `SameSite=Lax`; Redis key có TTL. Production bắt buộc HTTPS, Brevo API key/DB/Redis URL là environment secret. Không đưa values thật vào appsettings, docs hay GitHub Actions.
 
 Google OAuth callback là `/signin-google`; chỉ dùng client secret ở server. Cloudinary API secret chỉ được dùng server-side để upload signed asset; browser/mobile không được nhận secret. Avatar giới hạn ảnh 5 MB; ảnh xe sẽ dùng cùng `IImageStorage` với folder `vehicle-rental/vehicles` khi FR-009 triển khai.

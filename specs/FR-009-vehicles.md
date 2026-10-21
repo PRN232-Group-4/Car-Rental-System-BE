@@ -8,3 +8,9 @@ Phân quyền: đọc catalog public; tạo/sửa loại xe, xe và upload ảnh
 
 ## 2026-10-04 — Biển số
 Vehicle có licensePlate nullable, tối đa 255 ký tự trong create/update/list/detail. Migration 0011 dùng ADD COLUMN IF NOT EXISTS.
+## Người bảo trì hiện tại — 2026-10-21
+
+Vehicle list/detail bổ sung maintenanceTechnicianEmails là array email phân công hiện tại đã dedup/sắp xếp, chỉ trả cho Admin/Manager/Maintenance. Public/customer đọc array rỗng. Chỉ lấy nhân viên Maintenance đang active từ các phiếu không cancelled và còn open/scheduled/in_progress hoặc completed nhưng chưa an toàn (is_safe=false); không dùng completed-safe/cancelled làm người phụ trách hiện tại. Không có phân công phù hợp trả array rỗng.
+
+- [x] SQL/HTTP regression xác minh dedup, current/unsafe work và loại inactive/wrong-role/historical assignees.
+- [x] Public/customer/Driver/CustomerService không nhận email, Admin/Manager/Maintenance đọc đúng list/detail.

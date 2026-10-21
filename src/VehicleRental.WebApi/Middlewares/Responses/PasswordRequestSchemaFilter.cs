@@ -11,6 +11,17 @@ public sealed class PasswordRequestSchemaFilter : ISchemaFilter
 {
     public void Apply(OpenApiSchema schema, SchemaFilterContext context)
     {
+        if (context.Type.Name is "PasswordChangeStartRequest" or "ChangePasswordRequest")
+        {
+            foreach (var parameter in context.Type.GetConstructors().SelectMany(constructor => constructor.GetParameters()))
+            {
+                var name = JsonNamingPolicy.CamelCase.ConvertName(parameter.Name!);
+                if (!schema.Properties.TryGetValue(name, out var property)) continue;
+                if (parameter.IsDefined(typeof(RequiredAttribute))) { schema.Required.Add(name); property.Nullable = false; }
+                var pattern = parameter.GetCustomAttribute<RegularExpressionAttribute>();
+                if (pattern is not null) property.Pattern = pattern.Pattern;
+            }
+        }
         foreach (var parameter in context.Type.GetConstructors().SelectMany(constructor => constructor.GetParameters()))
         {
             if (parameter.Name is not ("Password" or "NewPassword")) continue;

@@ -315,18 +315,22 @@ public sealed partial class NpgsqlOperationsRepository
             await ValueAsync(cn, tx, "UPDATE vehicles SET status='maintenance' WHERE id=$1", ct,x.VehicleId);
         else if (x.Status == "completed")
             await ValueAsync(cn, tx, "UPDATE vehicles SET status='available' WHERE id=$1 AND status='maintenance' AND NOT EXISTS(SELECT 1 FROM vehicle_maintenance WHERE vehicle_id=$1 AND (COALESCE(status,'open') NOT IN ('completed','cancelled') OR is_safe=false)) AND NOT EXISTS(SELECT 1 FROM reports WHERE vehicle_id=$1 AND type='breakdown' AND status IN ('open','in_progress','assigned','rejected'))", ct,x.VehicleId);
-        await using var metadata = new NpgsqlCommand("SELECT created_at,rental_id FROM vehicle_maintenance WHERE id=$1",cn,tx);
+        await using var metadata = new NpgsqlCommand("SELECT created_at,rental_id,(SELECT u.email FROM staffs s JOIN users u ON u.id=s.user_id WHERE s.id=vehicle_maintenance.assigned_staff_id),(SELECT f.name FROM facilities f WHERE f.id=vehicle_maintenance.facility_id) FROM vehicle_maintenance WHERE id=$1",cn,tx);
         Add(metadata,key);
         DateTime createdAt;
         int? rentalId;
+        string? assignedStaffEmail;
+        string? facilityName;
         await using(var reader=await metadata.ExecuteReaderAsync(ct))
         {
             await reader.ReadAsync(ct);
             createdAt=DateTime.SpecifyKind(reader.GetDateTime(0),DateTimeKind.Utc);
             rentalId=reader.IsDBNull(1)?null:reader.GetInt32(1);
+            assignedStaffEmail=reader.IsDBNull(2)?null:reader.GetString(2);
+            facilityName=reader.IsDBNull(3)?null:reader.GetString(3);
         }
         await tx.CommitAsync(ct);
-        return x with { Id=key,CreatedAt=createdAt,RentalId=rentalId };
+        return x with { Id=key,CreatedAt=createdAt,RentalId=rentalId,AssignedStaffEmail=assignedStaffEmail,FacilityName=facilityName };
     }
 
     public async Task ResolveReportAsync(int id, string actor, CancellationToken ct)

@@ -10,6 +10,14 @@ namespace Car_Rental_System_BE.Application.Services;
 
 public sealed class StaffService(IStaffRepository repository, IRefreshTokenStore sessions) : IStaffService
 {
+    public async Task<Staff> CreateFromUserAsync(CreateStaffFromUser command, CancellationToken ct)
+    {
+        if (command.UserId <= 0 || command.DepartmentId is <= 0 || command.FacilityId is <= 0)
+            throw new ArgumentException("Hãy chọn tài khoản, phòng ban và cơ sở hợp lệ.");
+        var created = await repository.CreateFromUserAsync(command, ct);
+        await sessions.RevokeAllAsync(created.Email, ct);
+        return created;
+    }
     public Task<StaffPage> SearchAsync(string? search, bool? isDriver, int page, int pageSize, CancellationToken ct)
     {
         if (page < 1 || pageSize is < 1 or > 100) throw new ArgumentException("Page must be positive and pageSize must be between 1 and 100.");
