@@ -1,5 +1,13 @@
 # Tiến độ
 
+## Giới hạn xác thực, badge menu và email nghiệp vụ — 2026-10-21
+
+Đã bổ sung giới hạn mặc định 5 request/60 giây/IP/instance cho đăng ký/đăng nhập/reset; gửi OTP và xác nhận đổi mật khẩu dùng chung ngân sách 5. Redis chặn login/currentPassword sai tối đa 5 lần/10 phút theo email chuẩn hóa; OTP khóa ngay lần sai thứ 5, tăng số lần sai và tiêu thụ mã nguyên tử. Thêm API snapshot năm queue cho dot/số trên menu, giữ scope báo cáo theo staff_id của người gọi và quyền từng nghiệp vụ. Email GPLX/hoàn tiền/trạng thái thuê/kiểm tra xe/báo cáo gửi sau commit, lỗi lookup/provider/timeout không làm thao tác nghiệp vụ trả lỗi.
+
+Kiểm chứng: build với `-warnaserror` và 154/154 test auth/contract/architecture/navigation/email đạt (gồm PostgreSQL tạm/HTTP thật, provider giả); sau sửa assertion validation để await lời gọi bất đồng bộ, 16/16 test xác nhận đạt. Lượt hồi quy mở rộng có 287/291 đạt trước sửa assertion; còn ba lỗi cũ đã được ghi nhận ngày 18/10: hai RentalLifecycleIntegrationTests về overtime/shortfall và RentalLifecycleSchemaTests về SQLSTATE lịch sử bất biến. Không thay đổi tính phí hoặc schema trong lượt này. FE đạt 636 unit test, 8 E2E Edge desktop/mobile sáng/tối, typecheck, design lint và production static build; ESLint 0 lỗi/25 cảnh báo có sẵn.
+
+Chưa kiểm chứng Redis/Brevo thật hoặc deploy. Giới hạn request/IP hiện theo từng instance, counter mật khẩu dùng Redis; email theo best effort không có outbox/retry bảo đảm giao thư. Xem [auth](../changes/2026-10-21-authentication-attempt-limits.md), [navigation](../changes/2026-10-21-navigation-queue-counts.md), [email](../changes/2026-10-21-best-effort-operational-emails.md).
+
 ## Đổi mật khẩu có OTP — 2026-10-21
 
 Đã bổ sung gửi OTP cho tài khoản đang đăng nhập và bắt buộc OTP trước khi đổi mật khẩu, dùng workflow/key riêng, TTL/cooldown/giới hạn sai và Redis compare-and-exchange. Mã gắn với mật khẩu hiện tại, email từ claim; sau đổi thu hồi mọi phiên. FE có form dùng chung ở hồ sơ customer/admin/staff. Build backend không warning/error, 82/82 test liên quan đạt; FE 630 unit test, 2 E2E desktop/mobile và build static đạt. Chưa kiểm tra Redis/Brevo thật hoặc Docker (daemon chưa chạy), chưa deploy. Xem [thay đổi](../changes/2026-10-21-password-change-otp.md).

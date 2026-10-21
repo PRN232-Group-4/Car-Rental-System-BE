@@ -1,5 +1,6 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Application.Validators;
 using Car_Rental_System_BE.Application.Availability;
@@ -8,7 +9,7 @@ using Car_Rental_System_BE.Domain.Availability;
 
 namespace Car_Rental_System_BE.Application.Services;
 
-public sealed class OperationsService(IOperationsRepository repository, IDriverAvailability? drivers = null, TimeProvider? timeProvider = null) : IOperationsService
+public sealed class OperationsService(IOperationsRepository repository, IDriverAvailability? drivers = null, TimeProvider? timeProvider = null, IOperationalNotifications? notifications = null) : IOperationsService
 {
     public Task<DriverShift> SaveDriverShiftAsync(int? id, int driverId, DateTime start, DateTime end, bool cancelled, string actor, CancellationToken ct) =>
         repository.SaveDriverShiftAsync(id, driverId, start, end, cancelled, actor, ct);
@@ -16,28 +17,45 @@ public sealed class OperationsService(IOperationsRepository repository, IDriverA
     public Task<IReadOnlyList<DriverShift>> ListDriverShiftsAsync(int? driverId, DateTime from, DateTime to, CancellationToken ct) =>
         repository.ListDriverShiftsAsync(driverId, from, to, ct);
 
-    public Task<IncidentReport> CreateReportAsync(int rentalId, int staffId, bool driverOnly, string type, string description, string? images, CancellationToken ct) =>
-        repository.CreateReportAsync(rentalId, staffId, driverOnly, type, description, images, ct);
+    public async Task<IncidentReport> CreateReportAsync(int rentalId, int staffId, bool driverOnly, string type, string description, string? images, CancellationToken ct)
+    {
+        var report = await repository.CreateReportAsync(rentalId, staffId, driverOnly, type, description, images, ct);
+        if (notifications is not null) await notifications.ReportChangedAsync(report.Id, report.Status);
+        return report;
+    }
 
     public Task<IReadOnlyList<IncidentReport>> ListReportsAsync(int? staffId, int? rentalId, CancellationToken ct) =>
         repository.ListReportsAsync(staffId, rentalId, ct);
 
-    public Task<Maintenance> AssignReportMaintenanceAsync(int reportId, int technicianId, int? facilityId, DateOnly scheduledDate, CancellationToken ct, string? maintenanceType = null, string? description = null, string? actor = null)
+    public async Task<Maintenance> AssignReportMaintenanceAsync(int reportId, int technicianId, int? facilityId, DateOnly scheduledDate, CancellationToken ct, string? maintenanceType = null, string? description = null, string? actor = null)
     {
         if (reportId < 1 || technicianId < 1 || facilityId is < 1) throw new ArgumentException("Report, technician and facility IDs must be positive.");
         if (maintenanceType is not null && (string.IsNullOrWhiteSpace(maintenanceType) || maintenanceType.Length > 255)) throw new ArgumentException("Maintenance type must contain 1 to 255 characters.");
         if (description is not null && (string.IsNullOrWhiteSpace(description) || description.Length > 4000)) throw new ArgumentException("Description must contain 1 to 4000 characters.");
-        return repository.AssignReportMaintenanceAsync(reportId, technicianId, facilityId, scheduledDate, ct, maintenanceType, description, actor);
+        var maintenance = await repository.AssignReportMaintenanceAsync(reportId, technicianId, facilityId, scheduledDate, ct, maintenanceType, description, actor);
+        if (notifications is not null) await notifications.ReportChangedAsync(reportId, "assigned");
+        return maintenance;
     }
 
-    public Task ResolveReportAsync(int reportId, string actor, CancellationToken ct) =>
-        repository.ResolveReportAsync(reportId, actor, ct);
+    public async Task ResolveReportAsync(int reportId, string actor, CancellationToken ct)
+    {
+        await repository.ResolveReportAsync(reportId, actor, ct);
+        if (notifications is not null) await notifications.ReportChangedAsync(reportId, "resolved");
+    }
 
     public Task<Inspection> InspectReplacementAsync(int rentalId, int vehicleId, int staffId, bool isOk, decimal? odometer, decimal? fuel, string? notes, string? images, CancellationToken ct) =>
         repository.InspectReplacementAsync(rentalId, vehicleId, staffId, isOk, odometer, fuel, notes, images, ct);
 
-    public Task<Rental> ReplaceVehicleAsync(int rentalId, int vehicleId, int? driverId, int? reportId, string actor, CancellationToken ct) =>
-        repository.ReplaceVehicleAsync(rentalId, vehicleId, driverId, reportId, actor, ct);
+    public async Task<Rental> ReplaceVehicleAsync(int rentalId, int vehicleId, int? driverId, int? reportId, string actor, CancellationToken ct)
+    {
+        var rental = await repository.ReplaceVehicleAsync(rentalId, vehicleId, driverId, reportId, actor, ct);
+        if (notifications is not null)
+        {
+            if (reportId is int report) await notifications.ReportChangedAsync(report, "resolved");
+            await notifications.RentalStatusChangedAsync(rentalId, "vehicle_replaced");
+        }
+        return rental;
+    }
 
     public Task<CustomerLicense?> GetLicenseAsync(string email, CancellationToken ct) =>
         repository.GetLicenseAsync(email, ct);
@@ -48,8 +66,13 @@ public sealed class OperationsService(IOperationsRepository repository, IDriverA
         return repository.SaveLicenseAsync(email, license with { Status = "pending" }, ct);
     }
 
-    public Task<CustomerLicense> ReviewLicenseAsync(int customerId, string status, CancellationToken ct) =>
-        repository.ReviewLicenseAsync(customerId, status, ct);
+    public async Task<CustomerLicense> ReviewLicenseAsync(int customerId, string status, CancellationToken ct)
+    {
+        if (status is not ("approved" or "rejected")) throw new ArgumentException("License status must be approved or rejected.");
+        var license = await repository.ReviewLicenseAsync(customerId, status, ct);
+        if (notifications is not null) await notifications.LicenseReviewedAsync(customerId, license.Status);
+        return license;
+    }
 
     public Task<IReadOnlyList<OrganizationUnit>> ListDepartmentsAsync(CancellationToken ct) =>
         repository.ListDepartmentsAsync(ct);
@@ -153,8 +176,12 @@ public sealed class OperationsService(IOperationsRepository repository, IDriverA
     public Task<Rental?> GetRentalForUserAsync(int id, string email, bool readAll, bool customer, bool driver, CancellationToken ct) =>
         repository.GetRentalForUserAsync(id, email, readAll, customer, driver, ct);
 
-    public Task<Rental> ChangeRentalStatusAsync(int id, string status, CancellationToken ct) =>
-        repository.ChangeRentalStatusAsync(id, status, ct);
+    public async Task<Rental> ChangeRentalStatusAsync(int id, string status, CancellationToken ct)
+    {
+        var rental = await repository.ChangeRentalStatusAsync(id, status, ct);
+        if (notifications is not null) await notifications.RentalStatusChangedAsync(id, rental.Status);
+        return rental;
+    }
 
     public Task AssignAsync(int rentalId, int? driverStaffId, string assignedByEmail, CancellationToken ct) =>
         repository.AssignAsync(rentalId, driverStaffId, assignedByEmail, ct);
@@ -162,8 +189,12 @@ public sealed class OperationsService(IOperationsRepository repository, IDriverA
     public Task<IReadOnlyList<DriverScheduleEntry>> ListDriverScheduleAsync(int? driverStaffId, DateTime from, DateTime to, CancellationToken ct) =>
         repository.ListDriverScheduleAsync(driverStaffId, from, to, ct);
 
-    public Task<Inspection> AddInspectionAsync(int rentalId, int staffId, string type, bool isOk, decimal? odometer, decimal? fuel, string? notes, string? images, CancellationToken ct) =>
-        repository.AddInspectionAsync(rentalId, staffId, type, isOk, odometer, fuel, notes, images, ct);
+    public async Task<Inspection> AddInspectionAsync(int rentalId, int staffId, string type, bool isOk, decimal? odometer, decimal? fuel, string? notes, string? images, CancellationToken ct)
+    {
+        var inspection = await repository.AddInspectionAsync(rentalId, staffId, type, isOk, odometer, fuel, notes, images, ct);
+        if (notifications is not null) await notifications.InspectionRecordedAsync(rentalId, inspection.Type, isOk);
+        return inspection;
+    }
 
     public Task<IReadOnlyList<SubscriptionPlan>> ListPlansAsync(bool activeOnly, CancellationToken ct) =>
         repository.ListPlansAsync(activeOnly, ct);

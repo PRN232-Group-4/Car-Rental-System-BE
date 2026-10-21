@@ -1,4 +1,5 @@
 using Car_Rental_System_BE.Application.DTOs.Accounts;
+using Car_Rental_System_BE.Application.DTOs.Options;
 using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Interfaces.Services;
@@ -6,12 +7,21 @@ using Car_Rental_System_BE.Application.Services.Security;
 
 namespace Car_Rental_System_BE.Application.Services;
 
-public sealed class SessionService(IAccountRepository accounts, IRefreshTokenStore sessions, IAccessTokenIssuer issuer) : ISessionService
+public sealed class SessionService(IAccountRepository accounts, IRefreshTokenStore sessions, IAccessTokenIssuer issuer,
+    IWorkflowStateStore cache, RegistrationOptions options) : ISessionService
 {
+    private readonly PasswordAttemptLimiter attempts = new(cache, options);
+
     public async Task<SessionTokens?> LoginAsync(string email, string password, bool rememberMe, CancellationToken ct)
     {
+        var lease = await attempts.ReserveAsync("login", email, ct);
         var account = await accounts.FindByEmailAsync(email.Trim().ToLowerInvariant(), ct);
-        if (account is null || !PasswordHash.Verify(password, account.PasswordHash)) return null;
+        if (account is null || !PasswordHash.Verify(password, account.PasswordHash))
+        {
+            attempts.ThrowIfExhausted(lease);
+            return null;
+        }
+        await attempts.SucceedAsync(lease, ct);
         return await IssueAsync(account, rememberMe, ct);
     }
 
