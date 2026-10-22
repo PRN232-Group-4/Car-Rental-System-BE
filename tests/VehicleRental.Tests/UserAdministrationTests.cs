@@ -110,6 +110,11 @@ public sealed class UserAdministrationTests : IAsyncLifetime
             request.Content = JsonContent.Create(new { isActive = false, reason = "self" });
             using var response = await _client.SendAsync(request); using var json = await EnvelopeAsync(response, 409);
         }
+        using (var request = Request(HttpMethod.Post, "/api/users/1/roles"))
+        {
+            request.Content = JsonContent.Create(new { role = "Staff" });
+            using var response = await _client.SendAsync(request); using var json = await EnvelopeAsync(response, 409);
+        }
         using (var request = Request(HttpMethod.Patch, "/api/users/2/status"))
         {
             request.Content = JsonContent.Create(new { isActive = false, reason = "Abuse report" });

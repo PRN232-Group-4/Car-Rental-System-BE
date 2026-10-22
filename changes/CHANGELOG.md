@@ -1,5 +1,6 @@
 # Changelog
 
+- 2026-10-21 — [Đồng bộ nghiệp vụ Chauffeur-only, phân giải policy giá và chặn tự gán role](2026-10-21-chauffeur-alignment-and-self-role-protection.md)
 - 2026-10-21 — [Audit logs và CRUD danh mục role](2026-10-21-audit-logs-role-crud.md)
 
 - 2026-10-21 — [Sửa bộ lọc thuê xe và lối tắt đổi mật khẩu](2026-10-21-catalog-filters-account-menu.md)
