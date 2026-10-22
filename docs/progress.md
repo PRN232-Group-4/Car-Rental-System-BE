@@ -1,5 +1,9 @@
 # Tiến độ
 
+## Đồng bộ tiến trình khi kiểm tra kèm duyệt — 2026-10-22
+
+Checked hỗ trợ approveRequest=true theo xác nhận rõ của Admin để duyệt pending trong cùng transaction với evidence. Dùng writer chung với lifecycle confirm; không tự start/paid hoặc duyệt driver_default. 58 backend tests liên quan đạt, không migration mới/chưa deploy. Xem [thay đổi](../changes/2026-10-22-inspection-approval-progress.md).
+
 ## Quá hạn và thu phí sau trả xe — 2026-10-22
 
 Đã thêm bộ lọc overdue trước phân trang/isOverdue, giữ lifecycle để nhận trả xe. Thu cash hoặc tạo checkout PayOS cho hóa đơn thiếu liên kết settlement completed; có audit/idempotency và lock chống thu trùng, không phát hành order từ overtime. 109 backend tests liên quan đạt trên PostgreSQL riêng; Build Release đạt. Xem [FR-037](../specs/FR-037-overdue-collection.md), [thay đổi](../changes/2026-10-22-overdue-collection.md). Chưa deploy/không thêm migration mới.
@@ -281,3 +285,6 @@ Kiểm chứng: **110/110 tests pass, 0 skipped**, build mọi project với war
 ## GPLX chưa gửi của khách hàng mới — 2026-10-22
 
 FR-006: GET GPLX trả status=none nếu số GPLX null/rỗng/khoảng trắng, không biến giá trị pending mặc định khi đăng ký thành hồ sơ đã gửi. Giữ bản ghi để upload lần đầu; hồ sơ đã gửi giữ trạng thái duyệt và đọc không mutate DB. Kiểm chứng CustomerLicenseUploadTests: **47/47 pass, 0 skipped** với HTTP/envelope/Swagger và upload đầu tiên, build Release thành công. Không migration/deploy. Xem [thay đổi](../changes/2026-10-22-unsubmitted-customer-license.md).
+## 2026-10-22 — Phân công/inspect sau trả xe
+
+API assignment hỗ trợ inspectionType=post_rental, Admin checked hoặc Manager phân công riêng theo giai đoạn; migration 0029 giữ hồ sơ trước thuê, post không tự complete/paid hoặc ghi đè evidence. Build Release/54 tests liên quan PostgreSQL đạt, HTTP auth/query/envelope/Swagger đã kiểm tra. Chưa deploy. Xem [thay đổi](../changes/2026-10-22-post-inspection-dispatch.md).

@@ -2,6 +2,8 @@
 
 ## Thay đổi theo yêu cầu 2026-10-22
 
+Đồng bộ tiến trình: POST checked nhận thêm `approveRequest:boolean=false`. Khi Admin chọn rõ xác nhận kiểm tra kèm duyệt yêu cầu, flag=true làm pending chuyển pre_inspection, ghi confirmed_at/history cùng transaction với evidence và phân công. Dùng cùng writer với duyệt lifecycle; gói/tiền đã nhận chỉ phát hành order theo quy tắc hiện có. Flag=false, phân công đơn thuần, kiểm tra kỹ thuật và driver_default không tự duyệt. Không tự bắt đầu thuê hoặc đánh dấu đã thanh toán. Đơn cũ pending đã có pass dùng endpoint confirm riêng, không ghi đè evidence.
+
 Đơn có tài xế được mặc định đạt kiểm tra trước thuê khi tạo và khi đổi xe. Ghi nhận riêng `confirmation_source=driver_default`, `confirmed_by=system`, không tạo số đo hay ảnh giả. Đơn tự lái: Admin/Manager có thể chỉ phân công Maintenance để chờ kiểm tra, hoặc chọn kỹ thuật viên và xác nhận đã phân công & kiểm tra qua POST `/api/rentals/{id}/inspection-assignment/checked`. Cách thứ hai lưu phân công và kết quả đạt trong cùng transaction, nguồn `admin_confirmation`, người xác nhận lấy từ principal. Không ghi đè biên bản đã có (kể cả fail); không cho thao tác sau khi bắt đầu. Chỉ Admin được xác nhận trực tiếp; Manager vẫn có thể phân công. Các điều kiện thanh toán, tài xế thực tế, bảo dưỡng và kiểm tra sau thuê giữ nguyên.
 
 ## Danh sách evidence — 2026-10-21
