@@ -20,7 +20,8 @@ public sealed record InspectionListQuery
 public sealed record InspectionListItem(
     int Id,int RentalId,int? VehicleId,string? VehicleName,string? LicensePlate,
     string InspectionType,bool? IsOk,string? InspectorEmail,DateTime? InspectedAt,
-    decimal? OdometerKm,decimal? FuelBatteryLevel,string? DamageNotes,string? ImageUrls);
+    decimal? OdometerKm,decimal? FuelBatteryLevel,string? DamageNotes,string? ImageUrls,
+    string ConfirmationSource = "technician", string? ConfirmedBy = null);
 
 public interface IInspectionDirectoryRepository
 {

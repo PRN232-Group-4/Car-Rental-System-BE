@@ -59,7 +59,7 @@ public sealed class PaidOrderApiTests : IAsyncLifetime
         {
             Assert.Equal("paid", json.RootElement.GetProperty("data").GetProperty("status").GetString());
             Assert.Equal(88, json.RootElement.GetProperty("data").GetProperty("orderId").GetInt32());
-            Assert.Equal("Cash payment confirmed and rental order issued successfully.", json.RootElement.GetProperty("message").GetString());
+            Assert.Equal("Cash payment confirmed successfully.", json.RootElement.GetProperty("message").GetString());
         }
     }
 
@@ -82,6 +82,30 @@ public sealed class PaidOrderApiTests : IAsyncLifetime
         Assert.True(swagger.RootElement.GetProperty("paths").TryGetProperty("/api/invoices/{invoiceId}/cash-confirmation", out _));
         var schema = swagger.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("InvoiceDetail");
         Assert.Equal("boolean", schema.GetProperty("properties").GetProperty("canPay").GetProperty("type").GetString());
+        Assert.Equal("boolean", schema.GetProperty("properties").GetProperty("canConfirmCash").GetProperty("type").GetString());
+        Assert.True(swagger.RootElement.GetProperty("paths").TryGetProperty("/api/invoices/{invoiceId}/staff-checkout", out _));
+    }
+
+    [Theory]
+    [InlineData("Admin", 200)]
+    [InlineData("Manager", 200)]
+    [InlineData("CustomerService", 200)]
+    [InlineData("Customer", 403)]
+    [InlineData("Driver", 403)]
+    [InlineData("Maintenance", 403)]
+    [InlineData("Staff", 403)]
+    [InlineData(null, 401)]
+    public async Task Staff_overtime_checkout_has_scoped_authorization_and_envelope(string? role, int status)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/invoices/55/staff-checkout");
+        if (role is not null) request.Headers.Add("X-Test-Role", role);
+        using var response = await _client.SendAsync(request);
+        using var json = await Envelope(response, status);
+        if (status == 200)
+        {
+            Assert.Equal("Overtime payment link created successfully.", json.RootElement.GetProperty("message").GetString());
+            Assert.Equal("https://pay.payos.vn/test", json.RootElement.GetProperty("data").GetProperty("checkoutUrl").GetString());
+        }
     }
 
     private static async Task<JsonDocument> Envelope(HttpResponseMessage response, int status)
@@ -100,6 +124,7 @@ public sealed class PaidOrderApiTests : IAsyncLifetime
         protected override object? Invoke(MethodInfo? method, object?[]? args) => method!.Name switch
         {
             "ConfirmCashAsync" => Task.FromResult(new PaymentResult(3, 55, 260, "paid", "cash:55", 88)),
+            "CheckoutOvertimeForStaffAsync" => Task.FromResult(new CheckoutResult(55, "test", "https://pay.payos.vn/test")),
             "GetInvoiceAsync" => Task.FromResult<InvoiceDetail?>(new(55, 42, "INV-55", 260, 20, "unpaid", DateTime.UtcNow, null, true, null, "cash")),
             _ => throw new NotSupportedException(method.Name)
         };

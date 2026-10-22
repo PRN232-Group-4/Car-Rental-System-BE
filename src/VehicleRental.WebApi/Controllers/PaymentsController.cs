@@ -26,6 +26,22 @@ public sealed class PaymentsController(IPaymentService payments) : ControllerBas
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public Task<PaymentResult> ConfirmCash([FromRoute, Range(1, int.MaxValue)] int invoiceId, CancellationToken ct) => payments.ConfirmCashAsync(invoiceId, Email(), ct);
 
+    /// <summary>Creates a PayOS checkout for an unpaid, settled overtime invoice; only provider verification marks paid.</summary>
+    [Authorize(Policy = AuthorizationPolicies.CustomerService)]
+    [HttpPost("invoices/{invoiceId:int}/staff-checkout")]
+    [ProducesResponseType<CheckoutResult>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> StaffCheckout([FromRoute, Range(1, int.MaxValue)] int invoiceId, CancellationToken ct)
+    {
+        try { return Ok(await payments.CheckoutOvertimeForStaffAsync(invoiceId, ct)); }
+        catch (PaymentWorkflowException error) { return Problem(error.Message, statusCode: error.StatusCode); }
+    }
+
     [Authorize(Policy = AuthorizationPolicies.Customer)]
     [HttpPost("invoices/{invoiceId:int}/checkout")]
     [ProducesResponseType<CheckoutResult>(StatusCodes.Status200OK)]

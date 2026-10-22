@@ -356,4 +356,26 @@ public sealed class RentalLifecycleIntegrationTests(PostgresFixture db) : IClass
             "SELECT amount FROM payments WHERE rental_id=$1 AND type='refund'", rId))!;
         Assert.Equal(676_000m, refundAmount);
     }
+
+    [Theory]
+    [InlineData(30,0)]
+    [InlineData(10,44000)]
+    [InlineData(-1,44000)]
+    public async Task Customer_pre_inspection_cancel_matches_preview_flags_and_refund_even_for_delayed_pickup(int hoursUntilStart,decimal fee)
+    {
+        var tp=new SettableTimeProvider(T0);
+        var start=T0.AddHours(hoursUntilStart);
+        var (customer,_,rental,_) = await CreatePaidDirectRentalAsync(start,start.AddHours(2),100_000m,500_000m,false);
+        var (service,queries)=CreateServices(timeProvider:tp);
+        await service.ConfirmAsync(rental,new(1,"staff@test.local","Staff"),default);
+        var actor=new ActorContext(customer,"customer@test.local","Customer");
+        Assert.True((await queries.GetMyRentalDetailAsync(rental,customer,default))!.CanCancel);
+        var preview=await service.GetCancellationPreviewAsync(rental,actor,default);
+        Assert.True(preview.Allowed);
+        Assert.Equal(fee,preview.FeeAmount);
+        var result=await service.CancelAsync(rental,new("Đổi lịch nhận xe"),actor,default);
+        Assert.Equal("cancelled",result.ToStatus);
+        Assert.Equal(720_000m-fee,await Seed.ScalarAsync(db.DataSource,"SELECT amount FROM payments WHERE rental_id=$1 AND type='refund'",rental));
+        Assert.False((await queries.GetMyRentalDetailAsync(rental,customer,default))!.CanCancel);
+    }
 }

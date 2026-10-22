@@ -1,5 +1,9 @@
 # FR-010 — Tìm xe và availability (BE-10)
 
+## Thay đổi theo yêu cầu 2026-10-22
+
+Danh mục công khai chỉ trả xe `available`, loại xe đang có đơn `renting` hoặc chưa hoàn tất kiểm tra trả (`post_inspection`), kể cả khi chọn ngày tương lai. Áp dụng trước đếm tổng/phân trang. Đơn chờ vẫn khóa đúng khoảng đặt và đệm 60 phút. Tạo đơn kiểm tra lại xe dưới vehicle lock để chặn đặt từ trang cũ. Quyết định này thay thế D5 bên dưới. Cả theo giờ và dài hạn hỗ trợ tự lái/có tài xế.
+
 ## Cập nhật 2026-10-21 — Bộ lọc danh mục thuê xe
 
 - `/find` dùng API tìm kiếm công khai để mọi tiêu chí được áp dụng trước phân trang và đếm tổng.
@@ -12,7 +16,7 @@
 
 - Customer chọn cơ sở, sau đó tự lái/có tài xế rồi mới truy vấn và chọn xe trong cơ sở bằng thẻ xe.
 - Theo xác nhận người dùng, có tài xế nghĩa là cơ sở có tài xế rảnh trong khoảng thuê; không phải xe thuộc đơn pending đã được phân công. `hasDriver=true&facilityId=...` chỉ trả xe khi có staff tài xế active tại đúng cơ sở, GPLX hợp lệ và không trùng assignment kể cả đệm. Chưa tự gán/giữ chỗ tài xế khi khách xem xe.
-- Tự lái dùng các xe khả dụng trong cùng cơ sở, vẫn áp dụng lịch xe/bảo dưỡng. Thuê dài hạn giữ hình thức tự lái theo contract hiện có.
+- Tự lái dùng các xe khả dụng trong cùng cơ sở, vẫn áp dụng lịch xe/bảo dưỡng. Cập nhật 2026-10-22: thuê dài hạn cũng lưu lựa chọn có tài xế.
 - Search pagination mặc định 1/20, pageSize 1..100; validate HTTP/Application, offset Int64, totalCount đúng ngay cả trang ngoài phạm vi.
 
 - **Status:** In progress; **Priority:** P0; **Milestone:** M3; **Assignee:** Huy
@@ -33,7 +37,7 @@
 | D2 | Dùng **advisory lock** trên `vehicle_id` trong transaction tạo rental, kèm kiểm tra lại; thêm exclusion constraint làm lưới an toàn | Huy + thiết kế |
 | D3 | Mọi mốc thời gian trong DB là **UTC** (cột `timestamp` không múi giờ); API dùng ISO-8601 có hậu tố `Z`; UI chuyển sang GMT+7 | Spec (acceptance "timezone contract") |
 | D4 | `rentals.vehicle_id` là **xe hiện hành** của đơn (đổi xe sẽ cập nhật, lịch sử nằm ở `vehicle_assignments`) — chi tiết ở FR-014 | Thiết kế |
-| D5 | Xe `status = 'renting'` vẫn tìm được cho khung giờ **tương lai** (quyết định bằng booking, không bằng cờ `is_renting`) | Thiết kế |
+| D5 | Cập nhật 2026-10-22: public search chỉ có xe available, không có rental đang renting/post_inspection, kể cả lịch tương lai; đơn chờ vẫn xét overlap theo booking | Yêu cầu người dùng |
 
 ## 3. Hợp đồng API
 
@@ -90,7 +94,7 @@ Response `200` (qua `ApiSuccessResponse`), `data`:
 }
 ```
 
-* Không trả: `created_by`, `status` nội bộ, thông tin chủ đơn khác. Chỉ trả xe đang đặt được (`available`/`renting`).
+* Không trả: `created_by`, `status` nội bộ, thông tin chủ đơn khác. Chỉ trả xe available và không có rental đang renting/post_inspection.
 * **Không** tính báo giá (VAT/cọc) ở đây: công thức thuộc FR-017 do BE-12. FE-04 gọi endpoint báo giá của BE-12 khi có; trong lúc chờ dùng mock có công thức ở DESIGN.md §23.
 * Không có `licensePlate` vì DDL chưa có cột này (câu hỏi mở O3).
 * Header: `Cache-Control: no-store` khi có `from`/`to`; `public, max-age=30` khi chỉ duyệt danh mục.

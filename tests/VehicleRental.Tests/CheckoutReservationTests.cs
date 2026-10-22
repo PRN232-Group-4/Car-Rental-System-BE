@@ -11,16 +11,18 @@ namespace VehicleRental.Tests;
 public sealed class CheckoutReservationTests
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Checkout_reserves_invoice_before_gateway_and_never_unfreezes_after_provider_failure(bool gatewayFails)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Checkout_reserves_invoice_before_gateway_and_never_unfreezes_after_provider_failure(bool gatewayFails, bool staff)
     {
         var calls = new List<string>();
         var repository = Proxy<IPaymentRepository>((method, args) =>
         {
             Assert.Equal("ReserveInvoiceCheckoutAsync", method.Name);
             Assert.Equal(42, args[0]);
-            Assert.Equal("customer@test.local", args[1]);
+            Assert.Equal(staff ? null : "customer@test.local", args[1]);
             calls.Add("reserve");
             return Task.FromResult<InvoicePayment?>(new(42, 7, 3, "INV-42", 260m, "unpaid"));
         });
@@ -37,10 +39,11 @@ public sealed class CheckoutReservationTests
                 : Task.FromResult(new CheckoutResult(42, "link", "https://example.com/checkout"));
         });
         var service = new PaymentService(repository, gateway, new("https://example.com/return", "https://example.com/cancel"));
+        Task<CheckoutResult> Checkout() => staff ? service.CheckoutOvertimeForStaffAsync(42, default) : service.CheckoutAsync(42, "customer@test.local", default);
         if (gatewayFails)
-            await Assert.ThrowsAsync<HttpRequestException>(() => service.CheckoutAsync(42, "customer@test.local", default));
+            await Assert.ThrowsAsync<HttpRequestException>(Checkout);
         else
-            Assert.Equal(42, (await service.CheckoutAsync(42, "customer@test.local", default)).OrderCode);
+            Assert.Equal(42, (await Checkout()).OrderCode);
         Assert.Equal(new[] { "reserve", "gateway" }, calls);
     }
 

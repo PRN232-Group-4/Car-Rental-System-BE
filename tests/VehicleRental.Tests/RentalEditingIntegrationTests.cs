@@ -89,9 +89,10 @@ public sealed class RentalEditingIntegrationTests(PostgresFixture db) : IClassFi
             _ => "UPDATE rentals SET started_at=now() WHERE id=$1"
         };
         await Seed.ScalarAsync(db.DataSource, sql, rental.Id);
+        var beforeEdit = await Store.GetRentalAsync(rental.Id, default);
         var error = await Assert.ThrowsAsync<ConflictException>(() => Store.UpdateBeforePickupAsync(rental.Id, Command(rental), default));
         Assert.Equal(code, error.Code);
-        Assert.Equal(rental, await Store.GetRentalAsync(rental.Id, default));
+        Assert.Equal(beforeEdit, await Store.GetRentalAsync(rental.Id, default));
     }
 
     [Fact]

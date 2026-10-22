@@ -11,6 +11,19 @@ namespace Car_Rental_System_BE.WebApi.Controllers;
 [Route("api/rentals/{id:int}/inspection-assignment")]
 public sealed class InspectionAssignmentsController(IInspectionAssignmentService service) : ControllerBase
 {
+    /// <summary>Admin confirms technician dispatch and a passing pre-rental check together. Does not overwrite existing evidence.</summary>
+    [HttpPost("checked")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType<InspectionAssignment>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public async Task<InspectionAssignment> ConfirmChecked([Range(1,int.MaxValue)] int id, AssignInspectionRequest request, CancellationToken ct) =>
+        await service.ConfirmCheckedAsync(id, request.TechnicianStaffId!.Value,
+            User.FindFirstValue(ClaimTypes.Email) ?? throw new UnauthorizedAccessException(), ct);
+
     /// <summary>Read the pre-rental technician assignment for the rental's current vehicle.</summary>
     [HttpGet]
     [Authorize(Roles = "Admin,Manager,CustomerService,Maintenance")]

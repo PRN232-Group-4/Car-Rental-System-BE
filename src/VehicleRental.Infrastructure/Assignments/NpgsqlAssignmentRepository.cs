@@ -15,7 +15,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
     {
         await using var cmd = dataSource.CreateCommand("""
             SELECT r.id, r.vehicle_id, v.vehicle_type_id, v.facility_id, r.status,
-                   COALESCE(h.has_driver, false) AS has_driver,
+                   COALESCE(h.has_driver, l.has_driver, false) AS has_driver,
                    r.customer_id,
                    COALESCE(h.start_time, l.start_time) AS start_time,
                    COALESCE(h.end_time, l.end_time) AS end_time,
@@ -543,7 +543,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
         // The Application snapshot can predate an edit that was waiting on the same vehicle lock.
         // Read again after taking that lock and keep the rental row locked until assignment commit.
         await using var command = new NpgsqlCommand("""
-            SELECT r.vehicle_id,r.status,r.customer_id,COALESCE(h.has_driver,false),
+            SELECT r.vehicle_id,r.status,r.customer_id,COALESCE(h.has_driver,l.has_driver,false),
                 COALESCE(h.start_time,l.start_time),COALESCE(h.end_time,l.end_time)
             FROM rentals r LEFT JOIN hour_rental_detail h ON h.rental_id=r.id
             LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id

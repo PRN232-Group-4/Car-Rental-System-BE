@@ -1,5 +1,7 @@
 # SQL migrations
 
+`0028_driver_inspection_confirmation.sql` lưu has_driver cho dài hạn; phân biệt nguồn kiểm tra technician/driver_default/admin_confirmation và người xác nhận. Trigger tự xác nhận trước thuê cho đơn có tài xế khi tạo/đổi xe; backfill chỉ đơn pending/pre_inspection chưa bắt đầu, không ghi đè evidence đã có. Hợp đồng dài hạn cũ giữ tự lái. Runner áp dụng tự động khi backend khởi động; triển khai đồng bộ với FE.
+
 `0026_audit_log_metadata.sql` bổ sung IP nullable, status mặc định success và index thứ tự thời gian cho nhật ký quản trị tài khoản; dữ liệu cũ không tự có IP.
 
 `0027_role_catalogue.sql` thêm unique index `lower(name)` cho role. Nếu dữ liệu cũ trùng tên không phân biệt hoa thường, migration dừng để xử lý rõ ràng; không tự gộp role hoặc xóa membership.

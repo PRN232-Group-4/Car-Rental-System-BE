@@ -1,0 +1,7 @@
+# FR-037 — Quá hạn và thu phí sau trả xe
+
+- Quá hạn là phân loại của chính bản ghi thuê đang `renting`, chưa có `returned_at`, hạn trả nhỏ hơn thời điểm máy chủ. API danh sách nhận `status=overdue`, lọc trước count/phân trang, giữ `status=renting` để thao tác trả xe vẫn đi qua lifecycle hiện có. Summary có `isOverdue`; không tạo bản ghi thuê thứ hai hoặc tự chuyển trạng thái bằng GET. Sau trả xe, `returned_at`, settlement và hóa đơn overtime lưu vết trả trễ lâu dài.
+- Admin/Manager/CustomerService xác nhận nhận lại xe bằng `/return`; sau post-inspection, `/complete` chốt phí/cọc và tạo hóa đơn phần thiếu. Thu phí độc lập với nhận xe/hoàn tất.
+- Hóa đơn overtime phải được tham chiếu bởi `rental_settlements.shortfall_invoice_id` và rental đã completed. Staff có thể xác nhận tiền mặt tại cash-confirmation (số tiền từ invoice, ghi người thu, idempotent) hoặc tạo checkout PayOS qua `/invoices/{id}/staff-checkout`. Endpoint online không nhận email/amount/status từ client; webhook xác thực mới ghi paid. Không phát hành order mới từ phí overtime.
+- Cash chỉ được chọn khi hóa đơn chưa bắt đầu checkout online. Giữ cùng lock order rental rồi invoice cho cả hai phương thức; checkout đã bắt đầu (kể cả provider lỗi) chặn cash. Không tự hủy link PayOS hoặc tin FE đã nhận tiền online. Hóa đơn rental ban đầu vẫn chỉ thu cash nếu phương thức đã chọn là cash.
+- Detail invoice trả `kind`, `canConfirmCash`, `canCreateStaffCheckout` để UI fail closed. Kiểm tra quyền HTTP, envelope 6 trường, tranh chấp cash/online, chống gửi lặp và lỗi provider.

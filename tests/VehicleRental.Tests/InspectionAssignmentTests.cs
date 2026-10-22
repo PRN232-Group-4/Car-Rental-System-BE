@@ -241,6 +241,25 @@ public sealed class InspectionAssignmentTests(PostgresFixture db) : IClassFixtur
             Assert.True(json.RootElement.GetProperty("error").TryGetProperty("errors", out _));
         }
         using var swagger = JsonDocument.Parse(await client.GetStringAsync("/swagger/v1/swagger.json"));
+        // Direct confirmation is Admin-only, validates at HTTP boundary, and persists audit provenance.
+        foreach (var role in new string?[] { null, "Customer", "Driver", "Maintenance", "CustomerService", "Manager", "Admin" })
+        {
+            var (checkedRental, _) = await RentalAsync();
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/rentals/{checkedRental}/inspection-assignment/checked") { Content = JsonContent.Create(new { technicianStaffId = staff }) };
+            if (role is not null) request.Headers.Add("X-Test-Role", role);
+            using var response = await client.SendAsync(request);
+            using var json = await Envelope(response, role is null ? 401 : role == "Admin" ? 200 : 403);
+            Assert.Equal(role == "Admin" ? 1 : 0, await Seed.CountAsync(db.DataSource,"SELECT COUNT(*) FROM inspections WHERE rental_id=$1 AND confirmation_source='admin_confirmation' AND confirmed_by='manager@test.local'",checkedRental));
+            if(role == "Admin") Assert.Equal("Technician dispatch and passing pre-rental check confirmed successfully.",json.RootElement.GetProperty("message").GetString());
+        }
+        foreach(var payload in new object[]{new {},new {technicianStaffId=0}})
+        {
+            using var request=new HttpRequestMessage(HttpMethod.Post,$"{route}/checked"){Content=JsonContent.Create(payload)};
+            request.Headers.Add("X-Test-Role","Admin");
+            using var response=await client.SendAsync(request);
+            using var json=await Envelope(response,400);
+        }
+        Assert.True(swagger.RootElement.GetProperty("paths").GetProperty("/api/rentals/{id}/inspection-assignment/checked").TryGetProperty("post",out _));
         var path = swagger.RootElement.GetProperty("paths").GetProperty("/api/rentals/{id}/inspection-assignment");
         Assert.True(path.TryGetProperty("get", out _));
         Assert.True(path.TryGetProperty("put", out _));

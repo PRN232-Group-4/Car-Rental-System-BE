@@ -14,6 +14,7 @@ public interface IPaymentService
     Task<PlanPurchaseStatus?> GetPlanPurchaseAsync(long orderCode, string email, CancellationToken ct);
 
     Task<CheckoutResult> CheckoutAsync(int invoiceId, string email, CancellationToken ct);
+    Task<CheckoutResult> CheckoutOvertimeForStaffAsync(int invoiceId, CancellationToken ct);
     Task<CheckoutResult> PurchasePlanAsync(int planId, string email, CancellationToken ct);
     Task<CheckoutCancellation> CancelCheckoutAsync(long orderCode, string email, CancellationToken ct);
     Task HandleWebhookAsync(PayOsWebhook webhook, string code, bool success, CancellationToken ct);

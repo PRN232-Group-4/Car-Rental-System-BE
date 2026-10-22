@@ -4,7 +4,11 @@ Railway dùng `Dockerfile` và probe `/health` theo `railway.toml`. Tạo servic
 
 Trong **Settings → Networking → Public Networking**, domain phải trỏ tới **Target port `8080`**. Log phải có `Now listening on: http://[::]:8080`; nếu domain trả 502 dù có dòng này thì target port đang sai hoặc domain thuộc service/deployment cũ.
 
-GitHub secret: `RAILWAY_TOKEN`; repository variable: `RAILWAY_SERVICE_NAME`. Release qua push `main`; rollback bằng Railway deployment trước đó hoặc redeploy commit trước. Migration không chạy lúc app khởi động; tạo hoặc cập nhật schema PostgreSQL có kiểm soát trước khi deploy.
+Chỉ phát hành mã đã được review/merge theo quy trình PR; không push trực tiếp main. `railway.toml` chọn Dockerfile và healthcheck, nhưng workflow hiện tại chỉ build/test, chưa có bước tự deploy Railway. Xác nhận service/nhánh liên kết trên Railway trước khi phát hành; rollback qua deployment trước đó. Migration runner thực tế chạy khi app khởi động nếu `Database__ApplyMigrations=true` (mặc định true), áp dụng các file SQL theo thứ tự và kiểm tra checksum. Kiểm tra backup/staging và quyền migrate trước phát hành; nếu môi trường chủ động tắt runner, cần áp dụng migration có kiểm soát trước khi chạy mã mới.
+
+### API xác nhận inspect — 2026-10-22
+
+FE hiện proxy tới Railway theo `next.config.ts`. Nếu xác nhận đạt trả 404, kiểm tra Swagger của **chính origin đó** có POST `/api/rentals/{id}/inspection-assignment/checked` không. Bản source mới có route Admin này và cần migration `0028_driver_inspection_confirmation.sql`. Cập nhật FE hoặc khởi động lại một backend local khác không cập nhật service Railway. Sau phát hành, xác minh healthcheck, route Swagger và migration thành công; không gọi inspect/cancel trên đơn thật để thử nếu chưa có yêu cầu nghiệp vụ.
 
 ## Chạy và xem connection log bằng CLI
 
@@ -13,6 +17,12 @@ Khởi động dependencies local: `docker compose up db redis -d`. Trong PowerS
 `Redis:ConnectionString=localhost:6379` chỉ là địa chỉ, không tự khởi động Redis. Với local Docker chạy `docker compose up redis -d`; kiểm tra bằng `docker compose ps redis`. Nếu dùng Redis cloud, thay bằng endpoint/password/TLS do nhà cung cấp cấp.
 
 API nhận cả URI cloud (`redis://user:password@host:port` hoặc TLS `rediss://...`) lẫn format StackExchange.Redis (`host:port,password=...`). Neon URI `postgresql://...` cũng được đổi sang Npgsql connection string khi startup. Secrets không được để trong `appsettings*.json` đã tracked; dùng environment variables hoặc user-secrets.
+
+## Timeout khi Npgsql nạp metadata
+
+Nếu stack trace dừng ở `PostgresDatabaseInfo.LoadBackendTypes` trong `OpenConnectionAsync`, SQL migration chưa bắt đầu. Kiểm tra kết nối và truy vấn chỉ đọc trước khi sửa migration. Tăng timeout không giải quyết được trường hợp kết nối bị đóng trong lúc nạp metadata.
+
+Workaround cho môi trường chỉ dùng kiểu PostgreSQL tích hợp: đặt `Database__SkipTypeLoading=true` hoặc `Database:SkipTypeLoading=true` trong cấu hình môi trường. Npgsql 8 sẽ dùng `Server Compatibility Mode=NoTypeLoading`. Mặc định cờ tắt; migration vẫn hoạt động theo `Database:ApplyMigrations`. Không dùng workaround nếu cần enum/domain/composite tự định nghĩa; tắt cờ để khôi phục nạp metadata đầy đủ. Xem [Npgsql](https://www.npgsql.org/doc/api/Npgsql.ServerCompatibilityMode.html). Cờ không chứa secret và không yêu cầu sao chép connection string.
 
 ## Google OAuth và Cloudinary
 

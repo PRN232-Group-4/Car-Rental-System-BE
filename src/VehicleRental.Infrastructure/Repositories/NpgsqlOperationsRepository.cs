@@ -42,7 +42,7 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
         await using var tx=await cn.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead,ct);
         var total=Convert.ToInt32(await ScalarAsync(cn,tx,"SELECT COUNT(*) FROM facilities",Array.Empty<object?>(),ct));
         var items=new List<OrganizationUnit>();
-        await using(var command=new NpgsqlCommand("SELECT id,name,address,phone FROM facilities ORDER BY name,id LIMIT $1 OFFSET $2",cn,tx))
+        await using(var command=new NpgsqlCommand("SELECT id,name,address,phone FROM facilities ORDER BY id DESC LIMIT $1 OFFSET $2",cn,tx))
         {
             Add(command,pageSize,((long)page-1)*pageSize);
             await using var reader=await command.ExecuteReaderAsync(ct);
@@ -78,7 +78,7 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
     public async Task<VehiclePage> SearchVehiclesAsync(int? type,int? facility,string? status,DateTime? from,DateTime? to,int page,int size,CancellationToken ct)
     { const string filter=" WHERE ($1::int IS NULL OR v.vehicle_type_id=$1::int) AND ($2::int IS NULL OR v.facility_id=$2::int) AND ($3::text IS NULL OR v.status=$3::text) AND ($4::timestamp IS NULL OR (v.status='available' AND NOT EXISTS(SELECT 1 FROM vehicle_maintenance m WHERE m.vehicle_id=v.id AND (COALESCE(m.status,'open') NOT IN ('completed','cancelled') OR m.is_safe=false)) AND NOT EXISTS (SELECT 1 FROM rentals r LEFT JOIN hour_rental_detail h ON h.rental_id=r.id LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id WHERE r.vehicle_id=v.id AND r.status NOT IN ('cancelled','completed') AND COALESCE(h.start_time,l.start_time)<$5::timestamp AND COALESCE(h.end_time,l.end_time)>$4::timestamp))) ";
       await using var count=dataSource.CreateCommand("SELECT COUNT(*) FROM vehicles v"+filter);Add(count,type,facility,status,from,to);var total=Convert.ToInt32(await count.ExecuteScalarAsync(ct));
-      await using var c=dataSource.CreateCommand("SELECT v.id,v.vehicle_type_id,t.name,v.facility_id,f.name,COALESCE(v.status,'available'),v.brand,v.model,v.color,v.year_of_manufacture,v.rental_price_hourly,v.rental_price_longterm,v.description,v.main_img_url,v.current_location,v.license_plate,v.features,(SELECT seat_count FROM car_detail WHERE vehicle_id=v.id AND lower(trim(t.type))='car'),(SELECT transmission FROM car_detail WHERE vehicle_id=v.id AND lower(trim(t.type))='car'),CASE WHEN lower(trim(t.fuel_type))='electric' THEN CASE WHEN lower(trim(t.type))='car' THEN (SELECT battery_capacity FROM electric_car_detail WHERE vehicle_id=v.id) ELSE (SELECT battery_capacity FROM electric_motorbike_detail WHERE vehicle_id=v.id) END END,"+MaintenanceTechniciansSql+" FROM vehicles v JOIN vehicle_types t ON t.id=v.vehicle_type_id LEFT JOIN facilities f ON f.id=v.facility_id"+filter+" ORDER BY v.id LIMIT $6 OFFSET $7");Add(c,type,facility,status,from,to,size,((long)page-1)*size);await using var r=await c.ExecuteReaderAsync(ct);var a=new List<Vehicle>();while(await r.ReadAsync(ct))a.Add(ReadVehicle(r));return new(a,page,size,total); }
+      await using var c=dataSource.CreateCommand("SELECT v.id,v.vehicle_type_id,t.name,v.facility_id,f.name,COALESCE(v.status,'available'),v.brand,v.model,v.color,v.year_of_manufacture,v.rental_price_hourly,v.rental_price_longterm,v.description,v.main_img_url,v.current_location,v.license_plate,v.features,(SELECT seat_count FROM car_detail WHERE vehicle_id=v.id AND lower(trim(t.type))='car'),(SELECT transmission FROM car_detail WHERE vehicle_id=v.id AND lower(trim(t.type))='car'),CASE WHEN lower(trim(t.fuel_type))='electric' THEN CASE WHEN lower(trim(t.type))='car' THEN (SELECT battery_capacity FROM electric_car_detail WHERE vehicle_id=v.id) ELSE (SELECT battery_capacity FROM electric_motorbike_detail WHERE vehicle_id=v.id) END END,"+MaintenanceTechniciansSql+" FROM vehicles v JOIN vehicle_types t ON t.id=v.vehicle_type_id LEFT JOIN facilities f ON f.id=v.facility_id"+filter+" ORDER BY v.created_at DESC,v.id DESC LIMIT $6 OFFSET $7");Add(c,type,facility,status,from,to,size,((long)page-1)*size);await using var r=await c.ExecuteReaderAsync(ct);var a=new List<Vehicle>();while(await r.ReadAsync(ct))a.Add(ReadVehicle(r));return new(a,page,size,total); }
     public async Task<Vehicle?> GetVehicleAsync(int id,CancellationToken ct){
         await using var c=dataSource.CreateCommand("SELECT v.id,v.vehicle_type_id,t.name,v.facility_id,f.name,COALESCE(v.status,'available'),v.brand,v.model,v.color,v.year_of_manufacture,v.rental_price_hourly,v.rental_price_longterm,v.description,v.main_img_url,v.current_location,v.license_plate,v.features,(SELECT seat_count FROM car_detail WHERE vehicle_id=v.id AND lower(trim(t.type))='car'),(SELECT transmission FROM car_detail WHERE vehicle_id=v.id AND lower(trim(t.type))='car'),CASE WHEN lower(trim(t.fuel_type))='electric' THEN CASE WHEN lower(trim(t.type))='car' THEN (SELECT battery_capacity FROM electric_car_detail WHERE vehicle_id=v.id) ELSE (SELECT battery_capacity FROM electric_motorbike_detail WHERE vehicle_id=v.id) END END,"+MaintenanceTechniciansSql+" FROM vehicles v JOIN vehicle_types t ON t.id=v.vehicle_type_id LEFT JOIN facilities f ON f.id=v.facility_id WHERE v.id=$1");
         c.Parameters.AddWithValue(id);
@@ -141,6 +141,15 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
             if(!string.Equals((await license.ExecuteScalarAsync(ct))?.ToString(),"approved",StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("An approved driver license is required.");
         }
+        await using (var bookable = new NpgsqlCommand("""
+            SELECT EXISTS(SELECT 1 FROM vehicles v WHERE v.id=$1 AND v.status='available'
+                AND NOT EXISTS(SELECT 1 FROM rentals r WHERE r.vehicle_id=v.id AND r.status IN ('renting','post_inspection')))
+            """, cn, tx))
+        {
+            bookable.Parameters.AddWithValue(vehicleId);
+            if (await bookable.ExecuteScalarAsync(ct) is not true)
+                throw new ConflictException("VEHICLE_UNAVAILABLE", "Xe đang được thuê hoặc chưa sẵn sàng bàn giao. Vui lòng chọn xe khác.");
+        }
         var availability = await VehicleAvailabilityChecks.EvaluateAsync(cn, tx, vehicleId, new TimeRange(start, end), null, 60, ct);
         VehicleAvailabilityChecks.ThrowIfBlocked(availability, vehicleId);
         var price=await ScalarAsync(cn,tx,type=="hourly"?"SELECT rental_price_hourly FROM vehicles WHERE id=$1":"SELECT rental_price_longterm FROM vehicles WHERE id=$1",vehicleId,ct);
@@ -169,8 +178,8 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
                 Add(d,rid,start,end,hasDriver,unit);
                 await d.ExecuteNonQueryAsync(ct);
             }else{
-                await using var d=new NpgsqlCommand("INSERT INTO longterm_rental_contract(rental_id,start_time,end_time,monthly_price_snapshot)VALUES($1,$2,$3,$4)",cn,tx);
-                Add(d,rid,start,end,unit);
+                await using var d=new NpgsqlCommand("INSERT INTO longterm_rental_contract(rental_id,start_time,end_time,monthly_price_snapshot,has_driver)VALUES($1,$2,$3,$4,$5)",cn,tx);
+                Add(d,rid,start,end,unit,hasDriver);
                 await d.ExecuteNonQueryAsync(ct);
             }
         }
@@ -186,7 +195,7 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
         await tx.CommitAsync(ct);
         return (await GetRentalAsync(rid,ct))!;
     }
-    public async Task<Rental?> GetRentalAsync(int id,CancellationToken ct){await using var c=dataSource.CreateCommand("SELECT r.id,r.customer_id,r.vehicle_id,r.rental_type,r.status,r.is_subscription,r.vat_price,r.deposit_price,r.overtime_price,r.total_price,COALESCE(h.start_time,l.start_time),COALESCE(h.end_time,l.end_time),h.hourly_price_snapshot,l.monthly_price_snapshot,h.has_driver,l.contract_link,l.signed_at,(SELECT o.id FROM rental_orders o WHERE o.rental_id=r.id),EXISTS(SELECT 1 FROM inspections i WHERE i.rental_id=r.id AND i.vehicle_id=r.vehicle_id AND i.inspection_type='pre_rental' AND i.is_ok=true),EXISTS(SELECT 1 FROM inspections i WHERE i.rental_id=r.id AND i.vehicle_id=r.vehicle_id AND i.inspection_type='post_rental') FROM rentals r LEFT JOIN hour_rental_detail h ON h.rental_id=r.id LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id WHERE r.id=$1");c.Parameters.AddWithValue(id);await using var r=await c.ExecuteReaderAsync(ct);return await r.ReadAsync(ct)?ReadRental(r):null;}
+    public async Task<Rental?> GetRentalAsync(int id,CancellationToken ct){await using var c=dataSource.CreateCommand("SELECT r.id,r.customer_id,r.vehicle_id,r.rental_type,r.status,r.is_subscription,r.vat_price,r.deposit_price,r.overtime_price,r.total_price,COALESCE(h.start_time,l.start_time),COALESCE(h.end_time,l.end_time),h.hourly_price_snapshot,l.monthly_price_snapshot,COALESCE(h.has_driver,l.has_driver,false),l.contract_link,l.signed_at,(SELECT o.id FROM rental_orders o WHERE o.rental_id=r.id),EXISTS(SELECT 1 FROM inspections i WHERE i.rental_id=r.id AND i.vehicle_id=r.vehicle_id AND i.inspection_type='pre_rental' AND i.is_ok=true),EXISTS(SELECT 1 FROM inspections i WHERE i.rental_id=r.id AND i.vehicle_id=r.vehicle_id AND i.inspection_type='post_rental') FROM rentals r LEFT JOIN hour_rental_detail h ON h.rental_id=r.id LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id WHERE r.id=$1");c.Parameters.AddWithValue(id);await using var r=await c.ExecuteReaderAsync(ct);return await r.ReadAsync(ct)?ReadRental(r):null;}
     public async Task<IReadOnlyList<DriverScheduleEntry>> ListDriverScheduleAsync(int? driver,DateTime from,DateTime to,CancellationToken ct)
     {
         await using var c=dataSource.CreateCommand("SELECT a.id,a.rental_id,a.vehicle_id,a.driver_staff_id,COALESCE(u.fullname,u.email),COALESCE(h.start_time,l.start_time),COALESCE(h.end_time,l.end_time),r.status,concat_ws(' ',v.brand,v.model),v.license_plate,a.buffer_minutes FROM vehicle_assignments a JOIN vehicles v ON v.id=a.vehicle_id JOIN rentals r ON r.id=a.rental_id JOIN staffs s ON s.id=a.driver_staff_id JOIN users u ON u.id=s.user_id LEFT JOIN hour_rental_detail h ON h.rental_id=r.id LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id WHERE a.status='assigned' AND r.status NOT IN ('cancelled','completed') AND ($1::int IS NULL OR a.driver_staff_id=$1) AND COALESCE(h.start_time,l.start_time)<$3 AND COALESCE(h.end_time,l.end_time)>$2 ORDER BY COALESCE(h.start_time,l.start_time),a.id");
@@ -216,7 +225,7 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
         await using var command = dataSource.CreateCommand("""
             SELECT r.id,r.customer_id,r.vehicle_id,r.rental_type,r.status,r.is_subscription,
                    r.vat_price,r.deposit_price,r.overtime_price,r.total_price,
-                   COALESCE(h.start_time,l.start_time),COALESCE(h.end_time,l.end_time),h.hourly_price_snapshot,l.monthly_price_snapshot,h.has_driver,l.contract_link,l.signed_at,
+                   COALESCE(h.start_time,l.start_time),COALESCE(h.end_time,l.end_time),h.hourly_price_snapshot,l.monthly_price_snapshot,COALESCE(h.has_driver,l.has_driver,false),l.contract_link,l.signed_at,
                    (SELECT o.id FROM rental_orders o WHERE o.rental_id=r.id),
                    EXISTS(SELECT 1 FROM inspections i WHERE i.rental_id=r.id AND i.vehicle_id=r.vehicle_id AND i.inspection_type='pre_rental' AND i.is_ok=true),
                    EXISTS(SELECT 1 FROM inspections i WHERE i.rental_id=r.id AND i.vehicle_id=r.vehicle_id AND i.inspection_type='post_rental')

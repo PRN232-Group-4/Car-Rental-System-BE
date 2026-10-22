@@ -1,5 +1,14 @@
 # FR-018 — Vòng đời đơn thuê: hủy, hoàn tất, quá giờ, quyết toán (BE-17)
 
+## 2026-10-22 — Admin và customer hủy trước Đang thuê
+
+Theo yêu cầu người dùng, cả Admin và customer chủ đơn được hủy khi pending/pre_inspection. Từ renting trở đi chặn. Đã qua giờ nhận dự kiến nhưng chưa bắt đầu thuê vẫn được hủy; áp dụng phí hủy muộn hiện tại, không miễn phí tự động. `canCancel` ở mine list/detail và cancellation-preview phải đồng bộ với policy này. Quyết định thay thế giới hạn chỉ pending/trước giờ nhận bên dưới; ownership, lý do bắt buộc, invoice/refund và server lock giữ nguyên.
+
+## 2026-10-22 — Loại thuê trong danh sách vận hành
+
+- GET `/api/rentals` trả `rentalType` cho từng summary từ `rentals.rental_type`, cùng giá trị với hồ sơ chi tiết (`hourly`/`longterm`). Giữ pagination, bộ lọc và quyền hiện tại.
+- Acceptance: danh sách có cả thuê giờ và dài hạn phải giữ loại từng đơn, không mặc định thiếu dữ liệu thành dài hạn; bao phủ SQL, HTTP/envelope và Swagger.
+
 ## 2026-10-18 — Staff xác nhận trước thanh toán (người dùng xác nhận)
 
 - Đơn mới ở pending; staff theo policy CustomerService xác nhận trước, ghi confirmed_at và chuyển pre_inspection mà không yêu cầu invoice đã paid.
@@ -20,7 +29,7 @@
 | # | Quyết định | Nguồn |
 |---|---|---|
 | D1 | Quá giờ → **tự động trừ vào tiền cọc**; phần thiếu **phát sinh hóa đơn bổ sung** | Huy |
-| D2 | Điều kiện khách tự hủy: **chỉ khi `pending`**; trước giờ nhận >= 24h hoàn 100%; trong 24h giữ 20% (tiền thuê + VAT); từ giờ nhận khách không tự hủy | Claude chọn, cần xác nhận (O1) |
+| D2 | Khách chủ đơn hủy ở pending/pre_inspection, trước renting; trước giờ nhận >= 24h hoàn 100%, ít hơn 24h (kể cả nhận trễ chưa bàn giao) giữ phí theo policy hiện tại | Người dùng xác nhận 2026-10-22 |
 | D3 | Lệnh chuyển trạng thái là **các lệnh riêng** (`confirm`, `start`, `return`, `complete`, `cancel`), `PATCH status` cũ trở thành bí danh deprecated qua cùng state machine | Thiết kế |
 | D4 | Quyết toán (quá giờ + hoàn cọc) thực hiện **một lần tại `completed`**; hành vi "tự hoàn cọc khi post-inspection đạt" ở BE-16 phải chuyển sang đây | Thiết kế (cần Anh/Lạc đồng ý, O2) |
 | D5 | Hóa đơn bổ sung dùng cột `invoices.kind` (`rental`/`overtime`) để không phá tính idempotent của FR-019 (cần Phúc đồng ý, O3) | Thiết kế |
@@ -48,15 +57,15 @@ Tự hủy do pre-inspection không đạt (BE-15): vẫn đi qua `cancel` với
 
 ## 4. Hủy đơn
 
-Cấu hình (`Rental:Cancellation`, `ValidateOnStart`): `SelfCancelStatuses=["pending"]`, `FreeHoursBeforeStart=24`, `LateFeePercent=20`.
+Cấu hình (`Rental:Cancellation`, `ValidateOnStart`): `SelfCancelStatuses=["pending","pre_inspection"]`, `FreeHoursBeforeStart=24`, `LateFeePercent=20`.
 
 Với đơn trực tiếp đã thanh toán, gọi `T = start_time − now`:
 
 | Người hủy | Điều kiện | Phí giữ lại | Hoàn |
 |---|---|---|---|
-| Khách (chỉ `pending`) | `T >= 24h` | 0 | 100% số đã trả |
-| Khách (chỉ `pending`) | `0 < T < 24h` | 20% × (tiền thuê + VAT) | Số đã trả − phí (gồm cọc) |
-| Khách | `T <= 0` | — | Không cho tự hủy: 409 `SELF_CANCEL_NOT_ALLOWED` |
+| Khách (pending/pre_inspection) | `T >= 24h` | 0 | 100% số đã trả |
+| Khách (pending/pre_inspection) | `T < 24h`, kể cả `T <= 0` nhưng chưa renting | 20% × (tiền thuê + VAT) | Số đã trả − phí (gồm cọc) |
+| Khách | renting/post_inspection/completed/cancelled | — | Không cho tự hủy |
 | Staff — `initiator=branch` | pending/pre_inspection | 0 | 100% |
 | Staff — `initiator=customer_request` | pending/pre_inspection | Như quy tắc khách theo `T` (staff có thể `waiveFee=true`, ghi lý do) | Tương ứng |
 | Hệ thống | pre-inspection không đạt | 0 | 100% |

@@ -1,5 +1,17 @@
 # Câu hỏi mở và giả định
 
+## Hủy trước renting và backend đang chạy — 2026-10-22
+
+Yêu cầu mới xác định hủy theo trạng thái thực tế, cho customer chủ đơn cả pending/pre_inspection kể cả sau giờ nhận dự kiến nếu chưa renting. Đây là thay đổi được người dùng yêu cầu, thay quyết định giới hạn thời gian cũ; áp dụng phí muộn hiện có thay vì tự miễn phí. Read-only Swagger Railway hiện chưa có POST checked dù route đã có ở source; cần triển khai backend mới, không thể sửa bằng tải lại FE. Không đổi proxy sang môi trường khác hoặc ghi trực tiếp dữ liệu Railway để né API thiếu.
+
+## Xe customer và kiểm tra trước thuê — 2026-10-22
+
+Hiểu “xe chưa được thuê” là xe available, không có đơn đang renting/post_inspection; đơn pending/pre_inspection vẫn được xét theo khoảng đặt và đệm. Xe đang thuê ẩn cả khi chọn lịch tương lai theo yêu cầu mới. Cả hourly/longterm cho chọn có tài xế/tự lái; xác nhận trực tiếp giới hạn Admin và phải chọn Maintenance active, còn Manager vẫn phân công chờ kỹ thuật. Dữ liệu mặc định có tài xế là xác nhận nghiệp vụ có nguồn system, không có số đo/ảnh giả. Các quyết định này thay luồng chauffeur-only trước đây; không thay giá/chính sách trễ/kiểm tra sau thuê.
+
+## Timeout PostgreSQL metadata — 2026-10-22
+
+Tái hiện Npgsql 8.0.5 lỗi tại `LoadBackendTypes`; tăng timeout lên 60 giây và thử driver 9.0.2 trong công cụ tạm vẫn thất bại. Kết nối với NoTypeLoading và truy vấn kiểu tích hợp hoạt động. Chưa xác định nguyên nhân khiến việc nạp metadata thất bại; dùng cờ `Database:SkipTypeLoading` theo môi trường như workaround, không đổi mặc định production. Schema ứng dụng hiện không khai báo enum/domain/composite tùy chỉnh cho truy vấn; cần đánh giá lại workaround nếu bổ sung các kiểu này. Driver của dự án vẫn là 8.0.5. Không lưu thêm connection string hoặc secret để bật cờ.
+
 ## OTP đổi mật khẩu — 2026-10-21
 
 Giữ kiểm tra mật khẩu cũ và thêm OTP bắt buộc vào luồng đổi mật khẩu đã đăng nhập, dùng email từ claim và cấu hình RegistrationOptions hiện có. OTP ở namespace riêng với đăng ký/reset. Tài khoản chỉ đăng nhập Google, chưa có hash mật khẩu, vẫn dùng luồng quên mật khẩu để thiết lập mật khẩu trước; không thêm nhánh bỏ qua mật khẩu cũ. FE đếm cooldown mặc định 60 giây; backend là nguồn quyết định khi cấu hình thay đổi. Kiểm thử không gửi email thật. Xem FR-005 và change 2026-10-21-password-change-otp.

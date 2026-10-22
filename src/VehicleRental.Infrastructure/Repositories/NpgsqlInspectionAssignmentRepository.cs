@@ -23,7 +23,13 @@ public sealed class NpgsqlInspectionAssignmentRepository(NpgsqlDataSource dataSo
             reader.IsDBNull(2) ? "" : reader.GetString(2), reader.GetDateTime(3), reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5));
     }
 
-    public async Task<InspectionAssignment> AssignAsync(int rentalId, int technicianStaffId, string assignedBy, CancellationToken ct)
+    public Task<InspectionAssignment> AssignAsync(int rentalId, int technicianStaffId, string assignedBy, CancellationToken ct) =>
+        SaveAsync(rentalId, technicianStaffId, assignedBy, false, ct);
+
+    public Task<InspectionAssignment> ConfirmCheckedAsync(int rentalId, int technicianStaffId, string confirmedBy, CancellationToken ct) =>
+        SaveAsync(rentalId, technicianStaffId, confirmedBy, true, ct);
+
+    private async Task<InspectionAssignment> SaveAsync(int rentalId, int technicianStaffId, string assignedBy, bool checkedByAdmin, CancellationToken ct)
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
@@ -76,6 +82,19 @@ public sealed class NpgsqlInspectionAssignmentRepository(NpgsqlDataSource dataSo
         save.Parameters.AddWithValue(technicianStaffId);
         save.Parameters.AddWithValue(assignedBy);
         var assignedAt = (DateTime)(await save.ExecuteScalarAsync(ct))!;
+        if (checkedByAdmin)
+        {
+            await using var check = new NpgsqlCommand("""
+                INSERT INTO inspections(rental_id,vehicle_id,staff_id,inspection_type,is_ok,inspected_at,damage_notes,confirmation_source,confirmed_by)
+                VALUES($1,$2,$3,'pre_rental',true,now() AT TIME ZONE 'utc',
+                    'Admin xác nhận đã phân công và kiểm tra trước thuê.','admin_confirmation',$4)
+                """, connection, transaction);
+            check.Parameters.AddWithValue(rentalId);
+            check.Parameters.AddWithValue(vehicleId);
+            check.Parameters.AddWithValue(technicianStaffId);
+            check.Parameters.AddWithValue(assignedBy);
+            await check.ExecuteNonQueryAsync(ct);
+        }
         await transaction.CommitAsync(ct);
         return new(rentalId, vehicleId, technicianStaffId, technicianName, assignedAt, assignedBy, technicianEmail);
     }
