@@ -231,7 +231,7 @@ public sealed partial class NpgsqlOperationsRepository
         await using var tx = await cn.BeginTransactionAsync(ct);
         await LockOperationsAsync(cn, tx, ct);
         var rental = await ReadRentalAsync(cn, tx, rentalId, ct);
-        if (await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM staffs s JOIN users u ON u.id=s.user_id WHERE s.id=$1 AND u.is_active)", ct, staffId) is not true)
+        if (staffId > 0 && await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM staffs s JOIN users u ON u.id=s.user_id WHERE s.id=$1 AND u.is_active)", ct, staffId) is not true)
             throw new InvalidOperationException("Reporter is not active.");
         if (driverOnly && await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM vehicle_assignments WHERE rental_id=$1 AND driver_staff_id=$2 AND status='assigned')", ct, rentalId, staffId) is not true)
             throw new UnauthorizedAccessException("Only the assigned driver can report this trip.");
@@ -239,8 +239,8 @@ public sealed partial class NpgsqlOperationsRepository
         if (rental.Status == "cancelled") throw new InvalidOperationException("Cannot report a cancelled rental.");
         if (type == "breakdown" && await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM reports WHERE rental_id=$1 AND vehicle_id=$2 AND type='breakdown' AND status IN ('open','in_progress','assigned'))", ct, rentalId, rental.VehicleId) is true)
             throw new InvalidOperationException("An unresolved breakdown already exists for this vehicle.");
-        var id = (int)(await ValueAsync(cn, tx, "INSERT INTO reports(rental_id,vehicle_id,reporter_staff_id,type,description,image_urls,status) VALUES($1,$2,$3,$4,$5,$6,'open') RETURNING id", ct,
-            rentalId, rental.VehicleId, staffId, type, description, images))!;
+        var id = (int)(await ValueAsync(cn, tx, "INSERT INTO reports(rental_id,vehicle_id,reporter_staff_id,customer_id,type,description,image_urls,status) VALUES($1,$2,$3,$4,$5,$6,$7,'open') RETURNING id", ct,
+            rentalId, rental.VehicleId, staffId > 0 ? staffId : (object?)DBNull.Value, rental.CustomerId, type, description, images))!;
         if (type == "breakdown") await ValueAsync(cn, tx, "UPDATE vehicles SET status='maintenance' WHERE id=$1", ct, rental.VehicleId);
         await tx.CommitAsync(ct);
         return new(id, rentalId, rental.VehicleId, staffId, type, description, "open", null, images);
