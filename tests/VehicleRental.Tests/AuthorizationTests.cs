@@ -64,6 +64,10 @@ public sealed class AuthorizationTests
     [InlineData("DriverSchedule", "Driver", true)]
     [InlineData("Policies", "CustomerService", false)]
     [InlineData("Policies", "Manager", true)]
+    [InlineData("DeleteType", "CustomerService", false)]
+    [InlineData("DeleteType", "Manager", true)]
+    [InlineData("DeletePlan", "CustomerService", false)]
+    [InlineData("DeletePlan", "Manager", true)]
     public async Task Operations_enforce_capability_matrix(string action, string role, bool allowed) =>
         Assert.Equal(allowed, await AuthorizeEndpoint<OperationsController>(action, Principal(role, 7)));
 

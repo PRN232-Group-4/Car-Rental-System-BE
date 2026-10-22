@@ -63,7 +63,18 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
     }
     public Task DeleteFacilityAsync(int id,CancellationToken ct)=>DeleteAsync("facilities",id,ct);
     public async Task<IReadOnlyList<VehicleType>> ListVehicleTypesAsync(CancellationToken ct){await using var c=dataSource.CreateCommand("SELECT id,name,fuel_type,type FROM vehicle_types ORDER BY name");await using var r=await c.ExecuteReaderAsync(ct);var a=new List<VehicleType>();while(await r.ReadAsync(ct))a.Add(new(r.GetInt32(0),r.GetString(1),S(r,2),S(r,3)));return a;}
-    public Task DeleteVehicleTypeAsync(int id,CancellationToken ct)=>DeleteAsync("vehicle_types",id,ct);
+    public async Task DeleteVehicleTypeAsync(int id,CancellationToken ct)
+    {
+        await using var cn=await dataSource.OpenConnectionAsync(ct);
+        await using var tx=await cn.BeginTransactionAsync(ct);
+        // Schema has no FKs: refuse instead of orphaning vehicles that still reference this type.
+        if(await ScalarAsync(cn,tx,"SELECT EXISTS(SELECT 1 FROM vehicles WHERE vehicle_type_id=$1)",id,ct) is true)
+            throw new ConflictException("VEHICLE_TYPE_IN_USE", "Loại phương tiện đang được dùng cho xe trong đội. Hãy chuyển các xe sang loại khác trước khi xóa.");
+        await using var c=new NpgsqlCommand("DELETE FROM vehicle_types WHERE id=$1",cn,tx);
+        c.Parameters.AddWithValue(id);
+        if(await c.ExecuteNonQueryAsync(ct)!=1)throw new KeyNotFoundException();
+        await tx.CommitAsync(ct);
+    }
     public async Task<VehiclePage> SearchVehiclesAsync(int? type,int? facility,string? status,DateTime? from,DateTime? to,int page,int size,CancellationToken ct)
     { const string filter=" WHERE ($1::int IS NULL OR v.vehicle_type_id=$1::int) AND ($2::int IS NULL OR v.facility_id=$2::int) AND ($3::text IS NULL OR v.status=$3::text) AND ($4::timestamp IS NULL OR (v.status='available' AND NOT EXISTS(SELECT 1 FROM vehicle_maintenance m WHERE m.vehicle_id=v.id AND (COALESCE(m.status,'open') NOT IN ('completed','cancelled') OR m.is_safe=false)) AND NOT EXISTS (SELECT 1 FROM rentals r LEFT JOIN hour_rental_detail h ON h.rental_id=r.id LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id WHERE r.vehicle_id=v.id AND r.status NOT IN ('cancelled','completed') AND COALESCE(h.start_time,l.start_time)<$5::timestamp AND COALESCE(h.end_time,l.end_time)>$4::timestamp))) ";
       await using var count=dataSource.CreateCommand("SELECT COUNT(*) FROM vehicles v"+filter);Add(count,type,facility,status,from,to);var total=Convert.ToInt32(await count.ExecuteScalarAsync(ct));
