@@ -22,6 +22,8 @@ public sealed class RentalInspectionModesTests(PostgresFixture db) : IClassFixtu
         var rental = await repository.CreateRentalAsync(email,vehicle,null,type,DateTime.UtcNow.AddDays(2),DateTime.UtcNow.AddDays(3),false,null,driver,default);
         Assert.Equal(driver,rental.HasDriver);
         Assert.Equal(driver,rental.HasPassingPreInspection);
+        Assert.Equal("pending", rental.Status);
+        Assert.Equal(0,await Seed.CountAsync(db.DataSource,"SELECT count(*) FROM rentals WHERE id=$1 AND confirmed_at IS NOT NULL",rental.Id));
         Assert.Equal(driver,(await new NpgsqlRentalQueries(db.DataSource,TimeProvider.System).GetOperationalDetailAsync(rental.Id,default))!.HasPassingPreInspection);
         Assert.Equal(driver,await new NpgsqlRentalLifecycleRepository(db.DataSource).HasPassingPreInspectionAsync(rental.Id,default));
         Assert.Equal(driver,(await new Car_Rental_System_BE.Infrastructure.Assignments.NpgsqlAssignmentRepository(db.DataSource).GetRentalScheduleAsync(rental.Id,default))!.HasDriver);
@@ -52,6 +54,53 @@ public sealed class RentalInspectionModesTests(PostgresFixture db) : IClassFixtu
         Assert.Equal("admin_confirmation",Assert.Single(directory.Items).ConfirmationSource);
         Assert.Equal("approver@test.local",directory.Items[0].ConfirmedBy);
         await Assert.ThrowsAsync<ConflictException>(()=>service.ConfirmCheckedAsync(rental.Id,staff,"admin@test.local",default));
+    }
+
+    [Theory]
+    [InlineData("hourly")]
+    [InlineData("longterm")]
+    public async Task Explicit_admin_check_and_approval_advances_real_status_without_starting_or_marking_paid(string type)
+    {
+        var (_, email) = await Seed.CustomerAsync(db.DataSource);
+        var vehicle = await Seed.VehicleAsync(db.DataSource);
+        var store = new NpgsqlOperationsRepository(db.DataSource);
+        var rental = await store.CreateRentalAsync(email,vehicle,null,type,DateTime.UtcNow.AddDays(2),DateTime.UtcNow.AddDays(3),false,null,false,default);
+        var staff = await TechnicianAsync();
+        var service = new InspectionAssignmentService(new NpgsqlInspectionAssignmentRepository(db.DataSource));
+        await service.ConfirmCheckedAsync(rental.Id,staff,"approver@test.local",default,approveRequest:true);
+        var saved = (await store.GetRentalAsync(rental.Id,default))!;
+        Assert.Equal("pre_inspection", saved.Status);
+        Assert.True(saved.HasPassingPreInspection);
+        Assert.Equal(1,await Seed.CountAsync(db.DataSource,"SELECT count(*) FROM rentals WHERE id=$1 AND confirmed_at IS NOT NULL AND started_at IS NULL",rental.Id));
+        Assert.Equal(1,await Seed.CountAsync(db.DataSource,"SELECT count(*) FROM rental_status_history WHERE rental_id=$1 AND from_status='pending' AND to_status='pre_inspection' AND actor_role='Admin' AND actor_email='approver@test.local'",rental.Id));
+        Assert.Equal(0,await Seed.CountAsync(db.DataSource,"SELECT count(*) FROM rental_orders WHERE rental_id=$1",rental.Id));
+        Assert.Equal(1,await Seed.CountAsync(db.DataSource,"SELECT count(*) FROM invoices WHERE rental_id=$1 AND status='unpaid'",rental.Id));
+        await Assert.ThrowsAsync<ConflictException>(()=>service.ConfirmCheckedAsync(rental.Id,staff,"approver@test.local",default,approveRequest:true));
+        Assert.Equal(1,await Seed.CountAsync(db.DataSource,"SELECT count(*) FROM rental_status_history WHERE rental_id=$1",rental.Id));
+    }
+
+    [Fact]
+    public async Task Existing_pass_is_not_overwritten_or_implicitly_approved()
+    {
+        var (_, email) = await Seed.CustomerAsync(db.DataSource);
+        var vehicle = await Seed.VehicleAsync(db.DataSource);
+        var rental = await new NpgsqlOperationsRepository(db.DataSource).CreateRentalAsync(email,vehicle,null,"hourly",DateTime.UtcNow.AddDays(2),DateTime.UtcNow.AddDays(3),false,null,false,default);
+        var staff = await TechnicianAsync();
+        var service = new InspectionAssignmentService(new NpgsqlInspectionAssignmentRepository(db.DataSource));
+        await service.ConfirmCheckedAsync(rental.Id,staff,"inspector@test.local",default);
+        await Assert.ThrowsAsync<ConflictException>(()=>service.ConfirmCheckedAsync(rental.Id,staff,"approver@test.local",default,approveRequest:true));
+        Assert.Equal(1,await Seed.CountAsync(db.DataSource,"SELECT count(*) FROM rentals WHERE id=$1 AND status='pending' AND confirmed_at IS NULL",rental.Id));
+        Assert.Equal(0,await Seed.CountAsync(db.DataSource,"SELECT count(*) FROM rental_status_history WHERE rental_id=$1",rental.Id));
+    }
+
+    [Fact]
+    public async Task Explicit_check_approval_uses_subscription_order_policy()
+    {
+        var (rental, _) = await Scenarios.CreateSubscriptionRentalAsync(db.DataSource);
+        var service = new InspectionAssignmentService(new NpgsqlInspectionAssignmentRepository(db.DataSource));
+        await service.ConfirmCheckedAsync(rental,await TechnicianAsync(),"approver@test.local",default,approveRequest:true);
+        Assert.Equal(1,await Seed.CountAsync(db.DataSource,"SELECT count(*) FROM rental_orders WHERE rental_id=$1 AND payment_method='subscription'",rental));
+        Assert.Equal(0,await Seed.CountAsync(db.DataSource,"SELECT count(*) FROM invoices WHERE rental_id=$1",rental));
     }
 
     [Theory]

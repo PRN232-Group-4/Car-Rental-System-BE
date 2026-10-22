@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-10-22 — [Kiểm tra kèm duyệt cập nhật tiến trình](2026-10-22-inspection-approval-progress.md)
+
 - 2026-10-22 — [Quá hạn và thu phụ phí tiền mặt/online](2026-10-22-overdue-collection.md)
 
 - 2026-10-22 — [Customer hủy đơn trước Đang thuê](2026-10-22-customer-cancel-before-renting.md)
@@ -94,3 +96,4 @@
 - [Google OAuth callback on Railway](2026-10-04-google-oauth-railway-callback.md)
 
 - 2026-10-04: [Vehicle plates, duty shifts and incident recovery](2026-10-04-operational-recovery.md)
+- 2026-10-22 — [Phân công và xác nhận inspect sau trả xe](2026-10-22-post-inspection-dispatch.md)
