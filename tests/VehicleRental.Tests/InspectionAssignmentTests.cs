@@ -72,6 +72,58 @@ public sealed class InspectionAssignmentTests(PostgresFixture db) : IClassFixtur
         Assert.Equal(replacement, (await Service.AssignAsync(rental, second, "admin@test.local", default)).VehicleId);
     }
 
+    [Fact]
+    public async Task Post_assignment_and_check_preserve_pre_evidence_and_do_not_complete_rental()
+    {
+        var (rental, vehicle) = await RentalAsync();
+        var pre = await StaffAsync(); var post = await StaffAsync();
+        await Service.ConfirmCheckedAsync(rental, pre, "pre@test.local", default);
+        await Seed.ScalarAsync(db.DataSource, "UPDATE rentals SET status='post_inspection',started_at=now(),returned_at=now() WHERE id=$1", rental);
+        Assert.Null(await Service.GetAsync(rental, default, "post_rental"));
+        await Service.AssignAsync(rental, post, "manager@test.local", default, "post_rental");
+        Assert.Equal(pre, (await Service.GetAsync(rental, default))!.TechnicianStaffId);
+        Assert.Equal(post, (await Service.GetAsync(rental, default, "post_rental"))!.TechnicianStaffId);
+        Assert.False((await new NpgsqlRentalQueries(db.DataSource, TimeProvider.System).GetOperationalDetailAsync(rental, default))!.HasPostInspection);
+        await Service.ConfirmCheckedAsync(rental, post, "admin@test.local", default, false, "post_rental");
+        Assert.True((await new NpgsqlRentalQueries(db.DataSource, TimeProvider.System).GetOperationalDetailAsync(rental, default))!.HasPostInspection);
+        Assert.Equal("post_inspection", await Seed.ScalarAsync(db.DataSource, "SELECT status FROM rentals WHERE id=$1", rental));
+        Assert.Equal(2, await Seed.CountAsync(db.DataSource, "SELECT count(*) FROM inspection_assignments WHERE rental_id=$1", rental));
+        Assert.Equal(1, await Seed.CountAsync(db.DataSource, "SELECT count(*) FROM inspections WHERE rental_id=$1 AND vehicle_id=$2 AND inspection_type='post_rental' AND is_ok AND confirmation_source='admin_confirmation' AND confirmed_by='admin@test.local' AND odometer_km IS NULL", rental, vehicle));
+        var error = await Assert.ThrowsAsync<ConflictException>(() => Service.ConfirmCheckedAsync(rental, post, "admin@test.local", default, false, "post_rental"));
+        Assert.Equal("INSPECTION_ALREADY_RECORDED", error.Code);
+    }
+
+    [Theory]
+    [InlineData("pending")]
+    [InlineData("pre_inspection")]
+    [InlineData("renting")]
+    [InlineData("completed")]
+    [InlineData("cancelled")]
+    public async Task Post_check_rejects_wrong_stage(string status)
+    {
+        var (rental, _) = await RentalAsync(); var staff = await StaffAsync();
+        await Seed.ScalarAsync(db.DataSource, "UPDATE rentals SET status=$2 WHERE id=$1", rental, status);
+        var error = await Assert.ThrowsAsync<ConflictException>(() => Service.ConfirmCheckedAsync(rental, staff, "admin@test.local", default, false, "post_rental"));
+        Assert.Equal("INSPECTION_ASSIGNMENT_NOT_ALLOWED", error.Code);
+    }
+
+    [Fact]
+    public async Task Failed_post_evidence_cannot_be_overwritten_and_post_requests_are_serialized()
+    {
+        var (rental, vehicle) = await RentalAsync(); var staff = await StaffAsync();
+        await Seed.ScalarAsync(db.DataSource, "UPDATE rentals SET status='post_inspection' WHERE id=$1", rental);
+        var outcomes = await Task.WhenAll(Enumerable.Range(0, 4).Select(async _ => {
+            try { await Service.ConfirmCheckedAsync(rental, staff, "admin@test.local", default, false, "post_rental"); return true; }
+            catch (ConflictException) { return false; }
+        }));
+        Assert.Single(outcomes, x => x);
+        await Seed.ScalarAsync(db.DataSource, "UPDATE inspections SET is_ok=false WHERE rental_id=$1 AND inspection_type='post_rental'", rental);
+        var error = await Assert.ThrowsAsync<ConflictException>(() => Service.AssignAsync(rental, staff, "admin@test.local", default, "post_rental"));
+        Assert.Equal("INSPECTION_ALREADY_RECORDED", error.Code);
+        Assert.Equal(1, await Seed.CountAsync(db.DataSource, "SELECT count(*) FROM inspections WHERE rental_id=$1 AND vehicle_id=$2 AND inspection_type='post_rental' AND NOT is_ok", rental, vehicle));
+        await Assert.ThrowsAsync<BusinessRuleException>(() => Service.GetAsync(rental, default, "invalid"));
+    }
+
     [Theory]
     [InlineData("Driver", true)]
     [InlineData("CustomerService", true)]
@@ -245,11 +297,13 @@ public sealed class InspectionAssignmentTests(PostgresFixture db) : IClassFixtur
         foreach (var role in new string?[] { null, "Customer", "Driver", "Maintenance", "CustomerService", "Manager", "Admin" })
         {
             var (checkedRental, _) = await RentalAsync();
-            using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/rentals/{checkedRental}/inspection-assignment/checked") { Content = JsonContent.Create(new { technicianStaffId = staff }) };
+            await Seed.ScalarAsync(db.DataSource,"UPDATE rentals SET status='pending' WHERE id=$1",checkedRental);
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/rentals/{checkedRental}/inspection-assignment/checked") { Content = JsonContent.Create(new { technicianStaffId = staff, approveRequest = true }) };
             if (role is not null) request.Headers.Add("X-Test-Role", role);
             using var response = await client.SendAsync(request);
             using var json = await Envelope(response, role is null ? 401 : role == "Admin" ? 200 : 403);
             Assert.Equal(role == "Admin" ? 1 : 0, await Seed.CountAsync(db.DataSource,"SELECT COUNT(*) FROM inspections WHERE rental_id=$1 AND confirmation_source='admin_confirmation' AND confirmed_by='manager@test.local'",checkedRental));
+            Assert.Equal(role == "Admin" ? "pre_inspection" : "pending",await Seed.ScalarAsync(db.DataSource,"SELECT status FROM rentals WHERE id=$1",checkedRental));
             if(role == "Admin") Assert.Equal("Technician dispatch and passing pre-rental check confirmed successfully.",json.RootElement.GetProperty("message").GetString());
         }
         foreach(var payload in new object[]{new {},new {technicianStaffId=0}})
@@ -259,7 +313,28 @@ public sealed class InspectionAssignmentTests(PostgresFixture db) : IClassFixtur
             using var response=await client.SendAsync(request);
             using var json=await Envelope(response,400);
         }
+        var (postRental, _) = await RentalAsync();
+        await Seed.ScalarAsync(db.DataSource,"UPDATE rentals SET status='post_inspection',started_at=now(),returned_at=now() WHERE id=$1",postRental);
+        var postRoute = $"/api/rentals/{postRental}/inspection-assignment";
+        foreach (var verb in new[] { HttpMethod.Get, HttpMethod.Put, HttpMethod.Post })
+        {
+            using var invalid = new HttpRequestMessage(verb, postRoute + (verb == HttpMethod.Post ? "/checked" : "") + "?inspectionType=wrong") { Content = verb == HttpMethod.Get ? null : JsonContent.Create(new { technicianStaffId = staff }) };
+            invalid.Headers.Add("X-Test-Role", "Admin");
+            using var badResponse = await client.SendAsync(invalid);
+            using var badJson = await Envelope(badResponse, 400);
+        }
+        foreach (var role in new string?[] { null, "Customer", "Maintenance", "Manager", "Admin" })
+        {
+            using var postRequest = new HttpRequestMessage(HttpMethod.Post, postRoute + "/checked?inspectionType=post_rental") { Content = JsonContent.Create(new { technicianStaffId = staff }) };
+            if (role is not null) postRequest.Headers.Add("X-Test-Role", role);
+            using var postResponse = await client.SendAsync(postRequest);
+            using var postJson = await Envelope(postResponse, role is null ? 401 : role == "Admin" ? 200 : 403);
+            if (role == "Admin") Assert.Equal("Technician dispatch and passing post-rental check confirmed successfully.", postJson.RootElement.GetProperty("message").GetString());
+        }
+        var postOperation = swagger.RootElement.GetProperty("paths").GetProperty("/api/rentals/{id}/inspection-assignment/checked").GetProperty("post");
+        Assert.Contains(postOperation.GetProperty("parameters").EnumerateArray(), x => x.GetProperty("name").GetString() == "inspectionType");
         Assert.True(swagger.RootElement.GetProperty("paths").GetProperty("/api/rentals/{id}/inspection-assignment/checked").TryGetProperty("post",out _));
+        Assert.Equal("boolean",swagger.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("ConfirmInspectionRequest").GetProperty("properties").GetProperty("approveRequest").GetProperty("type").GetString());
         var path = swagger.RootElement.GetProperty("paths").GetProperty("/api/rentals/{id}/inspection-assignment");
         Assert.True(path.TryGetProperty("get", out _));
         Assert.True(path.TryGetProperty("put", out _));

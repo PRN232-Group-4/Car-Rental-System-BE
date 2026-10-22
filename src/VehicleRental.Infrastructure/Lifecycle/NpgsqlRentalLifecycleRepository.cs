@@ -151,17 +151,7 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
                 throw new ConflictException("ILLEGAL_TRANSITION", $"Rental cannot be confirmed from {curStatus}.");
         }
 
-        await using var cmd = new NpgsqlCommand("""
-            UPDATE rentals
-            SET status = 'pre_inspection', confirmed_at = $2, status_changed_at = now()
-            WHERE id = $1
-            """, conn, tx);
-        cmd.Parameters.AddWithValue(rentalId);
-        cmd.Parameters.Add(Sql.Timestamp("", confirmedAt));
-        await cmd.ExecuteNonQueryAsync(ct);
-
-        await InsertHistoryAsync(conn, tx, rentalId, previousStatus, "pre_inspection", actor, "Rental confirmed", ct);
-        await Car_Rental_System_BE.Infrastructure.Repositories.RentalOrderWriter.EnsurePaidAsync(conn, tx, rentalId, ct);
+        await Car_Rental_System_BE.Infrastructure.Repositories.RentalApprovalWriter.WriteAsync(conn, tx, rentalId, previousStatus, confirmedAt, actor, "Rental confirmed", ct);
         await tx.CommitAsync(ct);
     }
 

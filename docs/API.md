@@ -1,5 +1,9 @@
 # Tài liệu API — Car Rental System BE
 
+## Bổ sung 22/10/2026: kiểm tra kèm duyệt yêu cầu
+
+POST `/api/rentals/{id}/inspection-assignment/checked` (Admin) nhận `{technicianStaffId, approveRequest?:boolean=false}`. Explicit true ghi phân công/pass/confirmed_at/history và chuyển pending sang pre_inspection trong cùng transaction; dùng chung writer với confirm, giữ quy tắc order paid/subscription, không tự start/paid. Không ghi đè evidence đã có; pending đã pass dùng `/rentals/{id}/confirm`. Thiếu flag giữ hành vi chỉ kiểm tra. Phân công PUT và driver_default không tự duyệt. Quyền/400/401/403/404/409/envelope giữ nguyên, Swagger có field boolean mới.
+
 ## Bổ sung 22/10/2026: quá hạn và thu phụ phí sau trả xe
 
 - GET `/api/rentals?status=overdue&page=1&pageSize=20`: quyền CustomerService (Admin/Manager/CustomerService). Lọc renting chưa có returned_at và hạn trả trước giờ máy chủ, trước count/phân trang; giữ newest ID DESC, page>=1/pageSize 1..100. Item thêm `isOverdue:boolean`, `status` vẫn renting để `/return` hợp lệ. Không tạo thêm rental hay ghi status bằng GET.
@@ -1049,3 +1053,6 @@ Cần áp dụng `0026_audit_log_metadata.sql` và `0027_role_catalogue.sql` tr�
 ## Thứ tự mặc định danh sách Admin — 2026-10-22
 
 Xe: created_at DESC, id DESC. Customer/GPLX, cơ sở, vai trò và nhân viên: ID DESC trước LIMIT/OFFSET. Các bảng không có ngày tạo hồ sơ dùng ID làm thứ tự tạo. API danh mục legacy phòng ban/loại xe/gói vẫn trả đầy đủ array; FE xếp ID DESC trước chia trang. Lịch chuyến/ca giữ giờ bắt đầu tăng dần, dashboard giữ thứ tự theo chỉ số.
+# Phân công/inspect sau trả xe — 2026-10-22
+
+GET/PUT `/api/rentals/{id}/inspection-assignment` và POST `/api/rentals/{id}/inspection-assignment/checked` nhận query `inspectionType=pre_rental|post_rental` (mặc định pre_rental). POST/PUT giữ body `{technicianStaffId}`; approveRequest chỉ áp dụng trước thuê. Post chỉ cho status post_inspection, không có evidence post hiện tại; không tự hoàn tất hoặc thanh toán. GET đọc phân công độc lập theo rental/vehicle/type. PUT cần Management, POST checked chỉ Admin, kỹ thuật viên Maintenance active. Invalid type trả 400 tại HTTP/Application, sai trạng thái/evidence trả 409, missing rental 404; envelope đủ 6 trường. Xác nhận post lưu is_ok=true, confirmation_source=admin_confirmation và confirmed_by từ principal. Biên bản không đạt dùng API biên bản đầy đủ; không ghi đè. Cần migration 0029, dữ liệu phân công cũ giữ type pre_rental.

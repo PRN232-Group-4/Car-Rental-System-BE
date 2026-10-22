@@ -83,6 +83,12 @@ public sealed class ApiSuccessResponseFilter : IAsyncAlwaysRunResultFilter
             return "Request completed successfully.";
 
         var key = $"{action.ControllerName}.{action.ActionName}";
+        if (action.ControllerName == "InspectionAssignments" && context.HttpContext.Request.Query["inspectionType"] == "post_rental")
+            return action.ActionName switch {
+                "Assign" => "Post-rental inspection technician assigned successfully.",
+                "ConfirmChecked" => "Technician dispatch and passing post-rental check confirmed successfully.",
+                _ => "Post-rental inspection technician assignment retrieved successfully."
+            };
         if (Messages.TryGetValue(key, out var message))
             return message;
 
