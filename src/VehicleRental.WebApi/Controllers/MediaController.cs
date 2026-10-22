@@ -45,7 +45,7 @@ public sealed class MediaController(IMediaService media) : ControllerBase
     }
 
     /// <summary>Admin uploads a driver's license image before creating or updating staff.</summary>
-    [Authorize(Policy = AuthorizationPolicies.Admin)]
+    [Authorize(Policy = AuthorizationPolicies.Management)]
     [HttpPost("staff-license")]
     [Consumes("multipart/form-data")]
     [ProducesResponseType<StoredImage>(StatusCodes.Status200OK)]

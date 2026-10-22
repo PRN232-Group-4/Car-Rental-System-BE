@@ -68,6 +68,10 @@ public sealed class AuthorizationTests
     [InlineData("DeleteType", "Manager", true)]
     [InlineData("DeletePlan", "CustomerService", false)]
     [InlineData("DeletePlan", "Manager", true)]
+    [InlineData("AddFacility", "Staff", false)]
+    [InlineData("AddFacility", "Manager", true)]
+    [InlineData("EditFacility", "Manager", true)]
+    [InlineData("DeleteFacility", "Manager", true)]
     public async Task Operations_enforce_capability_matrix(string action, string role, bool allowed) =>
         Assert.Equal(allowed, await AuthorizeEndpoint<OperationsController>(action, Principal(role, 7)));
 
@@ -104,7 +108,7 @@ public sealed class AuthorizationTests
     [InlineData("Staff", false)]
     [InlineData("Driver", false)]
     [InlineData("CustomerService", false)]
-    [InlineData("Manager", false)]
+    [InlineData("Manager", true)]
     [InlineData("Maintenance", true)]
     [InlineData("Admin", true)]
     public async Task Inspection_requires_technical_role_and_staff_identity(string role, bool allowed)
