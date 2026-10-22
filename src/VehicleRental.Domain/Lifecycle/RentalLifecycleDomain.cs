@@ -205,29 +205,18 @@ public static class CancellationPolicy
 
         if (actor == CancellationActor.Customer)
         {
-            if (currentStatus != RentalStatus.Pending)
+            if (currentStatus is not (RentalStatus.Pending or RentalStatus.PreInspection))
             {
                 return new CancellationPreview(
                     Allowed: false,
                     FeeAmount: 0m,
                     RefundAmount: 0m,
-                    Reasons: ["SELF_CANCEL_NOT_ALLOWED: Customer can only cancel when rental is in pending status."],
+                    Reasons: ["SELF_CANCEL_NOT_ALLOWED: Chỉ được hủy đơn trước khi chuyển sang Đang thuê."],
                     FreeUntil: freeUntil
                 );
             }
 
             var timeRemaining = startTime - now;
-            if (timeRemaining <= TimeSpan.Zero)
-            {
-                return new CancellationPreview(
-                    Allowed: false,
-                    FeeAmount: 0m,
-                    RefundAmount: 0m,
-                    Reasons: ["SELF_CANCEL_NOT_ALLOWED: Rental start time has already arrived or passed."],
-                    FreeUntil: freeUntil
-                );
-            }
-
             if (timeRemaining >= TimeSpan.FromHours(freeHoursBeforeStart))
             {
                 return new CancellationPreview(
@@ -239,7 +228,7 @@ public static class CancellationPolicy
                 );
             }
 
-            // 0 < timeRemaining < 24h: 20% penalty on (rent + VAT)
+            // Less than 24h (including a delayed pickup): the existing late cancellation policy applies.
             var fee = MoneyRounding.RoundVnd(rentAndVat * (lateFeePercent / 100m));
             var refund = Math.Max(0m, paidAmount - fee);
             return new CancellationPreview(

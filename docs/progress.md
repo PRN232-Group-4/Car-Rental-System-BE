@@ -1,5 +1,31 @@
 # Tiến độ
 
+## Quá hạn và thu phí sau trả xe — 2026-10-22
+
+Đã thêm bộ lọc overdue trước phân trang/isOverdue, giữ lifecycle để nhận trả xe. Thu cash hoặc tạo checkout PayOS cho hóa đơn thiếu liên kết settlement completed; có audit/idempotency và lock chống thu trùng, không phát hành order từ overtime. 109 backend tests liên quan đạt trên PostgreSQL riêng; Build Release đạt. Xem [FR-037](../specs/FR-037-overdue-collection.md), [thay đổi](../changes/2026-10-22-overdue-collection.md). Chưa deploy/không thêm migration mới.
+
+## Customer hủy trước Đang thuê và phiên bản inspect Railway — 2026-10-22
+
+Customer chủ đơn được hủy pending/pre_inspection, kể cả nhận trễ chưa renting; giữ phí/hoàn hiện có. Mine canCancel, preview và cancel đồng bộ; 148 backend tests liên quan đạt trên PostgreSQL riêng. Đã xác nhận Swagger Railway có inspection-assignment nhưng chưa có checked, nên Not Found hiện tại cần triển khai backend/migration 0028 từ source mới. Chưa deploy/migrate database ứng dụng. Xem [thay đổi](../changes/2026-10-22-customer-cancel-before-renting.md).
+
+## Xe customer và kiểm tra theo hình thức lái — 2026-10-22
+
+Đã lọc xe đang thuê khỏi public search/kiểm tra lại khi tạo đơn, lưu hasDriver cho cả hourly/longterm, tự xác nhận kiểm tra trước cho đơn có tài xế, và thêm Admin POST inspection-assignment/checked nguyên tử. Directory có nguồn/người xác nhận; migration 0028 backfill đơn có tài xế chưa bắt đầu, không ghi đè kiểm tra thật. 244/244 tests liên quan đạt trên PostgreSQL riêng, gồm HTTP/Swagger. Chưa deploy/migrate database ứng dụng. Xem [thay đổi](../changes/2026-10-22-customer-availability-inspection-modes.md).
+
+## Danh sách Admin mới nhất trước — 2026-10-22
+
+Đồng bộ SQL xe theo created_at DESC/id DESC; customer/GPLX, cơ sở, vai trò và nhân viên theo ID DESC trước phân trang. FE sắp đầy đủ danh mục legacy và đổi mặc định nhân viên sang ID giảm dần. 74/74 backend tests liên quan đạt, gồm PostgreSQL riêng và HTTP; không migration/deploy. Xem [thay đổi](../changes/2026-10-22-admin-newest-first.md).
+
+## Loại thuê giờ/dài hạn trong danh sách vận hành — 2026-10-22
+
+GET `/api/rentals` và summary bàn giao trả thêm `rentalType` từ DB, khớp chi tiết; giữ bộ lọc/quyền/pagination. 41/41 kiểm thử HTTP/Swagger/SQL liên quan đạt, 0 skipped; build Release thành công, PostgreSQL 18 riêng với database fixture tạm. Không migration/deploy; cần khởi động lại backend đang chạy. Xem [thay đổi](../changes/2026-10-22-operational-rental-type.md).
+
+## Timeout PostgreSQL metadata và proxy local — 2026-10-22
+
+Thêm cờ `Database:SkipTypeLoading` (mặc định false) cho workaround Npgsql `LoadBackendTypes`; Development local đã bật bằng cấu hình không chứa secret. Build solution `--no-restore -warnaserror` đạt, 0 warning/error. Kiểm chứng chỉ đọc với Npgsql 8.0.5: kết nối Neon 0,53 giây; đọc được text/varchar/int arrays, timestamps, jsonb, numeric, boolean và tsrange. Database hiện có migration `0027_role_catalogue`; lượt kiểm chứng không thực hiện migration.
+
+Đối chiếu timeout đăng nhập: API local `6789` healthy, nhưng manifest proxy Next.js cũ vẫn trỏ Railway. Nạp lại cấu hình Next dev đã đổi `/api/*` sang `http://localhost:6789/api/*`; POST đăng nhập rỗng qua frontend trả validation 400 trong 0,13 giây. Chưa thử thông tin đăng nhập thật. Xem [change](../changes/2026-10-22-database-type-loading-and-local-proxy.md).
+
 ## Audit logs và CRUD danh mục role — 2026-10-21
 
 Đã thêm `GET /api/audit-logs` cho Admin/Manager với search actor/target, action và phân trang; chuẩn hóa action cũ, trả metadata thật và ghi IP cho mutation quản trị tài khoản mới. Thêm CRUD `/api/roles` cho Admin, tên duy nhất không phân biệt hoa thường, bảo vệ role hệ thống và role đang gán; custom role dùng được qua API gán/gỡ/lọc users, giữ kiểm tra hồ sơ/chuyên môn, Admin cuối cùng và thu hồi phiên. Swagger và tài liệu đã cập nhật.
@@ -251,3 +277,7 @@ Kiểm chứng: **110/110 tests pass, 0 skipped**, build mọi project với war
 ## Danh sách kiểm tra và người bảo trì xe — 2026-10-21
 
 Đã triển khai GET `/api/inspections` theo inspectionType/rentalId và pagination mặc định 1/20, tối đa 100; gồm toàn bộ evidence xe cũ và rental đã đóng, có email người kiểm tra và thông tin xe. Vehicle list/detail có `maintenanceTechnicianEmails` theo Maintenance active và trạng thái phiếu hiện tại; ẩn email khỏi public/customer/Driver/CustomerService. Thêm test mở khóa user rồi đọc lại từ repository mới để xác nhận trạng thái PostgreSQL bền vững. Không thêm migration ngoài 0025 của tính năng phân công trước đó. Kiểm chứng root: build 0 warnings/errors; **75/75 tests pass, 0 skipped** trên PostgreSQL 18 độc lập (`Timezone=UTC`), gồm OperationalDirectoryTests, InspectionAssignmentTests, UserAdministrationTests, UserAdministrationIntegrationTests, VehicleSearchTests và OperationsCompletionApiTests. Bao phủ HTTP/DB, filter/pagination/auth/envelope/Swagger, current technician email/public redaction và unlock persistence. Root xác nhận read-only live Railway GET phân công trả 404 và Swagger chưa có route; FE dev rewrite đang trỏ origin live này và giữ nguyên theo yêu cầu. Source GET chưa phân công có regression 200/null; cần deploy backend/migration đồng bộ để route tồn tại trên môi trường đó. Chưa deploy/Docker. Xem [thay đổi](../changes/2026-10-21-inspection-directory-maintenance-emails.md).
+
+## GPLX chưa gửi của khách hàng mới — 2026-10-22
+
+FR-006: GET GPLX trả status=none nếu số GPLX null/rỗng/khoảng trắng, không biến giá trị pending mặc định khi đăng ký thành hồ sơ đã gửi. Giữ bản ghi để upload lần đầu; hồ sơ đã gửi giữ trạng thái duyệt và đọc không mutate DB. Kiểm chứng CustomerLicenseUploadTests: **47/47 pass, 0 skipped** với HTTP/envelope/Swagger và upload đầu tiên, build Release thành công. Không migration/deploy. Xem [thay đổi](../changes/2026-10-22-unsubmitted-customer-license.md).

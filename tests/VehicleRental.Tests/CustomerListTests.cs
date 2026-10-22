@@ -90,19 +90,19 @@ public sealed class CustomerListTests(PostgresFixture db) : IClassFixture<Postgr
 
         var page = await service.ListAsync(new() { Search = marker, PageSize = 2 }, default);
         Assert.Equal(3, page.TotalCount);
-        Assert.Equal(new[] { first, second }, page.Items.Select(x => x.Id));
+        Assert.Equal(new[] { third, second }, page.Items.Select(x => x.Id));
         Assert.True(page.Items[0].IsActive);
         Assert.False(page.Items[1].IsActive);
-        Assert.Equal("Alice", page.Items[0].FullName);
+        Assert.Null(page.Items[0].FullName);
         Assert.Equal("approved", page.Items[0].LicenseStatus);
         Assert.Equal(12, page.Items[0].LoyaltyPoint);
         Assert.Equal("https://example.test/avatar.png", page.Items[0].AvatarUrl);
         var next = await service.ListAsync(new() { Search = marker, Page = 2, PageSize = 2 }, default);
         Assert.Equal(3, next.TotalCount);
-        Assert.Equal(third, Assert.Single(next.Items).Id);
-        Assert.Null(next.Items[0].FullName);
+        Assert.Equal(first, Assert.Single(next.Items).Id);
+        Assert.Equal("Alice", next.Items[0].FullName);
         var active = await service.ListAsync(new() { Search = marker, IsActive = true }, default);
-        Assert.Equal(new[] { first, third }, active.Items.Select(x => x.Id));
+        Assert.Equal(new[] { third, first }, active.Items.Select(x => x.Id));
         Assert.Equal(2, active.TotalCount);
         var inactive = await service.ListAsync(new() { Search = marker, IsActive = false }, default);
         Assert.Equal(second, Assert.Single(inactive.Items).Id);
@@ -147,10 +147,10 @@ public sealed class CustomerListTests(PostgresFixture db) : IClassFixture<Postgr
 
         var page = await service.ListAsync(new() { Search = marker, LicenseStatus = "pending", PageSize = 1 }, default);
         Assert.Equal(2, page.TotalCount);
-        Assert.Equal(first, Assert.Single(page.Items).Id);
+        Assert.Equal(second, Assert.Single(page.Items).Id);
         var next = await service.ListAsync(new() { Search = marker, LicenseStatus = "pending", PageSize = 1, Page = 2 }, default);
         Assert.Equal(2, next.TotalCount);
-        Assert.Equal(second, Assert.Single(next.Items).Id);
+        Assert.Equal(first, Assert.Single(next.Items).Id);
         var empty = await service.ListAsync(new() { Search = marker, LicenseStatus = "pending", PageSize = 1, Page = 3 }, default);
         Assert.Empty(empty.Items);
         Assert.Equal(2, empty.TotalCount);
@@ -158,7 +158,7 @@ public sealed class CustomerListTests(PostgresFixture db) : IClassFixture<Postgr
         Assert.Equal(first, Assert.Single(active.Items).Id);
         Assert.Equal(1, active.TotalCount);
         var none = await service.ListAsync(new() { Search = marker, LicenseStatus = "none" }, default);
-        Assert.Equal(missing, none.Items.Select(x => x.Id));
+        Assert.Equal(missing.AsEnumerable().Reverse(), none.Items.Select(x => x.Id));
         Assert.Equal(3, none.TotalCount);
         Assert.All(none.Items, item => Assert.Equal("none", item.LicenseStatus));
         Assert.Equal(approved, Assert.Single((await service.ListAsync(new() { Search = marker, LicenseStatus = "approved" }, default)).Items).Id);

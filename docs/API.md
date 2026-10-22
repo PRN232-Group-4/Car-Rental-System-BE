@@ -1,5 +1,13 @@
 # Tài liệu API — Car Rental System BE
 
+## Bổ sung 22/10/2026: quá hạn và thu phụ phí sau trả xe
+
+- GET `/api/rentals?status=overdue&page=1&pageSize=20`: quyền CustomerService (Admin/Manager/CustomerService). Lọc renting chưa có returned_at và hạn trả trước giờ máy chủ, trước count/phân trang; giữ newest ID DESC, page>=1/pageSize 1..100. Item thêm `isOverdue:boolean`, `status` vẫn renting để `/return` hợp lệ. Không tạo thêm rental hay ghi status bằng GET.
+- POST `/api/invoices/{invoiceId}/staff-checkout`: cùng quyền, ID dương, không body. Chỉ hóa đơn overtime unpaid/payOS thuộc settlement đã completed. Trả 200 CheckoutResult `{orderCode,paymentLinkId,checkoutUrl}` qua envelope 6 trường; 400 ID sai, 401/403 quyền, 404 không có invoice, 409 sai loại/trạng thái/phương thức/settlement, 503 gateway chưa cấu hình. Không ghi paid; webhook xác minh chữ ký/số tiền mới ghi paid.
+- POST `/api/invoices/{invoiceId}/cash-confirmation`: mở rộng cho overtime liên kết settlement completed, chỉ trước checkout_started_at. Số tiền từ DB, không nhận amount/paid từ client. Ghi payment type overtime/method cash, reviewed_by/reviewed_at, invoice paid/method cash nguyên tử và idempotent; không phát hành order mới. Đã reserve online trả 409 PAYMENT_IN_PROGRESS. Quy tắc cash của hóa đơn thuê ban đầu không đổi.
+- GET `/api/invoices/{id}` thêm `kind`, `canConfirmCash`, `canCreateStaffCheckout`; cờ là boolean từ server. Overtime chưa quyết toán trả canPay=false/paymentBlockedReason=OVERTIME_INVOICE_REQUIRED. Cash và online serialize cùng lock rental→invoice. Nếu provider lỗi sau reserve, giữ khóa phương thức online để tránh thu trùng.
+- Nhận lại xe vẫn `/rentals/{id}/return`, lưu returnedAt; `/complete` sau post-inspection chốt phí/cọc, lưu settlement và shortfallInvoiceId. Đã hoàn tất trả xe không đồng nghĩa đã thanh toán hóa đơn phần thiếu. Xem [FR-037](../specs/FR-037-overdue-collection.md), [ADR-011](decisions/ADR-011-overdue-collection.md).
+
 ## Bổ sung 21/10/2026: email thông báo nghiệp vụ
 
 Sau khi lưu thành công, duyệt/từ chối GPLX và hoàn tiền, thay đổi trạng thái đơn thuê, ghi kết quả kiểm tra xe và tạo/xử lý báo cáo sự cố gửi email thông báo cho khách hàng liên quan (báo cáo gửi thêm người báo cáo). Đây là email thông báo theo best effort: lỗi tra cứu người nhận, provider, timeout hoặc hủy gửi được ghi log an toàn và không đổi kết quả thành công của thao tác nghiệp vụ. Không trả lỗi email trên response. Không áp dụng quy tắc bỏ qua lỗi này cho email OTP vì người dùng phải nhận mã để xác thực.
@@ -342,7 +350,7 @@ Phân công members chỉ thay department/facility, giữ specialty và các tr�
 | GET | `/api/customers` | CustomerService | `search?`, `isActive?`, `licenseStatus?`, `page=1`, `pageSize=20` | 200 / `CustomerPage` |
 | GET | `/api/customers/{customerId}` | CustomerService | Không | 200 / `CustomerDetail` |
 
-Policy CustomerService gồm **Admin, Manager, CustomerService**. Danh sách tìm chuỗi theo tên/email/điện thoại, không phân biệt hoa thường; `isActive` bỏ qua thì lấy cả tài khoản active và inactive. `page >= 1`, `pageSize` từ 1 đến 100. Dữ liệu sắp xếp theo customer ID; trang vượt phạm vi trả `items=[]` và giữ `totalCount`.
+Policy CustomerService gồm **Admin, Manager, CustomerService**. Danh sách tìm chuỗi theo tên/email/điện thoại, không phân biệt hoa thường; `isActive` bỏ qua thì lấy cả tài khoản active và inactive. `page >= 1`, `pageSize` từ 1 đến 100. Dữ liệu sắp xếp theo customer ID giảm dần (mới nhất trước); trang vượt phạm vi trả `items=[]` và giữ `totalCount`.
 
 `licenseStatus` tùy chọn nhận `pending`, `approved`, `rejected`, `none` (chữ thường); giá trị khác trả 400. Không truyền thì trả mọi trạng thái. Khách chưa có số GPLX (null/rỗng/chỉ khoảng trắng) có `licenseStatus=none` trong danh sách, dù DB mặc định `pending`; bộ lọc `pending` chỉ lấy hồ sơ đã gửi đang chờ duyệt. Kết hợp tất cả bộ lọc trước phân trang; `totalCount` là tổng sau lọc. Ví dụ `/api/customers?licenseStatus=pending&page=1&pageSize=20`.
 
@@ -356,6 +364,8 @@ Policy CustomerService gồm **Admin, Manager, CustomerService**. Danh sách tì
 | PUT | `/api/customer/license` | Customer | Multipart: `number`, `type`, `issueDate`, `expiryDate`, `file` (đều bắt buộc) | 200 / `CustomerLicense` |
 | PUT | `/api/customer/license/url` | Customer | JSON `LicenseRequest` | 200 / `CustomerLicense` |
 | PUT | `/api/customers/{customerId}/license-status` | CustomerService | `LicenseReviewRequest` | 200 / `CustomerLicense` |
+
+`GET /api/customer/license` trả `status=none` khi customer chưa có số GPLX (null/rỗng/chỉ khoảng trắng), kể cả bản ghi DB cũ mặc định `pending`. Giữ bản ghi và các trường hiện có để customer gửi lần đầu; không có customer thì `data=null`. Hồ sơ có số GPLX giữ nguyên trạng thái xét duyệt. Thao tác đọc không cập nhật dữ liệu.
 
 `PUT /api/customer/license` nhận **multipart/form-data** để Swagger hiện ô chọn file. Ảnh tối đa **5 MiB**, định dạng JPEG/PNG/WebP/GIF. Server upload Cloudinary rồi lưu URL HTTPS vào giấy phép của customer đang đăng nhập, đưa trạng thái về `pending`. Dữ liệu/ảnh không hợp lệ trả 400 trước khi gọi Cloudinary.
 
@@ -468,7 +478,7 @@ Danh sách xe hiện không tải `detail` như endpoint chi tiết. Dùng `GET 
 
 Bộ lọc danh mục `/find`: `category=car|electric_car|motorbike|electric_motorbike`, `brand`, `seatCount` (số chỗ tối thiểu), `transmission=automatic|manual|cvt` (automatic gồm CVT), `fuelType=petrol|gasoline|electric` (tương thích Xăng/Điện), `minPrice`, `maxPrice` theo hình thức thuê, `q` tìm hãng + mẫu, năm và chi nhánh. `sort=recommended|price_asc|price_desc|newest|name_asc`, có id làm thứ tự phụ ổn định. Tất cả áp dụng trước đếm tổng/phân trang. `vehicleType` trong kết quả thêm `type=car|motorbike` để giao diện nhận diện phân khúc độc lập tên hiển thị.
 
-Khi `hasDriver=true` và chọn cơ sở, cần ít nhất một tài xế thuộc chính cơ sở đó, tài khoản active, GPLX có ngày hết hạn hợp lệ đến cuối thời gian thuê, không có assignment `assigned` trùng giờ kể cả đệm `Assignment:DriverBufferMinutes` (mặc định 60). Không lấy tài xế từ cơ sở khác. Xe vẫn phải trống lịch và không bị bảo dưỡng chặn. Tìm kiếm chưa gán/giữ chỗ tài xế; việc phân công vẫn ở luồng vận hành. Tự lái không cần tài xế rảnh nhưng giữ kiểm tra xe/GPLX khách như hiện tại; longterm hiện chỉ tự lái.
+Khi `hasDriver=true` và chọn cơ sở, cần ít nhất một tài xế thuộc chính cơ sở đó, tài khoản active, GPLX có ngày hết hạn hợp lệ đến cuối thời gian thuê, không có assignment `assigned` trùng giờ kể cả đệm `Assignment:DriverBufferMinutes` (mặc định 60). Không lấy tài xế từ cơ sở khác. Xe vẫn phải trống lịch và không bị bảo dưỡng chặn. Tìm kiếm chưa gán/giữ chỗ tài xế; việc phân công vẫn ở luồng vận hành. Tự lái không cần tài xế rảnh nhưng giữ kiểm tra xe/GPLX khách. Cả hourly/longterm hỗ trợ hasDriver. Public search chỉ trả xe available, không có rental đang renting/post_inspection, dù chọn lịch tương lai; áp dụng trước totalCount/pagination. Admin catalogue giữ toàn bộ đội xe.
 
 Ví dụ `/api/vehicles/search?facilityId=5&hasDriver=true&rentalType=hourly&from=2027-01-10T01:00:00Z&to=2027-01-10T03:00:00Z&page=1&pageSize=20`.
 
@@ -482,7 +492,7 @@ Ví dụ `/api/vehicles/search?facilityId=5&hasDriver=true&rentalType=hourly&fro
 | POST | `/api/rentals/hourly` | Customer | `RentalRequest` | 201 / `Rental` |
 | POST | `/api/rentals/longterm` | Customer | `RentalRequest` | 201 / `Rental` |
 | GET | `/api/rentals/{id}` | RentalRead + phạm vi | Không | 200 / `Rental` |
-| GET | `/api/rentals` | CustomerService | Query status/customerId/vehicleId/from/to/page/pageSize | 200 / `PagedResult<OperationalRentalSummary>` |
+| GET | `/api/rentals` | CustomerService | Query status/customerId/vehicleId/from/to/page/pageSize | 200 / `PagedResult<OperationalRentalSummary>`; mỗi item có `rentalType` (`hourly`/`longterm`) từ DB, khớp detail |
 | GET | `/api/rentals/{id}/detail` | CustomerService | Không | 200 / `OperationalRentalDetail` |
 | GET | `/api/rentals/mine` | Customer | Query tab/page/pageSize | 200 / `PagedResult<CustomerRentalSummary>` |
 | GET | `/api/rentals/mine/{id}` | Customer, đơn của mình | Không | 200 / `CustomerRentalDetail` |
@@ -529,10 +539,10 @@ Chỉ đổi trạng thái bản ghi đích, không đổi điều khoản, khô
 }
 ```
 
-- `vehicleId` dương; `policyId`/`subscriptionId` nullable; `hasDriver` mặc định false. Longterm luôn truyền `hasDriver=false` ở server, dù body gửi true.
+- `vehicleId` dương; `policyId`/`subscriptionId` nullable; `hasDriver` mặc định false và được lưu đúng cho cả hourly/longterm. Xe phải available, không có đơn đang renting/post_inspection; API tạo đơn kiểm tra lại dưới vehicle lock.
 - `paymentMethod` là `payos` (mặc định) hoặc `cash`, lưu cho hóa đơn thuê trực tiếp. Customer gửi yêu cầu giữ chỗ xe, chưa phải đơn thuê chính thức; `Rental.id` là mã yêu cầu/vận hành, `orderId` nullable là mã order riêng. Staff duyệt trước thanh toán; PayOS webhook hợp lệ hoặc staff xác nhận thực nhận tiền mặt mới phát hành order paid. Gói đã trả trước phát hành order khi staff duyệt. Xem [FR-036](../specs/FR-036-booking-request-paid-order.md).
 - `endTime > startTime`; xe phải khả dụng, an toàn và không có lịch thuê hoạt động chồng nhau.
-- Thuê trực tiếp (`subscriptionId=null`) cần giấy phép customer đã approved; server tự tạo invoice trong transaction tạo rental.
+- Thuê trực tiếp tự lái (`subscriptionId=null`, `hasDriver=false`) cần GPLX customer đã approved; đơn có tài xế không yêu cầu GPLX customer. Server tự tạo invoice trong transaction tạo rental. Đơn có tài xế được mặc định đạt kiểm tra trước thuê, ghi confirmation_source=driver_default, confirmed_by=system, không giả phân công tài xế hoặc số đo/ảnh.
 - Có `subscriptionId` thì server suy ra `isSubscription=true`, kiểm tra gói active thuộc customer và trừ số giờ thuê nếu gói có giới hạn giờ. Gói này không tạo invoice thuê xe.
 - Giá theo giờ = đơn giá × số giờ. Giá dài hạn = đơn giá tháng × `max(1, ceil(số giờ / 720))`.
 - Với policy active: VAT và deposit tính theo phần trăm tiền thuê. `Rental.totalPrice` hiện là tiền thuê + VAT; invoice.amount cho thuê trực tiếp là tiền thuê + VAT + deposit.
@@ -572,6 +582,9 @@ Item: `{ id, rentalId, vehicleId, vehicleName, licensePlate, inspectionType, isO
 |---|---|---|---|
 | GET | `/api/rentals/{id}/inspection-assignment` | Admin, Manager, CustomerService, Maintenance | `InspectionAssignment` hoặc null khi chưa phân công cho xe hiện tại |
 | PUT | `/api/rentals/{id}/inspection-assignment` | Management (Admin/Manager) | `{ "technicianStaffId": 3 }` → `InspectionAssignment` |
+| POST | `/api/rentals/{id}/inspection-assignment/checked` | Admin | `{ "technicianStaffId": 3 }` → `InspectionAssignment`; lưu phân công và kết quả kiểm tra trước thuê đạt trong cùng transaction |
+
+POST checked chỉ cho rental pending/pre_inspection, started_at null và chưa có biên bản trước thuê của xe hiện tại. Technician phải Maintenance active; validation/quy tắc lỗi giống PUT. Lưu nguồn admin_confirmation và confirmed_by từ principal, không ghi đè evidence fail/pass, không đổi trạng thái rental hoặc tự bỏ qua thanh toán/tài xế/bảo dưỡng/kiểm tra sau thuê. GET `/api/inspections` thêm confirmationSource (technician/driver_default/admin_confirmation), confirmedBy nullable để phân biệt nguồn xác nhận. Đơn có tài xế tự có kết quả đạt khi tạo/đổi xe; mặc định không tạo số km, nhiên liệu hoặc ảnh. Sửa điều khoản trước bàn giao có thể đổi về tự lái và loại xác nhận mặc định; evidence kỹ thuật/Admin vẫn bất biến.
 
 `InspectionAssignment`: `{ rentalId, vehicleId, technicianStaffId, technicianName, assignedAt, assignedBy, technicianEmail }`. `technicianEmail` lấy từ tài khoản thật, cho phép người đọc không có quyền staff directory hiển thị đúng người nhận việc. `id` và `technicianStaffId` phải dương; staff phải có specialty Maintenance và tài khoản active. Lưu phân công cho rental/xe hiện tại ở pending/pre_inspection, started_at null, trước khi có pre-rental evidence; có thể đổi người trước evidence. Thiếu rental trả 404; technician không hợp lệ trả 400 `TECHNICIAN_NOT_ELIGIBLE`; trạng thái không cho phép trả 409 `INSPECTION_ASSIGNMENT_NOT_ALLOWED`; đã có evidence trả 409 `INSPECTION_ALREADY_RECORDED`. `assignedBy` lấy từ email principal, không nhận từ body. Phân công không ghi evidence, không đổi trạng thái, không thay quyền Inspection hay giả danh người thực hiện. Thay xe không kế thừa phân công của xe cũ. Danh sách ứng viên dùng `/api/staff` phân trang rồi lọc `isActive`/`roles` có Maintenance ở client (không có query staffRole).
 
@@ -579,9 +592,12 @@ GET `/api/rentals/{id}` (flat `Rental`, đang dùng trong Admin) và `/api/renta
 
 ### Vòng đời hiện tại
 
+2026-10-22: Admin và customer chủ đơn được hủy ở pending/pre_inspection, trước renting, kể cả đã qua giờ nhận dự kiến nhưng chưa bàn giao. GET cancellation-preview và POST `/api/rentals/{id}/cancel` giữ cùng chính sách phí/hoàn hiện có; reason bắt buộc, customer không được waiveFee. Mine list/detail trả canCancel theo cùng hai trạng thái; mutation kiểm tra lại current status dưới lock. Từ renting trở đi chặn hủy.
+
 ```text
 pending -> pre_inspection -> renting -> post_inspection -> completed
 pending -> cancelled
+pre_inspection -> cancelled
 ```
 
 Luồng mới: staff duyệt yêu cầu `/confirm` → customer thanh toán PayOS hoặc staff xác nhận đã thu tiền mặt → phát hành đơn thuê chính thức; kiểm định `/inspections/pre` đạt và phân công xe/tài xế → xác nhận `/api/handovers/{rentalId}/confirm`. Confirm không yêu cầu paid; ghi confirmed_at để mở thanh toán, legacy pre_inspection chưa có confirmed_at cần duyệt bổ sung. Xác nhận bàn giao dùng cùng logic `/start`, chuyển `pre_inspection → renting`, ghi started_at và audit trong transaction. Không cần body. Chỉ bàn giao trực tiếp khi hóa đơn thuê ban đầu paid, kiểm định và assignment của **xe hiện tại** hợp lệ; tự lái cần GPLX approved/còn hạn. Gọi lại trả 409 ALREADY_IN_STATE. Kiểm định legacy từ pending/renting vẫn tự chuyển trạng thái; xác nhận bàn giao kiểm tra lại payment và tình trạng xe để đường legacy không bỏ qua điều kiện bắt đầu thuê. `/status/{status}` cũ deprecated; dùng endpoint lifecycle riêng cho luồng mới.
@@ -990,7 +1006,7 @@ Migration mới: 0022_admin_user_audit.sql, 0023_operations_api_completion.sql, 
 | PUT | `/api/roles/{id}` | RequireAdmin | JSON `{ "name": "AuditViewer" }`; cập nhật role tùy chỉnh chưa gán. |
 | DELETE | `/api/roles/{id}` | RequireAdmin | Xóa role tùy chỉnh chưa gán; trả 200, data=null. |
 
-Hai danh sách trả `data={items,totalCount,page,pageSize}`; page>=1, pageSize từ 1 đến 100, mặc định 1/20. HTTP và Application cùng validate; sai trả 400. totalCount sau lọc/trước phân trang; trang vượt phạm vi trả items rỗng và giữ count. Role sắp ID tăng dần; audit sắp timestamp giảm dần rồi ID giảm dần. Mọi response giữ envelope 6 trường kể cả null; chưa đăng nhập trả 401, thiếu quyền trả 403.
+Hai danh sách trả `data={items,totalCount,page,pageSize}`; page>=1, pageSize từ 1 đến 100, mặc định 1/20. HTTP và Application cùng validate; sai trả 400. totalCount sau lọc/trước phân trang; trang vượt phạm vi trả items rỗng và giữ count. Role sắp ID giảm dần; audit sắp timestamp giảm dần rồi ID giảm dần. Mọi response giữ envelope 6 trường kể cả null; chưa đăng nhập trả 401, thiếu quyền trả 403.
 
 Audit search tối đa 255 ký tự, tìm không phân biệt hoa thường theo email/tên/ID của người thao tác và tài khoản đích hoặc mã `AUD-{id}`; action tối đa 40 ký tự, lọc chính xác sau chuẩn hóa. Các action lịch sử `role:add`, `role:remove`, `deactivate`, `activate`, `sessions:revoke` lần lượt được trả thành `role_assigned`, `role_removed`, `account_locked`, `account_unlocked`, `session_revoked`. Action khác giữ nguyên; filter không có kết quả trả trang rỗng.
 
@@ -1029,3 +1045,7 @@ Ví dụ response audit:
 Role trả `{id,name,isSystem,userCount}`. Tên bắt buộc, trim, tối đa 255 ký tự, không chứa dấu phẩy và duy nhất không phân biệt hoa thường; trùng trả 409. Không đổi tên/xóa Admin, Manager, Staff, CustomerService, Driver, Maintenance, Customer; role tùy chỉnh đang có người dùng cũng trả 409 khi đổi tên/xóa. Gửi lại đúng tên hiện tại là idempotent. Role tùy chỉnh có thể gán/gỡ qua `/api/users/{id}/roles` và lọc bằng query role của `/api/users`; hệ thống dùng tên đã lưu và giữ nguyên quy tắc hồ sơ/chuyên môn, bảo vệ Admin cuối cùng và thu hồi phiên. Role tùy chỉnh không tự cấp quyền của policy hệ thống.
 
 Cần áp dụng `0026_audit_log_metadata.sql` và `0027_role_catalogue.sql` trước khi dùng API mới. Migration uniqueness dừng nếu dữ liệu role cũ trùng tên không phân biệt hoa thường; không tự xóa dữ liệu. Xem [FR-037](../specs/FR-037-user-administration.md), [FR-041](../specs/FR-041-role-catalog.md).
+
+## Thứ tự mặc định danh sách Admin — 2026-10-22
+
+Xe: created_at DESC, id DESC. Customer/GPLX, cơ sở, vai trò và nhân viên: ID DESC trước LIMIT/OFFSET. Các bảng không có ngày tạo hồ sơ dùng ID làm thứ tự tạo. API danh mục legacy phòng ban/loại xe/gói vẫn trả đầy đủ array; FE xếp ID DESC trước chia trang. Lịch chuyến/ca giữ giờ bắt đầu tăng dần, dashboard giữ thứ tự theo chỉ số.

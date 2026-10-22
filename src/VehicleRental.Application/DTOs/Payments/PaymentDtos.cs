@@ -2,7 +2,7 @@ namespace Car_Rental_System_BE.Application.DTOs.Payments;
 
 public sealed record InvoicePayment(int InvoiceId, int RentalId, int CustomerId, string InvoiceNumber, decimal Amount, string Status);
 public sealed record InvoiceSummary(int Id, int RentalId, string InvoiceNumber, decimal Amount, decimal VatAmount, string Status, DateTime IssuedAt, DateTime? DueAt);
-public sealed record InvoiceDetail(int Id, int RentalId, string InvoiceNumber, decimal Amount, decimal VatAmount, string Status, DateTime IssuedAt, DateTime? DueAt, bool CanPay, string? PaymentBlockedReason, string PaymentMethod = "payos", int? OrderId = null)
+public sealed record InvoiceDetail(int Id, int RentalId, string InvoiceNumber, decimal Amount, decimal VatAmount, string Status, DateTime IssuedAt, DateTime? DueAt, bool CanPay, string? PaymentBlockedReason, string PaymentMethod = "payos", int? OrderId = null, string Kind = "rental", bool CanConfirmCash = false, bool CanCreateStaffCheckout = false)
 {
     public InvoiceSummary ToSummary() => new(Id, RentalId, InvoiceNumber, Amount, VatAmount, Status, IssuedAt, DueAt);
 }

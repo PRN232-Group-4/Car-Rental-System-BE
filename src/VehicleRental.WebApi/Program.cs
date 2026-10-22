@@ -110,7 +110,13 @@ if (string.IsNullOrWhiteSpace(connectionString) && builder.Environment.IsDevelop
 
 if (!string.IsNullOrWhiteSpace(connectionString))
 {
-    builder.Services.AddSingleton<NpgsqlDataSource>(_ => NpgsqlDataSource.Create(ToNpgsqlConnectionString(connectionString)));
+    builder.Services.AddSingleton<NpgsqlDataSource>(services =>
+    {
+        var settings = new NpgsqlConnectionStringBuilder(ToNpgsqlConnectionString(connectionString));
+        if (services.GetRequiredService<IOptions<DatabaseMigrationOptions>>().Value.SkipTypeLoading)
+            settings.ServerCompatibilityMode = ServerCompatibilityMode.NoTypeLoading;
+        return NpgsqlDataSource.Create(settings.ConnectionString);
+    });
     builder.Services.AddOptions<DatabaseMigrationOptions>()
         .Bind(builder.Configuration.GetSection(DatabaseMigrationOptions.SectionName));
     builder.Services.AddHostedService<DatabaseMigrationHostedService>();

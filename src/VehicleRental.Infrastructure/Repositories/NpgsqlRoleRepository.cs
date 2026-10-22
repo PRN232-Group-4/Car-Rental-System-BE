@@ -20,7 +20,7 @@ public sealed class NpgsqlRoleRepository(NpgsqlDataSource dataSource) : IRoleRep
         await using var count = new NpgsqlCommand("SELECT COUNT(*)::int FROM roles r" + Filter, connection, transaction);
         count.Parameters.AddWithValue((object?)query.Search ?? DBNull.Value);
         var total = (int)(await count.ExecuteScalarAsync(ct))!;
-        await using var command = new NpgsqlCommand(Select + Filter + " ORDER BY r.id LIMIT $2 OFFSET $3", connection, transaction);
+        await using var command = new NpgsqlCommand(Select + Filter + " ORDER BY r.id DESC LIMIT $2 OFFSET $3", connection, transaction);
         command.Parameters.AddWithValue((object?)query.Search ?? DBNull.Value);
         command.Parameters.AddWithValue(query.PageSize);
         command.Parameters.AddWithValue(((long)query.Page - 1) * query.PageSize);

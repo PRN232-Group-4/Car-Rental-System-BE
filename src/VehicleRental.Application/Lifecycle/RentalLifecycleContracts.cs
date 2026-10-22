@@ -135,7 +135,9 @@ public sealed record OperationalRentalSummary(
     decimal TotalPrice,
     bool HasDriver,
     string? DriverName,
-    int? OrderId = null
+    string RentalType,
+    int? OrderId = null,
+    bool IsOverdue = false
 );
 
 public sealed record OperationalRentalDetail(

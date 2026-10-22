@@ -77,7 +77,7 @@ public sealed class HandoverServiceTests
         {
             Filter = filter;
             var pending = new OperationalRentalSummary(1, 3, "A", "a@test.local", 4, "51A", "Car", "pre_inspection",
-                DateTime.UtcNow, DateTime.UtcNow.AddHours(2), 100, false, null);
+                DateTime.UtcNow, DateTime.UtcNow.AddHours(2), 100, false, null, "hourly");
             return Task.FromResult(new PagedResult<OperationalRentalSummary>([pending, pending with { Id = 2, Status = "completed" }],
                 8, filter.Page, filter.PageSize));
         }

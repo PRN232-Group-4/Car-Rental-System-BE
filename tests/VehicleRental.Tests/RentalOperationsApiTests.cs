@@ -91,6 +91,7 @@ public sealed class RentalOperationsApiTests : IAsyncLifetime
         Assert.Equal(7, _repository.LastFilter!.CustomerId);
         Assert.Equal("pending", _repository.LastFilter.Status);
         Assert.Equal(JsonValueKind.Null, page.GetProperty("items")[0].GetProperty("orderId").ValueKind);
+        Assert.Equal("hourly", page.GetProperty("items")[0].GetProperty("rentalType").GetString());
     }
 
     [Fact]
@@ -242,6 +243,8 @@ public sealed class RentalOperationsApiTests : IAsyncLifetime
             }
         }
         var parameters = paths.GetProperty("/api/handovers").GetProperty("get").GetProperty("parameters");
+        Assert.Equal("string", json.RootElement.GetProperty("components").GetProperty("schemas")
+            .GetProperty("OperationalRentalSummary").GetProperty("properties").GetProperty("rentalType").GetProperty("type").GetString());
         var size = parameters.EnumerateArray().Single(x => x.GetProperty("name").GetString() == "pageSize").GetProperty("schema");
         Assert.Equal(1, size.GetProperty("minimum").GetInt32());
         Assert.Equal(100, size.GetProperty("maximum").GetInt32());
@@ -293,7 +296,7 @@ public sealed class RentalOperationsApiTests : IAsyncLifetime
             {
                 var filter = (OperationalFilter)args![0]!;
                 LastFilter = filter;
-                OperationalRentalSummary item = new(7, 7, "Customer", "customer@test.local", 1, "TEST", "Car", "pre_inspection", DateTime.UtcNow, DateTime.UtcNow.AddHours(4), 440000, false, null);
+                OperationalRentalSummary item = new(7, 7, "Customer", "customer@test.local", 1, "TEST", "Car", "pre_inspection", DateTime.UtcNow, DateTime.UtcNow.AddHours(4), 440000, false, null, "hourly");
                 return Task.FromResult(new PagedResult<OperationalRentalSummary>(filter.Page > 1 ? [] : [item], 1, filter.Page, filter.PageSize));
             }
             throw new InvalidOperationException(method.Name);

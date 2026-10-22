@@ -14,12 +14,14 @@ public interface IInspectionAssignmentRepository
 {
     Task<InspectionAssignment?> GetAsync(int rentalId, CancellationToken ct);
     Task<InspectionAssignment> AssignAsync(int rentalId, int technicianStaffId, string assignedBy, CancellationToken ct);
+    Task<InspectionAssignment> ConfirmCheckedAsync(int rentalId, int technicianStaffId, string confirmedBy, CancellationToken ct);
 }
 
 public interface IInspectionAssignmentService
 {
     Task<InspectionAssignment?> GetAsync(int rentalId, CancellationToken ct);
     Task<InspectionAssignment> AssignAsync(int rentalId, int technicianStaffId, string assignedBy, CancellationToken ct);
+    Task<InspectionAssignment> ConfirmCheckedAsync(int rentalId, int technicianStaffId, string confirmedBy, CancellationToken ct);
 }
 
 public sealed class InspectionAssignmentService(IInspectionAssignmentRepository repository) : IInspectionAssignmentService
@@ -42,5 +44,14 @@ public sealed class InspectionAssignmentService(IInspectionAssignmentRepository 
     private static void ValidateId(int id, string code)
     {
         if (id <= 0) throw new BusinessRuleException(code, "Mã đơn thuê và kỹ thuật viên phải lớn hơn 0.");
+    }
+
+    public Task<InspectionAssignment> ConfirmCheckedAsync(int rentalId, int technicianStaffId, string confirmedBy, CancellationToken ct)
+    {
+        ValidateId(rentalId, "RENTAL_ID_INVALID");
+        ValidateId(technicianStaffId, "TECHNICIAN_ID_INVALID");
+        if (string.IsNullOrWhiteSpace(confirmedBy))
+            throw new BusinessRuleException("ACTOR_REQUIRED", "Người xác nhận không hợp lệ.");
+        return repository.ConfirmCheckedAsync(rentalId, technicianStaffId, confirmedBy, ct);
     }
 }

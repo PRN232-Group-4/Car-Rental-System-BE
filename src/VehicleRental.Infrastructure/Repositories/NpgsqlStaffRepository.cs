@@ -42,7 +42,7 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
         count.Parameters.AddWithValue((object?)normalizedSearch ?? DBNull.Value);
         var total = Convert.ToInt32(await count.ExecuteScalarAsync(ct));
 
-        await using var command = dataSource.CreateCommand(StaffSelect + filter + " ORDER BY u.fullname, s.id LIMIT $3 OFFSET $4");
+        await using var command = dataSource.CreateCommand(StaffSelect + filter + " ORDER BY s.id DESC LIMIT $3 OFFSET $4");
         command.Parameters.AddWithValue((object?)isDriver ?? DBNull.Value);
         command.Parameters.AddWithValue((object?)normalizedSearch ?? DBNull.Value);
         command.Parameters.AddWithValue(pageSize);

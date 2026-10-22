@@ -44,7 +44,14 @@ public sealed class PaymentService(IPaymentRepository repository, IPaymentGatewa
         repository.GetPlanPurchaseAsync(orderCode, email, ct);
 
     public async Task<CheckoutResult> CheckoutAsync(int invoiceId, string email, CancellationToken ct)
+        => await CreateInvoiceCheckoutAsync(invoiceId, email, ct);
+
+    public Task<CheckoutResult> CheckoutOvertimeForStaffAsync(int invoiceId, CancellationToken ct)
+        => CreateInvoiceCheckoutAsync(invoiceId, null, ct);
+
+    private async Task<CheckoutResult> CreateInvoiceCheckoutAsync(int invoiceId, string? email, CancellationToken ct)
     {
+        if (invoiceId < 1) throw new ArgumentOutOfRangeException(nameof(invoiceId));
         RequireGateway();
         var invoice = await repository.ReserveInvoiceCheckoutAsync(invoiceId, email, ct);
         if (invoice is null) throw new PaymentWorkflowException("Invoice was not found.", 404);

@@ -17,7 +17,7 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
                    r.overtime_price, r.total_price,
                    COALESCE(h.start_time, l.start_time) AS sched_start,
                    COALESCE(h.end_time, l.end_time) AS sched_end,
-                   COALESCE(h.has_driver, false) AS has_driver,
+                   COALESCE(h.has_driver, l.has_driver, false) AS has_driver,
                    COALESCE(h.hourly_price_snapshot, 0) AS unit_hourly,
                    COALESCE(l.monthly_price_snapshot, 0) AS monthly_snapshot,
                    COALESCE(p.overtime_fee_rate, 0) AS overtime_fee_rate,
@@ -227,8 +227,8 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
                 EXISTS(SELECT 1 FROM inspections i WHERE i.rental_id=r.id AND i.vehicle_id=r.vehicle_id
                     AND i.inspection_type='pre_rental' AND i.is_ok=true),
                 EXISTS(SELECT 1 FROM vehicle_assignments a WHERE a.rental_id=r.id AND a.vehicle_id=r.vehicle_id
-                    AND a.status='assigned' AND (NOT COALESCE(h.has_driver,false) OR a.driver_staff_id IS NOT NULL)),
-                COALESCE(h.has_driver,false) OR (c.license_status='approved'
+                    AND a.status='assigned' AND (NOT COALESCE(h.has_driver,l.has_driver,false) OR a.driver_staff_id IS NOT NULL)),
+                COALESCE(h.has_driver,l.has_driver,false) OR (c.license_status='approved'
                     AND (c.license_expiry_date IS NULL OR c.license_expiry_date>=CURRENT_DATE)),
                 r.is_subscription OR EXISTS(SELECT 1 FROM invoices inv WHERE inv.rental_id=r.id
                     AND inv.kind='rental' AND inv.status='paid'),

@@ -34,7 +34,7 @@ public static class RentalQueryValidation
         if (filter.From > filter.To)
             throw new BusinessRuleException("INVALID_RENTAL_PERIOD", "from must not be later than to.");
         if (!string.IsNullOrWhiteSpace(filter.Status) && filter.Status.Trim().ToLowerInvariant() is not
-            ("pending" or "pre_inspection" or "renting" or "post_inspection" or "completed" or "cancelled"))
+            ("pending" or "pre_inspection" or "renting" or "overdue" or "post_inspection" or "completed" or "cancelled"))
             throw new BusinessRuleException("INVALID_RENTAL_STATUS", "Unknown rental status.");
         if (filter.HandoverStatus is not (null or "pending" or "completed" or "all"))
             throw new BusinessRuleException("INVALID_HANDOVER_STATUS", "handover status must be pending, completed or all.");

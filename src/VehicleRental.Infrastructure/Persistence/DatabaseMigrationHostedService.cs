@@ -11,6 +11,7 @@ public sealed class DatabaseMigrationOptions
     public const string SectionName = "Database";
     public bool ApplyMigrations { get; init; } = true;
     public bool BaselineExistingSchema { get; init; }
+    public bool SkipTypeLoading { get; init; }
 }
 
 public sealed class DatabaseMigrationHostedService(

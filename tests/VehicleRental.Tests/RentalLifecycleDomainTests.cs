@@ -220,7 +220,7 @@ public sealed class RentalLifecycleDomainTests
     }
 
     [Fact]
-    public void Customer_cancel_after_start_time_is_disallowed()
+    public void Customer_can_cancel_delayed_pickup_before_renting_with_existing_late_fee()
     {
         var now = ScheduledStart.AddMinutes(1);
         var preview = CancellationPolicy.Evaluate(
@@ -232,16 +232,16 @@ public sealed class RentalLifecycleDomainTests
             actor: CancellationActor.Customer
         );
 
-        Assert.False(preview.Allowed);
-        Assert.Contains(preview.Reasons, r => r.Contains("SELF_CANCEL_NOT_ALLOWED"));
+        Assert.True(preview.Allowed);
+        Assert.Equal(60_000m,preview.FeeAmount);
+        Assert.Equal(440_000m,preview.RefundAmount);
     }
 
     [Theory]
-    [InlineData(RentalStatus.PreInspection)]
     [InlineData(RentalStatus.Renting)]
     [InlineData(RentalStatus.PostInspection)]
     [InlineData(RentalStatus.Completed)]
-    public void Customer_cannot_cancel_outside_pending_status(RentalStatus nonPending)
+    public void Customer_cannot_cancel_after_renting(RentalStatus nonPending)
     {
         var now = ScheduledStart.AddHours(-30);
         var preview = CancellationPolicy.Evaluate(

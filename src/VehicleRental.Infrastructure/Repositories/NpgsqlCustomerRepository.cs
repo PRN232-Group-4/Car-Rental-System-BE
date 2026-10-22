@@ -25,7 +25,7 @@ public sealed partial class NpgsqlCustomerRepository(NpgsqlDataSource dataSource
         await using var command = dataSource.CreateCommand("""
             SELECT c.id, c.user_id, u.email, u.fullname, u.phone, u.avatar,
                    u.is_active,
-            """ + " " + licenseStatus + ", c.loyalty_point " + filter + " ORDER BY c.id LIMIT $4 OFFSET $5");
+            """ + " " + licenseStatus + ", c.loyalty_point " + filter + " ORDER BY c.id DESC LIMIT $4 OFFSET $5");
         command.Parameters.AddWithValue((object?)query.IsActive ?? DBNull.Value);
         command.Parameters.AddWithValue((object?)query.Search ?? DBNull.Value);
         command.Parameters.AddWithValue((object?)query.LicenseStatus ?? DBNull.Value);

@@ -1,4 +1,6 @@
 # FR-013 — Thuê dài hạn/hợp đồng
+
+2026-10-22: Theo yêu cầu mới, lưu `hasDriver` cho cả hợp đồng dài hạn; không ép lựa chọn có tài xế về tự lái. Điều kiện tài xế/phân công/kiểm tra áp dụng cùng luồng theo giờ.
 - **Status:** In progress (creation, interval locking and signed evidence implemented); **Priority:** P1; **Milestone:** M4
 Tạo/renew/end contract tự lái. Acceptance: lock vehicle interval, contract link/signed date, payment schedule quyết định sau.
 

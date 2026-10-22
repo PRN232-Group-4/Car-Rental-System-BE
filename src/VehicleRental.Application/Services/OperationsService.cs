@@ -57,8 +57,14 @@ public sealed class OperationsService(IOperationsRepository repository, IDriverA
         return rental;
     }
 
-    public Task<CustomerLicense?> GetLicenseAsync(string email, CancellationToken ct) =>
-        repository.GetLicenseAsync(email, ct);
+    public async Task<CustomerLicense?> GetLicenseAsync(string email, CancellationToken ct)
+    {
+        var license = await repository.GetLicenseAsync(email, ct);
+        // Registration creates a customer with a legacy pending default before any license is submitted.
+        return license is not null && string.IsNullOrWhiteSpace(license.Number)
+            ? license with { Status = "none" }
+            : license;
+    }
 
     public Task<CustomerLicense> SaveLicenseAsync(string email, CustomerLicense license, CancellationToken ct)
     {
