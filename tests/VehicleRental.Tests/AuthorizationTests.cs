@@ -34,8 +34,8 @@ public sealed class AuthorizationTests
         Assert.Equal(allowed, await AuthorizeEndpoint<FacilityMembersController>("Assign", Principal(role)));
         Assert.Equal(allowed, await AuthorizeEndpoint<OperationsController>("Departments", Principal(role)));
         Assert.Equal(allowed, await AuthorizeEndpoint<StaffController>("List", Principal(role)));
-        foreach (var action in new[] { "Create", "Update", "Deactivate" })
-            Assert.Equal(role == "Admin", await AuthorizeEndpoint<StaffController>(action, Principal(role)));
+        foreach (var action in new[] { "Create", "CreateFromUser", "Update", "Deactivate" })
+            Assert.Equal(allowed, await AuthorizeEndpoint<StaffController>(action, Principal(role)));
     }
 
     [Theory]
@@ -72,7 +72,7 @@ public sealed class AuthorizationTests
     [InlineData("UpdateShift", "Driver", false)]
     [InlineData("CreateShift", "CustomerService", false)]
     [InlineData("CreateReport", "Driver", true)]
-    [InlineData("CreateReport", "Customer", false)]
+    [InlineData("CreateReport", "Customer", true)]
     [InlineData("AssignMaintenance", "Manager", true)]
     [InlineData("AssignMaintenance", "Maintenance", false)]
     [InlineData("ReplaceVehicle", "Manager", true)]

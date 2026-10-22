@@ -59,6 +59,8 @@ public sealed class NpgsqlUserAdministrationRepository(NpgsqlDataSource dataSour
     public Task<AdministrativeUser> SetRoleAsync(int id, string role, bool assigned, int actorUserId, CancellationToken ct) =>
         MutateAsync(id, actorUserId, assigned ? "role:add" : "role:remove", role, async (connection, transaction) =>
         {
+            if (assigned && id == actorUserId)
+                throw new UserAdministrationException(409, "You cannot assign additional roles to yourself.");
             // Resolve to the stored spelling before applying built-in invariants: e.g.
             // a request for 'admin' must still run the last active Admin protection.
             await using (var canonical = new NpgsqlCommand("SELECT name FROM roles WHERE lower(name)=lower($1)", connection, transaction))

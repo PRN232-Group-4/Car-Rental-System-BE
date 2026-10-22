@@ -30,6 +30,7 @@ public sealed class UserAdministrationService(IUserAdministrationRepository repo
     public async Task<AdministrativeUser> SetRoleAsync(int id, string role, bool assigned, int actorUserId, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(role) || role.Length > 255 || role.Contains(',')) throw new ArgumentException("Role must contain 1 to 255 characters and cannot contain a comma.");
+        if (assigned && id == actorUserId) throw new UserAdministrationException(409, "You cannot assign additional roles to yourself.");
         var user = await repository.SetRoleAsync(id, role.Trim(), assigned, actorUserId, ct);
         await sessions.RevokeAllAsync(user.Email, ct);
         return user;

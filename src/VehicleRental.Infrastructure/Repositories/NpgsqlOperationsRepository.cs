@@ -124,7 +124,7 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
                 await deduct.ExecuteNonQueryAsync(ct);
             }
         }
-        if(!subscription){
+        if(!subscription && !hasDriver){
             await using var license=new NpgsqlCommand("SELECT license_status FROM customers WHERE id=$1",cn,tx);
             license.Parameters.AddWithValue(cid);
             if(!string.Equals((await license.ExecuteScalarAsync(ct))?.ToString(),"approved",StringComparison.OrdinalIgnoreCase))
@@ -137,13 +137,17 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
         var hours=(decimal)(end-start).TotalHours;
         var total=type=="hourly"?unit*hours:unit*Math.Max(1,Math.Ceiling(hours/(24*30)));
         decimal vat=0,deposit=0;
+        if(policyId is null){
+            policyId = await ScalarAsync(cn, tx, "SELECT p.id FROM rental_policies p JOIN vehicles v ON (p.vehicle_type_id = v.vehicle_type_id OR p.vehicle_type_id IS NULL) WHERE v.id = $1 AND p.is_active = true ORDER BY (p.vehicle_type_id IS NOT NULL) DESC, p.id DESC LIMIT 1", vehicleId, ct) as int?;
+        }
         if(policyId is not null){
             await using var po=new NpgsqlCommand("SELECT vat_rate,deposit_percentage FROM rental_policies WHERE id=$1 AND is_active=true",cn,tx);
             po.Parameters.AddWithValue(policyId.Value);
             await using var rr=await po.ExecuteReaderAsync(ct);
-            if(!await rr.ReadAsync(ct))throw new InvalidOperationException("Policy is not active.");
-            vat=total*rr.GetDecimal(0)/100;
-            deposit=total*rr.GetDecimal(1)/100;
+            if(await rr.ReadAsync(ct)){
+                vat=total*rr.GetDecimal(0)/100;
+                deposit=total*rr.GetDecimal(1)/100;
+            }
         }
         var rentalId=await ScalarAsync(cn,tx,"INSERT INTO rentals(customer_id,vehicle_id,policy_id,customer_subscription_id,is_subscription,rental_type,status,vat_price,deposit_price,total_price)VALUES($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9) RETURNING id",new object?[]{cid,vehicleId,policyId,subscriptionId,subscription,type,vat,deposit,total+vat},ct);
         if(rentalId is not int rid)throw new InvalidOperationException();

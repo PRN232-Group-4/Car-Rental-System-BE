@@ -136,7 +136,7 @@ public sealed class StaffIdentityTests(PostgresFixture db) : IClassFixture<Postg
     public async Task Create_from_user_http_contract_checks_authorization_validation_identity_and_swagger()
     {
         await using var host=await ApiHostAsync();using var client=Client(host);
-        foreach(var(role,status) in new (string?,int)[]{(null,401),("Customer",403),("Driver",403),("Maintenance",403),("CustomerService",403),("Manager",403),("Admin",201)})
+        foreach(var(role,status) in new (string?,int)[]{(null,401),("Customer",403),("Driver",403),("Maintenance",403),("CustomerService",403),("Manager",201),("Admin",201)})
         {
             var(id,_)=await UserAsync("Maintenance");
             using var request=Request(HttpMethod.Post,"/api/staff/from-user",role,"admin@test.local",new{userId=id});

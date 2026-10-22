@@ -35,7 +35,6 @@ public sealed class StaffController(IStaffService staff) : ControllerBase
         staff.SearchAsync(search, true, page, pageSize, ct);
 
     [HttpPost]
-    [Authorize(Roles = "Admin")]
     [ProducesResponseType<Staff>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Create(CreateStaffRequest request, CancellationToken ct)
@@ -54,7 +53,6 @@ public sealed class StaffController(IStaffService staff) : ControllerBase
 
     /// <summary>Create an employee profile for an existing active account without replacing its identity, password or specialty.</summary>
     [HttpPost("from-user")]
-    [Authorize(Roles = "Admin")]
     [ProducesResponseType<Staff>(StatusCodes.Status201Created)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
@@ -76,7 +74,6 @@ public sealed class StaffController(IStaffService staff) : ControllerBase
     }
 
     [HttpPut("{id:int}")]
-    [Authorize(Roles = "Admin")]
     [ProducesResponseType<Staff>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(int id, UpdateStaffRequest request, CancellationToken ct)
@@ -90,7 +87,6 @@ public sealed class StaffController(IStaffService staff) : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
-    [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Deactivate(int id, CancellationToken ct)

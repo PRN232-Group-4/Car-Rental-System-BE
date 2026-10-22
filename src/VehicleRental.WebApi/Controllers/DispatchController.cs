@@ -49,14 +49,24 @@ public sealed class DispatchController(IOperationsService store, IOperationsComp
         return Ok(await store.ListDriverShiftsAsync(driverStaffId,from,to,ct));
     }
 
-    /// <summary>Staff reports damage separately from inspection; Driver reports only their assigned trip.</summary>
-    [Authorize(Roles="Admin,Manager,Staff,Maintenance,CustomerService,Driver")]
+    /// <summary>Staff reports damage separately from inspection; Driver reports only their assigned trip; Customer reports their own rental.</summary>
+    [Authorize(Roles="Admin,Manager,Staff,Maintenance,CustomerService,Driver,Customer")]
     [HttpPost("rentals/{id:int}/reports")]
     [ProducesResponseType<IncidentReport>(StatusCodes.Status201Created)]
     public async Task<IActionResult> CreateReport(int id, IncidentReportRequest request, CancellationToken ct)
     {
         var staff=AuthorizationPolicies.StaffId(User);
-        if (staff is null) return Forbid();
+        if (staff is null)
+        {
+            if (User.IsInRole("Customer"))
+            {
+                var ownRental = await store.GetRentalForUserAsync(id, Email(), false, true, false, ct);
+                if (ownRental is null) return Forbid();
+                var customerReport = await store.CreateReportAsync(id, 0, false, request.Type, request.Description, request.ImageUrls, ct);
+                return Created($"api/reports/{customerReport.Id}", customerReport);
+            }
+            return Forbid();
+        }
         var driverOnly=User.IsInRole("Driver") && !AuthorizationPolicies.CanManage(User);
         var report=await store.CreateReportAsync(id,staff.Value,driverOnly,request.Type,request.Description,request.ImageUrls,ct);
         return Created($"api/reports/{report.Id}",report);
