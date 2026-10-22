@@ -8,6 +8,28 @@ namespace VehicleRental.Tests;
 public sealed class RentalQueryPaginationIntegrationTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
     [Fact]
+    public async Task Operational_queue_preserves_hourly_and_longterm_types_from_the_database()
+    {
+        var (customerId, email) = await Seed.CustomerAsync(db.DataSource);
+        var store = new NpgsqlOperationsRepository(db.DataSource);
+        var start = DateTime.SpecifyKind(DateTime.UtcNow.AddDays(30), DateTimeKind.Unspecified);
+        var hourlyVehicle = await Seed.VehicleAsync(db.DataSource);
+        var longtermVehicle = await Seed.VehicleAsync(db.DataSource);
+        var hourly = await store.CreateRentalAsync(email, hourlyVehicle, null, "hourly", start, start.AddHours(4), false, null, false, default);
+        var longterm = await store.CreateRentalAsync(email, longtermVehicle, null, "longterm", start, start.AddMonths(1), false, null, false, default);
+        var queries = new NpgsqlRentalQueries(db.DataSource, TimeProvider.System);
+        var list = await queries.ListOperationalRentalsAsync(new(null, customerId, null, null, null, 1, 20), default);
+        Assert.Equal(2, list.TotalCount);
+        Assert.Equal("hourly", list.Items.Single(x => x.Id == hourly.Id).RentalType);
+        Assert.Equal("longterm", list.Items.Single(x => x.Id == longterm.Id).RentalType);
+        foreach (var item in list.Items)
+        {
+            var detail = await queries.GetMyRentalDetailAsync(item.Id, customerId, default);
+            Assert.Equal(detail!.RentalType, item.RentalType);
+        }
+    }
+
+    [Fact]
     public async Task Count_filters_empty_pages_and_handover_history_use_the_same_scope()
     {
         var (customerId, email) = await Seed.CustomerAsync(db.DataSource);

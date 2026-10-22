@@ -82,7 +82,7 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                 OrderId: reader.IsDBNull(12) ? null : reader.GetInt32(12),
                 LicensePlate: reader.IsDBNull(13) ? null : reader.GetString(13),
                 VehicleCategory: reader.IsDBNull(14) ? null : reader.GetString(14),
-                CanCancel: reader.GetString(1) == "pending" && reader.GetDateTime(8) > timeProvider.GetUtcNow().UtcDateTime,
+                CanCancel: reader.GetString(1) is "pending" or "pre_inspection",
                 NextAction: NextAction(reader.GetString(1), !reader.IsDBNull(18), reader.IsDBNull(19) ? null : reader.GetString(19), reader.GetBoolean(3)),
                 Facility: reader.IsDBNull(15) ? null : new CustomerFacilityDto(reader.GetInt32(15), reader.GetString(16), reader.IsDBNull(17) ? null : reader.GetString(17)),
                 SubscriptionHoursUsed: reader.IsDBNull(20) ? null : reader.GetDecimal(20)
@@ -100,7 +100,7 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                    f.name AS facility_name,
                    COALESCE(h.start_time, l.start_time) AS start_time,
                    COALESCE(h.end_time, l.end_time) AS end_time,
-                   COALESCE(h.has_driver, false) AS has_driver,
+                   COALESCE(h.has_driver, l.has_driver, false) AS has_driver,
                    r.total_price - r.vat_price AS rent_price,
                    r.vat_price, r.deposit_price, r.overtime_price, r.total_price,
                    i.id, i.invoice_number, i.status, i.amount, r.confirmed_at,
@@ -275,14 +275,14 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
         }
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
-        var canCancel = statusStr == "pending" && start > now;
+        var canCancel = statusStr is "pending" or "pre_inspection";
         CancellationPreview? cancellation = null;
-        if (statusStr == "pending")
+        if (canCancel)
         {
             cancellation = CancellationPolicy.Evaluate(
                 now: now,
                 startTime: start,
-                currentStatus: RentalStatus.Pending,
+                currentStatus: RentalStatusExtensions.FromDbString(statusStr),
                 paidAmount: invoice?.Status == "paid" ? price.Total : 0m,
                 rentAndVat: price.Rent + price.Vat,
                 actor: CancellationActor.Customer
@@ -347,7 +347,13 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
         else if (filter.HandoverStatus == "completed") conditions.Add(completedHandover);
         else if (filter.HandoverStatus == "all") conditions.Add($"(r.status = 'pre_inspection' OR {completedHandover})");
 
-        if (!string.IsNullOrWhiteSpace(filter.Status))
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        if (filter.Status?.Trim().ToLowerInvariant() == "overdue")
+        {
+            conditions.Add($"r.status='renting' AND r.returned_at IS NULL AND COALESCE(h.end_time,l.end_time) < ${pIdx++}");
+            parameters.Add(now);
+        }
+        else if (!string.IsNullOrWhiteSpace(filter.Status))
         {
             conditions.Add($"r.status = ${pIdx++}");
             parameters.Add(filter.Status.Trim().ToLowerInvariant());
@@ -391,9 +397,9 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                    v.id, v.license_plate, COALESCE(v.model, 'Unknown'), r.status,
                    COALESCE(h.start_time, l.start_time),
                    COALESCE(h.end_time, l.end_time),
-                   r.total_price, COALESCE(h.has_driver, false),
+                   r.total_price, COALESCE(h.has_driver, l.has_driver, false),
                    COALESCE(du.fullname, du.email),
-                   (SELECT o.id FROM rental_orders o WHERE o.rental_id = r.id)
+                   (SELECT o.id FROM rental_orders o WHERE o.rental_id = r.id), r.rental_type, r.returned_at
             FROM rentals r
             JOIN customers c ON c.id = r.customer_id
             JOIN users u ON u.id = c.user_id
@@ -430,7 +436,9 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                 TotalPrice: reader.GetDecimal(10),
                 HasDriver: reader.GetBoolean(11),
                 DriverName: reader.IsDBNull(12) ? null : reader.GetString(12),
-                OrderId: reader.IsDBNull(13) ? null : reader.GetInt32(13)
+                OrderId: reader.IsDBNull(13) ? null : reader.GetInt32(13),
+                RentalType: reader.GetString(14),
+                IsOverdue: reader.GetString(7) == "renting" && reader.IsDBNull(15) && reader.GetDateTime(9) < now
             ));
         }
 
@@ -445,7 +453,7 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                    r.overtime_price, r.total_price,
                    COALESCE(h.start_time, l.start_time) AS sched_start,
                    COALESCE(h.end_time, l.end_time) AS sched_end,
-                   COALESCE(h.has_driver, false) AS has_driver,
+                   COALESCE(h.has_driver, l.has_driver, false) AS has_driver,
                    COALESCE(h.hourly_price_snapshot, 0) AS unit_hourly,
                    COALESCE(l.monthly_price_snapshot, 0) AS monthly_snapshot,
                    COALESCE(p.overtime_fee_rate, 0) AS overtime_fee_rate,

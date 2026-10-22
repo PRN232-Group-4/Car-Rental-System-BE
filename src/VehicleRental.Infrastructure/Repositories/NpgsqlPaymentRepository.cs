@@ -9,17 +9,17 @@ namespace Car_Rental_System_BE.Infrastructure.Repositories;
 
 public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource) : IPaymentRepository
 {
-    public async Task<InvoicePayment?> ReserveInvoiceCheckoutAsync(int invoiceId, string email, CancellationToken ct)
+    public async Task<InvoicePayment?> ReserveInvoiceCheckoutAsync(int invoiceId, string? email, CancellationToken ct)
     {
         await using var cn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await cn.BeginTransactionAsync(ct);
         await using var find = new NpgsqlCommand("""
             SELECT i.rental_id FROM invoices i JOIN rentals r ON r.id=i.rental_id
             JOIN customers c ON c.id=r.customer_id JOIN users u ON u.id=c.user_id
-            WHERE i.id=$1 AND u.email=$2
+            WHERE i.id=$1 AND ($2::text IS NULL OR u.email=$2)
             """, cn, tx);
         find.Parameters.AddWithValue(invoiceId);
-        find.Parameters.AddWithValue(email);
+        find.Parameters.AddWithValue((object?)email ?? DBNull.Value);
         if (await find.ExecuteScalarAsync(ct) is not int rentalId) return null;
         // Same financial lock order as rental editing. The marker commits before calling PayOS.
         await using var rentalLock = new NpgsqlCommand("SELECT status,confirmed_at FROM rentals WHERE id=$1 FOR UPDATE", cn, tx);
@@ -40,15 +40,19 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
                 SELECT i.rental_id,r.customer_id,i.invoice_number,i.amount,i.status,i.kind,i.payment_method
                 FROM invoices i JOIN rentals r ON r.id=i.rental_id
                 JOIN customers c ON c.id=r.customer_id JOIN users u ON u.id=c.user_id
-                WHERE i.id=$1 AND u.email=$2 AND i.rental_id=$3 FOR UPDATE OF i NOWAIT
+                WHERE i.id=$1 AND ($2::text IS NULL OR u.email=$2) AND i.rental_id=$3 FOR UPDATE OF i NOWAIT
                 """, cn, tx);
             invoice.Parameters.AddWithValue(invoiceId);
-            invoice.Parameters.AddWithValue(email);
+            invoice.Parameters.AddWithValue((object?)email ?? DBNull.Value);
             invoice.Parameters.AddWithValue(rentalId);
             InvoicePayment result;
+            bool overtime;
             await using (var reader = await invoice.ExecuteReaderAsync(ct))
             {
                 if (!await reader.ReadAsync(ct)) return null;
+                overtime = reader.GetString(5) == "overtime";
+                if ((email is null && !overtime) || (overtime && rentalStatus != "completed"))
+                    throw new ConflictException("OVERTIME_INVOICE_REQUIRED", "Chỉ tạo link thu phụ phí đã quyết toán.");
                 if (reader.GetString(4) != "unpaid")
                     throw new ConflictException("INVOICE_NOT_PAYABLE", "Only unpaid invoices can be checked out.");
                 if (reader.GetString(6) != "payos")
@@ -56,6 +60,13 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
                 if (InvoiceCheckoutPolicy.BlockedReason(reader.GetString(4), reader.GetString(5), rentalStatus, confirmedAt) == "RENTAL_CONFIRMATION_REQUIRED")
                     throw new ConflictException("RENTAL_CONFIRMATION_REQUIRED", "Đơn thuê cần được nhân viên xác nhận trước khi thanh toán.");
                 result = new(invoiceId, reader.GetInt32(0), reader.GetInt32(1), reader.GetString(2), reader.GetDecimal(3), reader.GetString(4));
+            }
+            if (overtime)
+            {
+                await using var linked = new NpgsqlCommand("SELECT EXISTS(SELECT 1 FROM rental_settlements WHERE rental_id=$1 AND shortfall_invoice_id=$2)", cn, tx);
+                linked.Parameters.AddWithValue(rentalId); linked.Parameters.AddWithValue(invoiceId);
+                if (await linked.ExecuteScalarAsync(ct) is not true)
+                    throw new ConflictException("OVERTIME_INVOICE_REQUIRED", "Hóa đơn không thuộc quyết toán trả xe.");
             }
             await using var reserve = new NpgsqlCommand("UPDATE invoices SET checkout_started_at=COALESCE(checkout_started_at,now() AT TIME ZONE 'utc') WHERE id=$1", cn, tx);
             reserve.Parameters.AddWithValue(invoiceId);
@@ -87,30 +98,32 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
         await using var rentalLock = new NpgsqlCommand("SELECT id FROM rentals WHERE id=$1 FOR UPDATE", cn, tx);
         rentalLock.Parameters.AddWithValue(targetRental);
         if (await rentalLock.ExecuteScalarAsync(ct) is not int) throw new KeyNotFoundException();
-        await using var existing = new NpgsqlCommand("SELECT id,invoice_id,amount,status,provider_reference FROM payments WHERE provider_reference=$1", cn, tx);
+        await using var existing = new NpgsqlCommand("SELECT p.id,p.invoice_id,p.amount,p.status,p.provider_reference,i.kind FROM payments p JOIN invoices i ON i.id=p.invoice_id WHERE p.provider_reference=$1", cn, tx);
         existing.Parameters.AddWithValue(reference); await using var reader = await existing.ExecuteReaderAsync(ct);
         if (await reader.ReadAsync(ct))
         {
             if (reader.GetInt32(1) != invoiceId || reader.GetDecimal(2) != amount) throw new InvalidOperationException("Webhook reference does not match the invoice.");
             var previous = new PaymentResult(reader.GetInt32(0), reader.GetInt32(1), reader.GetDecimal(2), reader.GetString(3), reader.GetString(4));
+            var previousKind = reader.GetString(5);
             await reader.CloseAsync();
-            var previousOrder = await RentalOrderWriter.EnsurePaidAsync(cn, tx, targetRental, ct);
+            var previousOrder = previousKind == "rental" ? await RentalOrderWriter.EnsurePaidAsync(cn, tx, targetRental, ct) : null;
             await tx.CommitAsync(ct);
             return previous with { OrderId = previousOrder };
         }
         await reader.CloseAsync();
-        await using var invoice = new NpgsqlCommand("SELECT i.rental_id,r.customer_id,i.amount,i.status,i.payment_method FROM invoices i JOIN rentals r ON r.id=i.rental_id WHERE i.id=$1 FOR UPDATE OF i", cn, tx);
+        await using var invoice = new NpgsqlCommand("SELECT i.rental_id,r.customer_id,i.amount,i.status,i.payment_method,i.kind FROM invoices i JOIN rentals r ON r.id=i.rental_id WHERE i.id=$1 FOR UPDATE OF i", cn, tx);
         invoice.Parameters.AddWithValue(invoiceId); await using var ir = await invoice.ExecuteReaderAsync(ct);
         if (!await ir.ReadAsync(ct)) throw new KeyNotFoundException();
-        var rentalId = ir.GetInt32(0); var customerId = ir.GetInt32(1); var expected = ir.GetDecimal(2); var invoiceStatus = ir.GetString(3); var method = ir.GetString(4); await ir.CloseAsync();
+        var rentalId = ir.GetInt32(0); var customerId = ir.GetInt32(1); var expected = ir.GetDecimal(2); var invoiceStatus = ir.GetString(3); var method = ir.GetString(4); var kind = ir.GetString(5); await ir.CloseAsync();
         if (amount != expected) throw new InvalidOperationException("Webhook amount does not match the invoice.");
         if (method != "payos") throw new ConflictException("PAYMENT_METHOD_MISMATCH", "Invoice does not use PayOS.");
         if (invoiceStatus == "paid") throw new InvalidOperationException("Invoice is already paid without this provider reference.");
-        await using var add = new NpgsqlCommand("INSERT INTO payments(rental_id,invoice_id,customer_id,is_subscription_payment,amount,status,type,method,paid_at,provider_reference) VALUES($1,$2,$3,false,$4,'paid','rental','payos',now(),$5) RETURNING id", cn, tx);
+        await using var add = new NpgsqlCommand("INSERT INTO payments(rental_id,invoice_id,customer_id,is_subscription_payment,amount,status,type,method,paid_at,provider_reference) VALUES($1,$2,$3,false,$4,'paid',$6,'payos',now(),$5) RETURNING id", cn, tx);
         add.Parameters.AddWithValue(rentalId); add.Parameters.AddWithValue(invoiceId); add.Parameters.AddWithValue(customerId); add.Parameters.AddWithValue(amount); add.Parameters.AddWithValue(reference);
+        add.Parameters.AddWithValue(kind == "overtime" ? "overtime" : "rental");
         var id = (int)(await add.ExecuteScalarAsync(ct))!;
         await using var update = new NpgsqlCommand("UPDATE invoices SET status='paid' WHERE id=$1", cn, tx); update.Parameters.AddWithValue(invoiceId); await update.ExecuteNonQueryAsync(ct);
-        var orderId = await RentalOrderWriter.EnsurePaidAsync(cn, tx, rentalId, ct);
+        var orderId = kind == "rental" ? await RentalOrderWriter.EnsurePaidAsync(cn, tx, rentalId, ct) : null;
         await tx.CommitAsync(ct); return new(id, invoiceId, amount, "paid", reference, orderId);
     }
 
@@ -140,13 +153,16 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
 
     public async Task<InvoiceDetail?> GetInvoiceAsync(int invoiceId, string? email, CancellationToken ct)
     {
-        await using var c = dataSource.CreateCommand("SELECT i.id,i.rental_id,i.invoice_number,i.amount,i.vat_amount,i.status,i.issued_at,i.due_at,i.kind,r.status,r.confirmed_at,i.payment_method,(SELECT o.id FROM rental_orders o WHERE o.rental_id=r.id) FROM invoices i JOIN rentals r ON r.id=i.rental_id JOIN customers cu ON cu.id=r.customer_id JOIN users u ON u.id=cu.user_id WHERE i.id=$2 AND ($1::text IS NULL OR u.email=$1)");
+        await using var c = dataSource.CreateCommand("SELECT i.id,i.rental_id,i.invoice_number,i.amount,i.vat_amount,i.status,i.issued_at,i.due_at,i.kind,r.status,r.confirmed_at,i.payment_method,(SELECT o.id FROM rental_orders o WHERE o.rental_id=r.id),i.checkout_started_at,EXISTS(SELECT 1 FROM rental_settlements s WHERE s.rental_id=r.id AND s.shortfall_invoice_id=i.id) FROM invoices i JOIN rentals r ON r.id=i.rental_id JOIN customers cu ON cu.id=r.customer_id JOIN users u ON u.id=cu.user_id WHERE i.id=$2 AND ($1::text IS NULL OR u.email=$1)");
         c.Parameters.AddWithValue((object?)email ?? DBNull.Value); c.Parameters.AddWithValue(invoiceId);
         await using var r = await c.ExecuteReaderAsync(ct);
         if (!await r.ReadAsync(ct)) return null;
         var summary = ReadInvoice(r);
         var blocked = InvoiceCheckoutPolicy.BlockedReason(summary.Status, r.GetString(8), r.GetString(9), r.IsDBNull(10) ? null : r.GetDateTime(10));
-        return new(summary.Id, summary.RentalId, summary.InvoiceNumber, summary.Amount, summary.VatAmount, summary.Status, summary.IssuedAt, summary.DueAt, blocked is null, blocked, r.GetString(11), r.IsDBNull(12) ? null : r.GetInt32(12));
+        var overtime = r.GetString(8) == "overtime" && r.GetString(9) == "completed" && r.GetBoolean(14);
+        if (r.GetString(8) == "overtime" && !overtime) blocked = "OVERTIME_INVOICE_REQUIRED";
+        var canCash = blocked is null && (overtime ? r.IsDBNull(13) : r.GetString(8) == "rental" && r.GetString(11) == "cash");
+        return new(summary.Id, summary.RentalId, summary.InvoiceNumber, summary.Amount, summary.VatAmount, summary.Status, summary.IssuedAt, summary.DueAt, blocked is null, blocked, r.GetString(11), r.IsDBNull(12) ? null : r.GetInt32(12), r.GetString(8), canCash, blocked is null && overtime && r.GetString(11) == "payos");
     }
 
     public async Task<InvoiceSummary> CreateInvoiceForRentalAsync(int rentalId, CancellationToken ct)

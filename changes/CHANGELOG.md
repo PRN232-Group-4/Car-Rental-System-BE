@@ -1,5 +1,19 @@
 # Changelog
 
+- 2026-10-22 — [Quá hạn và thu phụ phí tiền mặt/online](2026-10-22-overdue-collection.md)
+
+- 2026-10-22 — [Customer hủy đơn trước Đang thuê](2026-10-22-customer-cancel-before-renting.md)
+
+- 2026-10-22 — [Xe customer chưa được thuê và các cách kiểm tra trước thuê](2026-10-22-customer-availability-inspection-modes.md)
+
+- 2026-10-22 — [Danh sách Admin mặc định mới nhất trước](2026-10-22-admin-newest-first.md)
+
+- 2026-10-22 — [Loại thuê giờ/dài hạn trong hàng đợi vận hành](2026-10-22-operational-rental-type.md)
+
+- 2026-10-22 — [Phân biệt hồ sơ GPLX chưa gửi và chờ duyệt](2026-10-22-unsubmitted-customer-license.md)
+
+- 2026-10-22 — [Workaround timeout PostgreSQL metadata và sửa proxy local đang chạy](2026-10-22-database-type-loading-and-local-proxy.md)
+
 - 2026-10-21 — [Đồng bộ nghiệp vụ Chauffeur-only, phân giải policy giá và chặn tự gán role](2026-10-21-chauffeur-alignment-and-self-role-protection.md)
 - 2026-10-21 — [Audit logs và CRUD danh mục role](2026-10-21-audit-logs-role-crud.md)
 

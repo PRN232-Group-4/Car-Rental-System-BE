@@ -76,6 +76,62 @@ public sealed class CustomerLicenseUploadTests : IAsyncLifetime
 
     public async Task DisposeAsync() { _client.Dispose(); await _app.DisposeAsync(); }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Unsubmitted_customer_is_none_without_mutating_the_pending_database_default(string? number)
+    {
+        _repository.License = new(number, null, null, null, null, "pending");
+        using var response = await _client.GetAsync("/api/customer/license");
+        using var body = await Envelope(response, 200, true);
+        Assert.Equal("none", body.RootElement.GetProperty("data").GetProperty("status").GetString());
+        Assert.Equal("pending", _repository.License.Status);
+        Assert.Equal(0, _repository.Saves);
+    }
+
+    [Theory]
+    [InlineData("pending")]
+    [InlineData("approved")]
+    [InlineData("rejected")]
+    public async Task Submitted_license_keeps_its_review_status(string status)
+    {
+        _repository.License = _repository.License with { Status = status };
+        using var response = await _client.GetAsync("/api/customer/license");
+        using var body = await Envelope(response, 200, true);
+        Assert.Equal(status, body.RootElement.GetProperty("data").GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task First_multipart_submission_from_an_unsubmitted_customer_is_allowed()
+    {
+        _repository.License = new(null, null, null, null, null, "pending");
+        using var form = LicenseForm();
+        using var response = await _client.PutAsync("/api/customer/license", form);
+        using var body = await Envelope(response, 200, true);
+        Assert.Equal("pending", body.RootElement.GetProperty("data").GetProperty("status").GetString());
+        Assert.Equal(1, _repository.Saves);
+        Assert.Equal(Png, _images.Bytes);
+    }
+
+    [Fact]
+    public async Task Missing_customer_still_returns_null()
+    {
+        _repository.Exists = false;
+        using var response = await _client.GetAsync("/api/customer/license");
+        using var body = await Envelope(response, 200, true);
+        Assert.Equal(JsonValueKind.Null, body.RootElement.GetProperty("data").ValueKind);
+    }
+
+    [Fact]
+    public async Task Swagger_documents_the_unsubmitted_license_state()
+    {
+        using var response = await _client.GetAsync("/swagger/v1/swagger.json");
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var operation = body.RootElement.GetProperty("paths").GetProperty("/api/customer/license").GetProperty("get");
+        Assert.Contains("status none", operation.GetProperty("description").GetString());
+    }
+
     [Fact]
     public async Task Multipart_upload_persists_cloudinary_url_and_resubmits_approved_license()
     {
@@ -303,7 +359,7 @@ public sealed class CustomerLicenseUploadTests : IAsyncLifetime
     {
         public int Saves { get; private set; }
         public bool Exists { get; set; } = true;
-        public CustomerLicense License { get; private set; } = new("OLD", "B", null, null, "https://example.test/old.png", "approved");
+        public CustomerLicense License { get; set; } = new("OLD", "B", null, null, "https://example.test/old.png", "approved");
         protected override object? Invoke(MethodInfo? method, object?[]? args)
         {
             if (method!.Name == "GetLicenseAsync") return Task.FromResult<CustomerLicense?>(Exists ? License : null);

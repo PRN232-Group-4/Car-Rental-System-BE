@@ -6,8 +6,8 @@ public interface IPaymentRepository
 {
     Task<PaymentResult> ConfirmCashAsync(int invoiceId, string reviewer, CancellationToken ct);
     Task<InvoicePayment?> GetInvoiceForCustomerAsync(int invoiceId, string email, CancellationToken ct);
-    /// <summary>Reserves an owned unpaid invoice before an external checkout; freezes rental edits even if the provider request fails.</summary>
-    Task<InvoicePayment?> ReserveInvoiceCheckoutAsync(int invoiceId, string email, CancellationToken ct);
+    /// <summary>Reserves an owned unpaid invoice before checkout. Null email is the staff scope, restricted to completed, linked overtime settlements. Reservation blocks cash even if the provider fails.</summary>
+    Task<InvoicePayment?> ReserveInvoiceCheckoutAsync(int invoiceId, string? email, CancellationToken ct);
     Task<IReadOnlyList<InvoiceSummary>> ListInvoicesAsync(string? email, CancellationToken ct);
     Task<InvoiceDetail?> GetInvoiceAsync(int invoiceId, string? email, CancellationToken ct);
     Task<InvoiceSummary> CreateInvoiceForRentalAsync(int rentalId, CancellationToken ct);

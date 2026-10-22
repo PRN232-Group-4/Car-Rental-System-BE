@@ -51,7 +51,7 @@ public sealed class VehicleSearchIntegrationTests(PostgresFixture db) : IClassFi
     }
 
     [Fact]
-    public async Task Vehicle_with_renting_status_is_findable_for_future_windows()
+    public async Task Vehicle_with_renting_status_is_hidden_even_for_future_windows()
     {
         var (cId, vId, _, _) = await SeedFullVehicleAsync(status: "renting");
 
@@ -63,10 +63,11 @@ public sealed class VehicleSearchIntegrationTests(PostgresFixture db) : IClassFi
         var busyResult = await _repo.SearchAsync(busyQuery, 60, null, CancellationToken.None);
         Assert.DoesNotContain(busyResult.Items, x => x.Id == vId);
 
-        // Search for future window (after booking + 60m buffer) -> SHOULD be found
+        // Customer catalogues hide currently rented vehicles even after their scheduled end.
         var futureQuery = new VehicleSearchQuery(T0.AddHours(3).AddMinutes(1), T0.AddHours(6));
         var futureResult = await _repo.SearchAsync(futureQuery, 60, null, CancellationToken.None);
-        Assert.Contains(futureResult.Items, x => x.Id == vId);
+        Assert.DoesNotContain(futureResult.Items, x => x.Id == vId);
+        Assert.DoesNotContain((await _repo.SearchAsync(new(null,null),60,null,default)).Items, x => x.Id == vId);
     }
 
     [Fact]

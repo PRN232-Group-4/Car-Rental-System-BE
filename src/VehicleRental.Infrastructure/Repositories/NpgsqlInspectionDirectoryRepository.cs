@@ -17,7 +17,8 @@ public sealed class NpgsqlInspectionDirectoryRepository(NpgsqlDataSource dataSou
         var total=Convert.ToInt32(await count.ExecuteScalarAsync(ct));
         await using var command=new NpgsqlCommand("""
             SELECT i.id,i.rental_id,i.vehicle_id,NULLIF(trim(concat_ws(' ',v.brand,v.model)),''),v.license_plate,
-                i.inspection_type,i.is_ok,u.email,i.inspected_at,i.odometer_km,i.fuel_battery_level,i.damage_notes,i.img_urls
+                i.inspection_type,i.is_ok,u.email,i.inspected_at,i.odometer_km,i.fuel_battery_level,i.damage_notes,i.img_urls,
+                i.confirmation_source,i.confirmed_by
             FROM inspections i
             LEFT JOIN vehicles v ON v.id=i.vehicle_id
             LEFT JOIN staffs s ON s.id=i.staff_id
@@ -32,7 +33,8 @@ public sealed class NpgsqlInspectionDirectoryRepository(NpgsqlDataSource dataSou
             while(await reader.ReadAsync(ct)) rows.Add(new(reader.GetInt32(0),reader.GetInt32(1),reader.IsDBNull(2)?null:reader.GetInt32(2),
                 Text(reader,3),Text(reader,4),reader.GetString(5),reader.IsDBNull(6)?null:reader.GetBoolean(6),Text(reader,7),
                 reader.IsDBNull(8)?null:DateTime.SpecifyKind(reader.GetDateTime(8),DateTimeKind.Utc),
-                reader.IsDBNull(9)?null:reader.GetDecimal(9),reader.IsDBNull(10)?null:reader.GetDecimal(10),Text(reader,11),Text(reader,12)));
+                reader.IsDBNull(9)?null:reader.GetDecimal(9),reader.IsDBNull(10)?null:reader.GetDecimal(10),Text(reader,11),Text(reader,12),
+                reader.GetString(13),Text(reader,14)));
         }
         await transaction.CommitAsync(ct);
         return new(rows,query.Page,query.PageSize,total);

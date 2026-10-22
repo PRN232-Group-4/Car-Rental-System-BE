@@ -105,16 +105,18 @@ public sealed class RentalLifecycleSchemaTests(PostgresFixture db) : IClassFixtu
                 UPDATE rental_status_history SET reason = 'Tampered' WHERE id = $1
                 """, historyId));
 
-        Assert.Equal("P0001", updateEx.SqlState);
-        Assert.Contains("immutable", updateEx.MessageText);
+        // Migration 0018 replaced the shared immutable-row function and its error code.
+        Assert.Equal("23505", updateEx.SqlState);
+        Assert.Contains("không được phép", updateEx.MessageText);
 
         var deleteEx = await Assert.ThrowsAsync<PostgresException>(() =>
             Seed.ScalarAsync(db.DataSource, """
                 DELETE FROM rental_status_history WHERE id = $1
                 """, historyId));
 
-        Assert.Equal("P0001", deleteEx.SqlState);
-        Assert.Contains("immutable", deleteEx.MessageText);
+        Assert.Equal("23505", deleteEx.SqlState);
+        Assert.Contains("không được phép", deleteEx.MessageText);
+        Assert.Equal("Manual confirmation", await Seed.ScalarAsync(db.DataSource,"SELECT reason FROM rental_status_history WHERE id=$1",historyId));
     }
 
     [Fact]

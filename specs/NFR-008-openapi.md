@@ -1,4 +1,11 @@
 # NFR-008 — OpenAPI
+
+## 2026-10-22 — Thứ tự mặc định danh sách Admin
+
+- Xe: `created_at DESC, id DESC`; customer/GPLX, cơ sở, vai trò, hồ sơ nhân viên: ID giảm dần (các bảng này không có ngày tạo hồ sơ). SQL xếp trước LIMIT/OFFSET, giữ filter và tổng.
+- FE mặc định nhân viên theo ID giảm dần thay cho ngày vào làm. Danh mục legacy trả đủ array (phòng ban, loại xe, gói) được xếp ID giảm dần trước chia trang ở FE; giữ contract API hiện có.
+- Lịch chuyến/ca vẫn theo giờ bắt đầu; dashboard vẫn theo chỉ số. Các lựa chọn sort chủ động của người dùng được giữ.
+- Acceptance: trang đầu/trang sau đúng thứ tự toàn cục, ổn định khi trùng ngày tạo; không xếp riêng từng trang.
 - **Status:** In progress
 Swagger non-production exists; log startup in ra URL Swagger; AGENT bắt buộc API mới có metadata OpenAPI. Remaining: versioning, API examples and auth schema.
 

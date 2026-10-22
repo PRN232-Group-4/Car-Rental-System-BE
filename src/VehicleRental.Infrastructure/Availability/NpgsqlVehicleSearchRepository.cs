@@ -38,7 +38,9 @@ public sealed class NpgsqlVehicleSearchRepository(NpgsqlDataSource dataSource) :
             LEFT JOIN motorbike_detail md ON md.vehicle_id = v.id
             LEFT JOIN electric_car_detail ecd ON ecd.vehicle_id = v.id
             LEFT JOIN electric_motorbike_detail emd ON emd.vehicle_id = v.id
-            WHERE v.status IN ('available', 'renting')
+            WHERE v.status = 'available'
+              AND NOT EXISTS (SELECT 1 FROM rentals active_rental WHERE active_rental.vehicle_id=v.id
+                  AND active_rental.status IN ('renting','post_inspection'))
             """);
 
         await using var command = new NpgsqlCommand { Connection = connection };

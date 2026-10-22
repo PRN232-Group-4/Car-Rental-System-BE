@@ -13,6 +13,12 @@ public sealed class ApiSuccessResponseOperationFilter : IOperationFilter
     {
         var controller = context.MethodInfo.DeclaringType?.Name;
         var action = context.MethodInfo.Name;
+        if (controller == "RentalLifecycleController" && action is "Cancel" or "CancellationPreview")
+            operation.Description = "Authenticated rental owner or authorized operations staff. Customer and staff may cancel only pending/pre_inspection rentals, before renting; a delayed scheduled pickup does not by itself prohibit cancellation. Customer ownership is checked. Existing free-hours and late-fee policy determines fees/refunds; customer cannot waive fees. Preview and mutation use the same policy; current state is checked under a row lock before cancellation. Cancel requires reason. Errors use the shared six-field envelope.";
+        if (controller == "RentalQueriesController" && action == "List")
+            operation.Description = "Operational rentals include rentalType from the persisted rental (hourly or longterm), consistent with detail. Pagination defaults to page=1/pageSize=20; page>=1 and pageSize 1..100. Invalid values return 400. data contains items/page/pageSize/totalCount after filters.";
+        if (controller == "OperationsController" && action == "License")
+            operation.Description = "Customer reads their own driver license. An existing customer with a null, empty or whitespace license number has status none, including legacy rows with a pending default. A submitted license retains pending, approved or rejected. Missing customer returns null; reading never changes stored data.";
         if (controller == "OperationsController" && action is "SaveLicense" or "SaveLicenseUrl")
             operation.Description = "Customer submits their own driver license for review. Number, type, issueDate, expiryDate and image are all required. Multipart /customer/license requires a new file; JSON /customer/license/url requires a valid imageUrl. Missing values return 400 before upload or persistence. Issue date must not be after expiry and expiry must not be before today UTC. Successful submission resets status to pending.";
         if (controller == "NavigationCountsController")
@@ -31,6 +37,12 @@ public sealed class ApiSuccessResponseOperationFilter : IOperationFilter
             operation.Description = "Any authenticated active account reads its own profile, including nullable staffId/departmentId/departmentName/facilityId/facilityName from persisted employee assignments. No staff directory permission is needed; unassigned facilityName is null.";
         if (controller == "InspectionAssignmentsController")
             operation.Description = "GET: Admin/Manager/CustomerService/Maintenance reads the persisted assignment for the current rental vehicle; data is null if unassigned. PUT: Admin/Manager only, technicianStaffId is required and positive. Target must be active Maintenance. Only pending/pre_inspection before pre-rental evidence; assignment does not replace inspection or change rental status. Missing rental returns 404, invalid technician 400, locked stage/evidence 409. Actor comes from authentication.";
+        if (controller == "InspectionAssignmentsController" && action == "ConfirmChecked")
+            operation.Description = "Admin only. POST checked requires a positive technicianStaffId belonging to active Maintenance. Atomically saves technician dispatch and a passing pre-rental confirmation for the current vehicle; confirmation_source=admin_confirmation, confirmed_by is the authenticated email. Only pending/pre_inspection with started_at null and no existing pre-rental evidence; never overwrites pass/fail evidence. Missing rental 404, invalid technician 400, locked stage/evidence 409. Does not start the rental or bypass driver assignment, payment, maintenance or post-rental inspection.";
+        if (controller == "InspectionsController")
+            operation.Description += " confirmationSource distinguishes technician evidence, driver_default automatic confirmation and admin_confirmation; confirmedBy records the confirming actor. Automatic/manual confirmations do not fabricate odometer, fuel or image evidence.";
+        if (controller == "OperationsController" && action is "Hourly" or "Longterm")
+            operation.Description = "Customer creates a rental preserving hasDriver for both hourly and longterm. Only available vehicles without a currently renting/post_inspection rental can be booked; schedule/maintenance checks run inside the transaction under a vehicle lock. Driver bookings automatically record a passing pre-rental confirmation with source driver_default and actor system, without assigning a driver. Self-drive requires an approved customer license and an explicit technician check or Admin confirmation before handover.";
         if (controller == "OperationsController" && action == "Rental")
             operation.Description = "Authorized rental detail in the flat Rental contract. hasPassingPreInspection and hasPostInspection are boolean readiness flags derived only from persisted inspections for this rental's current vehicle; a successful pre-rental check is mandatory before handover. These fields do not replace server-side lifecycle validation.";
         if (controller == "AuditLogsController")
@@ -71,25 +83,33 @@ public sealed class ApiSuccessResponseOperationFilter : IOperationFilter
             }
         }
         if (controller == "PaymentsController" && action == "ConfirmCash")
-            operation.Description = "Admin/Manager/CustomerService confirms actual full cash receipt for a cash invoice after rental approval. No client amount or paid flag accepted. Atomically records paid ledger with reviewer audit, marks invoice paid and issues the official rental order. Repeated confirmation returns the same receipt/order. Online invoices, cancelled rentals and unapproved requests return 409.";
+            operation.Description = "Admin/Manager/CustomerService confirms actual full cash receipt. Rental invoices require selected cash method and approval. Settled overtime invoices may use cash only before checkout_started_at; atomically records overtime ledger with reviewer audit and marks invoice paid without issuing a new order. No client amount or paid flag. Idempotent; conflicting online checkout returns 409.";
+        if (controller == "PaymentsController" && action == "StaffCheckout")
+            operation.Description = "Admin/Manager/CustomerService creates PayOS link only for an unpaid overtime invoice linked to a completed rental settlement. Rental and invoice locks serialize against cash receipt; reservation blocks cash even on provider failure. Provider signature and amount verification is required before paid. Does not accept customer identity, amount or paid status from client.";
         if (controller == "PaymentsController" && action == "Checkout")
             operation.Description = "Customer, own invoice only. Rental invoices require prior staff confirmation (confirmed_at present, rental not pending/cancelled); otherwise 409 RENTAL_CONFIRMATION_REQUIRED, without reserving checkout or calling PayOS. Unpaid overtime invoices remain payable after settlement. Payment must complete before handover.";
         if (controller == "PaymentsController" && action == "Invoice")
-            operation.Description = "Invoice detail includes canPay (boolean) and paymentBlockedReason (null, RENTAL_CONFIRMATION_REQUIRED or INVOICE_NOT_PAYABLE). These are computed by the same policy rechecked under lock at checkout; clients must not enable payment until canPay=true.";
+            operation.Description = "Invoice detail includes canPay, paymentBlockedReason, kind, canConfirmCash and canCreateStaffCheckout (booleans). Overtime collection requires a completed rental and linked settlement. Cash is disallowed after online reservation. Policies are rechecked under locks; online paid status only follows verified provider receipt.";
         if (controller == "RentalLifecycleController" && action == "Confirm")
             operation.Description = "Admin/Manager/CustomerService confirms a pending rental before payment, writes confirmed_at and advances to pre_inspection. An unpaid direct rental can be confirmed. Legacy pre_inspection without confirmed_at may be explicitly approved here; repeating an existing approval returns 409. Direct rental payment remains mandatory before handover.";
         if (controller == "VehicleSearchController" && action == "Search")
         {
-            operation.Description = "Public available-vehicle search. category=car|electric_car|motorbike|electric_motorbike uses vehicle type and fuel; q searches combined brand/model, year and branch; seatCount is a minimum. transmission=automatic includes CVT; manual/cvt and legacy display values are supported. fuelType accepts petrol/gasoline/electric and Vietnamese display values. sort=recommended|price_asc|price_desc|newest|name_asc has a stable id tie-breaker. Prices use rentalType=hourly|longterm. facilityId restricts vehicles to one branch; with hasDriver=true, an active qualified driver at that same branch must be free for the requested window including assignment buffer. Drivers are assigned later, not reserved by search. Pagination defaults to page=1/pageSize=20; page>=1 and pageSize 1..100, invalid values return 400. totalCount is after filtering and remains correct on empty pages.";
+            operation.Description = "Public unrented-vehicle search: only status available and no rental currently renting/post_inspection, including when searching future dates. category=car|electric_car|motorbike|electric_motorbike uses vehicle type and fuel; q searches combined brand/model, year and branch; seatCount is a minimum. transmission=automatic includes CVT; manual/cvt and legacy display values are supported. fuelType accepts petrol/gasoline/electric and Vietnamese display values. sort=recommended|price_asc|price_desc|newest|name_asc has a stable id tie-breaker. Prices use rentalType=hourly|longterm. facilityId restricts vehicles to one branch; with hasDriver=true, an active qualified driver at that same branch must be free for the requested window including assignment buffer. Drivers are assigned later, not reserved by search. Pagination defaults to page=1/pageSize=20; page>=1 and pageSize 1..100, invalid values return 400. totalCount is after filtering and remains correct on empty pages.";
         }
         if (controller == "CustomersController" && action == "List")
         {
-            operation.Description = "Admin/Manager/CustomerService only. Optional search, isActive and licenseStatus filters combine before pagination and totalCount. licenseStatus is pending, approved, rejected or none; none means no license number submitted, pending means submitted and awaiting review. Omit filters to list all customers including inactive accounts. Pagination defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Results are ordered by customer ID ascending; out-of-range pages return empty items.";
+            operation.Description = "Admin/Manager/CustomerService only. Optional search, isActive and licenseStatus filters combine before pagination and totalCount. licenseStatus is pending, approved, rejected or none; none means no license number submitted, pending means submitted and awaiting review. Omit filters to list all customers including inactive accounts. Pagination defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Results are ordered by customer ID descending, newest profile first; out-of-range pages return empty items.";
             var status = operation.Parameters.FirstOrDefault(p => string.Equals(p.Name, "LicenseStatus", StringComparison.OrdinalIgnoreCase));
             if (status is not null)
                 status.Schema.Enum = new[] { "pending", "approved", "rejected", "none" }
                     .Select(value => (Microsoft.OpenApi.Any.IOpenApiAny)new Microsoft.OpenApi.Any.OpenApiString(value)).ToList();
         }
+        if ((controller == "RolesController" && action == "List") ||
+            (controller == "StaffController" && action is "List" or "ListDrivers") ||
+            (controller == "OperationsController" && action == "Facilities"))
+            operation.Description = (operation.Description ?? "") + " Default order is ID descending (newest profile/record first), applied before pagination.";
+        if (controller == "OperationsController" && action == "Vehicles")
+            operation.Description = (operation.Description ?? "") + " Default order is created_at DESC, id DESC, applied before pagination; modification time does not change order.";
         if ((controller == "RentalQueriesController" && action is "List" or "Mine") ||
             (controller == "HandoversController" && action == "List"))
         {
@@ -112,6 +132,8 @@ public sealed class ApiSuccessResponseOperationFilter : IOperationFilter
                 operation.Description += " Admin/Manager/CustomerService only. status=pending (default), completed or all. Completed handovers include rentals that have since been returned/completed.";
             if (controller == "RentalQueriesController")
                 operation.Description += " Each item includes nullable orderId for the official paid rental order; id remains the booking request ID. Omit status (and tab for mine) to include all lifecycle states, including completed and cancelled.";
+            if (controller == "RentalQueriesController" && action == "List")
+                operation.Description += " status=overdue filters renting rentals with no returned_at and end time before the server clock, before count/pagination. Summaries expose isOverdue; lifecycle status remains renting so return remains valid. Newest id first, defaults page=1/pageSize=20, maximum 100.";
         }
         if (controller == "RentalQueriesController" && action is "Detail" or "MineDetail")
             operation.Description = "Rental detail includes status, audit timeline/history and nullable top-level orderId. id (or rental.id) remains the booking request ID; only a persisted official order supplies orderId. A cancelled rental remains cancelled even if a historical paid order exists.";

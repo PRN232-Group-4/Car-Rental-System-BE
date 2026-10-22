@@ -40,9 +40,7 @@ public sealed partial class NpgsqlOperationsRepository : IRentalEditingRepositor
             }
             if (rental.SignedAt is not null)
                 throw new ConflictException("RENTAL_SIGNED", "Signed rental terms cannot be edited.");
-            if (rental.RentalType == "longterm" && command.HasDriver)
-                throw new BusinessRuleException("INVALID_RENTAL_EDIT", "Long-term rentals are self-drive only.");
-            if (await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM inspections WHERE rental_id=$1)", ct, id) is true)
+            if (await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM inspections WHERE rental_id=$1 AND confirmation_source<>'driver_default')", ct, id) is true)
                 throw new ConflictException("RENTAL_HAS_INSPECTION", "The rental already has inspection evidence; review its operational workflow before editing.");
             if (await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM vehicle_assignments WHERE rental_id=$1 AND status='assigned')", ct, id) is true)
                 throw new ConflictException("RENTAL_HAS_ASSIGNMENT", "Resolve the active assignment through the assignment workflow before editing.");
@@ -109,7 +107,9 @@ public sealed partial class NpgsqlOperationsRepository : IRentalEditingRepositor
             if (rental.RentalType == "hourly")
                 await ValueAsync(cn, tx, "UPDATE hour_rental_detail SET start_time=$2,end_time=$3,has_driver=$4,hourly_price_snapshot=$5 WHERE rental_id=$1", ct, id, start, end, command.HasDriver, price.Unit);
             else
-                await ValueAsync(cn, tx, "UPDATE longterm_rental_contract SET start_time=$2,end_time=$3,monthly_price_snapshot=$4 WHERE rental_id=$1", ct, id, start, end, price.Unit);
+                await ValueAsync(cn, tx, "UPDATE longterm_rental_contract SET start_time=$2,end_time=$3,monthly_price_snapshot=$4,has_driver=$5 WHERE rental_id=$1", ct, id, start, end, price.Unit, command.HasDriver);
+            if (!command.HasDriver)
+                await ValueAsync(cn, tx, "DELETE FROM inspections WHERE rental_id=$1 AND confirmation_source='driver_default'", ct, id);
             if (!rental.IsSubscription)
                 await ValueAsync(cn, tx, "UPDATE invoices SET amount=$2,vat_amount=$3 WHERE rental_id=$1 AND kind='rental' AND status='unpaid'", ct, id, price.Total + price.Deposit, price.Vat);
             var result = await ReadRentalAsync(cn, tx, id, ct);

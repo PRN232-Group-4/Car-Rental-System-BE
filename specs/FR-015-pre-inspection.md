@@ -1,5 +1,9 @@
 # FR-015 — Pre-rental inspection
 
+## Thay đổi theo yêu cầu 2026-10-22
+
+Đơn có tài xế được mặc định đạt kiểm tra trước thuê khi tạo và khi đổi xe. Ghi nhận riêng `confirmation_source=driver_default`, `confirmed_by=system`, không tạo số đo hay ảnh giả. Đơn tự lái: Admin/Manager có thể chỉ phân công Maintenance để chờ kiểm tra, hoặc chọn kỹ thuật viên và xác nhận đã phân công & kiểm tra qua POST `/api/rentals/{id}/inspection-assignment/checked`. Cách thứ hai lưu phân công và kết quả đạt trong cùng transaction, nguồn `admin_confirmation`, người xác nhận lấy từ principal. Không ghi đè biên bản đã có (kể cả fail); không cho thao tác sau khi bắt đầu. Chỉ Admin được xác nhận trực tiếp; Manager vẫn có thể phân công. Các điều kiện thanh toán, tài xế thực tế, bảo dưỡng và kiểm tra sau thuê giữ nguyên.
+
 ## Danh sách evidence — 2026-10-21
 
 GET `/api/inspections` đọc tất cả evidence trước/sau thuê, không giới hạn xe hiện tại hoặc rental đang chạy. Admin/Manager/CustomerService/Maintenance được đọc. Lọc tùy chọn inspectionType=pre_rental/post_rental và rentalId dương; phân trang mặc định 1/20, pageSize 1–100, totalCount sau lọc. Thứ tự inspected_at DESC NULLS LAST rồi id DESC. Evidence trả tên xe/biển số/email người kiểm tra đã ghi cùng các thông số, thời gian và ảnh. Danh sách việc chưa làm được khám phá từ rental queue hiện có, không tạo evidence giả cho việc chưa kiểm tra.

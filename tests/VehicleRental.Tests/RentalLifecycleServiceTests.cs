@@ -330,15 +330,14 @@ public sealed class RentalLifecycleServiceTests
     // =========================================================================
 
     [Fact]
-    public async Task Cancel_by_customer_outside_pending_throws_SelfCancelNotAllowed()
+    public async Task Cancel_by_customer_during_pre_inspection_is_allowed()
     {
         var service = CreateService();
         _repo.Entity = CreateDefaultRental(status: RentalStatus.PreInspection);
 
-        var ex = await Assert.ThrowsAsync<ConflictException>(() =>
-            service.CancelAsync(100, new("Change of plans"), new(10, "cust@test.local", "Customer"), CancellationToken.None));
-
-        Assert.Equal("SELF_CANCEL_NOT_ALLOWED", ex.Code);
+        var result = await service.CancelAsync(100, new("Change of plans"), new(10, "cust@test.local", "Customer"), CancellationToken.None);
+        Assert.Equal("cancelled",result.ToStatus);
+        Assert.True(_repo.UpdatedToCancelled);
     }
 
     [Fact]
