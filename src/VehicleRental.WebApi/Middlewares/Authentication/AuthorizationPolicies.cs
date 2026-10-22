@@ -26,7 +26,7 @@ public static class AuthorizationPolicies
         Add(Management, "Admin", "Manager");
         Add(CustomerService, "Admin", "Manager", "CustomerService");
         options.AddPolicy(Inspection, policy => policy.RequireAuthenticatedUser()
-            .RequireRole("Admin", "Maintenance").RequireAssertion(context => StaffId(context.User) is not null));
+            .RequireRole("Admin", "Manager", "Maintenance").RequireAssertion(context => StaffId(context.User) is not null));
         Add(Maintenance, "Admin", "Manager", "Maintenance");
         Add(DriverSchedule, "Admin", "Manager", "Driver");
         Add(RentalRead, "Admin", "Manager", "CustomerService", "Maintenance", "Customer", "Driver");
