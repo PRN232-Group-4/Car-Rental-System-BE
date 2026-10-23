@@ -424,6 +424,18 @@ public sealed class RentalLifecycleServiceTests
             return Task.CompletedTask;
         }
 
+        public IReadOnlyList<int> ExpiringRentalIds { get; set; } = [];
+        public bool UpdatedToExpired { get; set; }
+
+        public Task<IReadOnlyList<int>> ListExpiringRentalIdsAsync(DateTime now, int limit, CancellationToken ct) =>
+            Task.FromResult(ExpiringRentalIds);
+
+        public Task<RentalStatus?> UpdateToExpiredAsync(int rentalId, DateTime expiredAt, string reason, ActorContext actor, CancellationToken ct)
+        {
+            UpdatedToExpired = true;
+            return Task.FromResult<RentalStatus?>(RentalStatus.Pending);
+        }
+
         public Task UpdateToRentingAsync(int rentalId, int vehicleId, DateTime startedAt, ActorContext actor, CancellationToken ct)
         {
             UpdatedToRenting = true;

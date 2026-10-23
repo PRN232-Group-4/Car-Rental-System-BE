@@ -1,3 +1,4 @@
+using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Interfaces.External;
@@ -9,7 +10,7 @@ using Car_Rental_System_BE.Domain.Availability;
 
 namespace Car_Rental_System_BE.Application.Services;
 
-public sealed class OperationsService(IOperationsRepository repository, IDriverAvailability? drivers = null, TimeProvider? timeProvider = null, IOperationalNotifications? notifications = null) : IOperationsService
+public sealed class OperationsService(IOperationsRepository repository, IDriverAvailability? drivers = null, TimeProvider? timeProvider = null, IOperationalNotifications? notifications = null, RentalExpiryOptions? expiryOptions = null) : IOperationsService
 {
     public Task<DriverShift> SaveDriverShiftAsync(int? id, int driverId, DateTime start, DateTime end, bool cancelled, string actor, CancellationToken ct) =>
         repository.SaveDriverShiftAsync(id, driverId, start, end, cancelled, actor, ct);
@@ -170,7 +171,18 @@ public sealed class OperationsService(IOperationsRepository repository, IDriverA
     public Task<Rental> CreateRentalAsync(string email, int vehicleId, int? policyId, string rentalType, DateTime start, DateTime end, bool subscription, int? subscriptionId, bool hasDriver, CancellationToken ct, string paymentMethod = "payos")
     {
         if (paymentMethod is not ("payos" or "cash")) throw new ArgumentException("PaymentMethod must be payos or cash.", nameof(paymentMethod));
-        return repository.CreateRentalAsync(email, vehicleId, policyId, rentalType, start, end, subscription, subscriptionId, hasDriver, ct, paymentMethod);
+
+        // FR-042: giờ nhận xe phải cách thời điểm đặt tối thiểu một khoảng an toàn,
+        // và yêu cầu chỉ có một cửa sổ hữu hạn để được duyệt + thanh toán.
+        var options = expiryOptions ?? new RentalExpiryOptions();
+        var rule = options.ToRule();
+        var bookedAt = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
+        if (!rule.IsStartTimeAllowed(bookedAt, start))
+            throw new BusinessRuleException(
+                "RENTAL_START_TIME_TOO_SOON",
+                $"Giờ nhận xe phải cách thời điểm đặt ít nhất {options.MinimumLeadMinutes} phút. Vui lòng chọn giờ nhận xe muộn hơn.");
+
+        return repository.CreateRentalAsync(email, vehicleId, policyId, rentalType, start, end, subscription, subscriptionId, hasDriver, ct, paymentMethod, rule.ComputeExpireAt(bookedAt));
     }
 
     public Task<Rental> SaveRentalContractAsync(int id, string contractLink, DateTime signedAt, CancellationToken ct) =>

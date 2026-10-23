@@ -23,7 +23,8 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
                    COALESCE(p.overtime_fee_rate, 0) AS overtime_fee_rate,
                    COALESCE(p.vat_rate, 10) AS vat_rate,
                    r.confirmed_at, r.started_at, r.returned_at, r.completed_at,
-                   r.cancelled_at, r.cancelled_by, r.cancel_reason, r.overtime_hours
+                   r.cancelled_at, r.cancelled_by, r.cancel_reason, r.overtime_hours,
+                   r.expire_at, r.expired_at
             FROM rentals r
             LEFT JOIN hour_rental_detail h ON h.rental_id = r.id
             LEFT JOIN longterm_rental_contract l ON l.rental_id = r.id
@@ -65,7 +66,9 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
             CancelledAt: reader.IsDBNull(23) ? null : reader.GetDateTime(23),
             CancelledBy: reader.IsDBNull(24) ? null : reader.GetString(24),
             CancelReason: reader.IsDBNull(25) ? null : reader.GetString(25),
-            OvertimeHours: reader.GetInt32(26)
+            OvertimeHours: reader.GetInt32(26),
+            ExpireAt: reader.IsDBNull(27) ? null : reader.GetDateTime(27),
+            ExpiredAt: reader.IsDBNull(28) ? null : reader.GetDateTime(28)
         );
     }
 
@@ -426,6 +429,109 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
 
         await InsertHistoryAsync(conn, tx, rentalId, null, "cancelled", actor, reason, ct);
         await tx.CommitAsync(ct);
+    }
+
+    /// <summary>
+    /// FR-042: ứng viên hết hạn = còn ở trạng thái chờ/pre_inspection, đã qua <c>expire_at</c>
+    /// và chưa hoàn tất điều kiện “đã duyệt + đã thanh toán” (gói trả trước chỉ cần duyệt).
+    /// </summary>
+    public async Task<IReadOnlyList<int>> ListExpiringRentalIdsAsync(DateTime now, int limit, CancellationToken ct)
+    {
+        await using var cmd = dataSource.CreateCommand("""
+            SELECT r.id
+            FROM rentals r
+            WHERE r.status IN ('pending','pre_inspection')
+              AND r.expire_at IS NOT NULL AND r.expire_at <= $1
+              AND NOT (r.confirmed_at IS NOT NULL
+                       AND (r.is_subscription OR EXISTS(
+                           SELECT 1 FROM invoices i
+                           WHERE i.rental_id = r.id AND i.kind = 'rental' AND i.status = 'paid')))
+            ORDER BY r.expire_at, r.id
+            LIMIT $2
+            """);
+        cmd.Parameters.Add(Sql.Timestamp("", now));
+        cmd.Parameters.AddWithValue(limit);
+
+        var ids = new List<int>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct)) ids.Add(reader.GetInt32(0));
+        return ids;
+    }
+
+    public async Task<RentalStatus?> UpdateToExpiredAsync(
+        int rentalId,
+        DateTime expiredAt,
+        string reason,
+        ActorContext actor,
+        CancellationToken ct)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
+        await using (var lockCmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock($1)", conn, tx))
+        {
+            lockCmd.Parameters.AddWithValue(rentalId);
+            await lockCmd.ExecuteNonQueryAsync(ct);
+        }
+
+        string currentStatus;
+        bool isSubscription;
+        DateTime? expireAt;
+        bool confirmed;
+        bool invoicePaid;
+        await using (var checkCmd = new NpgsqlCommand("""
+            SELECT r.status, r.is_subscription, r.expire_at,
+                   r.confirmed_at IS NOT NULL,
+                   EXISTS(SELECT 1 FROM invoices i
+                          WHERE i.rental_id = r.id AND i.kind = 'rental' AND i.status = 'paid')
+            FROM rentals r
+            WHERE r.id = $1
+            FOR UPDATE
+            """, conn, tx))
+        {
+            checkCmd.Parameters.AddWithValue(rentalId);
+            await using var reader = await checkCmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct)) return null;
+            currentStatus = reader.GetString(0);
+            isSubscription = reader.GetBoolean(1);
+            expireAt = reader.IsDBNull(2) ? null : reader.GetDateTime(2);
+            confirmed = reader.GetBoolean(3);
+            invoicePaid = reader.GetBoolean(4);
+        }
+
+        // Đã rời trạng thái chờ, chưa tới hạn, hoặc đã đủ điều kiện duyệt + thanh toán: bỏ qua.
+        // Điều kiện được kiểm tra lại trong transaction nên duyệt/thanh toán sát giờ hết hạn không bị xử lý hai lần.
+        if (currentStatus is not ("pending" or "pre_inspection")) return null;
+        if (!RentalExpiryRule.IsPastDeadline(expiredAt, expireAt)) return null;
+        if (RentalExpiryRule.IsFulfilled(confirmed, isSubscription, invoicePaid)) return null;
+
+        await using (var cmd = new NpgsqlCommand("""
+            UPDATE rentals
+            SET status = 'expired', expired_at = $2, cancel_reason = $3, status_changed_at = now()
+            WHERE id = $1
+            """, conn, tx))
+        {
+            cmd.Parameters.AddWithValue(rentalId);
+            cmd.Parameters.Add(Sql.Timestamp("", expiredAt));
+            cmd.Parameters.AddWithValue(reason);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+
+        // Hóa đơn chưa thu tiền bị hủy để khách không thanh toán cho đơn đã hết hạn.
+        await using (var voidInvoice = new NpgsqlCommand("""
+            UPDATE invoices SET status = 'cancelled'
+            WHERE rental_id = $1 AND kind = 'rental' AND status = 'unpaid'
+            """, conn, tx))
+        {
+            voidInvoice.Parameters.AddWithValue(rentalId);
+            await voidInvoice.ExecuteNonQueryAsync(ct);
+        }
+
+        // Lịch xe được giải phóng tự động: trigger trg_rentals_sync_booking đặt vehicle_bookings.is_blocking=false
+        // khi status chuyển sang 'expired', nên xe lại được tìm thấy cho khung giờ đó.
+        await InsertHistoryAsync(conn, tx, rentalId, currentStatus, RentalStatus.Expired.ToDbString(), actor, reason, ct);
+        await tx.CommitAsync(ct);
+        return RentalStatusExtensions.FromDbString(currentStatus);
     }
 
     public async Task<IReadOnlyList<RentalStatusHistoryEntry>> GetHistoryAsync(int rentalId, CancellationToken ct)

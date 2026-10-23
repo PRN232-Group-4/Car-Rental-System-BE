@@ -12,7 +12,7 @@ public sealed class NpgsqlOperationsCompletionRepository(NpgsqlDataSource dataSo
             FROM vehicle_assignments a JOIN vehicles v ON v.id=a.vehicle_id JOIN rentals r ON r.id=a.rental_id
             JOIN staffs s ON s.id=a.driver_staff_id JOIN users u ON u.id=s.user_id
             LEFT JOIN hour_rental_detail h ON h.rental_id=r.id LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id
-            WHERE a.status='assigned' AND r.status NOT IN ('cancelled','completed')
+            WHERE a.status='assigned' AND r.status NOT IN ('cancelled','completed','expired')
               AND ($1::int IS NULL OR a.driver_staff_id=$1) AND COALESCE(h.start_time,l.start_time)<$3 AND COALESCE(h.end_time,l.end_time)>$2
             """;
         await using var cn=await dataSource.OpenConnectionAsync(ct);

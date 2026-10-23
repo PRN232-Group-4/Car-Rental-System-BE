@@ -33,7 +33,9 @@ public sealed record RentalSettlementDto(
     int? ShortfallInvoiceId,
     int? RefundPaymentId,
     bool DamageReviewRequired,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    DateTime? ExpireAt = null,
+    DateTime? ExpiredAt = null
 );
 
 public sealed record RentalLifecycleEntity(
@@ -63,7 +65,9 @@ public sealed record RentalLifecycleEntity(
     DateTime? CancelledAt,
     string? CancelledBy,
     string? CancelReason,
-    int OvertimeHours
+    int OvertimeHours,
+    DateTime? ExpireAt = null,
+    DateTime? ExpiredAt = null
 );
 
 public sealed record CustomerVehicleDto(int Id, string Brand, string Model, string? MainImageUrl, string? Color);
@@ -94,7 +98,8 @@ public sealed record CustomerRentalSummary(
     bool CanCancel = false,
     string? NextAction = null,
     CustomerFacilityDto? Facility = null,
-    decimal? SubscriptionHoursUsed = null
+    decimal? SubscriptionHoursUsed = null,
+    DateTime? ExpireAt = null
 );
 
 public sealed record CustomerRentalDetail(
@@ -118,7 +123,8 @@ public sealed record CustomerRentalDetail(
     CancellationPreview? Cancellation,
     string? NextAction,
     int? OrderId = null,
-    decimal? SubscriptionHoursUsed = null
+    decimal? SubscriptionHoursUsed = null,
+    DateTime? ExpireAt = null
 );
 
 public sealed record OperationalRentalSummary(
@@ -137,7 +143,8 @@ public sealed record OperationalRentalSummary(
     string? DriverName,
     string RentalType,
     int? OrderId = null,
-    bool IsOverdue = false
+    bool IsOverdue = false,
+    DateTime? ExpireAt = null
 );
 
 public sealed record OperationalRentalDetail(
@@ -206,6 +213,15 @@ public interface IRentalLifecycleRepository
     Task UpdateToPostInspectionAsync(int rentalId, DateTime returnedAt, ActorContext actor, CancellationToken ct);
     Task UpdateToCompletedAsync(int rentalId, int vehicleId, DateTime completedAt, DateTime returnedAt, decimal overtimePrice, decimal vatPrice, decimal totalPrice, int overtimeHours, RentalSettlementDto settlement, ActorContext actor, CancellationToken ct);
     Task UpdateToCancelledAsync(int rentalId, int vehicleId, DateTime cancelledAt, string cancelledBy, string reason, ActorContext actor, CancellationToken ct);
+    /// <summary>FR-042: danh sách yêu cầu đã quá hạn duyệt/thanh toán, cũ nhất trước, giới hạn theo lô.</summary>
+    Task<IReadOnlyList<int>> ListExpiringRentalIdsAsync(DateTime now, int limit, CancellationToken ct);
+    /// <summary>
+    /// FR-042: chuyển yêu cầu sang <c>expired</c> trong một transaction (khóa tư vấn + FOR UPDATE + kiểm tra lại
+    /// điều kiện đã duyệt/đã thanh toán nên an toàn khi tranh chấp với duyệt/thanh toán).
+    /// Trả về trạng thái trước đó khi chuyển thành công, hoặc <c>null</c> khi đơn đã đủ điều kiện,
+    /// không còn ở trạng thái chờ, hoặc đã hết hạn trước đó.
+    /// </summary>
+    Task<RentalStatus?> UpdateToExpiredAsync(int rentalId, DateTime expiredAt, string reason, ActorContext actor, CancellationToken ct);
     Task<IReadOnlyList<RentalStatusHistoryEntry>> GetHistoryAsync(int rentalId, CancellationToken ct);
     Task<RentalSettlementDto?> GetSettlementAsync(int rentalId, CancellationToken ct);
 }

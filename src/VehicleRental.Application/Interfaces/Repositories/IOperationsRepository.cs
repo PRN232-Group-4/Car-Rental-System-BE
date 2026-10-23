@@ -33,7 +33,7 @@ public interface IOperationsRepository
     Task<bool> HasActivePolicyAsync(int? vehicleTypeId, CancellationToken ct);
     Task<RentalPolicy?> SetPolicyStatusAsync(int id, bool isActive, CancellationToken ct);
     Task<RentalPolicyPage> ListPoliciesAsync(int page, int pageSize, CancellationToken ct);
-    Task<Rental> CreateRentalAsync(string email, int vehicleId, int? policyId, string rentalType, DateTime start, DateTime end, bool subscription, int? subscriptionId, bool hasDriver, CancellationToken ct, string paymentMethod = "payos");
+    Task<Rental> CreateRentalAsync(string email, int vehicleId, int? policyId, string rentalType, DateTime start, DateTime end, bool subscription, int? subscriptionId, bool hasDriver, CancellationToken ct, string paymentMethod = "payos", DateTime? expireAt = null);
     Task<Rental> SaveRentalContractAsync(int id, string contractLink, DateTime signedAt, CancellationToken ct);
     Task<Rental?> GetRentalAsync(int id, CancellationToken ct);
     Task<Rental?> GetRentalForUserAsync(int id, string email, bool readAll, bool customer, bool driver, CancellationToken ct);

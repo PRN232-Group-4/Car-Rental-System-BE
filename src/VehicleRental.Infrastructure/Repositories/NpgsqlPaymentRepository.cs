@@ -34,6 +34,9 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
         }
         if (rentalStatus == "cancelled")
             throw new ConflictException("INVOICE_NOT_PAYABLE", "A cancelled rental cannot be checked out.");
+        // FR-042: đơn đã hết hạn không được tạo link thanh toán mới.
+        if (rentalStatus == "expired")
+            throw new ConflictException("RENTAL_EXPIRED", "Đơn thuê đã hết hạn vì chưa được duyệt hoặc chưa thanh toán trong thời hạn. Vui lòng tạo đơn mới.");
         try
         {
             await using var invoice = new NpgsqlCommand("""
@@ -95,9 +98,9 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
         find.Parameters.AddWithValue(invoiceId);
         if (await find.ExecuteScalarAsync(ct) is not int targetRental) throw new KeyNotFoundException();
         // Same lock order as cash receipt, approval and checkout: rental, then invoice.
-        await using var rentalLock = new NpgsqlCommand("SELECT id FROM rentals WHERE id=$1 FOR UPDATE", cn, tx);
+        await using var rentalLock = new NpgsqlCommand("SELECT status FROM rentals WHERE id=$1 FOR UPDATE", cn, tx);
         rentalLock.Parameters.AddWithValue(targetRental);
-        if (await rentalLock.ExecuteScalarAsync(ct) is not int) throw new KeyNotFoundException();
+        if (await rentalLock.ExecuteScalarAsync(ct) is not string lockedRentalStatus) throw new KeyNotFoundException();
         await using var existing = new NpgsqlCommand("SELECT p.id,p.invoice_id,p.amount,p.status,p.provider_reference,i.kind FROM payments p JOIN invoices i ON i.id=p.invoice_id WHERE p.provider_reference=$1", cn, tx);
         existing.Parameters.AddWithValue(reference); await using var reader = await existing.ExecuteReaderAsync(ct);
         if (await reader.ReadAsync(ct))
@@ -107,6 +110,8 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
             var previousKind = reader.GetString(5);
             await reader.CloseAsync();
             var previousOrder = previousKind == "rental" ? await RentalOrderWriter.EnsurePaidAsync(cn, tx, targetRental, ct) : null;
+            if (previousKind == "rental" && lockedRentalStatus == "expired")
+                await RequestExpiryRefundAsync(cn, tx, invoiceId, ct);
             await tx.CommitAsync(ct);
             return previous with { OrderId = previousOrder };
         }
@@ -124,7 +129,30 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
         var id = (int)(await add.ExecuteScalarAsync(ct))!;
         await using var update = new NpgsqlCommand("UPDATE invoices SET status='paid' WHERE id=$1", cn, tx); update.Parameters.AddWithValue(invoiceId); await update.ExecuteNonQueryAsync(ct);
         var orderId = kind == "rental" ? await RentalOrderWriter.EnsurePaidAsync(cn, tx, rentalId, ct) : null;
+        // FR-042: khách kịp trả tiền nhưng đơn đã hết hạn ngay trước đó (webhook về sau job hết hạn).
+        // Ghi nhận khoản thu vào sổ cái nhưng KHÔNG phát hành đơn, đồng thời tạo yêu cầu hoàn tiền để xử lý rõ ràng.
+        if (kind == "rental" && lockedRentalStatus == "expired")
+            await RequestExpiryRefundAsync(cn, tx, invoiceId, ct);
         await tx.CommitAsync(ct); return new(id, invoiceId, amount, "paid", reference, orderId);
+    }
+
+    /// <summary>
+    /// FR-042: tạo yêu cầu hoàn tiền cho hóa đơn thuê đã thu nhưng đơn đã hết hạn.
+    /// Idempotent: chỉ chèn khi chưa có yêu cầu hoàn tiền nào cho hóa đơn đó.
+    /// </summary>
+    private static async Task RequestExpiryRefundAsync(NpgsqlConnection cn, NpgsqlTransaction tx, int invoiceId, CancellationToken ct)
+    {
+        await using var cmd = new NpgsqlCommand("""
+            INSERT INTO payments(rental_id,invoice_id,customer_id,is_subscription_payment,amount,status,type,method)
+            SELECT i.rental_id, i.id, r.customer_id, false, i.amount, 'requested', 'refund', 'payos'
+            FROM invoices i
+            JOIN rentals r ON r.id = i.rental_id
+            WHERE i.id = $1 AND i.kind = 'rental' AND i.status = 'paid' AND r.status = 'expired'
+              AND NOT EXISTS (SELECT 1 FROM payments p
+                              WHERE p.invoice_id = i.id AND p.type = 'refund' AND p.status IN ('requested','paid'))
+            """, cn, tx);
+        cmd.Parameters.AddWithValue(invoiceId);
+        await cmd.ExecuteNonQueryAsync(ct);
     }
 
     public async Task<PaymentResult> RequestRefundAsync(int paymentId, decimal amount, CancellationToken ct)
