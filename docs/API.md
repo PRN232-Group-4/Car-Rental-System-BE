@@ -602,7 +602,11 @@ GET `/api/rentals/{id}` (flat `Rental`, đang dùng trong Admin) và `/api/renta
 pending -> pre_inspection -> renting -> post_inspection -> completed
 pending -> cancelled
 pre_inspection -> cancelled
+pending -> expired
+pre_inspection -> expired
 ```
+
+FR-042: `expired` là trạng thái kết thúc, do job nền đặt khi quá `rentals.expire_at` mà chưa đủ điều kiện “đã duyệt + đã thanh toán”. Hóa đơn thuê chưa thu của đơn hết hạn bị hủy trong cùng transaction; `vehicle_bookings.is_blocking=false` nên lịch xe được giải phóng. `expire_at = created_at + Rental:Expiry:ApprovalWindowMinutes` (mặc định 60 phút); `POST /api/rentals/hourly|longterm` từ chối `startTime < now + Rental:Expiry:MinimumLeadMinutes` với 400 `RENTAL_START_TIME_TOO_SOON`. Duyệt (`confirm`/`start`) và thanh toán (checkout PayOS, xác nhận tiền mặt) trên đơn `expired` trả 409 (`ILLEGAL_TRANSITION`/`RENTAL_EXPIRED`/`INVOICE_NOT_PAYABLE`). Webhook PayOS về sau khi đơn đã hết hạn vẫn ghi sổ cái nhưng không phát hành `rental_orders` và tự tạo `payments(type='refund', status='requested')`. Danh sách `mine` có thêm tab `expired`; `CustomerRentalSummary`/`CustomerRentalDetail` có thêm `expireAt: datetime|null`; danh sách vận hành nhận `status=expired`.
 
 Luồng mới: staff duyệt yêu cầu `/confirm` → customer thanh toán PayOS hoặc staff xác nhận đã thu tiền mặt → phát hành đơn thuê chính thức; kiểm định `/inspections/pre` đạt và phân công xe/tài xế → xác nhận `/api/handovers/{rentalId}/confirm`. Confirm không yêu cầu paid; ghi confirmed_at để mở thanh toán, legacy pre_inspection chưa có confirmed_at cần duyệt bổ sung. Xác nhận bàn giao dùng cùng logic `/start`, chuyển `pre_inspection → renting`, ghi started_at và audit trong transaction. Không cần body. Chỉ bàn giao trực tiếp khi hóa đơn thuê ban đầu paid, kiểm định và assignment của **xe hiện tại** hợp lệ; tự lái cần GPLX approved/còn hạn. Gọi lại trả 409 ALREADY_IN_STATE. Kiểm định legacy từ pending/renting vẫn tự chuyển trạng thái; xác nhận bàn giao kiểm tra lại payment và tình trạng xe để đường legacy không bỏ qua điều kiện bắt đầu thuê. `/status/{status}` cũ deprecated; dùng endpoint lifecycle riêng cho luồng mới.
 

@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-10-23 — [Tự động hết hạn yêu cầu đặt xe](2026-10-23-rental-expiry.md)
+
 - 2026-10-22 — [Kiểm tra kèm duyệt cập nhật tiến trình](2026-10-22-inspection-approval-progress.md)
 
 - 2026-10-22 — [Quá hạn và thu phụ phí tiền mặt/online](2026-10-22-overdue-collection.md)

@@ -1,5 +1,9 @@
 # Tiến độ
 
+## Tự động hết hạn yêu cầu đặt xe — 2026-10-23
+
+Thêm trạng thái `expired`, cột `expire_at`/`expired_at` (migration 0030) và job quét mỗi phút: yêu cầu chưa được duyệt hoặc chưa thanh toán trong cửa sổ cấu hình (mặc định 1 giờ kể từ lúc đặt) tự hết hạn, hủy hóa đơn chưa thu và giải phóng lịch xe. Đặt xe phải cách giờ nhận tối thiểu 1 giờ; đơn hết hạn không duyệt/không thanh toán được, thanh toán muộn sau hạn được ghi ledger và tự tạo yêu cầu hoàn tiền. 32 test FR-042 đạt trên PostgreSQL tạm; toàn bộ suite 1144 đạt, 3 lỗi có sẵn từ trước. Chưa deploy, chưa gửi thông báo email. Xem [FR-042](../specs/FR-042-rental-expiry.md), [thay đổi](../changes/2026-10-23-rental-expiry.md).
+
 ## Đồng bộ tiến trình khi kiểm tra kèm duyệt — 2026-10-22
 
 Checked hỗ trợ approveRequest=true theo xác nhận rõ của Admin để duyệt pending trong cùng transaction với evidence. Dùng writer chung với lifecycle confirm; không tự start/paid hoặc duyệt driver_default. 58 backend tests liên quan đạt, không migration mới/chưa deploy. Xem [thay đổi](../changes/2026-10-22-inspection-approval-progress.md).
