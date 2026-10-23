@@ -1,0 +1,20 @@
+# Reverse proxy cho API khi triển khai bằng docker compose.
+#
+# Địa chỉ site lấy từ biến môi trường CADDY_SITE_ADDRESS; mặc định ":80" nghĩa là phục vụ HTTP
+# cho mọi hostname (phù hợp khi đứng sau một proxy/CDN khác hoặc chạy nội bộ).
+#
+# Đặt tên miền thật để Caddy tự xin và tự gia hạn chứng chỉ HTTPS:
+#   CADDY_SITE_ADDRESS=api.example.com docker compose up -d --build caddy
+# Khi đó bản ghi DNS của tên miền phải trỏ về máy này và cổng 80/443 phải mở.
+# Chứng chỉ được lưu trong volume caddy_data nên container khởi động lại không xin lại
+# (tránh giới hạn tần suất của Let's Encrypt).
+{$CADDY_SITE_ADDRESS::80} {
+	# API trả JSON/Swagger nên nén phần trả về là có lợi và không đổi nội dung.
+	encode zstd gzip
+
+	# Caddy tự thêm X-Forwarded-For / X-Forwarded-Proto / X-Forwarded-Host.
+	# API đang bật UseForwardedHeaders với KnownNetworks/KnownProxies đã xoá nên đọc được
+	# scheme thật (cookie Secure, redirect Google OAuth) và IP thật của khách.
+	# Cổng 8080 là cổng nội bộ của container api (xem Dockerfile: ASPNETCORE_URLS=http://+:8080).
+	reverse_proxy api:8080
+}
