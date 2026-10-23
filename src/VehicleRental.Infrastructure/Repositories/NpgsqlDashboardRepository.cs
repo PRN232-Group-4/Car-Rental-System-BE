@@ -73,12 +73,17 @@ public sealed class NpgsqlDashboardRepository(NpgsqlDataSource dataSource) : IDa
                 COALESCE((SELECT jsonb_object_agg(g.category,g.total) FROM (
                     SELECT e.category,sum(r.amount) AS total FROM revenues r JOIN eligible e ON e.id=r.vehicle_id
                     WHERE r.issued_at>=b.previous_from AND r.issued_at<b.previous_to GROUP BY e.category
-                ) g),'{}'::jsonb)::text AS previous_by_group
+                ) g),'{}'::jsonb)::text AS previous_by_group,
+                (SELECT count(*) FROM scoped_rentals r WHERE r.started_at>=b.bucket_from AND r.started_at<b.bucket_to
+                    AND r.status<>'cancelled') AS rentals,
+                (SELECT count(*) FROM scoped_rentals r WHERE r.started_at>=b.previous_from AND r.started_at<b.previous_to
+                    AND r.status<>'cancelled') AS previous_rentals
             FROM buckets b
         )
         """, "bucket", reader => new("day", DateOnly.FromDateTime(reader.GetDateTime(1)), reader.GetDecimal(6),
             Groups(reader.GetString(7)), new(reader.GetDecimal(8), Groups(reader.GetString(9))),
-            new(Utc(reader, 2), Utc(reader, 3)), new(Utc(reader, 4), Utc(reader, 5))), ct);
+            new(Utc(reader, 2), Utc(reader, 3)), new(Utc(reader, 4), Utc(reader, 5)),
+            reader.GetInt64(10), reader.GetInt64(11)), ct);
 
     private const string VehicleMetrics = """
         , vehicle_metrics AS (

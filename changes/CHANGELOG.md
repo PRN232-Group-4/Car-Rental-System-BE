@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-10-23 — [Số lượt thuê theo ngày trong chuỗi doanh thu](2026-10-23-dashboard-rental-volume.md)
+
 - 2026-10-23 — [Caddy đứng trước API trong deploy docker compose](2026-10-23-caddy-reverse-proxy.md)
 - 2026-10-23 — [Tự động hết hạn yêu cầu đặt xe](2026-10-23-rental-expiry.md)
 - 2026-10-23 — [Ẩn xe chưa cấu hình hạng GPLX khỏi danh mục khách hàng](2026-10-23-hide-unconfigured-vehicles.md)

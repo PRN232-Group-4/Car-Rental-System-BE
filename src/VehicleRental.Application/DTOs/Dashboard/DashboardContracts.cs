@@ -22,9 +22,15 @@ public sealed record DashboardSnapshot(decimal Revenue, long Renting, long Maint
     DashboardMetrics Previous, DashboardPeriod Period, DashboardPeriod PreviousPeriod,
     DateTimeOffset AsOf, DateTimeOffset PreviousAsOf);
 public sealed record RevenueValues(decimal Total, IReadOnlyDictionary<string, decimal> ByGroup);
+
+/// <summary>
+/// Một điểm trong chuỗi doanh thu theo ngày. <paramref name="Rentals"/> là số lượt thuê
+/// **thực tế bắt đầu** trong bucket (started_at, bỏ đơn đã huỷ) — không phải số lượt đặt.
+/// </summary>
 public sealed record RevenueSeriesEntry(string Bucket, DateOnly DateIso, decimal Total,
     IReadOnlyDictionary<string, decimal> ByGroup, RevenueValues Previous,
-    DashboardPeriod Period, DashboardPeriod PreviousPeriod);
+    DashboardPeriod Period, DashboardPeriod PreviousPeriod,
+    long Rentals = 0, long PreviousRentals = 0);
 public sealed record VehicleUsageValues(decimal Revenue, long Rentals, decimal Hours, decimal Utilization);
 public sealed record TopVehicleEntry(int VehicleId, string Name, string Category, decimal Revenue,
     long Rentals, decimal Hours, decimal Utilization, VehicleUsageValues Previous);
