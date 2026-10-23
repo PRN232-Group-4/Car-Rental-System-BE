@@ -10,6 +10,31 @@ Chỉ phát hành mã đã được review/merge theo quy trình PR; không push
 
 FE hiện proxy tới Railway theo `next.config.ts`. Nếu xác nhận đạt trả 404, kiểm tra Swagger của **chính origin đó** có POST `/api/rentals/{id}/inspection-assignment/checked` không. Bản source mới có route Admin này và cần migration `0028_driver_inspection_confirmation.sql`. Cập nhật FE hoặc khởi động lại một backend local khác không cập nhật service Railway. Sau phát hành, xác minh healthcheck, route Swagger và migration thành công; không gọi inspect/cancel trên đơn thật để thử nếu chưa có yêu cầu nghiệp vụ.
 
+## Reverse proxy Caddy khi chạy bằng docker compose
+
+Compose có thêm service `caddy` đứng trước `api`. Cấu hình site nằm trong `Caddyfile` ở gốc repo và được mount vào container theo đúng yêu cầu triển khai:
+
+```yaml
+  caddy:
+    image: caddy:2-alpine
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "${CADDY_HTTP_PORT:-80}:80"
+      - "${CADDY_HTTPS_PORT:-443}:443"
+    environment:
+      CADDY_SITE_ADDRESS: "${CADDY_SITE_ADDRESS:-:80}"
+```
+
+- Mặc định `CADDY_SITE_ADDRESS=:80`: Caddy phục vụ HTTP cho mọi hostname và `reverse_proxy api:8080`. Cổng nội bộ 8080 lấy từ `Dockerfile` (`ASPNETCORE_URLS=http://+:8080`), không phải cổng `3000` đang publish ra host cho FE dev.
+- Đặt tên miền thật để Caddy tự xin/gia hạn chứng chỉ HTTPS: `CADDY_SITE_ADDRESS=api.example.com docker compose up -d --build caddy`. Lúc đó DNS của tên miền phải trỏ về máy này và cổng 80/443 phải mở; chứng chỉ lưu trong volume `caddy_data` nên restart container không xin lại (tránh giới hạn tần suất của Let's Encrypt).
+- Đổi cổng publish khi 80/443 đã bị chiếm trên máy chủ: `CADDY_HTTP_PORT=8080 CADDY_HTTPS_PORT=8443 docker compose up -d caddy`.
+- Caddy tự gửi `X-Forwarded-For`/`Proto`/`Host`; API đã bật `UseForwardedHeaders` với `KnownNetworks`/`KnownProxies` được xoá nên nhận đúng scheme (cookie `Secure`, `redirect_uri` Google OAuth) và IP thật của khách.
+- Compose chỉ dùng cho môi trường tự vận hành/local. Bản Railway vẫn build `Dockerfile` theo `railway.toml` và không dùng Caddy này.
+- Kiểm tra nhanh: `docker compose exec -T caddy ls -l /etc/caddy/` (phải là file `Caddyfile`, không phải thư mục), `docker compose logs caddy` phải có dòng `using config from file` và `server running`; gọi `http://localhost/health` khi `api` chưa chạy sẽ trả `502` (đúng vì proxy đang hoạt động mà upstream chưa lên).
+
 ## Chạy và xem connection log bằng CLI
 
 Khởi động dependencies local: `docker compose up db redis -d`. Trong PowerShell, đặt `Jwt__SigningKey` (ít nhất 32 ký tự ngẫu nhiên), `Brevo__ApiKey`, `Brevo__SenderEmail`, rồi chạy `dotnet run --project src\VehicleRental.WebApi\VehicleRental.WebApi.csproj`. Ở Development, API mặc định kết nối PostgreSQL `localhost:5432` và Redis `localhost:6379` theo cấu hình Compose; các service này vẫn phải được khởi động trước. Swagger có tại `http://localhost:3000/swagger`. Console phải có `Redis connection established`; khi lỗi sẽ in tên biến cấu hình cần kiểm tra và stack trace, không in secret. Dừng/xem log dependencies: `docker compose logs -f db redis`.

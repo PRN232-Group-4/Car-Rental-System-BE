@@ -1,5 +1,11 @@
 # Câu hỏi mở và giả định
 
+## Mốc hết hạn của yêu cầu đặt xe — 2026-10-23, cần xác nhận
+
+FR-042 được hiểu là **hạn duyệt + thanh toán tính từ thời điểm đặt**: `expire_at = created_at + ApprovalWindowMinutes` (mặc định 60 phút). Cách hiểu thay thế ("đơn hết hạn tại `start_time - 1 giờ`") chỉ cần đổi cách tính/backfill `rentals.expire_at` và `RentalExpiryOptions`, không cần đổi schema hay state machine. Đã chọn cách hiểu đầu vì đơn đặt xa ngày nhận vẫn phải được xử lý sớm để giải phóng lịch xe; nếu chủ sản phẩm chọn cách sau thì phải sửa cả thông báo UI và test. Backfill cho đơn đang mở trước khi triển khai dùng `GREATEST(created_at + 1 giờ, deploy + 1 giờ)` để không hết hạn hàng loạt đơn đang chờ; cần xác nhận có đồng ý cách xử lý này không.
+
+Thông báo "sắp hết hạn/đã hết hạn" chưa triển khai: cần chốt có gửi email qua Brevo hay chỉ hiển thị trên giao diện trước khi bổ sung mẫu email.
+
 ## Hủy trước renting và backend đang chạy — 2026-10-22
 
 Yêu cầu mới xác định hủy theo trạng thái thực tế, cho customer chủ đơn cả pending/pre_inspection kể cả sau giờ nhận dự kiến nếu chưa renting. Đây là thay đổi được người dùng yêu cầu, thay quyết định giới hạn thời gian cũ; áp dụng phí muộn hiện có thay vì tự miễn phí. Read-only Swagger Railway hiện chưa có POST checked dù route đã có ở source; cần triển khai backend mới, không thể sửa bằng tải lại FE. Không đổi proxy sang môi trường khác hoặc ghi trực tiếp dữ liệu Railway để né API thiếu.

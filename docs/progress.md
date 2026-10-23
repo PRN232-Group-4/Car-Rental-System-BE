@@ -1,5 +1,9 @@
 # Tiến độ
 
+## Tự động hết hạn yêu cầu đặt xe — 2026-10-23
+
+Thêm trạng thái `expired`, cột `expire_at`/`expired_at` (migration 0032) và job quét mỗi phút: yêu cầu chưa được duyệt hoặc chưa thanh toán trong cửa sổ cấu hình (mặc định 1 giờ kể từ lúc đặt) tự hết hạn, hủy hóa đơn chưa thu và giải phóng lịch xe. Đặt xe phải cách giờ nhận tối thiểu 1 giờ; đơn hết hạn không duyệt/không thanh toán được, thanh toán muộn sau hạn được ghi ledger và tự tạo yêu cầu hoàn tiền. 32 test FR-042 đạt trên PostgreSQL tạm; toàn bộ suite 1144 đạt, 3 lỗi có sẵn từ trước. Chưa deploy, chưa gửi thông báo email. Xem [FR-042](../specs/FR-042-rental-expiry.md), [thay đổi](../changes/2026-10-23-rental-expiry.md).
+
 ## Ẩn xe chưa cấu hình hạng GPLX khỏi danh mục khách — 2026-10-23
 
 Public search yêu cầu ít nhất một hạng GPLX khác khoảng trắng trước đếm tổng/phân trang; landing, tìm xe và booking dùng cùng API. Giữ xe trong quản trị, chi tiết và lịch sử; GPS nearby vận hành không đổi. Build tests `-warnaserror` đạt 0 lỗi/0 cảnh báo; 77/77 ca search/catalog/Application/HTTP/Swagger/inspection liên quan đạt trên PostgreSQL test riêng. Fixture subscription self-drive được cập nhật sang GPLX approved theo invariant đã có. Không migration/deploy; WebApi local đang chạy cần nạp lại bản build để áp dụng filter mới. Xem [thay đổi](../changes/2026-10-23-hide-unconfigured-vehicles.md).

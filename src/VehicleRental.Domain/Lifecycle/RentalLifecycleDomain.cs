@@ -7,7 +7,8 @@ public enum RentalStatus
     Renting,
     PostInspection,
     Completed,
-    Cancelled
+    Cancelled,
+    Expired
 }
 
 public static class RentalStatusExtensions
@@ -20,6 +21,7 @@ public static class RentalStatusExtensions
         RentalStatus.PostInspection => "post_inspection",
         RentalStatus.Completed => "completed",
         RentalStatus.Cancelled => "cancelled",
+        RentalStatus.Expired => "expired",
         _ => throw new ArgumentOutOfRangeException(nameof(status), status, null)
     };
 
@@ -31,6 +33,7 @@ public static class RentalStatusExtensions
         "post_inspection" => RentalStatus.PostInspection,
         "completed" => RentalStatus.Completed,
         "cancelled" => RentalStatus.Cancelled,
+        "expired" => RentalStatus.Expired,
         _ => throw new ArgumentException($"Invalid rental status: '{status}'", nameof(status))
     };
 
@@ -56,7 +59,8 @@ public enum RentalTrigger
     Start,
     Return,
     Complete,
-    Cancel
+    Cancel,
+    Expire
 }
 
 public abstract record TransitionOutcome
@@ -72,8 +76,8 @@ public abstract record TransitionOutcome
 
 public static class RentalStateMachine
 {
-    private static readonly IReadOnlyList<RentalStatus> FromPending = [RentalStatus.PreInspection, RentalStatus.Cancelled];
-    private static readonly IReadOnlyList<RentalStatus> FromPreInspection = [RentalStatus.Renting, RentalStatus.Cancelled];
+    private static readonly IReadOnlyList<RentalStatus> FromPending = [RentalStatus.PreInspection, RentalStatus.Cancelled, RentalStatus.Expired];
+    private static readonly IReadOnlyList<RentalStatus> FromPreInspection = [RentalStatus.Renting, RentalStatus.Cancelled, RentalStatus.Expired];
     private static readonly IReadOnlyList<RentalStatus> FromRenting = [RentalStatus.PostInspection];
     private static readonly IReadOnlyList<RentalStatus> FromPostInspection = [RentalStatus.Completed];
     private static readonly IReadOnlyList<RentalStatus> Terminal = [];
@@ -97,6 +101,7 @@ public static class RentalStateMachine
             (RentalStatus.PostInspection, RentalTrigger.Return) => true,
             (RentalStatus.Completed, RentalTrigger.Complete) => true,
             (RentalStatus.Cancelled, RentalTrigger.Cancel) => true,
+            (RentalStatus.Expired, RentalTrigger.Expire) => true,
             _ => false
         };
 
@@ -110,8 +115,10 @@ public static class RentalStateMachine
         {
             (RentalStatus.Pending, RentalTrigger.Confirm) => RentalStatus.PreInspection,
             (RentalStatus.Pending, RentalTrigger.Cancel) => RentalStatus.Cancelled,
+            (RentalStatus.Pending, RentalTrigger.Expire) => RentalStatus.Expired,
             (RentalStatus.PreInspection, RentalTrigger.Start) => RentalStatus.Renting,
             (RentalStatus.PreInspection, RentalTrigger.Cancel) => RentalStatus.Cancelled,
+            (RentalStatus.PreInspection, RentalTrigger.Expire) => RentalStatus.Expired,
             (RentalStatus.Renting, RentalTrigger.Return) => RentalStatus.PostInspection,
             (RentalStatus.PostInspection, RentalTrigger.Complete) => RentalStatus.Completed,
             _ => (RentalStatus?)null
