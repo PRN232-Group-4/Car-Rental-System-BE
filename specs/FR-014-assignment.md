@@ -1,6 +1,12 @@
 <<<<<<< HEAD
 # FR-014 — Phân xe / tài xế (BE-14)
 
+## 2026-10-22 — Danh sách tài xế dùng đúng schema và khoảng thuê
+
+Danh sách tài xế hợp lệ đọc ảnh từ `users.avatar` và điểm đánh giá nullable từ `staffs.rating`; không dùng cột `avatar_url` không tồn tại hoặc tự mặc định điểm 5.0. Gán tài xế dùng cùng truy vấn thật này để kiểm tra ứng viên. Danh sách tài xế/xe thay thế tính khoảng còn lại `[max(now,start),end)`; nếu end không lớn hơn start thì trả 400 `RENTAL_ALREADY_ENDED` trước truy vấn PostgreSQL, đồng bộ guard mutation hiện có. Giữ contract và phân quyền hiện hành.
+
+Acceptance: PostgreSQL thật kiểm chứng metadata ảnh/điểm có giá trị và null, gán tài xế thành công qua Application/repository, xung đột lịch và exclude chính đơn; unit kiểm chứng danh sách hết hạn/đúng biên không gọi truy vấn với khoảng sai.
+
 - **Status:** In progress; **Priority:** P0; **Milestone:** M4; **Assignee:** Huy
 - **Phụ thuộc:** BE-10 (vehicle_bookings, khóa xe, `IVehicleAvailabilityService` — **làm trước**), BE-08 (Done), BE-12 (Lạc, tạo rental), BE-15/16 (kiểm định). **Phục vụ:** BE-33 (Lạc, lịch tài xế), FE-15 (Trí), FE-24 (Huy), BE-17.
 - **Migration dự kiến:** `0009_assignment_constraints.sql`.

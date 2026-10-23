@@ -16,3 +16,5 @@
 
 Mỗi thay đổi schema tiếp theo tạo file immutable `NNNN_description.sql` tại đây, rồi đăng ký theo thứ tự trong runner. Không sửa migration đã được áp dụng. Trước production, backup database và chạy migration trên staging.
 `0029_post_inspection_assignments.sql` bổ sung inspection_type mặc định pre_rental, đổi primary key sang rental_id/vehicle_id/inspection_type. Giữ phân công trước thuê cũ, cho phép phân công sau trả riêng; backend/FE cần nâng cấp đồng bộ, runner tự phát hiện migration.
+
+`0030_customer_licenses_and_vehicle_classes.sql` thêm allowed_license_types, bảng customer_licenses và view tương thích; backfill bằng đã có, giữ nguyên duyệt. Migration runner tự phát hiện; triển khai BE và FE đồng bộ.

@@ -19,3 +19,9 @@ Nhập số/hạng/ngày/ảnh giấy phép, staff duyệt. Trạng thái pendin
 - Cả hai cách gửi yêu cầu đủ số GPLX, hạng, ngày cấp, ngày hết hạn và ảnh. JSON `/url` bắt buộc `imageUrl` hợp lệ; multipart bắt buộc file ảnh mới mỗi lần gửi.
 - HTTP và Application đều từ chối thiếu ngày cấp hoặc ảnh trước khi lưu; kiểm tra metadata trước upload, kiểm tra URL sau upload.
 - Acceptance: bỏ từng trường bắt buộc trả 400, không upload/ghi dữ liệu; form hiển thị tất cả lỗi dưới trường tương ứng và focus lỗi đầu tiên. Hồ sơ đầy đủ vẫn được gửi duyệt với trạng thái `pending`.
+
+## 2026-10-23 — Nhiều GPLX độc lập
+- Customer thêm nhiều GPLX; cập nhật theo licenseId hoặc upsert số GPLX khi không có ID. Mỗi GPLX giữ hạng, ngày, ảnh và trạng thái duyệt riêng; sửa một bằng không hủy duyệt bằng khác.
+- GET hồ sơ GPLX giữ trường cũ và bổ sung licenses; duyệt nhận licenseId tùy chọn. Dữ liệu cũ được chuyển sang bảng customer_licenses, giữ nguyên trạng thái.
+- Tự lái yêu cầu ít nhất một GPLX approved đúng hạng xe, còn hạn đến hết kỳ thuê; có tài xế không yêu cầu GPLX khách.
+- Acceptance: lưu/đọc nhiều bằng, sửa số bằng theo ID không tạo bản sao, không sửa bằng của khách khác, duyệt riêng; booking/edit/assignment/handover cùng kiểm tra hạng và hạn.

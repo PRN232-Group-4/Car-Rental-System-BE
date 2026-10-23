@@ -38,7 +38,10 @@ public sealed record VehicleBadges(bool Electric, bool? DriverAvailable, bool Su
 public sealed record VehicleSearchItem(
     int Id, VehicleTypeRef VehicleType, string? Brand, string? Model, int? YearOfManufacture, string? Color,
     string? MainImageUrl, string? Location, FacilityRef? Facility, decimal? PriceHourly, decimal? PriceLongterm,
-    VehicleSummary Summary, VehicleBadges Badges, double? DurationHours);
+    VehicleSummary Summary, VehicleBadges Badges, double? DurationHours)
+{
+    public IReadOnlyList<string> AllowedLicenseTypes { get; init; } = [];
+}
 public sealed record AppliedWindow(DateTime From, DateTime To, int BufferMinutes);
 public sealed record VehicleSearchResult(IReadOnlyList<VehicleSearchItem> Items, int Page, int PageSize, int TotalCount, AppliedWindow? AppliedWindow);
 

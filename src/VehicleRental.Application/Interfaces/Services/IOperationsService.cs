@@ -15,6 +15,8 @@ public interface IOperationsService
     Task<CustomerLicense?> GetLicenseAsync(string email, CancellationToken ct);
     Task<CustomerLicense> SaveLicenseAsync(string email, CustomerLicense license, CancellationToken ct);
     Task<CustomerLicense> ReviewLicenseAsync(int customerId, string status, CancellationToken ct);
+    Task<CustomerLicense> ReviewLicenseAsync(int customerId, string status, CancellationToken ct, int? licenseId) =>
+        licenseId is null ? ReviewLicenseAsync(customerId, status, ct) : throw new NotSupportedException();
     Task<IReadOnlyList<OrganizationUnit>> ListDepartmentsAsync(CancellationToken ct);
     Task<OrganizationUnit> SaveDepartmentAsync(int? id, string name, CancellationToken ct);
     Task DeleteDepartmentAsync(int id, CancellationToken ct);

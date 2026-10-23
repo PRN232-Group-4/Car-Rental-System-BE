@@ -1,5 +1,9 @@
 # Changelog
 
+- 2026-10-23 — [Ẩn xe chưa cấu hình hạng GPLX khỏi danh mục khách hàng](2026-10-23-hide-unconfigured-vehicles.md)
+
+- 2026-10-22 — [Bàn giao xe tự lái ghi nhận phân xe trong transaction](2026-10-22-self-drive-handover.md)
+
 - 2026-10-22 — [Kiểm tra kèm duyệt cập nhật tiến trình](2026-10-22-inspection-approval-progress.md)
 
 - 2026-10-22 — [Quá hạn và thu phụ phí tiền mặt/online](2026-10-22-overdue-collection.md)
@@ -97,3 +101,5 @@
 
 - 2026-10-04: [Vehicle plates, duty shifts and incident recovery](2026-10-04-operational-recovery.md)
 - 2026-10-22 — [Phân công và xác nhận inspect sau trả xe](2026-10-22-post-inspection-dispatch.md)
+
+- 2026-10-23: Nhiều GPLX độc lập và cấu hình hạng theo xe; xem [change](2026-10-23-multiple-customer-licenses.md).

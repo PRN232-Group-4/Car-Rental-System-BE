@@ -65,10 +65,9 @@ public sealed partial class NpgsqlOperationsRepository : IRentalEditingRepositor
             if (!rental.IsSubscription && invoiceIds.Count != 1)
                 throw new ConflictException("RENTAL_PRICING_UNAVAILABLE", "An unpaid rental invoice is required before editing a direct rental.");
 
-            if (!command.HasDriver && await ValueAsync(cn, tx, """
-                SELECT EXISTS(SELECT 1 FROM customers WHERE id=$1 AND license_status='approved'
-                    AND (license_expiry_date IS NULL OR license_expiry_date>=GREATEST(CURRENT_DATE,$2::timestamp::date)))
-                """, ct, rental.CustomerId, end) is not true)
+            if (!command.HasDriver)
+                await ValueAsync(cn, tx, "SELECT id FROM customers WHERE id=$1 FOR SHARE", ct, rental.CustomerId);
+            if (!command.HasDriver && await ValueAsync(cn, tx, "SELECT " + CustomerLicenseSql.Eligible("$1", "$3", "$2::timestamp::date"), ct, rental.CustomerId, end, command.VehicleId) is not true)
                 throw new ConflictException("CUSTOMER_LICENSE_NOT_VALID", "Self-drive requires an approved license valid through the rental period.");
             if (rental.IsSubscription)
             {

@@ -8,14 +8,14 @@ public sealed partial class NpgsqlCustomerRepository(NpgsqlDataSource dataSource
 {
     public async Task<CustomerPage> ListAsync(CustomerListQuery query, CancellationToken ct)
     {
-        const string licenseStatus = "CASE WHEN NULLIF(btrim(c.license_number), '') IS NULL THEN 'none' ELSE c.license_status END";
+        const string licenseStatus = "CASE WHEN EXISTS(SELECT 1 FROM customer_license_records cl WHERE cl.customer_id=c.id AND cl.status='pending') THEN 'pending' WHEN NULLIF(btrim(c.license_number), '') IS NULL THEN 'none' ELSE c.license_status END";
         const string filter = """
             FROM customers c JOIN users u ON u.id = c.user_id
             WHERE ($1::boolean IS NULL OR u.is_active = $1::boolean)
               AND ($2::text IS NULL OR strpos(lower(COALESCE(u.fullname, '')), lower($2)) > 0
                    OR strpos(lower(u.email), lower($2)) > 0
                    OR strpos(lower(COALESCE(u.phone, '')), lower($2)) > 0)
-            """ + " AND ($3::text IS NULL OR (" + licenseStatus + ") = $3::text)";
+            """ + " AND ($3::text IS NULL OR ($3='none' AND NOT EXISTS(SELECT 1 FROM customer_license_records cl WHERE cl.customer_id=c.id)) OR EXISTS(SELECT 1 FROM customer_license_records cl WHERE cl.customer_id=c.id AND cl.status=$3))";
         await using var count = dataSource.CreateCommand("SELECT COUNT(*) " + filter);
         count.Parameters.AddWithValue((object?)query.IsActive ?? DBNull.Value);
         count.Parameters.AddWithValue((object?)query.Search ?? DBNull.Value);
