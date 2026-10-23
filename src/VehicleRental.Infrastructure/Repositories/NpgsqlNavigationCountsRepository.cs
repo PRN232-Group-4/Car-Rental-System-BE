@@ -19,8 +19,7 @@ public sealed class NpgsqlNavigationCountsRepository(NpgsqlDataSource dataSource
                 (SELECT COUNT(*) FROM vehicle_maintenance WHERE $3 AND status IN ('open','scheduled')),
                 (SELECT COUNT(*) FROM reports WHERE status='open' AND reporter_staff_id IS NOT NULL
                     AND ($4 OR reporter_staff_id=$5)),
-                (SELECT COUNT(*) FROM customers c WHERE $1 AND c.license_status='pending'
-                    AND NULLIF(btrim(c.license_number),'') IS NOT NULL
+                (SELECT COUNT(*) FROM customers c WHERE $1 AND EXISTS(SELECT 1 FROM customer_license_records cl WHERE cl.customer_id=c.id AND cl.status='pending')
                     AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.user_id))
             """);
         command.Parameters.AddWithValue(access.CustomerService);

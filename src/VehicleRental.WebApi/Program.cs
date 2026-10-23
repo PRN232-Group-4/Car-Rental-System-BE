@@ -178,6 +178,8 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IOperationsCompletionService, OperationsCompletionService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IMediaService, MediaService>();
+builder.Services.AddScoped<IRentalContractDocumentService, RentalContractDocumentService>();
+builder.Services.AddScoped<IRentalContractDocumentRepository, NpgsqlRentalContractDocumentRepository>();
 builder.Services.AddScoped<ISessionService, SessionService>();
 builder.Services.AddScoped<ITrackingService, TrackingService>();
 builder.Services.AddScoped<IMapService, MapService>();

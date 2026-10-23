@@ -1,5 +1,12 @@
 # FR-010 — Tìm xe và availability (BE-10)
 
+## Cập nhật 2026-10-23 — Ẩn xe chưa cấu hình hạng GPLX
+
+- Danh mục công khai `/api/vehicles/search` chỉ trả xe có ít nhất một phần tử `allowedLicenseTypes` chứa ký tự khác khoảng trắng. Mảng rỗng, NULL hoặc chỉ có phần tử NULL/khoảng trắng không được hiển thị với khách, cả khi có tài xế.
+- Điều kiện áp dụng trước phân trang và `totalCount`, cho cả duyệt mặc định, tìm theo cơ sở, loại xe và khoảng thuê.
+- Danh sách quản trị `/api/vehicles`, chi tiết xe và dữ liệu đơn thuê/lịch sử vẫn giữ xe để nhân viên cấu hình hoặc xem lịch sử. Không thay quy tắc đối chiếu GPLX của đơn hiện hữu và không tự suy diễn hạng tương đương.
+- [x] Hồi quy PostgreSQL xác minh xe có cấu hình, mảng rỗng/khoảng trắng, tổng sau lọc, trang rỗng, mọi phân khúc và dữ liệu quản trị/lịch sử (77/77 kiểm thử search/catalog/liên quan đạt).
+
 ## Thay đổi theo yêu cầu 2026-10-22
 
 Danh mục công khai chỉ trả xe `available`, loại xe đang có đơn `renting` hoặc chưa hoàn tất kiểm tra trả (`post_inspection`), kể cả khi chọn ngày tương lai. Áp dụng trước đếm tổng/phân trang. Đơn chờ vẫn khóa đúng khoảng đặt và đệm 60 phút. Tạo đơn kiểm tra lại xe dưới vehicle lock để chặn đặt từ trang cũ. Quyết định này thay thế D5 bên dưới. Cả theo giờ và dài hạn hỗ trợ tự lái/có tài xế.

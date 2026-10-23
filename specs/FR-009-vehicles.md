@@ -14,3 +14,12 @@ Vehicle list/detail bổ sung maintenanceTechnicianEmails là array email phân 
 
 - [x] SQL/HTTP regression xác minh dedup, current/unsafe work và loại inactive/wrong-role/historical assignees.
 - [x] Public/customer/Driver/CustomerService không nhận email, Admin/Manager/Maintenance đọc đúng list/detail.
+
+## 2026-10-23 — Hạng GPLX được chấp nhận
+- Vehicle create/update/list/detail/search bổ sung allowedLicenseTypes, chuẩn hóa trim/uppercase/dedup, tối đa 30 hạng chữ/số dài 1–20 ký tự.
+- So khớp chính xác hạng được cấu hình, không tự suy diễn thứ bậc pháp lý. Mảng rỗng giữ tương thích xe cũ: bất kỳ GPLX approved còn hạn.
+- Acceptance: lưu/đọc cấu hình qua list/detail/search; hạng không khớp hoặc bằng hết hạn/chưa duyệt không thể đặt tự lái.
+
+### 2026-10-23 — Điều kiện xuất hiện trong danh mục khách hàng
+
+Xe chưa cấu hình hạng GPLX (`allowedLicenseTypes` rỗng hoặc không có hạng khác khoảng trắng) bị ẩn khỏi public search trước phân trang/đếm tổng. Quy tắc hiển thị này thay thế cách hiển thị tương thích cũ; xe vẫn còn trong quản trị và lịch sử. Quy tắc xác minh GPLX cho đơn hiện hữu giữ nguyên.

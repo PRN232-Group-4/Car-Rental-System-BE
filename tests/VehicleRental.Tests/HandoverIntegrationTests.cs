@@ -23,17 +23,95 @@ public sealed class HandoverIntegrationTests(PostgresFixture db) : IClassFixture
         return (int)(await Seed.ScalarAsync(db.DataSource, "INSERT INTO staffs(user_id) VALUES($1) RETURNING id", user))!;
     }
 
-    private async Task<(int Rental, int Vehicle, int Inspector)> PrepareAsync(bool assign = true, bool paid = true)
+    private async Task<(int Rental, int Vehicle, int Inspector)> PrepareAsync(bool assign = true, bool paid = true, string rentalType = "hourly")
     {
-        var scenario = await Scenarios.CreateDirectRentalAsync(db.DataSource);
-        if (paid) await Scenarios.CompleteInvoiceAsync(db.DataSource, scenario.InvoiceId, scenario.InvoiceAmount);
-        await Seed.ScalarAsync(db.DataSource, "UPDATE customers SET license_status='approved',license_expiry_date=CURRENT_DATE+365 WHERE id=$1", scenario.CustomerId);
-        await Repository.UpdateToPreInspectionAsync(scenario.RentalId, DateTime.UtcNow, Actor, default);
+        var (customer, email) = await Seed.CustomerAsync(db.DataSource);
+        var vehicle = await Seed.VehicleAsync(db.DataSource);
+        var start = DateTime.UtcNow.AddHours(1);
+        var rental = await Operations.CreateRentalAsync(email, vehicle, null, rentalType, start,
+            rentalType == "hourly" ? start.AddHours(2) : start.AddDays(30), false, null, false, default);
+        var invoice = (int)(await Seed.ScalarAsync(db.DataSource, "SELECT id FROM invoices WHERE rental_id=$1", rental.Id))!;
+        var amount = (decimal)(await Seed.ScalarAsync(db.DataSource, "SELECT amount FROM invoices WHERE id=$1", invoice))!;
+        if (paid) await Scenarios.CompleteInvoiceAsync(db.DataSource, invoice, amount);
+        await Seed.ScalarAsync(db.DataSource, "UPDATE customers SET license_status='approved',license_expiry_date=CURRENT_DATE+365 WHERE id=$1", customer);
+        await Repository.UpdateToPreInspectionAsync(rental.Id, DateTime.UtcNow, Actor, default);
         var inspector = await InspectorAsync();
-        var inspection = await Operations.AddInspectionAsync(scenario.RentalId, inspector, "pre_rental", true, 1000, 80, null, null, default);
-        Assert.Equal("pre_inspection", (await Operations.GetRentalAsync(scenario.RentalId, default))!.Status);
-        if (assign) await Operations.AssignAsync(scenario.RentalId, null, Actor.Email, default);
-        return (scenario.RentalId, inspection.VehicleId!.Value, inspector);
+        var inspection = await Operations.AddInspectionAsync(rental.Id, inspector, "pre_rental", true, 1000, 80, null, null, default);
+        Assert.Equal("pre_inspection", (await Operations.GetRentalAsync(rental.Id, default))!.Status);
+        if (assign) await Operations.AssignAsync(rental.Id, null, Actor.Email, default);
+        return (rental.Id, inspection.VehicleId!.Value, inspector);
+    }
+
+    [Theory]
+    [InlineData("hourly", false)]
+    [InlineData("hourly", true)]
+    [InlineData("longterm", false)]
+    [InlineData("longterm", true)]
+    public async Task Self_drive_handover_records_selected_vehicle_or_reuses_existing_assignment(string rentalType, bool assigned)
+    {
+        var ready = await PrepareAsync(assign: assigned, rentalType: rentalType);
+        Assert.Equal("renting", (await Service.ConfirmAsync(ready.Rental, Actor, default)).RentalStatus);
+        Assert.Equal(1, await Seed.CountAsync(db.DataSource, """
+            SELECT COUNT(*) FROM vehicle_assignments WHERE rental_id=$1 AND vehicle_id=$2
+                AND status='assigned' AND driver_staff_id IS NULL AND assigned_by=$3
+            """, ready.Rental, ready.Vehicle, Actor.Email));
+        if (!assigned)
+            Assert.Equal(1, await Seed.CountAsync(db.DataSource, "SELECT COUNT(*) FROM vehicle_assignments WHERE rental_id=$1 AND starts_at<ends_at", ready.Rental));
+        Assert.True(await Repository.HasValidAssignmentAsync(ready.Rental, false, default));
+        var repeated = await Assert.ThrowsAsync<ConflictException>(() => Service.ConfirmAsync(ready.Rental, Actor, default));
+        Assert.Equal("ALREADY_IN_STATE", repeated.Code);
+        Assert.Equal(1, await Seed.CountAsync(db.DataSource, "SELECT COUNT(*) FROM vehicle_assignments WHERE rental_id=$1", ready.Rental));
+    }
+
+    [Theory]
+    [InlineData("unpaid", "PAYMENT_REQUIRED")]
+    [InlineData("license", "CUSTOMER_LICENSE_NOT_VALID")]
+    [InlineData("expired_license", "CUSTOMER_LICENSE_NOT_VALID")]
+    [InlineData("inspection", "PRE_INSPECTION_REQUIRED")]
+    [InlineData("maintenance", "VEHICLE_UNAVAILABLE")]
+    public async Task Self_drive_atomic_handover_rejects_missing_evidence_without_creating_assignment(string blocker, string code)
+    {
+        var ready = await PrepareAsync(assign: false, paid: blocker != "unpaid");
+        if (blocker == "license")
+            await Seed.ScalarAsync(db.DataSource, "UPDATE customers SET license_status='pending' WHERE id=(SELECT customer_id FROM rentals WHERE id=$1)", ready.Rental);
+        if (blocker == "expired_license")
+            await Seed.ScalarAsync(db.DataSource, "UPDATE customers SET license_expiry_date=CURRENT_DATE-1 WHERE id=(SELECT customer_id FROM rentals WHERE id=$1)", ready.Rental);
+        if (blocker == "inspection")
+            await Seed.ScalarAsync(db.DataSource, "UPDATE rentals SET vehicle_id=$2 WHERE id=$1", ready.Rental, await Seed.VehicleAsync(db.DataSource));
+        if (blocker == "maintenance")
+            await Seed.ScalarAsync(db.DataSource, "UPDATE vehicles SET status='maintenance' WHERE id=$1", ready.Vehicle);
+        var currentVehicle = (await Operations.GetRentalAsync(ready.Rental, default))!.VehicleId;
+        // Call the transaction boundary directly so application prechecks cannot hide a race.
+        var error = await Assert.ThrowsAsync<ConflictException>(() => Repository.UpdateToRentingAsync(ready.Rental, currentVehicle, DateTime.UtcNow, Actor, default));
+        Assert.Equal(code, error.Code);
+        Assert.Equal("pre_inspection", (await Operations.GetRentalAsync(ready.Rental, default))!.Status);
+        Assert.Equal(0, await Seed.CountAsync(db.DataSource, "SELECT COUNT(*) FROM vehicle_assignments WHERE rental_id=$1", ready.Rental));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Driver_rental_still_requires_an_actual_driver_on_current_vehicle(bool vehicleOnlyAssignment)
+    {
+        var ready = await PrepareAsync(assign: vehicleOnlyAssignment);
+        await Seed.ScalarAsync(db.DataSource, "UPDATE hour_rental_detail SET has_driver=true WHERE rental_id=$1", ready.Rental);
+        var applicationError = await Assert.ThrowsAsync<ConflictException>(() => Service.ConfirmAsync(ready.Rental, Actor, default));
+        Assert.Equal("ASSIGNMENT_REQUIRED", applicationError.Code);
+        var transactionError = await Assert.ThrowsAsync<ConflictException>(() => Repository.UpdateToRentingAsync(ready.Rental, ready.Vehicle, DateTime.UtcNow, Actor, default));
+        Assert.Equal("ASSIGNMENT_REQUIRED", transactionError.Code);
+        Assert.Equal("pre_inspection", (await Operations.GetRentalAsync(ready.Rental, default))!.Status);
+    }
+
+    [Fact]
+    public async Task Self_drive_handover_does_not_reuse_an_assignment_containing_a_driver()
+    {
+        var ready = await PrepareAsync();
+        // Inconsistent legacy data must be corrected explicitly; handover never erases it.
+        await Seed.ScalarAsync(db.DataSource, "UPDATE vehicle_assignments SET driver_staff_id=$2 WHERE rental_id=$1", ready.Rental, ready.Inspector);
+        var error = await Assert.ThrowsAsync<ConflictException>(() => Service.ConfirmAsync(ready.Rental, Actor, default));
+        Assert.Equal("ASSIGNMENT_REQUIRED", error.Code);
+        Assert.Equal(1, await Seed.CountAsync(db.DataSource, "SELECT COUNT(*) FROM vehicle_assignments WHERE rental_id=$1 AND driver_staff_id=$2", ready.Rental, ready.Inspector));
+        Assert.Equal("pre_inspection", (await Operations.GetRentalAsync(ready.Rental, default))!.Status);
     }
 
     [Fact]
@@ -82,7 +160,7 @@ public sealed class HandoverIntegrationTests(PostgresFixture db) : IClassFixture
     [Fact]
     public async Task Concurrent_confirmations_produce_one_start_and_one_conflict()
     {
-        var ready = await PrepareAsync();
+        var ready = await PrepareAsync(assign: false);
         async Task<string> Confirm()
         {
             try { await Service.ConfirmAsync(ready.Rental, Actor, default); return "success"; }
@@ -92,6 +170,7 @@ public sealed class HandoverIntegrationTests(PostgresFixture db) : IClassFixture
         Assert.Single(results, x => x == "success");
         Assert.Single(results, x => x == "ALREADY_IN_STATE");
         Assert.Equal(1, await Seed.CountAsync(db.DataSource, "SELECT COUNT(*) FROM rental_status_history WHERE rental_id=$1 AND to_status='renting'", ready.Rental));
+        Assert.Equal(1, await Seed.CountAsync(db.DataSource, "SELECT COUNT(*) FROM vehicle_assignments WHERE rental_id=$1 AND status='assigned' AND driver_staff_id IS NULL", ready.Rental));
     }
 
     [Fact]

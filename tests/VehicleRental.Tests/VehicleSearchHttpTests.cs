@@ -92,6 +92,17 @@ public sealed class VehicleSearchHttpTests : IAsyncLifetime
         Assert.Equal(6, query.PageSize);
     }
 
+    [Fact]
+    public async Task Swagger_documents_configured_license_visibility_before_pagination()
+    {
+        using var json = JsonDocument.Parse(await _client.GetStringAsync("/swagger/v1/swagger.json"));
+        var search = json.RootElement.GetProperty("paths").GetProperty("/api/vehicles/search").GetProperty("get");
+        var description = search.GetProperty("description").GetString()!;
+        Assert.Contains("non-whitespace allowedLicenseTypes entry", description);
+        Assert.Contains("excluded before pagination and totalCount", description);
+        Assert.Contains("management listing, detail and rental history retain these vehicles", description);
+    }
+
     private static async Task<JsonDocument> Envelope(HttpResponseMessage response, int status)
     {
         Assert.Equal(status, (int)response.StatusCode);
