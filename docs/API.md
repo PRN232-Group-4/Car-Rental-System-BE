@@ -981,7 +981,7 @@ Tất cả response giữ envelope 6 trường `code/status/is_success/data/mess
 | POST | `/api/ratings/{id}/reply` | Admin/Manager | `{text}`; trả reply `{text,by,at}` |
 | PATCH | `/api/reports/{id}/status` | Admin/Manager | `{status,reason}`; in_progress/rejected; rejected có thể tiếp nhận lại |
 | GET | `/api/dashboard` | Admin/Manager | Snapshot typed: revenue/renting/maintenance/activeSubscriptions và previous |
-| GET | `/api/dashboard/revenue-series` | Admin/Manager | Theo ngày UTC; bucket/dateIso/total/byGroup/previous và biên kỳ của từng dòng |
+| GET | `/api/dashboard/revenue-series` | Admin/Manager | Theo ngày UTC; bucket/dateIso/total/byGroup/previous, `rentals`/`previousRentals` (số chuyến thực tế bắt đầu, bỏ đơn hủy) và biên kỳ của từng dòng |
 | GET | `/api/dashboard/top-vehicles` | Admin/Manager | vehicleId/name/category/revenue/rentals/hours/utilization/previous |
 | GET | `/api/dashboard/maintenance-vs-revenue` | Admin/Manager | Chi phí bảo dưỡng hoàn thành và doanh thu mỗi xe/kỳ |
 | GET | `/api/dashboard/plan-usage` | Admin/Manager | planId/name/usedHours/includedHours/activeSubscribers/usagePercentage/previous |
