@@ -122,6 +122,8 @@ if (!string.IsNullOrWhiteSpace(connectionString))
     builder.Services.AddHostedService<DatabaseMigrationHostedService>();
     builder.Services.AddHostedService<SubscriptionExpiryHostedService>();
     builder.Services.AddHostedService<TelemetryRetentionHostedService>();
+    // FR-042: quét yêu cầu đặt xe quá hạn duyệt/thanh toán mỗi phút.
+    builder.Services.AddHostedService<RentalExpiryHostedService>();
 }
 
 var redisConnection = builder.Configuration["Redis:ConnectionString"] ?? builder.Configuration["REDIS_URL"];
@@ -222,6 +224,8 @@ builder.Services.AddScoped<IAssignmentService>(sp =>
 
 builder.Services.Configure<RentalOptions>(builder.Configuration.GetSection(RentalOptions.SectionName));
 builder.Services.Configure<RentalCancellationOptions>(builder.Configuration.GetSection(RentalCancellationOptions.SectionName));
+builder.Services.Configure<RentalExpiryOptions>(builder.Configuration.GetSection(RentalExpiryOptions.SectionName));
+builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<RentalExpiryOptions>>().Value);
 builder.Services.AddOptions<LoyaltyOptions>()
     .Bind(builder.Configuration.GetSection(LoyaltyOptions.SectionName))
     .Validate(options =>
@@ -246,6 +250,11 @@ builder.Services.AddScoped<ICurrentCustomer, CurrentCustomerService>();
 builder.Services.AddScoped<IRentalQueryRepository, NpgsqlRentalQueries>();
 builder.Services.AddScoped<IRentalQueries, RentalQueryService>();
 builder.Services.AddScoped<IHandoverService, HandoverService>();
+builder.Services.AddScoped<IRentalExpiryService>(sp => new RentalExpiryService(
+    sp.GetRequiredService<IRentalLifecycleRepository>(),
+    sp.GetRequiredService<IRentalEventSink>(),
+    sp.GetRequiredService<RentalExpiryOptions>(),
+    sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddScoped<IRentalLifecycleService>(sp =>
 {
     var repo = sp.GetRequiredService<IRentalLifecycleRepository>();

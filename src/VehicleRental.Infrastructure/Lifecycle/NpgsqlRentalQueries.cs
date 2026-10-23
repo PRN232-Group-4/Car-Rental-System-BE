@@ -45,7 +45,8 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                    v.license_plate, vt.type, f.id, f.name, f.phone, r.confirmed_at, i.status,
                    CASE WHEN r.is_subscription THEN
                        EXTRACT(EPOCH FROM (COALESCE(h.end_time,l.end_time)-COALESCE(h.start_time,l.start_time)))/3600
-                       + r.overtime_hours ELSE NULL END
+                       + r.overtime_hours ELSE NULL END,
+                   r.expire_at
             FROM rentals r
             JOIN vehicles v ON v.id = r.vehicle_id
             JOIN vehicle_types vt ON vt.id = v.vehicle_type_id
@@ -85,7 +86,8 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                 CanCancel: reader.GetString(1) is "pending" or "pre_inspection",
                 NextAction: NextAction(reader.GetString(1), !reader.IsDBNull(18), reader.IsDBNull(19) ? null : reader.GetString(19), reader.GetBoolean(3)),
                 Facility: reader.IsDBNull(15) ? null : new CustomerFacilityDto(reader.GetInt32(15), reader.GetString(16), reader.IsDBNull(17) ? null : reader.GetString(17)),
-                SubscriptionHoursUsed: reader.IsDBNull(20) ? null : reader.GetDecimal(20)
+                SubscriptionHoursUsed: reader.IsDBNull(20) ? null : reader.GetDecimal(20),
+                ExpireAt: reader.IsDBNull(21) ? null : reader.GetDateTime(21)
             ));
         }
 
@@ -107,7 +109,8 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                    (SELECT o.id FROM rental_orders o WHERE o.rental_id = r.id), f.id, f.phone,
                    CASE WHEN r.is_subscription THEN
                        EXTRACT(EPOCH FROM (COALESCE(h.end_time,l.end_time)-COALESCE(h.start_time,l.start_time)))/3600
-                       + r.overtime_hours ELSE NULL END
+                       + r.overtime_hours ELSE NULL END,
+                   r.expire_at
             FROM rentals r
             JOIN vehicles v ON v.id = r.vehicle_id
             LEFT JOIN facilities f ON f.id = v.facility_id
@@ -140,6 +143,7 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
         var facilityName = reader.IsDBNull(9) ? null : reader.GetString(9);
         var facility = reader.IsDBNull(24) ? null : new CustomerFacilityDto(reader.GetInt32(24), facilityName!, reader.IsDBNull(25) ? null : reader.GetString(25));
         var subscriptionHoursUsed = reader.IsDBNull(26) ? (decimal?)null : reader.GetDecimal(26);
+        var expireAt = reader.IsDBNull(27) ? (DateTime?)null : reader.GetDateTime(27);
         var start = reader.GetDateTime(10);
         var end = reader.GetDateTime(11);
         var hasDriver = reader.GetBoolean(12);
@@ -312,7 +316,8 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
             Cancellation: cancellation,
             NextAction: nextAction,
             OrderId: orderId,
-            SubscriptionHoursUsed: subscriptionHoursUsed
+            SubscriptionHoursUsed: subscriptionHoursUsed,
+            ExpireAt: expireAt
         );
     }
 
@@ -399,7 +404,7 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                    COALESCE(h.end_time, l.end_time),
                    r.total_price, COALESCE(h.has_driver, l.has_driver, false),
                    COALESCE(du.fullname, du.email),
-                   (SELECT o.id FROM rental_orders o WHERE o.rental_id = r.id), r.rental_type, r.returned_at
+                   (SELECT o.id FROM rental_orders o WHERE o.rental_id = r.id), r.rental_type, r.returned_at, r.expire_at
             FROM rentals r
             JOIN customers c ON c.id = r.customer_id
             JOIN users u ON u.id = c.user_id
@@ -438,7 +443,8 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                 DriverName: reader.IsDBNull(12) ? null : reader.GetString(12),
                 OrderId: reader.IsDBNull(13) ? null : reader.GetInt32(13),
                 RentalType: reader.GetString(14),
-                IsOverdue: reader.GetString(7) == "renting" && reader.IsDBNull(15) && reader.GetDateTime(9) < now
+                IsOverdue: reader.GetString(7) == "renting" && reader.IsDBNull(15) && reader.GetDateTime(9) < now,
+                ExpireAt: reader.IsDBNull(16) ? null : reader.GetDateTime(16)
             ));
         }
 
@@ -467,7 +473,8 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                    i.id, i.invoice_number, i.status, i.amount,
                    (SELECT o.id FROM rental_orders o WHERE o.rental_id = r.id),
                    EXISTS(SELECT 1 FROM inspections ip WHERE ip.rental_id=r.id AND ip.vehicle_id=r.vehicle_id AND ip.inspection_type='pre_rental' AND ip.is_ok=true),
-                   EXISTS(SELECT 1 FROM inspections ip WHERE ip.rental_id=r.id AND ip.vehicle_id=r.vehicle_id AND ip.inspection_type='post_rental')
+                   EXISTS(SELECT 1 FROM inspections ip WHERE ip.rental_id=r.id AND ip.vehicle_id=r.vehicle_id AND ip.inspection_type='post_rental'),
+                   r.expire_at, r.expired_at
             FROM rentals r
             JOIN customers c ON c.id = r.customer_id
             JOIN users u ON u.id = c.user_id
@@ -514,7 +521,9 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
             CancelledAt: reader.IsDBNull(23) ? null : reader.GetDateTime(23),
             CancelledBy: reader.IsDBNull(24) ? null : reader.GetString(24),
             CancelReason: reader.IsDBNull(25) ? null : reader.GetString(25),
-            OvertimeHours: reader.GetInt32(26)
+            OvertimeHours: reader.GetInt32(26),
+            ExpireAt: reader.IsDBNull(42) ? null : reader.GetDateTime(42),
+            ExpiredAt: reader.IsDBNull(43) ? null : reader.GetDateTime(43)
         );
 
         var custName = reader.GetString(27);
@@ -655,7 +664,7 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
                        LEFT JOIN longterm_rental_contract l2 ON l2.rental_id = r2.id
                        WHERE r2.vehicle_id = r.vehicle_id
                          AND r2.id <> r.id
-                         AND r2.status NOT IN ('cancelled', 'completed')
+                         AND r2.status NOT IN ('cancelled', 'completed', 'expired')
                          AND COALESCE(h2.start_time, l2.start_time) >= COALESCE(h.end_time, l.end_time)
                        ORDER BY COALESCE(h2.start_time, l2.start_time) ASC
                        LIMIT 1

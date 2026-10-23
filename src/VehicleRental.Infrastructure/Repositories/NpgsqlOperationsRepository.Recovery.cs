@@ -46,7 +46,7 @@ public sealed partial class NpgsqlOperationsRepository
                     LEFT JOIN hour_rental_detail h ON h.rental_id=r.id
                     LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id
                     WHERE r.vehicle_id=v.id AND ($4::int IS NULL OR r.id<>$4)
-                    AND r.status NOT IN ('completed','cancelled')
+                    AND r.status NOT IN ('completed','cancelled','expired')
                     AND COALESCE(h.start_time,l.start_time)<$3 AND COALESCE(h.end_time,l.end_time)>$2))
             """, ct, vehicle, start, end, rental);
         if (available is not true) throw new InvalidOperationException("Vehicle is unavailable or unsafe.");
@@ -69,7 +69,7 @@ public sealed partial class NpgsqlOperationsRepository
                 LEFT JOIN hour_rental_detail h ON h.rental_id=r.id
                 LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id
                 WHERE a.driver_staff_id=$1 AND a.rental_id<>$4 AND a.status='assigned'
-                AND r.status NOT IN ('cancelled','completed')
+                AND r.status NOT IN ('cancelled','completed','expired')
                 AND COALESCE(h.start_time,l.start_time)<$3 AND COALESCE(h.end_time,l.end_time)>$2)
             """, ct, driver, start, end, rental);
         if (conflict is true) throw new InvalidOperationException("Driver is already assigned during this period.");
@@ -128,7 +128,7 @@ public sealed partial class NpgsqlOperationsRepository
             SELECT EXISTS(SELECT 1 FROM vehicle_assignments a JOIN rentals r ON r.id=a.rental_id
                 LEFT JOIN hour_rental_detail h ON h.rental_id=r.id LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id
                 WHERE (a.driver_staff_id=$1 OR a.driver_staff_id=$2::int) AND a.status='assigned'
-                AND r.status NOT IN ('completed','cancelled') AND COALESCE(h.end_time,l.end_time)>now() AT TIME ZONE 'UTC'
+                AND r.status NOT IN ('completed','cancelled','expired') AND COALESCE(h.end_time,l.end_time)>now() AT TIME ZONE 'UTC'
                 AND NOT EXISTS(SELECT 1 FROM driver_shifts ds WHERE ds.driver_staff_id=a.driver_staff_id
                     AND ds.status='scheduled' AND ds.start_time<=GREATEST(COALESCE(h.start_time,l.start_time),now() AT TIME ZONE 'UTC')
                     AND ds.end_time>=COALESCE(h.end_time,l.end_time)))

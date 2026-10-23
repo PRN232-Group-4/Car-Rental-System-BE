@@ -42,5 +42,24 @@ services:
       timeout: 3s
       retries: 10
 
+  # Reverse proxy HTTPS/HTTP đứng trước api. Cấu hình site nằm trong ./Caddyfile.
+  caddy:
+    image: caddy:2-alpine
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      # Giữ chứng chỉ ACME và cấu hình sinh ra giữa các lần khởi động lại container.
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "${CADDY_HTTP_PORT:-80}:80"
+      - "${CADDY_HTTPS_PORT:-443}:443"
+    environment:
+      # Chỉ đổi giá trị này là đổi tên miền Caddy phục vụ; xem ./Caddyfile.
+      CADDY_SITE_ADDRESS: "${CADDY_SITE_ADDRESS:-:80}"
+    depends_on:
+      - api
+
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:

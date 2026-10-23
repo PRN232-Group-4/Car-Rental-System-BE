@@ -27,7 +27,7 @@ public sealed class NpgsqlDriverAvailability(NpgsqlDataSource dataSource, IOptio
                           LEFT JOIN hour_rental_detail h ON h.rental_id = r.id
                           LEFT JOIN longterm_rental_contract l ON l.rental_id = r.id
                           WHERE a.driver_staff_id = s.id AND a.status = 'assigned'
-                            AND r.status NOT IN ('cancelled', 'completed')
+                            AND r.status NOT IN ('cancelled', 'completed', 'expired')
                             AND COALESCE(a.period, tsrange(COALESCE(h.start_time, l.start_time),
                                 COALESCE(h.end_time, l.end_time) + make_interval(mins => a.buffer_minutes), '[)'))
                                 && tsrange(@from, @to + make_interval(mins => @buffer), '[)')

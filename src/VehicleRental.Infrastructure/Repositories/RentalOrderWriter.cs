@@ -18,7 +18,7 @@ internal static class RentalOrderWriter
                   AND p.type='rental' AND p.status='paid' AND p.method IN ('payos','cash')
                 ORDER BY p.id LIMIT 1
             ) p ON true
-            WHERE r.id=$1 AND r.confirmed_at IS NOT NULL AND r.status<>'cancelled'
+            WHERE r.id=$1 AND r.confirmed_at IS NOT NULL AND r.status NOT IN ('cancelled','expired')
               AND (r.is_subscription OR p.id IS NOT NULL)
             ON CONFLICT(rental_id) DO NOTHING
             """, cn, tx);

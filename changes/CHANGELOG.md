@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-10-23 — [Caddy đứng trước API trong deploy docker compose](2026-10-23-caddy-reverse-proxy.md)
+- 2026-10-23 — [Tự động hết hạn yêu cầu đặt xe](2026-10-23-rental-expiry.md)
 - 2026-10-23 — [Ẩn xe chưa cấu hình hạng GPLX khỏi danh mục khách hàng](2026-10-23-hide-unconfigured-vehicles.md)
 
 - 2026-10-22 — [Bàn giao xe tự lái ghi nhận phân xe trong transaction](2026-10-22-self-drive-handover.md)
