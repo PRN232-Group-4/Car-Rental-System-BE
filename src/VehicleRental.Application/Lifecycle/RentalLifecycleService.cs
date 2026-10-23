@@ -61,14 +61,18 @@ public sealed class RentalLifecycleService(
             throw new ConflictException("ILLEGAL_TRANSITION", $"Cannot transition from {rental.Status.ToDbString()} using start. Allowed next: [{allowed}]");
         }
 
+        if (rental.RentalType == "longterm" && !rental.HasUploadedContract)
+            throw new ConflictException("SIGNED_CONTRACT_REQUIRED", "Upload the signed long-term contract before handover.");
+
         var hasPreInspection = await repository.HasPassingPreInspectionAsync(id, ct);
         if (!hasPreInspection)
         {
             throw new ConflictException("PRE_INSPECTION_REQUIRED", "A successful pre-rental inspection is required to start.");
         }
 
-        var hasAssignment = await repository.HasValidAssignmentAsync(id, rental.HasDriver, ct);
-        if (!hasAssignment)
+        // Self-drive handover records the already selected vehicle atomically with start.
+        // A requested driver must have been explicitly assigned by dispatch beforehand.
+        if (rental.HasDriver && !await repository.HasValidAssignmentAsync(id, true, ct))
         {
             throw new ConflictException("ASSIGNMENT_REQUIRED", "Vehicle and driver (if requested) must be assigned.");
         }

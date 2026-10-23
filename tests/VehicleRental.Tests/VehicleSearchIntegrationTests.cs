@@ -21,8 +21,8 @@ public sealed class VehicleSearchIntegrationTests(PostgresFixture db) : IClassFi
         var typeId = (int)(await Seed.ScalarAsync(db.DataSource, "INSERT INTO vehicle_types(name, fuel_type) VALUES('Sedan', $1) RETURNING id", fuel))!;
         var facId = (int)(await Seed.ScalarAsync(db.DataSource, "INSERT INTO facilities(name) VALUES('Main Station') RETURNING id"))!;
         var vId = (int)(await Seed.ScalarAsync(db.DataSource, """
-            INSERT INTO vehicles(vehicle_type_id, facility_id, status, brand, model, year_of_manufacture, rental_price_hourly, rental_price_longterm)
-            VALUES($1, $2, $3, $4, $5, 2024, $6, $7) RETURNING id
+            INSERT INTO vehicles(vehicle_type_id, facility_id, status, brand, model, year_of_manufacture, rental_price_hourly, rental_price_longterm, allowed_license_types)
+            VALUES($1, $2, $3, $4, $5, 2024, $6, $7, ARRAY['B']) RETURNING id
             """, typeId, facId, status, brand, model, hourly, longterm))!;
         await Seed.ScalarAsync(db.DataSource, "INSERT INTO car_detail(vehicle_id, seat_count, transmission) VALUES($1, $2, 'Tự động')", vId, seats);
         return (cId, vId, facId, typeId);

@@ -63,7 +63,8 @@ public sealed record RentalLifecycleEntity(
     DateTime? CancelledAt,
     string? CancelledBy,
     string? CancelReason,
-    int OvertimeHours
+    int OvertimeHours,
+    bool HasUploadedContract = false
 );
 
 public sealed record CustomerVehicleDto(int Id, string Brand, string Model, string? MainImageUrl, string? Color);

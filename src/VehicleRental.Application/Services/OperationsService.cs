@@ -72,10 +72,13 @@ public sealed class OperationsService(IOperationsRepository repository, IDriverA
         return repository.SaveLicenseAsync(email, license with { Status = "pending" }, ct);
     }
 
-    public async Task<CustomerLicense> ReviewLicenseAsync(int customerId, string status, CancellationToken ct)
+    public Task<CustomerLicense> ReviewLicenseAsync(int customerId, string status, CancellationToken ct) => ReviewLicenseAsync(customerId, status, ct, null);
+
+    public async Task<CustomerLicense> ReviewLicenseAsync(int customerId, string status, CancellationToken ct, int? licenseId)
     {
+        if (licenseId < 1) throw new ArgumentException("LicenseId must be positive.");
         if (status is not ("approved" or "rejected")) throw new ArgumentException("License status must be approved or rejected.");
-        var license = await repository.ReviewLicenseAsync(customerId, status, ct);
+        var license = await repository.ReviewLicenseAsync(customerId, status, ct, licenseId);
         if (notifications is not null) await notifications.LicenseReviewedAsync(customerId, license.Status);
         return license;
     }
@@ -139,7 +142,7 @@ public sealed class OperationsService(IOperationsRepository repository, IDriverA
         repository.GetVehicleAsync(id, ct);
 
     public Task<Vehicle> SaveVehicleAsync(int? id, Vehicle vehicle, CancellationToken ct) =>
-        repository.SaveVehicleAsync(id, vehicle, ct);
+        repository.SaveVehicleAsync(id, vehicle with { AllowedLicenseTypes = LicenseTypesAttribute.Normalize(vehicle.AllowedLicenseTypes) }, ct);
 
     public Task DeleteVehicleAsync(int id, CancellationToken ct) =>
         repository.DeleteVehicleAsync(id, ct);

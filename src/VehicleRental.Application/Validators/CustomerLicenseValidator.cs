@@ -15,6 +15,7 @@ public static class CustomerLicenseValidator
     // Upload checks metadata before storage; SaveLicenseAsync checks the resulting URL too.
     public static void ValidateDetails(CustomerLicense license)
     {
+        if (license.Id < 1) throw new ArgumentException("LicenseId must be positive.");
         if (string.IsNullOrWhiteSpace(license.Number) || license.Number.Length > 255)
             throw new ArgumentException("License number is required and must not exceed 255 characters.");
         if (string.IsNullOrWhiteSpace(license.Type) || license.Type.Length > 255)

@@ -30,7 +30,7 @@ public sealed class NpgsqlVehicleSearchRepository(NpgsqlDataSource dataSource) :
                    COALESCE(ecd.max_range_km, emd.max_range_km),
                    COALESCE(ecd.battery_capacity, emd.battery_capacity),
                    COALESCE({ElectricSql}, false) AS is_electric,
-                   COUNT(*) OVER() AS total_count, {TypeSql} AS type
+                   COUNT(*) OVER() AS total_count, {TypeSql} AS type, v.allowed_license_types
             FROM vehicles v
             JOIN vehicle_types t ON t.id = v.vehicle_type_id
             LEFT JOIN facilities f ON f.id = v.facility_id
@@ -39,6 +39,8 @@ public sealed class NpgsqlVehicleSearchRepository(NpgsqlDataSource dataSource) :
             LEFT JOIN electric_car_detail ecd ON ecd.vehicle_id = v.id
             LEFT JOIN electric_motorbike_detail emd ON emd.vehicle_id = v.id
             WHERE v.status = 'available'
+              AND EXISTS (SELECT 1 FROM unnest(v.allowed_license_types) AS configured_license(license_type)
+                  WHERE configured_license.license_type ~ '[^[:space:]]')
               AND NOT EXISTS (SELECT 1 FROM rentals active_rental WHERE active_rental.vehicle_id=v.id
                   AND active_rental.status IN ('renting','post_inspection'))
             """);
@@ -210,7 +212,7 @@ public sealed class NpgsqlVehicleSearchRepository(NpgsqlDataSource dataSource) :
 
             items.Add(new VehicleSearchItem(
                 id, typeRef, brand, model, year, color, imgUrl, location, facRef,
-                priceH, priceL, summary, badges, durationHours));
+                priceH, priceL, summary, badges, durationHours) { AllowedLicenseTypes = reader.GetFieldValue<string[]>(23) });
         }
 
         await reader.DisposeAsync();

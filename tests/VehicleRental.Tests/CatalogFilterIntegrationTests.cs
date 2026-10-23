@@ -19,8 +19,8 @@ public sealed class CatalogFilterIntegrationTests(PostgresFixture db) : IClassFi
         {
             var type = (int)(await Seed.ScalarAsync(db.DataSource, "INSERT INTO vehicle_types(name,type,fuel_type) VALUES('Display name',$1,$2) RETURNING id", types[i], fuels[i]))!;
             var vehicle = (int)(await Seed.ScalarAsync(db.DataSource, """
-                INSERT INTO vehicles(vehicle_type_id,facility_id,status,brand,model,year_of_manufacture,rental_price_hourly,rental_price_longterm)
-                VALUES($1,$2,'available',$3,$4,$5,$6,$7) RETURNING id
+                INSERT INTO vehicles(vehicle_type_id,facility_id,status,brand,model,year_of_manufacture,rental_price_hourly,rental_price_longterm,allowed_license_types)
+                VALUES($1,$2,'available',$3,$4,$5,$6,$7,ARRAY['B']) RETURNING id
                 """, type, facility, brand, models[i], 2020 + i, (i + 1) * 10m, (5 - i) * 100m))!;
             ids.Add(vehicle);
             if (types[i] == "car")

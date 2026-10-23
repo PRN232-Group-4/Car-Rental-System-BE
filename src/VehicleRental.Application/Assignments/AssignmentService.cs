@@ -138,6 +138,9 @@ public sealed class AssignmentService(
         var startsAt = rental.StartTime > now ? rental.StartTime : now;
         var endsAt = rental.EndTime;
 
+        if (endsAt <= startsAt)
+            throw new BusinessRuleException("RENTAL_ALREADY_ENDED", "Rental period has already elapsed.", 400);
+
         var candidates = await repo.ListDriverCandidatesAsync(startsAt, endsAt, _options.DriverBufferMinutes, rentalId, ct);
         var result = new List<AssignableDriverItem>();
 
@@ -174,6 +177,9 @@ public sealed class AssignmentService(
         var now = timeProvider.GetUtcNow().UtcDateTime;
         var startsAt = rental.StartTime > now ? rental.StartTime : now;
         var endsAt = rental.EndTime;
+
+        if (endsAt <= startsAt)
+            throw new BusinessRuleException("RENTAL_ALREADY_ENDED", "Rental period has already elapsed.", 400);
 
         return await repo.ListAssignableVehiclesAsync(
             rental.VehicleTypeId,
