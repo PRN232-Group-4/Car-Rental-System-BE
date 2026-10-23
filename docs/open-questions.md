@@ -110,3 +110,6 @@ Revenue tiếp tục theo paid invoice/issued_at như dashboard cũ; không đ�
 ## Audit logs và role catalog — 2026-10-21 assumptions
 
 Audit logs sử dụng nhật ký quản trị tài khoản đã có, mở quyền đọc Management (Admin/Manager); các mutation tài khoản và CRUD role giữ Admin. Chuẩn hóa action lịch sử sang tên public theo yêu cầu, details dùng reason đã lưu và IP lịch sử giữ null. Tạo role là tạo danh mục dùng được cho membership; tên tùy chỉnh không tự tạo policy/capability mới. Bảo vệ role hệ thống và chặn đổi tên/xóa role tùy chỉnh đang gán để giữ tính nhất quán phiên và tham chiếu. Migration unique tên role không tự gộp bản ghi cũ.
+
+## GPLX — 2026-10-23 assumptions
+- Mảng allowedLicenseTypes rỗng giữ tương thích xe cũ: mọi hạng đã duyệt còn hạn, không miễn bằng. Admin cấu hình rõ từng hạng khi cần giới hạn. Không suy diễn hạng pháp lý hoặc tự cấp duyệt. Bằng không có ngày hết hạn không đủ điều kiện thuê tự lái; customer cập nhật hồ sơ đầy đủ. Xem ADR-010.

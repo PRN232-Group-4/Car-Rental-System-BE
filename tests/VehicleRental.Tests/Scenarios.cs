@@ -23,7 +23,7 @@ internal static class Scenarios
 
     public static async Task<(int RentalId, int SubscriptionId)> CreateSubscriptionRentalAsync(NpgsqlDataSource db)
     {
-        var (_, email) = await Seed.CustomerAsync(db, licenseStatus: "pending");
+        var (_, email) = await Seed.CustomerAsync(db);
         var vehicle = await Seed.VehicleAsync(db);
         var plan = await Seed.PlanAsync(db);
         var operations = new NpgsqlOperationsRepository(db);

@@ -18,7 +18,7 @@ public sealed partial class NpgsqlCustomerRepository
         command.Parameters.AddWithValue(customerId);
         await using var reader = await command.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct)) return null;
-        return new(reader.GetInt32(0), reader.GetInt32(1), reader.GetString(2),
+        var result = new CustomerDetail(reader.GetInt32(0), reader.GetInt32(1), reader.GetString(2),
             reader.IsDBNull(3) ? null : reader.GetString(3), reader.IsDBNull(4) ? null : reader.GetString(4),
             reader.IsDBNull(5) ? null : reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetString(6),
             reader.GetBoolean(7), new(reader.IsDBNull(8) ? null : reader.GetString(8),
@@ -27,5 +27,7 @@ public sealed partial class NpgsqlCustomerRepository
                 reader.IsDBNull(11) ? null : reader.GetFieldValue<DateOnly>(11),
                 reader.IsDBNull(12) ? null : reader.GetString(12), reader.GetString(13)),
             new(reader.GetInt32(14)));
+        await reader.CloseAsync();
+        return result with { License = result.License with { Licenses = await NpgsqlOperationsRepository.ReadLicensesAsync(dataSource, customerId, ct) } };
     }
 }

@@ -61,4 +61,4 @@ Yêu cầu đặt xe (`rentals` ở trạng thái `pending`) chỉ được gi�
 ## Thay đổi
 
 - `changes/2026-10-23-rental-expiry.md`
-- Migration `0030_rental_expiry.sql`
+- Migration `0032_rental_expiry.sql`

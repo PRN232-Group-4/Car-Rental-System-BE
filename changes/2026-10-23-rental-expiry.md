@@ -25,7 +25,7 @@ Yêu cầu đặt xe hiện giữ lịch xe vô thời hạn khi chưa được 
 - `RentalExpiryHostedService` chạy mỗi phút (lượt đầu chờ hết chu kỳ để nhường migration), bỏ qua khi `Enabled=false`, log số đơn xử lý.
 - `RentalOrderWriter` không phát hành order cho đơn `expired`; `CompleteInvoiceAsync` ghi ledger nhưng tự tạo `payments(type='refund', status='requested')` khi webhook về sau hạn.
 - `ReserveInvoiceCheckoutAsync` và xác nhận tiền mặt chặn `expired`; mọi bộ lọc "đơn đang chiếm xe" thêm `expired` (availability, điều phối, danh sách xe, lịch tài xế).
-- Migration `0030_rental_expiry.sql`: cột `expire_at`/`expired_at`, CHECK có `expired`, index theo `expire_at`, backfill, khai báo lại `fn_rental_is_blocking`.
+- Migration `0032_rental_expiry.sql`: cột `expire_at`/`expired_at`, CHECK có `expired`, index theo `expire_at`, backfill, khai báo lại `fn_rental_is_blocking`.
 
 ## Kiểm chứng
 
@@ -38,4 +38,4 @@ Yêu cầu đặt xe hiện giữ lịch xe vô thời hạn khi chưa được 
 - Job chạy trong tiến trình API (BackgroundService), không phải scheduler ngoài: nhiều instance cùng chạy sẽ cùng quét nhưng `UpdateToExpiredAsync` idempotent nên không xử lý hai lần.
 - Thông báo email "sắp hết hạn/đã hết hạn" chưa gửi: `IOperationalNotifications` hiện không có mẫu cho tình huống này; cần bổ sung mẫu email trước khi bật.
 - Mốc hạn tính từ thời điểm đặt (giả định đã ghi trong `docs/open-questions.md`), không phải `start_time - 1 giờ`.
-- Chưa deploy; migration 0030 chỉ mới chạy trên database test cục bộ.
+- Chưa deploy; migration 0032 chỉ mới chạy trên database test cục bộ.

@@ -230,7 +230,7 @@ public sealed class RentalExpiryIntegrationTests(PostgresFixture db) : IClassFix
     [Fact]
     public async Task Migration_is_idempotent_and_adds_the_expiry_columns()
     {
-        var sql = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "db", "migrations", "0030_rental_expiry.sql"));
+        var sql = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "db", "migrations", "0032_rental_expiry.sql"));
         await Seed.ScalarAsync(db.DataSource, sql);
         await Seed.ScalarAsync(db.DataSource, sql);
 

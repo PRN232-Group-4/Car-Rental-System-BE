@@ -5,6 +5,7 @@ using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Domain.Assignments;
 using Car_Rental_System_BE.Infrastructure.Availability;
 using Npgsql;
+using Car_Rental_System_BE.Infrastructure.Repositories;
 using NpgsqlTypes;
 
 namespace Car_Rental_System_BE.Infrastructure.Assignments;
@@ -13,14 +14,14 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
 {
     public async Task<RentalScheduleInfo?> GetRentalScheduleAsync(int rentalId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
+        await using var cmd = dataSource.CreateCommand($"""
             SELECT r.id, r.vehicle_id, v.vehicle_type_id, v.facility_id, r.status,
                    COALESCE(h.has_driver, l.has_driver, false) AS has_driver,
                    r.customer_id,
                    COALESCE(h.start_time, l.start_time) AS start_time,
                    COALESCE(h.end_time, l.end_time) AS end_time,
-                   c.license_status,
-                   c.license_expiry_date
+                   CASE WHEN {CustomerLicenseSql.Eligible("c.id", "v.id", "COALESCE(h.end_time,l.end_time)::date")} THEN 'approved' ELSE 'none' END,
+                   COALESCE(h.end_time,l.end_time)::date
             FROM rentals r
             JOIN vehicles v ON v.id = r.vehicle_id
             JOIN customers c ON c.id = r.customer_id
@@ -48,6 +49,19 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
             EndTime: end,
             CustomerLicenseStatus: reader.IsDBNull(9) ? null : reader.GetString(9),
             CustomerLicenseExpiry: reader.IsDBNull(10) ? null : reader.GetFieldValue<DateOnly>(10));
+    }
+
+    private static async Task RequireLicenseAsync(NpgsqlConnection connection, NpgsqlTransaction tx, RentalScheduleInfo rental, int vehicleId, CancellationToken ct)
+    {
+        if (rental.HasDriver) return;
+        await using (var customerLock = new NpgsqlCommand("SELECT id FROM customers WHERE id=$1 FOR SHARE",connection,tx))
+        { customerLock.Parameters.AddWithValue(rental.CustomerId); await customerLock.ExecuteScalarAsync(ct); }
+        await using var command = new NpgsqlCommand("SELECT " + CustomerLicenseSql.Eligible("$1", "$2", "$3::timestamp::date"),connection,tx);
+        command.Parameters.AddWithValue(rental.CustomerId);
+        command.Parameters.AddWithValue(vehicleId);
+        command.Parameters.Add(Sql.Timestamp("", rental.EndTime));
+        if (await command.ExecuteScalarAsync(ct) is not true)
+            throw new ConflictException("CUSTOMER_LICENSE_NOT_VALID", "Cần GPLX đã duyệt, đúng hạng xe và còn hạn đến hết chuyến thuê.");
     }
 
     public async Task<bool> HasPassedPreInspectionAsync(int rentalId, CancellationToken ct)
@@ -118,6 +132,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
             // Lock vehicle (1001)
             await VehicleLock.AcquireAsync(connection, tx, rental.VehicleId, ct);
             await RequireCurrentScheduleAsync(connection, tx, rental, ct);
+            await RequireLicenseAsync(connection, tx, rental, rental.VehicleId, ct);
 
             // Lock driver (1002) if provided
             if (driverStaffId is not null)
@@ -243,6 +258,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
             await VehicleLock.AcquireAsync(connection, tx, firstId, ct);
             await VehicleLock.AcquireAsync(connection, tx, secondId, ct);
             await RequireCurrentScheduleAsync(connection, tx, rental, ct);
+            await RequireLicenseAsync(connection, tx, rental, newVehicleId, ct);
 
             int? currentAssignmentId = null;
             int? currentDriverId = null;
@@ -420,7 +436,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
         CancellationToken ct)
     {
         await using var cmd = dataSource.CreateCommand("""
-            SELECT s.id, COALESCE(u.fullname, u.email), u.avatar_url,
+            SELECT s.id, COALESCE(u.fullname, u.email), u.avatar,
                    s.is_driver, u.is_active, s.license_expiry_date,
                    EXISTS(
                        SELECT 1 FROM vehicle_assignments va
@@ -428,7 +444,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
                          AND va.status = 'assigned'
                          AND (@excludeId::int IS NULL OR va.rental_id <> @excludeId)
                          AND va.period && tsrange(@from, @to + make_interval(mins => @buffer), '[)')
-                   ) AS has_conflict
+                   ) AS has_conflict, s.rating
             FROM staffs s
             JOIN users u ON u.id = s.user_id
             WHERE s.is_driver = true
@@ -449,7 +465,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
                 StaffId: reader.GetInt32(0),
                 FullName: reader.GetString(1),
                 AvatarUrl: reader.IsDBNull(2) ? null : reader.GetString(2),
-                Rating: 5.0m, // default rating
+                Rating: reader.IsDBNull(7) ? null : reader.GetDecimal(7),
                 IsDriver: reader.GetBoolean(3),
                 IsActive: reader.GetBoolean(4),
                 LicenseExpiry: reader.IsDBNull(5) ? null : reader.GetFieldValue<DateOnly>(5),

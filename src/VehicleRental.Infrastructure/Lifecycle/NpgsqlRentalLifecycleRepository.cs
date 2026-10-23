@@ -3,6 +3,7 @@ using Car_Rental_System_BE.Application.Lifecycle;
 using Car_Rental_System_BE.Domain.Availability;
 using Car_Rental_System_BE.Infrastructure.Availability;
 using Npgsql;
+using Car_Rental_System_BE.Infrastructure.Repositories;
 using VehicleRental.Domain.Lifecycle;
 
 namespace Car_Rental_System_BE.Infrastructure.Lifecycle;
@@ -24,6 +25,7 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
                    COALESCE(p.vat_rate, 10) AS vat_rate,
                    r.confirmed_at, r.started_at, r.returned_at, r.completed_at,
                    r.cancelled_at, r.cancelled_by, r.cancel_reason, r.overtime_hours,
+                   EXISTS(SELECT 1 FROM rental_contract_documents d WHERE d.rental_id=r.id),
                    r.expire_at, r.expired_at
             FROM rentals r
             LEFT JOIN hour_rental_detail h ON h.rental_id = r.id
@@ -67,8 +69,9 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
             CancelledBy: reader.IsDBNull(24) ? null : reader.GetString(24),
             CancelReason: reader.IsDBNull(25) ? null : reader.GetString(25),
             OvertimeHours: reader.GetInt32(26),
-            ExpireAt: reader.IsDBNull(27) ? null : reader.GetDateTime(27),
-            ExpiredAt: reader.IsDBNull(28) ? null : reader.GetDateTime(28)
+            HasUploadedContract: reader.GetBoolean(27),
+            ExpireAt: reader.IsDBNull(28) ? null : reader.GetDateTime(28),
+            ExpiredAt: reader.IsDBNull(29) ? null : reader.GetDateTime(29)
         );
     }
 
@@ -120,9 +123,9 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
     {
         await using var cmd = dataSource.CreateCommand("""
             SELECT EXISTS(
-                SELECT 1 FROM customers
-                WHERE id = $1 AND license_status = 'approved'
-                  AND (license_expiry_date IS NULL OR license_expiry_date >= CURRENT_DATE)
+                SELECT 1 FROM customer_license_records
+                WHERE customer_id = $1 AND status = 'approved'
+                  AND expiry_date >= CURRENT_DATE
             )
             """);
         cmd.Parameters.AddWithValue(customerId);
@@ -191,6 +194,26 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
 
         await RequireStartEvidenceAsync(conn, tx, rentalId, vehicleId, startedAt, ct);
 
+        // Evidence, payment and availability have passed while dispatch/vehicle/rental locks
+        // are held. Record self-drive handover without requiring a separate driver action.
+        await using (var assignment = new NpgsqlCommand("""
+            INSERT INTO vehicle_assignments(rental_id,vehicle_id,driver_staff_id,status,assigned_by,assigned_at,starts_at,ends_at,reason)
+            SELECT r.id,r.vehicle_id,NULL,'assigned',$3,$2,
+                GREATEST(COALESCE(h.start_time,l.start_time),$2),
+                GREATEST(COALESCE(h.end_time,l.end_time),$2 + interval '1 microsecond'),'initial'
+            FROM rentals r
+            LEFT JOIN hour_rental_detail h ON h.rental_id=r.id
+            LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id
+            WHERE r.id=$1 AND NOT COALESCE(h.has_driver,l.has_driver,false)
+                AND NOT EXISTS(SELECT 1 FROM vehicle_assignments a WHERE a.rental_id=r.id AND a.status='assigned')
+            """, conn, tx))
+        {
+            assignment.Parameters.AddWithValue(rentalId);
+            assignment.Parameters.Add(Sql.Timestamp("", startedAt));
+            assignment.Parameters.AddWithValue(actor.Email);
+            await assignment.ExecuteNonQueryAsync(ct);
+        }
+
         await using var cmdRental = new NpgsqlCommand("""
             UPDATE rentals
             SET status = 'renting', started_at = $2, status_changed_at = now()
@@ -215,18 +238,24 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
     private static async Task RequireStartEvidenceAsync(NpgsqlConnection conn, NpgsqlTransaction tx, int rentalId,
         int vehicleId, DateTime startedAt, CancellationToken ct)
     {
-        await using var command = new NpgsqlCommand("""
+        // A separate statement takes the customer lock before the eligibility snapshot.
+        await using (var customerLock = new NpgsqlCommand("SELECT c.id FROM customers c JOIN rentals r ON r.customer_id=c.id WHERE r.id=$1 FOR SHARE OF c",conn,tx))
+        { customerLock.Parameters.AddWithValue(rentalId); await customerLock.ExecuteScalarAsync(ct); }
+        await using var command = new NpgsqlCommand($"""
             SELECT
                 EXISTS(SELECT 1 FROM inspections i WHERE i.rental_id=r.id AND i.vehicle_id=r.vehicle_id
                     AND i.inspection_type='pre_rental' AND i.is_ok=true),
-                EXISTS(SELECT 1 FROM vehicle_assignments a WHERE a.rental_id=r.id AND a.vehicle_id=r.vehicle_id
-                    AND a.status='assigned' AND (NOT COALESCE(h.has_driver,l.has_driver,false) OR a.driver_staff_id IS NOT NULL)),
-                COALESCE(h.has_driver,l.has_driver,false) OR (c.license_status='approved'
-                    AND (c.license_expiry_date IS NULL OR c.license_expiry_date>=CURRENT_DATE)),
+                CASE WHEN COALESCE(h.has_driver,l.has_driver,false) THEN
+                    EXISTS(SELECT 1 FROM vehicle_assignments a WHERE a.rental_id=r.id AND a.vehicle_id=r.vehicle_id
+                        AND a.status='assigned' AND a.driver_staff_id IS NOT NULL)
+                ELSE NOT EXISTS(SELECT 1 FROM vehicle_assignments a WHERE a.rental_id=r.id AND a.status='assigned'
+                    AND (a.vehicle_id<>r.vehicle_id OR a.driver_staff_id IS NOT NULL)) END,
+                COALESCE(h.has_driver,l.has_driver,false) OR {CustomerLicenseSql.Eligible("c.id", "r.vehicle_id", "COALESCE(h.end_time,l.end_time)::date")},
                 r.is_subscription OR EXISTS(SELECT 1 FROM invoices inv WHERE inv.rental_id=r.id
                     AND inv.kind='rental' AND inv.status='paid'),
                 LEAST(COALESCE(h.start_time,l.start_time),$2),
-                GREATEST(COALESCE(h.end_time,l.end_time),$2 + interval '1 microsecond')
+                GREATEST(COALESCE(h.end_time,l.end_time),$2 + interval '1 microsecond'),
+                r.rental_type <> 'longterm' OR EXISTS(SELECT 1 FROM rental_contract_documents d WHERE d.rental_id=r.id)
             FROM rentals r JOIN customers c ON c.id=r.customer_id
             LEFT JOIN hour_rental_detail h ON h.rental_id=r.id
             LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id
@@ -241,6 +270,7 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
         if (!reader.GetBoolean(1)) throw new ConflictException("ASSIGNMENT_REQUIRED", "An active assignment for the current vehicle is required.");
         if (reader.IsDBNull(2) || !reader.GetBoolean(2)) throw new ConflictException("CUSTOMER_LICENSE_NOT_VALID", "Customer license must be approved and valid for self-drive.");
         if (!reader.GetBoolean(3)) throw new ConflictException("PAYMENT_REQUIRED", "Direct rental invoice must be paid before handover.");
+        if (!reader.GetBoolean(6)) throw new ConflictException("SIGNED_CONTRACT_REQUIRED", "Upload the signed long-term contract before handover.");
         var window = new TimeRange(reader.GetDateTime(4), reader.GetDateTime(5));
         await reader.CloseAsync();
         var availability = await VehicleAvailabilityChecks.EvaluateAsync(conn, tx, vehicleId, window, rentalId, 60, ct);

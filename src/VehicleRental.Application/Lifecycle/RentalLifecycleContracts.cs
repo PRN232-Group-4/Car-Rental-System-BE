@@ -66,6 +66,7 @@ public sealed record RentalLifecycleEntity(
     string? CancelledBy,
     string? CancelReason,
     int OvertimeHours,
+    bool HasUploadedContract = false,
     DateTime? ExpireAt = null,
     DateTime? ExpiredAt = null
 );

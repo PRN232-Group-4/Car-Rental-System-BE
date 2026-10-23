@@ -148,6 +148,44 @@ public sealed class CustomerLicenseUploadTests : IAsyncLifetime
         Assert.Equal(1, _repository.Saves);
     }
 
+    [Fact]
+    public async Task Multipart_explicit_license_id_reaches_save_without_being_lost()
+    {
+        using var form = LicenseForm();
+        form.Add(new StringContent("42"), "LicenseId");
+        using var response = await _client.PutAsync("/api/customer/license", form);
+        using var body = await Envelope(response, 200, true);
+        Assert.Equal(42, _repository.License.Id);
+        Assert.Equal(42, body.RootElement.GetProperty("data").GetProperty("id").GetInt32());
+    }
+
+    [Fact]
+    public async Task Get_license_serializes_independent_records_inside_standard_envelope()
+    {
+        _repository.License = _repository.License with { Id = 1, Licenses = [
+            new("OLD", "B", null, null, "https://example.test/b.png", "approved") { Id = 1 },
+            new("NEW", "A1", null, null, "https://example.test/a.png", "pending") { Id = 2 }
+        ] };
+        using var response = await _client.GetAsync("/api/customer/license");
+        using var body = await Envelope(response, 200, true);
+        var licenses = body.RootElement.GetProperty("data").GetProperty("licenses");
+        Assert.Equal(2, licenses.GetArrayLength());
+        Assert.Equal("approved", licenses[0].GetProperty("status").GetString());
+        Assert.Equal("pending", licenses[1].GetProperty("status").GetString());
+        Assert.Equal(2, licenses[1].GetProperty("id").GetInt32());
+    }
+
+    [Fact]
+    public async Task Invalid_license_id_fails_at_HTTP_boundary_before_upload()
+    {
+        using var form = LicenseForm();
+        form.Add(new StringContent("0"), "LicenseId");
+        using var response = await _client.PutAsync("/api/customer/license", form);
+        using var body = await Envelope(response, 400, false);
+        Assert.Equal(0, _images.Uploads);
+        Assert.Equal(0, _repository.Saves);
+    }
+
     [Theory]
     [InlineData("expired")]
     [InlineData("issue-after-expiry")]

@@ -112,7 +112,7 @@ public sealed class RentalInspectionModesTests(PostgresFixture db) : IClassFixtu
         var (customer,email)=await Seed.CustomerAsync(db.DataSource);
         var vehicle=await Seed.VehicleAsync(db.DataSource);
         var facility=(int)(await Seed.ScalarAsync(db.DataSource,"INSERT INTO facilities(name) VALUES('Filter test') RETURNING id"))!;
-        await Seed.ScalarAsync(db.DataSource,"UPDATE vehicles SET status=$2,facility_id=$3 WHERE id=$1",vehicle,status == "post_inspection" ? "available" : status,facility);
+        await Seed.ScalarAsync(db.DataSource,"UPDATE vehicles SET status=$2,facility_id=$3,allowed_license_types=ARRAY['B'] WHERE id=$1",vehicle,status == "post_inspection" ? "available" : status,facility);
         if(staleStatus || status=="post_inspection")
             await Seed.ScalarAsync(db.DataSource,"INSERT INTO rentals(customer_id,vehicle_id,rental_type,status) VALUES($1,$2,'hourly',$3)",customer,vehicle,staleStatus ? "renting" : status);
         var repo=new NpgsqlVehicleSearchRepository(db.DataSource);

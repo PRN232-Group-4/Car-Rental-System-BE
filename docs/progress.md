@@ -2,7 +2,19 @@
 
 ## Tự động hết hạn yêu cầu đặt xe — 2026-10-23
 
-Thêm trạng thái `expired`, cột `expire_at`/`expired_at` (migration 0030) và job quét mỗi phút: yêu cầu chưa được duyệt hoặc chưa thanh toán trong cửa sổ cấu hình (mặc định 1 giờ kể từ lúc đặt) tự hết hạn, hủy hóa đơn chưa thu và giải phóng lịch xe. Đặt xe phải cách giờ nhận tối thiểu 1 giờ; đơn hết hạn không duyệt/không thanh toán được, thanh toán muộn sau hạn được ghi ledger và tự tạo yêu cầu hoàn tiền. 32 test FR-042 đạt trên PostgreSQL tạm; toàn bộ suite 1144 đạt, 3 lỗi có sẵn từ trước. Chưa deploy, chưa gửi thông báo email. Xem [FR-042](../specs/FR-042-rental-expiry.md), [thay đổi](../changes/2026-10-23-rental-expiry.md).
+Thêm trạng thái `expired`, cột `expire_at`/`expired_at` (migration 0032) và job quét mỗi phút: yêu cầu chưa được duyệt hoặc chưa thanh toán trong cửa sổ cấu hình (mặc định 1 giờ kể từ lúc đặt) tự hết hạn, hủy hóa đơn chưa thu và giải phóng lịch xe. Đặt xe phải cách giờ nhận tối thiểu 1 giờ; đơn hết hạn không duyệt/không thanh toán được, thanh toán muộn sau hạn được ghi ledger và tự tạo yêu cầu hoàn tiền. 32 test FR-042 đạt trên PostgreSQL tạm; toàn bộ suite 1144 đạt, 3 lỗi có sẵn từ trước. Chưa deploy, chưa gửi thông báo email. Xem [FR-042](../specs/FR-042-rental-expiry.md), [thay đổi](../changes/2026-10-23-rental-expiry.md).
+
+## Ẩn xe chưa cấu hình hạng GPLX khỏi danh mục khách — 2026-10-23
+
+Public search yêu cầu ít nhất một hạng GPLX khác khoảng trắng trước đếm tổng/phân trang; landing, tìm xe và booking dùng cùng API. Giữ xe trong quản trị, chi tiết và lịch sử; GPS nearby vận hành không đổi. Build tests `-warnaserror` đạt 0 lỗi/0 cảnh báo; 77/77 ca search/catalog/Application/HTTP/Swagger/inspection liên quan đạt trên PostgreSQL test riêng. Fixture subscription self-drive được cập nhật sang GPLX approved theo invariant đã có. Không migration/deploy; WebApi local đang chạy cần nạp lại bản build để áp dụng filter mới. Xem [thay đổi](../changes/2026-10-23-hide-unconfigured-vehicles.md).
+
+## Nhiều GPLX và hạng bằng theo xe — 2026-10-23
+
+Đã lưu/duyệt độc lập nhiều GPLX, cấu hình allowedLicenseTypes, kiểm tra phù hợp ở booking/edit/assignment/handover. Migration 0030 backfill hồ sơ cũ. Build đạt 0 lỗi/0 cảnh báo; 133 ca liên quan đạt trên PostgreSQL riêng. Chưa áp dụng migration DB ứng dụng; xem [thay đổi](../changes/2026-10-23-multiple-customer-licenses.md).
+
+## Bàn giao đơn tự lái không cần phân tài xế — 2026-10-22
+
+Đơn tự lái đã chọn xe được tự ghi nhận assignment không có tài xế trong transaction bàn giao sau kiểm tra xe hiện tại, kiểm định, GPLX, thanh toán và lịch trống. Không tạo trùng khi bàn giao đồng thời; chặn phân công sai xe hoặc có tài xế trên đơn tự lái. Đơn có tài xế vẫn phải phân tài xế thực tế. Build `-warnaserror` đạt, 63/63 kiểm thử lifecycle/handover/inspection đạt trên PostgreSQL riêng với session UTC. Không migration hoặc deploy; cần nạp lại backend để dùng bản sửa. Xem [thay đổi](../changes/2026-10-22-self-drive-handover.md).
 
 ## Đồng bộ tiến trình khi kiểm tra kèm duyệt — 2026-10-22
 
@@ -292,3 +304,7 @@ FR-006: GET GPLX trả status=none nếu số GPLX null/rỗng/khoảng trắng,
 ## 2026-10-22 — Phân công/inspect sau trả xe
 
 API assignment hỗ trợ inspectionType=post_rental, Admin checked hoặc Manager phân công riêng theo giai đoạn; migration 0029 giữ hồ sơ trước thuê, post không tự complete/paid hoặc ghi đè evidence. Build Release/54 tests liên quan PostgreSQL đạt, HTTP auth/query/envelope/Swagger đã kiểm tra. Chưa deploy. Xem [thay đổi](../changes/2026-10-22-post-inspection-dispatch.md).
+
+## 2026-10-23 — Nhiều GPLX
+- Implemented: migration 0030, independent license ID/save/review, vehicle allowedLicenseTypes, eligibility through rental end across booking/edit/assignment/handover, pending queue/filter across licenses.
+- Added: HTTP/validator tests and PostgreSQL regression tests. Deployment requires backend restart to apply migration 0030 with frontend update.

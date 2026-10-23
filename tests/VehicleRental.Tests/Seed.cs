@@ -4,11 +4,11 @@ namespace VehicleRental.Tests;
 
 internal static class Seed
 {
-    public static async Task<(int Id, string Email)> CustomerAsync(NpgsqlDataSource db, string licenseStatus = "approved")
+    public static async Task<(int Id, string Email)> CustomerAsync(NpgsqlDataSource db, string licenseStatus = "approved", bool withLicense = true)
     {
         var email = $"customer-{Guid.NewGuid():N}@test.local";
         var userId = await ScalarAsync(db, "INSERT INTO users(email,fullname) VALUES($1,'Test Customer') RETURNING id", email);
-        var customerId = await ScalarAsync(db, "INSERT INTO customers(user_id,license_status) VALUES($1,$2) RETURNING id", userId, licenseStatus);
+        var customerId = await ScalarAsync(db, "INSERT INTO customers(user_id,license_status,license_number,license_type,license_issue_date,license_expiry_date) VALUES($1,$2,$3,'B','2020-01-01','2099-01-01') RETURNING id", userId, licenseStatus, withLicense ? "TEST-LICENSE" : null);
         return ((int)customerId!, email);
     }
 

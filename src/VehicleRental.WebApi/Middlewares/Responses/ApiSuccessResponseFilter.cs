@@ -82,6 +82,8 @@ public sealed class ApiSuccessResponseFilter : IAsyncAlwaysRunResultFilter
         if (context.ActionDescriptor is not ControllerActionDescriptor action)
             return "Request completed successfully.";
 
+        if (action.ControllerName == "RentalContractDocuments" && action.ActionName == "Upload")
+            return "Signed rental contract uploaded successfully.";
         var key = $"{action.ControllerName}.{action.ActionName}";
         if (action.ControllerName == "InspectionAssignments" && context.HttpContext.Request.Query["inspectionType"] == "post_rental")
             return action.ActionName switch {

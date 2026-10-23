@@ -210,6 +210,8 @@ public sealed partial class NpgsqlOperationsRepository
         if (status == "renting") await RequirePassedPreAsync(cn, tx, id, rental.VehicleId, ct);
         if (status == "renting")
         {
+            if (rental.RentalType == "longterm" && await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM rental_contract_documents WHERE rental_id=$1)", ct, id) is not true)
+                throw new Car_Rental_System_BE.Application.Common.Errors.ConflictException("SIGNED_CONTRACT_REQUIRED", "Upload the signed long-term contract before handover.");
             if (!rental.IsSubscription && await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM invoices WHERE rental_id=$1 AND kind='rental' AND status='paid')", ct, id) is not true)
                 throw new Car_Rental_System_BE.Application.Common.Errors.ConflictException("PAYMENT_REQUIRED", "Direct rental invoice must be paid before handover.");
             var (start,end) = AssignmentPeriod(rental);

@@ -178,7 +178,7 @@ public sealed class RentalLifecycleServiceTests
     public async Task Start_throws_AssignmentRequired_when_not_assigned()
     {
         var service = CreateService();
-        _repo.Entity = CreateDefaultRental(status: RentalStatus.PreInspection);
+        _repo.Entity = CreateDefaultRental(status: RentalStatus.PreInspection, hasDriver: true);
         _repo.PreInspectionPassing = true;
         _repo.ValidAssignment = false;
 
@@ -186,6 +186,16 @@ public sealed class RentalLifecycleServiceTests
             service.StartAsync(100, new(1, "staff@test.local", "Staff"), CancellationToken.None));
 
         Assert.Equal("ASSIGNMENT_REQUIRED", ex.Code);
+    }
+
+    [Fact]
+    public async Task Start_self_drive_delegates_vehicle_assignment_to_atomic_handover()
+    {
+        _repo.Entity = CreateDefaultRental(status: RentalStatus.PreInspection, hasDriver: false);
+        _repo.ValidAssignment = false;
+        var result = await CreateService().StartAsync(100, new(1, "staff@test.local", "Staff"), default);
+        Assert.Equal("renting", result.ToStatus);
+        Assert.True(_repo.UpdatedToRenting);
     }
 
     [Fact]
