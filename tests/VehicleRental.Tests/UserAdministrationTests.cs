@@ -102,20 +102,20 @@ public sealed class UserAdministrationTests : IAsyncLifetime
     {
         foreach (var invalid in new object[] { new { reason = "missing flag" }, new { isActive = false, reason = " " } })
         {
-            using var request = Request(HttpMethod.Patch, "/api/users/2/status"); request.Content = JsonContent.Create(invalid);
+            using var request = Request(HttpMethod.Patch, "/api/user/2/status"); request.Content = JsonContent.Create(invalid);
             using var response = await _client.SendAsync(request); using var json = await EnvelopeAsync(response, 400);
         }
-        using (var request = Request(HttpMethod.Patch, "/api/users/1/status"))
+        using (var request = Request(HttpMethod.Patch, "/api/user/1/status"))
         {
             request.Content = JsonContent.Create(new { isActive = false, reason = "self" });
             using var response = await _client.SendAsync(request); using var json = await EnvelopeAsync(response, 409);
         }
-        using (var request = Request(HttpMethod.Post, "/api/users/1/roles"))
+        using (var request = Request(HttpMethod.Post, "/api/user/1/roles"))
         {
             request.Content = JsonContent.Create(new { role = "Staff" });
             using var response = await _client.SendAsync(request); using var json = await EnvelopeAsync(response, 409);
         }
-        using (var request = Request(HttpMethod.Patch, "/api/users/2/status"))
+        using (var request = Request(HttpMethod.Patch, "/api/user/2/status"))
         {
             request.Content = JsonContent.Create(new { isActive = false, reason = "Abuse report" });
             using var response = await _client.SendAsync(request); using var json = await EnvelopeAsync(response, 200);
@@ -123,11 +123,11 @@ public sealed class UserAdministrationTests : IAsyncLifetime
         }
         foreach (var method in new[] { HttpMethod.Post, HttpMethod.Delete })
         {
-            using var request = Request(method, "/api/users/2/roles"); request.Content = JsonContent.Create(new { role = "Admin" });
+            using var request = Request(method, "/api/user/2/roles"); request.Content = JsonContent.Create(new { role = "Admin" });
             using var response = await _client.SendAsync(request); using var json = await EnvelopeAsync(response, 200);
             Assert.Equal(method == HttpMethod.Post, _repository.Assigned);
         }
-        using (var request = Request(HttpMethod.Post, "/api/users/2/sessions/revoke"))
+        using (var request = Request(HttpMethod.Post, "/api/user/2/sessions/revoke"))
         {
             using var response = await _client.SendAsync(request); using var json = await EnvelopeAsync(response, 200);
             Assert.True(_repository.Invalidated);

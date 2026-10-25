@@ -45,7 +45,7 @@ public sealed class RentalQueriesController(
     /// Retrieves full customer-facing rental detail including vehicle, driver, pricing, inspections and timeline.
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.Customer)]
-    [HttpGet("mine/{id:int}")]
+    [HttpGet("~/api/rental/mine/{id:int}")]
     [ProducesResponseType(typeof(CustomerRentalDetail), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -95,7 +95,7 @@ public sealed class RentalQueriesController(
     /// Retrieves comprehensive operational details for a rental, including settlement and history audit ledger.
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
-    [HttpGet("{id:int}/detail")]
+    [HttpGet("~/api/rental/{id:int}/detail")]
     [ProducesResponseType(typeof(OperationalRentalDetail), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]

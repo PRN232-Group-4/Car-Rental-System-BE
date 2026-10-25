@@ -33,7 +33,7 @@ public sealed class GeofencesController(ITrackingService trackingService) : Cont
     public async Task<IActionResult> Create([FromBody] CreateGeofenceRequest request, CancellationToken ct)
     {
         var geofence = await trackingService.CreateGeofenceAsync(request, ct);
-        return Created($"api/geofences/{geofence.Id}", geofence);
+        return Created($"/api/geofence/{geofence.Id}", geofence);
     }
 
     /// <summary>

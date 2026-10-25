@@ -24,12 +24,12 @@ public sealed class DispatchController(IOperationsService store, IOperationsComp
     public async Task<IActionResult> CreateShift(DriverShiftRequest request, CancellationToken ct)
     {
         var shift = await store.SaveDriverShiftAsync(null,request.DriverStaffId,request.StartTime,request.EndTime,false,Email(),ct);
-        return Created($"api/drivers/shifts/{shift.Id}",shift);
+        return Created($"/api/drivers/shift/{shift.Id}",shift);
     }
 
     /// <summary>Manager/Admin edits or cancels a shift; assigned trips must remain covered.</summary>
     [Authorize(Policy=AuthorizationPolicies.Management)]
-    [HttpPut("drivers/shifts/{id:int}")]
+    [HttpPut("drivers/shift/{id:int}")]
     [ProducesResponseType<DriverShift>(StatusCodes.Status200OK)]
     public Task<DriverShift> UpdateShift(int id, DriverShiftRequest request, CancellationToken ct)
         => store.SaveDriverShiftAsync(id,request.DriverStaffId,request.StartTime,request.EndTime,request.Cancelled,Email(),ct);
@@ -51,7 +51,7 @@ public sealed class DispatchController(IOperationsService store, IOperationsComp
 
     /// <summary>Staff reports damage separately from inspection; Driver reports only their assigned trip; Customer reports their own rental.</summary>
     [Authorize(Roles="Admin,Manager,Staff,Maintenance,CustomerService,Driver,Customer")]
-    [HttpPost("rentals/{id:int}/reports")]
+    [HttpPost("rental/{id:int}/reports")]
     [ProducesResponseType<IncidentReport>(StatusCodes.Status201Created)]
     public async Task<IActionResult> CreateReport(int id, IncidentReportRequest request, CancellationToken ct)
     {
@@ -63,13 +63,13 @@ public sealed class DispatchController(IOperationsService store, IOperationsComp
                 var ownRental = await store.GetRentalForUserAsync(id, Email(), false, true, false, ct);
                 if (ownRental is null) return Forbid();
                 var customerReport = await store.CreateReportAsync(id, 0, false, request.Type, request.Description, request.ImageUrls, ct);
-                return Created($"api/reports/{customerReport.Id}", customerReport);
+                return Created($"/api/report/{customerReport.Id}", customerReport);
             }
             return Forbid();
         }
         var driverOnly=User.IsInRole("Driver") && !AuthorizationPolicies.CanManage(User);
         var report=await store.CreateReportAsync(id,staff.Value,driverOnly,request.Type,request.Description,request.ImageUrls,ct);
-        return Created($"api/reports/{report.Id}",report);
+        return Created($"/api/report/{report.Id}",report);
     }
 
     /// <summary>Manager/Admin reviews incident reports; other staff see their own reports.</summary>
@@ -85,17 +85,17 @@ public sealed class DispatchController(IOperationsService store, IOperationsComp
 
     /// <summary>Manager/Admin assigns a report to an active Maintenance technician.</summary>
     [Authorize(Policy=AuthorizationPolicies.Management)]
-    [HttpPost("reports/{id:int}/maintenance")]
+    [HttpPost("report/{id:int}/maintenance")]
     [ProducesResponseType<Maintenance>(StatusCodes.Status201Created)]
     public async Task<IActionResult> AssignMaintenance(int id, ReportMaintenanceRequest request, CancellationToken ct)
     {
         var maintenance=await store.AssignReportMaintenanceAsync(id,request.AssignedStaffId,request.FacilityId,request.ScheduledDate,ct,request.MaintenanceType,request.Description,Email());
-        return Created($"api/maintenance/{maintenance.Id}",maintenance);
+        return Created($"/api/maintenance/{maintenance.Id}",maintenance);
     }
 
     /// <summary>Manager/Admin closes reviewed damage reports; breakdowns close through replacement.</summary>
     [Authorize(Policy=AuthorizationPolicies.Management)]
-    [HttpPost("reports/{id:int}/resolve")]
+    [HttpPost("report/{id:int}/resolve")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> ResolveReport(int id, CancellationToken ct)
     {
@@ -104,7 +104,7 @@ public sealed class DispatchController(IOperationsService store, IOperationsComp
     }
 
     /// <summary>Admin/Manager accepts an open report or rejects an unassigned report with a reason.</summary>
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPatch("reports/{id:int}/status")]
+    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPatch("report/{id:int}/status")]
     [ProducesResponseType<IncidentReport>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public Task<IncidentReport> SetReportStatus([Range(1,int.MaxValue)] int id, ReportStatusRequest request, CancellationToken ct)
@@ -112,7 +112,7 @@ public sealed class DispatchController(IOperationsService store, IOperationsComp
 
     /// <summary>Inspection staff checks a candidate replacement before Manager dispatches it.</summary>
     [Authorize(Policy=AuthorizationPolicies.Inspection)]
-    [HttpPost("rentals/{id:int}/replacement-inspections/{vehicleId:int}")]
+    [HttpPost("rental/{id:int}/replacement-inspection/{vehicleId:int}")]
     [ProducesResponseType<Inspection>(StatusCodes.Status200OK)]
     public async Task<IActionResult> InspectReplacement(int id, int vehicleId, InspectionRequest request, CancellationToken ct)
     {
@@ -123,7 +123,7 @@ public sealed class DispatchController(IOperationsService store, IOperationsComp
 
     /// <summary>Manager/Admin replaces with the same seat count, preserving prices; ongoing trips require a breakdown report and a new driver.</summary>
     [Authorize(Policy=AuthorizationPolicies.Management)]
-    [HttpPost("rentals/{id:int}/replacements")]
+    [HttpPost("rental/{id:int}/replacements")]
     [ProducesResponseType<Rental>(StatusCodes.Status200OK)]
     public Task<Rental> ReplaceVehicle(int id, VehicleReplacementRequest request, CancellationToken ct)
         => store.ReplaceVehicleAsync(id,request.VehicleId,request.DriverStaffId,request.ReportId,Email(),ct);

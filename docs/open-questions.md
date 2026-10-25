@@ -113,3 +113,7 @@ Audit logs sử dụng nhật ký quản trị tài khoản đã có, mở quy�
 
 ## GPLX — 2026-10-23 assumptions
 - Mảng allowedLicenseTypes rỗng giữ tương thích xe cũ: mọi hạng đã duyệt còn hạn, không miễn bằng. Admin cấu hình rõ từng hạng khi cần giới hạn. Không suy diễn hạng pháp lý hoặc tự cấp duyệt. Bằng không có ngày hết hạn không đủ điều kiện thuê tự lái; customer cập nhật hồ sơ đầy đủ. Xem ADR-010.
+
+## Tên API — 2026-10-25 assumptions
+
+“Nhiều thêm s, riêng không s” áp dụng cho tài nguyên đích: collection giữ số nhiều kể cả POST tạo mới; resource được chọn bằng ID dùng số ít. Danh từ `staff`/`media` và action không tự thêm `s`. FE đồng bộ URL mới; không giữ alias cũ. Xem [ADR-013](decisions/ADR-013-api-resource-number.md).

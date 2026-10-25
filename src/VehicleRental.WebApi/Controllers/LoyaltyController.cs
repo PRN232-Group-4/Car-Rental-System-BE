@@ -59,7 +59,7 @@ public sealed class LoyaltyController(
     /// Retrieves loyalty summary for a specific customer (Admin, Manager).
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.Management)]
-    [HttpGet("api/customers/{id:int}/loyalty")]
+    [HttpGet("api/customer/{id:int}/loyalty")]
     [ProducesResponseType(typeof(LoyaltySummaryResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -74,7 +74,7 @@ public sealed class LoyaltyController(
     /// Adjusts loyalty points manually for a specific customer with an audit reason (Admin only).
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.Admin)]
-    [HttpPost("api/customers/{id:int}/loyalty/adjustments")]
+    [HttpPost("api/customer/{id:int}/loyalty/adjustments")]
     [ProducesResponseType(typeof(LoyaltyTransactionDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]

@@ -224,8 +224,8 @@ public sealed class InspectionAssignmentTests(PostgresFixture db) : IClassFixtur
         using var client = new HttpClient { BaseAddress = new(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single()) };
         var (rental, _) = await RentalAsync();
         var staff = await StaffAsync();
-        var route = $"/api/rentals/{rental}/inspection-assignment";
-        using (var request = new HttpRequestMessage(HttpMethod.Get, $"/api/rentals/{rental}"))
+        var route = $"/api/rental/{rental}/inspection-assignment";
+        using (var request = new HttpRequestMessage(HttpMethod.Get, $"/api/rental/{rental}"))
         {
             request.Headers.Add("X-Test-Role", "Admin");
             using var response = await client.SendAsync(request);
@@ -235,7 +235,7 @@ public sealed class InspectionAssignmentTests(PostgresFixture db) : IClassFixtur
             Assert.False(data.GetProperty("hasPostInspection").GetBoolean());
         }
         await Seed.ScalarAsync(db.DataSource, "INSERT INTO inspections(rental_id,vehicle_id,staff_id,inspection_type,is_ok,inspected_at) SELECT id,vehicle_id,$2,'pre_rental',true,now() FROM rentals WHERE id=$1", rental, staff);
-        using (var request = new HttpRequestMessage(HttpMethod.Get, $"/api/rentals/{rental}"))
+        using (var request = new HttpRequestMessage(HttpMethod.Get, $"/api/rental/{rental}"))
         {
             request.Headers.Add("X-Test-Role", "Admin");
             using var response = await client.SendAsync(request);
@@ -244,7 +244,7 @@ public sealed class InspectionAssignmentTests(PostgresFixture db) : IClassFixtur
         }
         // Keep a separate rental for assignment: immutable evidence must block replacing its technician.
         (rental, _) = await RentalAsync();
-        route = $"/api/rentals/{rental}/inspection-assignment";
+        route = $"/api/rental/{rental}/inspection-assignment";
         using (var request = new HttpRequestMessage(HttpMethod.Get, route))
         {
             request.Headers.Add("X-Test-Role", "Maintenance");
@@ -298,7 +298,7 @@ public sealed class InspectionAssignmentTests(PostgresFixture db) : IClassFixtur
         {
             var (checkedRental, _) = await RentalAsync();
             await Seed.ScalarAsync(db.DataSource,"UPDATE rentals SET status='pending' WHERE id=$1",checkedRental);
-            using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/rentals/{checkedRental}/inspection-assignment/checked") { Content = JsonContent.Create(new { technicianStaffId = staff, approveRequest = true }) };
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/rental/{checkedRental}/inspection-assignment/checked") { Content = JsonContent.Create(new { technicianStaffId = staff, approveRequest = true }) };
             if (role is not null) request.Headers.Add("X-Test-Role", role);
             using var response = await client.SendAsync(request);
             using var json = await Envelope(response, role is null ? 401 : role == "Admin" ? 200 : 403);
@@ -315,7 +315,7 @@ public sealed class InspectionAssignmentTests(PostgresFixture db) : IClassFixtur
         }
         var (postRental, _) = await RentalAsync();
         await Seed.ScalarAsync(db.DataSource,"UPDATE rentals SET status='post_inspection',started_at=now(),returned_at=now() WHERE id=$1",postRental);
-        var postRoute = $"/api/rentals/{postRental}/inspection-assignment";
+        var postRoute = $"/api/rental/{postRental}/inspection-assignment";
         foreach (var verb in new[] { HttpMethod.Get, HttpMethod.Put, HttpMethod.Post })
         {
             using var invalid = new HttpRequestMessage(verb, postRoute + (verb == HttpMethod.Post ? "/checked" : "") + "?inspectionType=wrong") { Content = verb == HttpMethod.Get ? null : JsonContent.Create(new { technicianStaffId = staff }) };
@@ -331,11 +331,11 @@ public sealed class InspectionAssignmentTests(PostgresFixture db) : IClassFixtur
             using var postJson = await Envelope(postResponse, role is null ? 401 : role == "Admin" ? 200 : 403);
             if (role == "Admin") Assert.Equal("Technician dispatch and passing post-rental check confirmed successfully.", postJson.RootElement.GetProperty("message").GetString());
         }
-        var postOperation = swagger.RootElement.GetProperty("paths").GetProperty("/api/rentals/{id}/inspection-assignment/checked").GetProperty("post");
+        var postOperation = swagger.RootElement.GetProperty("paths").GetProperty("/api/rental/{id}/inspection-assignment/checked").GetProperty("post");
         Assert.Contains(postOperation.GetProperty("parameters").EnumerateArray(), x => x.GetProperty("name").GetString() == "inspectionType");
-        Assert.True(swagger.RootElement.GetProperty("paths").GetProperty("/api/rentals/{id}/inspection-assignment/checked").TryGetProperty("post",out _));
+        Assert.True(swagger.RootElement.GetProperty("paths").GetProperty("/api/rental/{id}/inspection-assignment/checked").TryGetProperty("post",out _));
         Assert.Equal("boolean",swagger.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("ConfirmInspectionRequest").GetProperty("properties").GetProperty("approveRequest").GetProperty("type").GetString());
-        var path = swagger.RootElement.GetProperty("paths").GetProperty("/api/rentals/{id}/inspection-assignment");
+        var path = swagger.RootElement.GetProperty("paths").GetProperty("/api/rental/{id}/inspection-assignment");
         Assert.True(path.TryGetProperty("get", out _));
         Assert.True(path.TryGetProperty("put", out _));
         var rentalSchema = swagger.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("Rental").GetProperty("properties");

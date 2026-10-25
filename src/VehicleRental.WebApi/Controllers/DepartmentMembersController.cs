@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Car_Rental_System_BE.WebApi.Controllers;
 
 [ApiController]
-[Route("api/departments/{departmentId:int}/members")]
+[Route("api/department/{departmentId:int}/member")]
 [Authorize(Policy = AuthorizationPolicies.Management)]
 public sealed class DepartmentMembersController(IStaffService staff) : ControllerBase
 {

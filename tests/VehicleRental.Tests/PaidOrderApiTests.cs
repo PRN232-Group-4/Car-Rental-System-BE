@@ -51,7 +51,7 @@ public sealed class PaidOrderApiTests : IAsyncLifetime
     [InlineData(null, 401)]
     public async Task Only_customer_service_roles_can_confirm_cash(string? role, int status)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/invoices/55/cash-confirmation");
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/invoice/55/cash-confirmation");
         if (role is not null) request.Headers.Add("X-Test-Role", role);
         using var response = await _client.SendAsync(request);
         using var json = await Envelope(response, status);
@@ -66,11 +66,11 @@ public sealed class PaidOrderApiTests : IAsyncLifetime
     [Fact]
     public async Task Cash_id_validation_and_detail_schema_are_documented_and_serialized()
     {
-        using var invalid = new HttpRequestMessage(HttpMethod.Post, "/api/invoices/0/cash-confirmation");
+        using var invalid = new HttpRequestMessage(HttpMethod.Post, "/api/invoice/0/cash-confirmation");
         invalid.Headers.Add("X-Test-Role", "Admin");
         using var response = await _client.SendAsync(invalid);
         using var error = await Envelope(response, 400);
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/invoices/55");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/invoice/55");
         request.Headers.Add("X-Test-Role", "Customer");
         using var detailResponse = await _client.SendAsync(request);
         using var detail = await Envelope(detailResponse, 200);
@@ -79,11 +79,11 @@ public sealed class PaidOrderApiTests : IAsyncLifetime
         Assert.Equal(JsonValueKind.Null, detail.RootElement.GetProperty("data").GetProperty("orderId").ValueKind);
         using var swaggerResponse = await _client.GetAsync("/swagger/v1/swagger.json");
         using var swagger = JsonDocument.Parse(await swaggerResponse.Content.ReadAsStringAsync());
-        Assert.True(swagger.RootElement.GetProperty("paths").TryGetProperty("/api/invoices/{invoiceId}/cash-confirmation", out _));
+        Assert.True(swagger.RootElement.GetProperty("paths").TryGetProperty("/api/invoice/{invoiceId}/cash-confirmation", out _));
         var schema = swagger.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("InvoiceDetail");
         Assert.Equal("boolean", schema.GetProperty("properties").GetProperty("canPay").GetProperty("type").GetString());
         Assert.Equal("boolean", schema.GetProperty("properties").GetProperty("canConfirmCash").GetProperty("type").GetString());
-        Assert.True(swagger.RootElement.GetProperty("paths").TryGetProperty("/api/invoices/{invoiceId}/staff-checkout", out _));
+        Assert.True(swagger.RootElement.GetProperty("paths").TryGetProperty("/api/invoice/{invoiceId}/staff-checkout", out _));
     }
 
     [Theory]
@@ -97,7 +97,7 @@ public sealed class PaidOrderApiTests : IAsyncLifetime
     [InlineData(null, 401)]
     public async Task Staff_overtime_checkout_has_scoped_authorization_and_envelope(string? role, int status)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/invoices/55/staff-checkout");
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/invoice/55/staff-checkout");
         if (role is not null) request.Headers.Add("X-Test-Role", role);
         using var response = await _client.SendAsync(request);
         using var json = await Envelope(response, status);

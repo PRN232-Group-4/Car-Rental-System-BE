@@ -27,7 +27,7 @@ public sealed class VehicleSearchController(VehicleSearchService service) : Cont
     }
 
     [AllowAnonymous]
-    [HttpGet("vehicles/{id:int}/availability")]
+    [HttpGet("vehicle/{id:int}/availability")]
     [ProducesResponseType<AvailabilityResult>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Availability(int id, [FromQuery] DateTime? from, [FromQuery] DateTime? to, CancellationToken ct)
@@ -37,7 +37,7 @@ public sealed class VehicleSearchController(VehicleSearchService service) : Cont
     }
 
     [AllowAnonymous]
-    [HttpGet("vehicles/{id:int}/busy-slots")]
+    [HttpGet("vehicle/{id:int}/busy-slots")]
     [ProducesResponseType<IReadOnlyList<BusySlot>>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -48,7 +48,7 @@ public sealed class VehicleSearchController(VehicleSearchService service) : Cont
     }
 
     [AllowAnonymous]
-    [HttpGet("vehicle-types/{id:int}/active-policy")]
+    [HttpGet("vehicle-type/{id:int}/active-policy")]
     [ProducesResponseType<ActiveRentalPolicy>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ActivePolicy(int id, CancellationToken ct)
@@ -58,7 +58,7 @@ public sealed class VehicleSearchController(VehicleSearchService service) : Cont
     }
 
     [Authorize(Roles = "Admin,Manager,Staff,CustomerService,Maintenance")]
-    [HttpGet("vehicles/{id:int}/affected-rentals")]
+    [HttpGet("vehicle/{id:int}/affected-rentals")]
     [ProducesResponseType<IReadOnlyList<AffectedRental>>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> AffectedRentals(int id, CancellationToken ct)

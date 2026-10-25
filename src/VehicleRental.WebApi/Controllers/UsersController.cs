@@ -21,7 +21,7 @@ public sealed class UsersController(IUserAdministrationService users) : Controll
     [ProducesResponseType<AdministrativeUserPage>(StatusCodes.Status200OK)]
     public Task<IActionResult> List([FromQuery] UserListQuery query, CancellationToken ct) => ExecuteAsync(async () => Ok(await users.ListAsync(query, ct)));
 
-    [HttpGet("{id:int}")]
+    [HttpGet("~/api/user/{id:int}")]
     [ProducesResponseType<AdministrativeUser>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public Task<IActionResult> Get([Range(1, int.MaxValue)] int id, CancellationToken ct) => ExecuteAsync(async () =>
@@ -30,28 +30,28 @@ public sealed class UsersController(IUserAdministrationService users) : Controll
         return user is null ? Problem("User was not found.", statusCode: 404) : Ok(user);
     });
 
-    [HttpPatch("{id:int}/status")]
+    [HttpPatch("~/api/user/{id:int}/status")]
     [ProducesResponseType<AdministrativeUser>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public Task<IActionResult> SetStatus([Range(1, int.MaxValue)] int id, UserStatusRequest request, CancellationToken ct) =>
         ExecuteAsync(async () => Ok(await users.SetStatusAsync(id, request, ActorId(), ct)));
 
-    [HttpPost("{id:int}/roles")]
+    [HttpPost("~/api/user/{id:int}/roles")]
     [ProducesResponseType<AdministrativeUser>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public Task<IActionResult> AddRole([Range(1, int.MaxValue)] int id, UserRoleRequest request, CancellationToken ct) =>
         ExecuteAsync(async () => Ok(await users.SetRoleAsync(id, request.Role, true, ActorId(), ct)));
 
-    [HttpDelete("{id:int}/roles")]
+    [HttpDelete("~/api/user/{id:int}/roles")]
     [ProducesResponseType<AdministrativeUser>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public Task<IActionResult> RemoveRole([Range(1, int.MaxValue)] int id, [FromBody] UserRoleRequest request, CancellationToken ct) =>
         ExecuteAsync(async () => Ok(await users.SetRoleAsync(id, request.Role, false, ActorId(), ct)));
 
-    [HttpPost("{id:int}/sessions/revoke")]
+    [HttpPost("~/api/user/{id:int}/sessions/revoke")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public Task<IActionResult> RevokeSessions([Range(1, int.MaxValue)] int id, CancellationToken ct) => ExecuteAsync(async () =>

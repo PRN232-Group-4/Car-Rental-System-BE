@@ -35,6 +35,17 @@ integration mới phục vụ kiểm chứng EF; không tính vào số file mã
 
 ## Các nhóm giữ riêng
 
+### Bổ sung Customer detail — 2026-10-25
+
+Gộp tiếp `CustomerService.Detail.cs` vào `CustomerService.cs` và
+`CustomersController.Detail.cs` vào `CustomersController.cs`, bỏ `partial` không còn cần thiết.
+Giảm thêm 2 file: tổng số source `.cs` trong `src` **236 → 234**;
+Application **120 → 119**. Tổng các đợt gộp giảm **14 file**.
+Không còn file `*Detail*` trong `src`; giữ DTO `CustomerDetail` cùng các test detail
+vì contract và phạm vi kiểm chứng vẫn có ý nghĩa riêng.
+
+### Các trách nhiệm tiếp tục giữ riêng
+
 - Service interface, repository interface và implementation: thuộc các trách nhiệm
   và chiều phụ thuộc khác nhau; số dòng ít không đủ lý do để gộp chúng.
 - Options của các provider khác nhau: khác cấu hình, validation và vòng đời.

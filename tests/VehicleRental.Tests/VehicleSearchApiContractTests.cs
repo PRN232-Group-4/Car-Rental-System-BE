@@ -32,10 +32,10 @@ public sealed class VehicleSearchApiContractTests
 
     [Theory]
     [InlineData("Search", typeof(HttpGetAttribute), "vehicles/search", true)]
-    [InlineData("Availability", typeof(HttpGetAttribute), "vehicles/{id:int}/availability", true)]
-    [InlineData("BusySlots", typeof(HttpGetAttribute), "vehicles/{id:int}/busy-slots", true)]
-    [InlineData("ActivePolicy", typeof(HttpGetAttribute), "vehicle-types/{id:int}/active-policy", true)]
-    [InlineData("AffectedRentals", typeof(HttpGetAttribute), "vehicles/{id:int}/affected-rentals", false)]
+    [InlineData("Availability", typeof(HttpGetAttribute), "vehicle/{id:int}/availability", true)]
+    [InlineData("BusySlots", typeof(HttpGetAttribute), "vehicle/{id:int}/busy-slots", true)]
+    [InlineData("ActivePolicy", typeof(HttpGetAttribute), "vehicle-type/{id:int}/active-policy", true)]
+    [InlineData("AffectedRentals", typeof(HttpGetAttribute), "vehicle/{id:int}/affected-rentals", false)]
     public void Controller_endpoints_have_correct_routes_and_authorization(string actionName, Type httpMethodAttr, string template, bool isPublic)
     {
         var method = typeof(VehicleSearchController).GetMethod(actionName);

@@ -1,5 +1,9 @@
 # Tiến độ
 
+## Gộp Customer detail và tên API số ít/số nhiều — 2026-10-25
+
+Gộp hai partial detail còn lại của Customer vào controller/service chính; `src` giảm 236 → 234 file C#. API tập hợp giữ số nhiều, tài nguyên có ID dùng số ít; đồng bộ route, Location, Swagger metadata, FE adapters/schema và mock e2e. URL hợp đồng cũ đã lưu được chuẩn hóa khi đọc qua cả EF/ADO, không migration. Rà 179 controller actions không trùng route. Build warnings-as-errors đạt; toàn suite BE **1.254/1.254 pass, 0 fail/skip** trên PostgreSQL 18 tạm UTC; FE typecheck và **97/97 test liên quan** đạt. URL đổi không tương thích ngược, cần phát hành BE/FE đồng bộ. Xem [thay đổi](../changes/2026-10-25-file-consolidation-api-number.md), [ADR-013](decisions/ADR-013-api-resource-number.md). Chưa deploy.
+
 ## Entity Framework và gộp file — 2026-10-25
 
 Truy vấn đọc thông thường dùng LINQ/EF Core ở Infrastructure, mapping 46 bảng/3 view hiện có. Giữ SQL cho ghi, khóa và kiểm tra nội bộ trong transaction; không migration/deploy. Gộp 12 file nhỏ, tổng source `src` 246 → 236. Build solution và publish Release đạt 0 warning/error. Toàn suite **1.248/1.248 pass, 0 fail/skip** sau sửa 12 fixture/test lỗi cũ và thêm 3 ca kiểm tra từ chối quyền upload. Không nới điều kiện nghiệp vụ. Docker Desktop chưa mở được Linux engine dù đã thử khởi động, nên container chưa kiểm chứng. Xem [thay đổi](../changes/2026-10-25-entity-framework-read-queries.md), [ADR-012](decisions/ADR-012-entity-framework-read-queries.md) và [báo cáo gộp file](file-consolidation-review.md).
