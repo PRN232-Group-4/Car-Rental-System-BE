@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.DTOs.Accounts;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
@@ -7,37 +9,43 @@ namespace Car_Rental_System_BE.Infrastructure.Repositories;
 
 public sealed class NpgsqlRoleRepository(NpgsqlDataSource dataSource) : IRoleRepository
 {
-    private const string Select = """
-        SELECT r.id,r.name,(SELECT COUNT(DISTINCT ur.user_id)::int FROM user_roles ur WHERE ur.role_id=r.id)
-        FROM roles r
-        """;
-    private const string Filter = " WHERE ($1::text IS NULL OR r.name ILIKE '%'||$1||'%' OR r.id::text=$1)";
-
     public async Task<RolePage> ListAsync(RoleListQuery query, CancellationToken ct)
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, ct);
-        await using var count = new NpgsqlCommand("SELECT COUNT(*)::int FROM roles r" + Filter, connection, transaction);
-        count.Parameters.AddWithValue((object?)query.Search ?? DBNull.Value);
-        var total = (int)(await count.ExecuteScalarAsync(ct))!;
-        await using var command = new NpgsqlCommand(Select + Filter + " ORDER BY r.id DESC LIMIT $2 OFFSET $3", connection, transaction);
-        command.Parameters.AddWithValue((object?)query.Search ?? DBNull.Value);
-        command.Parameters.AddWithValue(query.PageSize);
-        command.Parameters.AddWithValue(((long)query.Page - 1) * query.PageSize);
-        var items = new List<RoleDetails>();
-        await using (var reader = await command.ExecuteReaderAsync(ct))
-            while (await reader.ReadAsync(ct)) items.Add(Read(reader));
+        await using var db = VehicleRentalDbContext.Create(connection, transaction);
+        var filtered = db.Set<RolesRow>().Where(role => query.Search == null ||
+            EF.Functions.ILike(role.Name, "%" + query.Search + "%") || role.Id.ToString() == query.Search);
+        var total = await filtered.CountAsync(ct);
+        var offset = ((long)query.Page - 1) * query.PageSize;
+        var rows = offset >= total ? [] : await filtered.OrderByDescending(role => role.Id)
+            .Skip((int)offset).Take(query.PageSize)
+            .Select(role => new { role.Id, role.Name,
+                Count = db.Set<UserRolesRow>().Where(member => member.RoleId == role.Id)
+                    .Select(member => member.UserId).Distinct().Count() }).ToListAsync(ct);
+        var items = rows.Select(row => Details(row.Id, row.Name, row.Count)).ToList();
         await transaction.CommitAsync(ct);
         return new(items, query.Page, query.PageSize, total);
     }
 
     public async Task<RoleDetails?> FindAsync(int id, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand(Select + " WHERE r.id=$1");
-        command.Parameters.AddWithValue(id);
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        return await reader.ReadAsync(ct) ? Read(reader) : null;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await FindAsync(db, id, ct);
     }
+
+    private static async Task<RoleDetails?> FindAsync(VehicleRentalDbContext db, int id, CancellationToken ct)
+    {
+        var row = await db.Set<RolesRow>().Where(role => role.Id == id)
+            .Select(role => new { role.Id, role.Name,
+                Count = db.Set<UserRolesRow>().Where(member => member.RoleId == role.Id)
+                    .Select(member => member.UserId).Distinct().Count() }).FirstOrDefaultAsync(ct);
+        return row is null ? null : Details(row.Id, row.Name, row.Count);
+    }
+
+    private static RoleDetails Details(int id, string name, int count) => new(id, name,
+        new[] { "Admin", "Manager", "Staff", "CustomerService", "Driver", "Maintenance", "Customer" }
+            .Contains(name, StringComparer.OrdinalIgnoreCase), count);
 
     public Task<RoleDetails> CreateAsync(string name, CancellationToken ct) => MutateAsync(async (connection, transaction) =>
     {
@@ -96,25 +104,16 @@ public sealed class NpgsqlRoleRepository(NpgsqlDataSource dataSource) : IRoleRep
 
     private static async Task EnsureUniqueAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string name, int? exceptId, CancellationToken ct)
     {
-        await using var command = new NpgsqlCommand("SELECT EXISTS(SELECT 1 FROM roles WHERE lower(name)=lower($1) AND ($2::int IS NULL OR id<>$2))", connection, transaction);
-        command.Parameters.AddWithValue(name);
-        command.Parameters.AddWithValue((object?)exceptId ?? DBNull.Value);
-        if ((bool)(await command.ExecuteScalarAsync(ct))!) throw new ConflictException("role_name_exists", "A role with this name already exists.");
+        await using var db = VehicleRentalDbContext.Create(connection, transaction);
+        if (await db.Set<RolesRow>().AnyAsync(role => role.Name.ToLower() == name.ToLower() &&
+                (exceptId == null || role.Id != exceptId), ct))
+            throw new ConflictException("role_name_exists", "A role with this name already exists.");
     }
 
     private static async Task<RoleDetails> RequireAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int id, CancellationToken ct)
     {
-        await using var command = new NpgsqlCommand(Select + " WHERE r.id=$1", connection, transaction);
-        command.Parameters.AddWithValue(id);
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        return await reader.ReadAsync(ct) ? Read(reader) : throw new NotFoundException("role_not_found", "Role was not found.");
+        await using var db = VehicleRentalDbContext.Create(connection, transaction);
+        return await FindAsync(db, id, ct) ?? throw new NotFoundException("role_not_found", "Role was not found.");
     }
 
-    private static RoleDetails Read(NpgsqlDataReader reader)
-    {
-        var name = reader.GetString(1);
-        var system = new[] { "Admin", "Manager", "Staff", "CustomerService", "Driver", "Maintenance", "Customer" }
-            .Contains(name, StringComparer.OrdinalIgnoreCase);
-        return new(reader.GetInt32(0), name, system, reader.GetInt32(2));
-    }
 }

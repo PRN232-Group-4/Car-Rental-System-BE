@@ -10,7 +10,7 @@ public sealed class SubscriptionRentalTests(PostgresFixture db) : IClassFixture<
     [Fact]
     public async Task Subscription_rental_deducts_remaining_hours()
     {
-        var (_, email) = await Seed.CustomerAsync(db.DataSource, licenseStatus: "pending");
+        var (_, email) = await Seed.CustomerAsync(db.DataSource, licenseStatus: "approved");
         var vehicle = await Seed.VehicleAsync(db.DataSource);
         var plan = await Seed.PlanAsync(db.DataSource, includedHours: 100m);
         var subscription = await _operations.BuyPlanAsync(email, plan, CancellationToken.None);
@@ -24,22 +24,23 @@ public sealed class SubscriptionRentalTests(PostgresFixture db) : IClassFixture<
     [Fact]
     public async Task Subscription_rental_beyond_remaining_hours_is_rejected_without_deducting()
     {
-        var (_, email) = await Seed.CustomerAsync(db.DataSource, licenseStatus: "pending");
+        var (_, email) = await Seed.CustomerAsync(db.DataSource, licenseStatus: "approved");
         var vehicle = await Seed.VehicleAsync(db.DataSource);
         var plan = await Seed.PlanAsync(db.DataSource, includedHours: 1m);
         var subscription = await _operations.BuyPlanAsync(email, plan, CancellationToken.None);
         var start = DateTime.UtcNow.AddHours(1);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             _operations.CreateRentalAsync(email, vehicle, null, "hourly", start, start.AddHours(2), true, subscription, false, CancellationToken.None));
 
+        Assert.Equal("Subscription does not have enough remaining hours.", error.Message);
         Assert.Equal(1m, await RemainingHoursAsync(subscription));
     }
 
     [Fact]
     public async Task Concurrent_subscription_rentals_cannot_double_deduct()
     {
-        var (_, email) = await Seed.CustomerAsync(db.DataSource, licenseStatus: "pending");
+        var (_, email) = await Seed.CustomerAsync(db.DataSource, licenseStatus: "approved");
         var vehicle = await Seed.VehicleAsync(db.DataSource);
         var plan = await Seed.PlanAsync(db.DataSource, includedHours: 100m);
         var subscription = await _operations.BuyPlanAsync(email, plan, CancellationToken.None);

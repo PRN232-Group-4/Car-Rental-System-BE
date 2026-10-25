@@ -1,6 +1,8 @@
 # Kiến trúc
 
-API là modular monolith theo Clean Architecture: Web API gọi Application; Application chỉ biết Domain và các port; Infrastructure hiện thực Npgsql, Redis, Brevo. Dependency đi vào trong, composition ở `Program.cs`.
+API là modular monolith theo Clean Architecture: Web API gọi Application; Application chỉ biết Domain và các port; Infrastructure hiện thực EF Core/PostgreSQL, Redis, Brevo. Dependency đi vào trong, composition ở `Program.cs`.
+
+Từ 2026-10-25, truy vấn đọc thông thường dùng LINQ qua `Persistence/VehicleRentalDbContext` với no-tracking. Row ánh xạ bảng/view hiện có được gom trong `PersistenceRows.cs`; không thêm FK hoặc EF migration. SQL còn dùng cho ghi dữ liệu và kiểm tra/khóa trong transaction. Xem [ADR-012](decisions/ADR-012-entity-framework-read-queries.md) và [rà soát gộp file](file-consolidation-review.md).
 
 ## Services và Repositories
 
@@ -27,7 +29,7 @@ src/
     └── Program.cs         # Composition root và DI
 ```
 
-Luồng gọi: `Controller → Application Service → Repository interface → Npgsql Repository → PostgreSQL`.
+Luồng gọi: `Controller → Application Service → Repository interface → EF Core query / Npgsql transaction → PostgreSQL`.
 Chiều tham chiếu compile-time vẫn đi vào trong: Domain độc lập; Application chỉ tham chiếu Domain;
 Infrastructure tham chiếu Application; WebApi tham chiếu Application/Infrastructure để composition.
 

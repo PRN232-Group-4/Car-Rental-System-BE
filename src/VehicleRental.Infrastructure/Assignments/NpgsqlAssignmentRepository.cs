@@ -7,6 +7,8 @@ using Car_Rental_System_BE.Infrastructure.Availability;
 using Npgsql;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using NpgsqlTypes;
+using Microsoft.EntityFrameworkCore;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 
 namespace Car_Rental_System_BE.Infrastructure.Assignments;
 
@@ -14,41 +16,25 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
 {
     public async Task<RentalScheduleInfo?> GetRentalScheduleAsync(int rentalId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand($"""
-            SELECT r.id, r.vehicle_id, v.vehicle_type_id, v.facility_id, r.status,
-                   COALESCE(h.has_driver, l.has_driver, false) AS has_driver,
-                   r.customer_id,
-                   COALESCE(h.start_time, l.start_time) AS start_time,
-                   COALESCE(h.end_time, l.end_time) AS end_time,
-                   CASE WHEN {CustomerLicenseSql.Eligible("c.id", "v.id", "COALESCE(h.end_time,l.end_time)::date")} THEN 'approved' ELSE 'none' END,
-                   COALESCE(h.end_time,l.end_time)::date
-            FROM rentals r
-            JOIN vehicles v ON v.id = r.vehicle_id
-            JOIN customers c ON c.id = r.customer_id
-            LEFT JOIN hour_rental_detail h ON h.rental_id = r.id
-            LEFT JOIN longterm_rental_contract l ON l.rental_id = r.id
-            WHERE r.id = @id
-            """);
-        cmd.Parameters.AddWithValue("id", rentalId);
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct)) return null;
-
-        var start = reader.IsDBNull(7) ? DateTime.MinValue : reader.GetDateTime(7);
-        var end = reader.IsDBNull(8) ? DateTime.MinValue : reader.GetDateTime(8);
-
-        return new RentalScheduleInfo(
-            RentalId: reader.GetInt32(0),
-            VehicleId: reader.GetInt32(1),
-            VehicleTypeId: reader.GetInt32(2),
-            FacilityId: reader.IsDBNull(3) ? null : reader.GetInt32(3),
-            Status: reader.GetString(4),
-            HasDriver: reader.GetBoolean(5),
-            CustomerId: reader.GetInt32(6),
-            StartTime: start,
-            EndTime: end,
-            CustomerLicenseStatus: reader.IsDBNull(9) ? null : reader.GetString(9),
-            CustomerLicenseExpiry: reader.IsDBNull(10) ? null : reader.GetFieldValue<DateOnly>(10));
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await (from r in db.Set<RentalsRow>().AsNoTracking()
+            join v in db.Set<VehiclesRow>() on r.VehicleId equals v.Id
+            join c in db.Set<CustomersRow>() on r.CustomerId equals c.Id
+            join h in db.Set<HourRentalDetailRow>() on r.Id equals h.RentalId into hourly
+            from h in hourly.DefaultIfEmpty()
+            join l in db.Set<LongtermRentalContractRow>() on r.Id equals l.RentalId into longterm
+            from l in longterm.DefaultIfEmpty()
+            let start = h.StartTime ?? l.StartTime
+            let end = h.EndTime ?? l.EndTime
+            where r.Id == rentalId
+            select new RentalScheduleInfo(r.Id, r.VehicleId, v.VehicleTypeId, v.FacilityId, r.Status,
+                (bool?)h.HasDriver ?? (bool?)l.HasDriver ?? false, r.CustomerId,
+                start ?? DateTime.MinValue, end ?? DateTime.MinValue,
+                db.Set<CustomerLicenseRecordsRow>().Any(cl => cl.CustomerId == c.Id && cl.Status == "approved" &&
+                    cl.ExpiryDate >= DateOnly.FromDateTime(DateTime.Today) &&
+                    (end == null || cl.ExpiryDate >= DateOnly.FromDateTime(end.Value)) &&
+                    (v.AllowedLicenseTypes.Length == 0 || v.AllowedLicenseTypes.Contains(cl.Type.Trim().ToUpper()))) ? "approved" : "none",
+                end == null ? null : DateOnly.FromDateTime(end.Value))).FirstOrDefaultAsync(ct);
     }
 
     private static async Task RequireLicenseAsync(NpgsqlConnection connection, NpgsqlTransaction tx, RentalScheduleInfo rental, int vehicleId, CancellationToken ct)
@@ -66,51 +52,32 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
 
     public async Task<bool> HasPassedPreInspectionAsync(int rentalId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT EXISTS (
-                SELECT 1 FROM inspections
-                WHERE rental_id = @id AND inspection_type = 'pre_rental' AND is_ok = true
-            )
-            """);
-        cmd.Parameters.AddWithValue("id", rentalId);
-        return (bool)(await cmd.ExecuteScalarAsync(ct))!;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<InspectionsRow>().AnyAsync(x => x.RentalId == rentalId && x.InspectionType == "pre_rental" && x.IsOk == true, ct);
     }
-
     public async Task<bool> HasAnyAssignmentAsync(int rentalId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT EXISTS (SELECT 1 FROM vehicle_assignments WHERE rental_id = @id)
-            """);
-        cmd.Parameters.AddWithValue("id", rentalId);
-        return (bool)(await cmd.ExecuteScalarAsync(ct))!;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<VehicleAssignmentsRow>().AnyAsync(x => x.RentalId == rentalId, ct);
     }
-
     public async Task<IReadOnlyList<AssignmentResponse>> ListAssignmentsAsync(int rentalId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT va.id, va.rental_id, va.vehicle_id, va.driver_staff_id,
-                   COALESCE(u.fullname, u.email) AS driver_name,
-                   va.status, va.reason, va.note, va.supersedes_id,
-                   va.starts_at, va.ends_at, va.ended_at, va.assigned_at, va.assigned_by,
-                   concat_ws(' ',v.brand,v.model), v.license_plate, va.buffer_minutes
-            FROM vehicle_assignments va
-            LEFT JOIN vehicles v ON v.id=va.vehicle_id
-            LEFT JOIN staffs s ON s.id = va.driver_staff_id
-            LEFT JOIN users u ON u.id = s.user_id
-            WHERE va.rental_id = @id
-            ORDER BY va.assigned_at DESC, va.id DESC
-            """);
-        cmd.Parameters.AddWithValue("id", rentalId);
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        var result = new List<AssignmentResponse>();
-
-        while (await reader.ReadAsync(ct))
-        {
-            result.Add(ReadAssignmentResponse(reader));
-        }
-
-        return result;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await (from a in db.Set<VehicleAssignmentsRow>().AsNoTracking()
+            join v in db.Set<VehiclesRow>() on a.VehicleId equals v.Id into vehicles
+            from v in vehicles.DefaultIfEmpty()
+            join st in db.Set<StaffsRow>() on a.DriverStaffId equals st.Id into staffs
+            from st in staffs.DefaultIfEmpty()
+            join u in db.Set<UsersRow>() on st.UserId equals u.Id into users
+            from u in users.DefaultIfEmpty()
+            where a.RentalId == rentalId
+            orderby a.AssignedAt descending, a.Id descending
+            select new AssignmentResponse(a.Id, a.RentalId, a.VehicleId, a.DriverStaffId,
+                u.Fullname ?? u.Email, a.Status, a.Reason, a.Note, a.SupersedesId,
+                a.StartsAt ?? DateTime.MinValue, a.EndsAt ?? DateTime.MinValue, a.EndedAt,
+                a.AssignedAt, a.AssignedBy,
+                v.Brand == null ? (v.Model ?? "") : v.Model == null ? v.Brand : v.Brand + " " + v.Model,
+                v.LicensePlate, a.BufferMinutes)).ToListAsync(ct);
     }
 
     public async Task<AssignmentResponse> AssignDriverAsync(
@@ -199,12 +166,9 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
             string? driverName = null;
             if (driverStaffId is not null)
             {
-                await using var nameCmd = new NpgsqlCommand("""
-                    SELECT COALESCE(u.fullname, u.email) FROM staffs s
-                    JOIN users u ON u.id = s.user_id WHERE s.id = @id
-                    """, connection, tx);
-                nameCmd.Parameters.AddWithValue("id", driverStaffId.Value);
-                driverName = (string?)await nameCmd.ExecuteScalarAsync(ct);
+                await using var db = VehicleRentalDbContext.Create(connection, tx);
+                driverName = await (from st in db.Set<StaffsRow>() join u in db.Set<UsersRow>() on st.UserId equals u.Id
+                    where st.Id == driverStaffId select u.Fullname ?? u.Email).FirstOrDefaultAsync(ct);
             }
 
             var vehicleInfo = await VehicleInfoAsync(connection, tx, rental.VehicleId, ct);
@@ -361,12 +325,9 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
             string? driverName = null;
             if (newDriverStaffId is not null)
             {
-                await using var nameCmd = new NpgsqlCommand("""
-                    SELECT COALESCE(u.fullname, u.email) FROM staffs s
-                    JOIN users u ON u.id = s.user_id WHERE s.id = @id
-                    """, connection, tx);
-                nameCmd.Parameters.AddWithValue("id", newDriverStaffId.Value);
-                driverName = (string?)await nameCmd.ExecuteScalarAsync(ct);
+                await using var db = VehicleRentalDbContext.Create(connection, tx);
+                driverName = await (from st in db.Set<StaffsRow>() join u in db.Set<UsersRow>() on st.UserId equals u.Id
+                    where st.Id == newDriverStaffId select u.Fullname ?? u.Email).FirstOrDefaultAsync(ct);
             }
 
             var vehicleInfo = await VehicleInfoAsync(connection, tx, newVehicleId, ct);
@@ -429,128 +390,45 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
     }
 
     public async Task<IReadOnlyList<DriverCandidateRaw>> ListDriverCandidatesAsync(
-        DateTime windowStart,
-        DateTime windowEnd,
-        int bufferMinutes,
-        int? excludeRentalId,
-        CancellationToken ct)
+        DateTime windowStart, DateTime windowEnd, int bufferMinutes, int? excludeRentalId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT s.id, COALESCE(u.fullname, u.email), u.avatar,
-                   s.is_driver, u.is_active, s.license_expiry_date,
-                   EXISTS(
-                       SELECT 1 FROM vehicle_assignments va
-                       WHERE va.driver_staff_id = s.id
-                         AND va.status = 'assigned'
-                         AND (@excludeId::int IS NULL OR va.rental_id <> @excludeId)
-                         AND va.period && tsrange(@from, @to + make_interval(mins => @buffer), '[)')
-                   ) AS has_conflict, s.rating
-            FROM staffs s
-            JOIN users u ON u.id = s.user_id
-            WHERE s.is_driver = true
-            ORDER BY s.id ASC
-            """);
-
-        cmd.Parameters.Add(Sql.Timestamp("from", windowStart));
-        cmd.Parameters.Add(Sql.Timestamp("to", windowEnd));
-        cmd.Parameters.AddWithValue("buffer", bufferMinutes);
-        cmd.Parameters.AddWithValue("excludeId", (object?)excludeRentalId ?? DBNull.Value);
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        var result = new List<DriverCandidateRaw>();
-
-        while (await reader.ReadAsync(ct))
-        {
-            result.Add(new DriverCandidateRaw(
-                StaffId: reader.GetInt32(0),
-                FullName: reader.GetString(1),
-                AvatarUrl: reader.IsDBNull(2) ? null : reader.GetString(2),
-                Rating: reader.IsDBNull(7) ? null : reader.GetDecimal(7),
-                IsDriver: reader.GetBoolean(3),
-                IsActive: reader.GetBoolean(4),
-                LicenseExpiry: reader.IsDBNull(5) ? null : reader.GetFieldValue<DateOnly>(5),
-                HasScheduleConflict: reader.GetBoolean(6)));
-        }
-
-        return result;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var range = NpgsqlVehicleSearchRepository.Range(windowStart, windowEnd.AddMinutes(bufferMinutes));
+        return await (from st in db.Set<StaffsRow>().AsNoTracking()
+            join u in db.Set<UsersRow>() on st.UserId equals u.Id
+            where st.IsDriver
+            orderby st.Id
+            select new DriverCandidateRaw(st.Id, u.Fullname ?? u.Email, u.Avatar, st.Rating, st.IsDriver, u.IsActive,
+                st.LicenseExpiryDate,
+                db.Set<VehicleAssignmentsRow>().Any(a => a.DriverStaffId == st.Id && a.Status == "assigned" &&
+                    (excludeRentalId == null || a.RentalId != excludeRentalId) && a.Period != null && a.Period!.Value.Overlaps(range))))
+            .ToListAsync(ct);
     }
 
     public async Task<IReadOnlyList<AssignableVehicleItem>> ListAssignableVehiclesAsync(
-        int vehicleTypeId,
-        int? currentFacilityId,
-        DateTime windowStart,
-        DateTime windowEnd,
-        int bufferMinutes,
-        int excludeVehicleId,
-        CancellationToken ct)
+        int vehicleTypeId, int? currentFacilityId, DateTime windowStart, DateTime windowEnd,
+        int bufferMinutes, int excludeVehicleId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT v.id, v.vehicle_type_id, t.name, v.brand, v.model,
-                   v.year_of_manufacture, v.color, v.facility_id, f.name,
-                   v.rental_price_hourly, v.rental_price_longterm,
-                   (v.facility_id IS NOT NULL AND v.facility_id = @currentFacilityId) AS is_same_facility
-            FROM vehicles v
-            JOIN vehicle_types t ON t.id = v.vehicle_type_id
-            LEFT JOIN facilities f ON f.id = v.facility_id
-            WHERE v.vehicle_type_id = @typeId
-              AND v.status IN ('available', 'renting')
-              AND v.id <> @excludeVehicleId
-              AND NOT EXISTS (
-                  SELECT 1 FROM vehicle_bookings vb
-                  WHERE vb.vehicle_id = v.id AND vb.is_blocking
-                    AND vb.period && tsrange(@from, @to + make_interval(mins => @buffer), '[)')
-              )
-              AND NOT EXISTS (
-                  SELECT 1 FROM v_vehicle_maintenance_blocks mb
-                  WHERE mb.vehicle_id = v.id
-                    AND mb.blocked_range && tsrange(@from, @to, '[)')
-              )
-            ORDER BY is_same_facility DESC, v.year_of_manufacture DESC NULLS LAST, v.id ASC
-            LIMIT 50
-            """);
-
-        cmd.Parameters.AddWithValue("typeId", vehicleTypeId);
-        cmd.Parameters.AddWithValue("currentFacilityId", (object?)currentFacilityId ?? DBNull.Value);
-        cmd.Parameters.Add(Sql.Timestamp("from", windowStart));
-        cmd.Parameters.Add(Sql.Timestamp("to", windowEnd));
-        cmd.Parameters.AddWithValue("buffer", bufferMinutes);
-        // Exclude the current vehicle assigned to the rental
-        cmd.Parameters.AddWithValue("excludeVehicleId", excludeVehicleId);
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        var result = new List<AssignableVehicleItem>();
-
-        while (await reader.ReadAsync(ct))
-        {
-            result.Add(new AssignableVehicleItem(
-                VehicleId: reader.GetInt32(0),
-                VehicleTypeId: reader.GetInt32(1),
-                VehicleTypeName: reader.GetString(2),
-                Brand: reader.IsDBNull(3) ? null : reader.GetString(3),
-                Model: reader.IsDBNull(4) ? null : reader.GetString(4),
-                Year: reader.IsDBNull(5) ? null : reader.GetInt32(5),
-                Color: reader.IsDBNull(6) ? null : reader.GetString(6),
-                FacilityId: reader.IsDBNull(7) ? null : reader.GetInt32(7),
-                FacilityName: reader.IsDBNull(8) ? null : reader.GetString(8),
-                PriceHourly: reader.IsDBNull(9) ? null : reader.GetDecimal(9),
-                PriceLongterm: reader.IsDBNull(10) ? null : reader.GetDecimal(10),
-                IsSameFacility: reader.GetBoolean(11)));
-        }
-
-        return result;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var bookingRange = NpgsqlVehicleSearchRepository.Range(windowStart, windowEnd.AddMinutes(bufferMinutes));
+        var maintenanceRange = NpgsqlVehicleSearchRepository.Range(windowStart, windowEnd);
+        return await (from v in db.Set<VehiclesRow>().AsNoTracking()
+            join t in db.Set<VehicleTypesRow>() on v.VehicleTypeId equals t.Id
+            join f in db.Set<FacilitiesRow>() on v.FacilityId equals f.Id into facilities
+            from f in facilities.DefaultIfEmpty()
+            let sameFacility = v.FacilityId != null && currentFacilityId != null && v.FacilityId == currentFacilityId
+            where v.VehicleTypeId == vehicleTypeId && (v.Status == "available" || v.Status == "renting") && v.Id != excludeVehicleId &&
+                !db.Set<VehicleBookingsRow>().Any(b => b.VehicleId == v.Id && b.IsBlocking && b.Period != null && b.Period!.Value.Overlaps(bookingRange)) &&
+                !db.Set<VVehicleMaintenanceBlocksRow>().Any(m => m.VehicleId == v.Id && m.BlockedRange.Overlaps(maintenanceRange))
+            orderby sameFacility descending, v.YearOfManufacture.HasValue descending, v.YearOfManufacture descending, v.Id
+            select new AssignableVehicleItem(v.Id, v.VehicleTypeId, t.Name, v.Brand, v.Model, v.YearOfManufacture,
+                v.Color, v.FacilityId, f.Name, v.RentalPriceHourly, v.RentalPriceLongterm, sameFacility)).Take(50).ToListAsync(ct);
     }
-
     public async Task<bool> VehicleExistsAndActiveAsync(int vehicleId, int requiredTypeId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT EXISTS (
-                SELECT 1 FROM vehicles
-                WHERE id = @id AND vehicle_type_id = @typeId AND status IN ('available', 'renting')
-            )
-            """);
-        cmd.Parameters.AddWithValue("id", vehicleId);
-        cmd.Parameters.AddWithValue("typeId", requiredTypeId);
-        return (bool)(await cmd.ExecuteScalarAsync(ct))!;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<VehiclesRow>().AnyAsync(v => v.Id == vehicleId && v.VehicleTypeId == requiredTypeId &&
+            (v.Status == "available" || v.Status == "renting"), ct);
     }
 
     private static async Task RequireCurrentScheduleAsync(NpgsqlConnection connection, NpgsqlTransaction tx,
@@ -577,31 +455,10 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
 
     private static async Task<(string? Name, string? LicensePlate)> VehicleInfoAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int id, CancellationToken ct)
     {
-        await using var command = new NpgsqlCommand("SELECT NULLIF(concat_ws(' ',brand,model),''),license_plate FROM vehicles WHERE id=$1", connection, transaction);
-        command.Parameters.AddWithValue(id);
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        return await reader.ReadAsync(ct) ? (reader.IsDBNull(0)?null:reader.GetString(0),reader.IsDBNull(1)?null:reader.GetString(1)) : (null,null);
-    }
-
-    private static AssignmentResponse ReadAssignmentResponse(NpgsqlDataReader reader)
-    {
-        return new AssignmentResponse(
-            Id: reader.GetInt32(0),
-            RentalId: reader.GetInt32(1),
-            VehicleId: reader.GetInt32(2),
-            DriverStaffId: reader.IsDBNull(3) ? null : reader.GetInt32(3),
-            DriverName: reader.IsDBNull(4) ? null : reader.GetString(4),
-            Status: reader.GetString(5),
-            Reason: reader.IsDBNull(6) ? null : reader.GetString(6),
-            Note: reader.IsDBNull(7) ? null : reader.GetString(7),
-            SupersedesId: reader.IsDBNull(8) ? null : reader.GetInt32(8),
-            StartsAt: reader.IsDBNull(9) ? DateTime.MinValue : reader.GetDateTime(9),
-            EndsAt: reader.IsDBNull(10) ? DateTime.MinValue : reader.GetDateTime(10),
-            EndedAt: reader.IsDBNull(11) ? null : reader.GetDateTime(11),
-            AssignedAt: reader.GetDateTime(12),
-            AssignedBy: reader.IsDBNull(13) ? null : reader.GetString(13),
-            VehicleName: reader.IsDBNull(14) ? null : reader.GetString(14),
-            LicensePlate: reader.IsDBNull(15) ? null : reader.GetString(15),
-            BufferMinutes: reader.GetInt32(16));
+        await using var db = VehicleRentalDbContext.Create(connection, transaction);
+        var row = await db.Set<VehiclesRow>().Where(v => v.Id == id)
+            .Select(v => new { Name = v.Brand == null ? (v.Model ?? "") : v.Model == null ? v.Brand : v.Brand + " " + v.Model, v.LicensePlate })
+            .FirstOrDefaultAsync(ct);
+        return row == null ? (null, null) : (row.Name == "" ? null : row.Name, row.LicensePlate);
     }
 }

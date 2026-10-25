@@ -54,5 +54,5 @@ public sealed class ArchitectureTests
 
     private static bool IsExternalDependency(AssemblyName name) =>
         name.Name is "Npgsql" or "StackExchange.Redis" or "CloudinaryDotNet" ||
-        name.Name!.StartsWith("Microsoft.AspNetCore");
+        name.Name!.StartsWith("Microsoft.AspNetCore") || name.Name.StartsWith("Microsoft.EntityFrameworkCore") || name.Name.StartsWith("Npgsql.EntityFrameworkCore");
 }

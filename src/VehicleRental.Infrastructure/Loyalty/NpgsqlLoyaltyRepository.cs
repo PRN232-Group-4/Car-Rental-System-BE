@@ -1,4 +1,7 @@
 using System.Data;
+using System.Linq.Expressions;
+using Car_Rental_System_BE.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using System.Data.Common;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Loyalty;
@@ -11,80 +14,46 @@ public sealed class NpgsqlLoyaltyRepository(NpgsqlDataSource dataSource, TimePro
 {
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
 
+    private static readonly Expression<Func<CustomerLoyaltyTransactionsRow, LoyaltyTransactionDto>> TransactionProjection =
+        t => new LoyaltyTransactionDto(t.Id, t.CustomerId, t.RentalId, t.Type, t.Points, t.Reason,
+            t.RefType, t.RefId, t.IdempotencyKey, t.BalanceAfter, t.CreatedBy, t.CreatedAt);
+
     public async Task<bool> CustomerExistsAsync(int customerId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM customers WHERE id = $1)");
-        cmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Integer, Value = customerId });
-        var result = await cmd.ExecuteScalarAsync(ct);
-        return result is true;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<CustomersRow>().AnyAsync(c => c.Id == customerId, ct);
     }
 
     public async Task<int> GetCachedBalanceAsync(int customerId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("SELECT loyalty_point FROM customers WHERE id = $1");
-        cmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Integer, Value = customerId });
-        var result = await cmd.ExecuteScalarAsync(ct);
-        return result is int val ? val : 0;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<CustomersRow>().Where(c => c.Id == customerId).Select(c => c.LoyaltyPoint).FirstOrDefaultAsync(ct);
     }
 
     public async Task<int> GetLifetimeEarnedAsync(int customerId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT COALESCE(SUM(points), 0)::INTEGER
-            FROM customer_loyalty_transactions
-            WHERE customer_id = $1 AND type = 'earn'
-            """);
-        cmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Integer, Value = customerId });
-        var result = await cmd.ExecuteScalarAsync(ct);
-        return result is int val ? val : 0;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<CustomerLoyaltyTransactionsRow>().Where(t => t.CustomerId == customerId && t.Type == "earn")
+            .SumAsync(t => (int?)t.Points, ct) ?? 0;
     }
 
     public async Task<(IReadOnlyList<LoyaltyTransactionDto> Items, int TotalCount)> ListTransactionsAsync(
         int customerId, string? type, int page, int pageSize, CancellationToken ct)
     {
-        var filter = " WHERE customer_id = $1 AND ($2::text IS NULL OR type = $2::text)";
-
-        await using var countCmd = dataSource.CreateCommand("SELECT COUNT(*) FROM customer_loyalty_transactions" + filter);
-        countCmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Integer, Value = customerId });
-        countCmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Text, Value = (object?)type ?? DBNull.Value });
-        var countResult = await countCmd.ExecuteScalarAsync(ct);
-        var total = Convert.ToInt32(countResult);
-
-        var offset = (page - 1) * pageSize;
-        await using var selectCmd = dataSource.CreateCommand("""
-            SELECT id, customer_id, rental_id, type, points, reason, ref_type, ref_id, idempotency_key, balance_after, created_by, created_at
-            FROM customer_loyalty_transactions
-            """ + filter + " ORDER BY id DESC LIMIT $3 OFFSET $4");
-
-        selectCmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Integer, Value = customerId });
-        selectCmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Text, Value = (object?)type ?? DBNull.Value });
-        selectCmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Integer, Value = pageSize });
-        selectCmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Integer, Value = offset });
-
-        await using var reader = await selectCmd.ExecuteReaderAsync(ct);
-        var list = new List<LoyaltyTransactionDto>();
-        while (await reader.ReadAsync(ct))
-        {
-            list.Add(ReadTransaction(reader));
-        }
-
-        return (list, total);
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var query = db.Set<CustomerLoyaltyTransactionsRow>().Where(t => t.CustomerId == customerId && (type == null || t.Type == type));
+        var total = await query.CountAsync(ct);
+        var offset = ((long)page - 1) * pageSize;
+        if (offset >= total) return ([], total);
+        var items = await query.OrderByDescending(t => t.Id).Skip((int)offset).Take(pageSize).Select(TransactionProjection).ToListAsync(ct);
+        return (items, total);
     }
 
     public async Task<LoyaltyTransactionDto?> FindAdjustmentByIdempotencyKeyAsync(int customerId, string idempotencyKey, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT id, customer_id, rental_id, type, points, reason, ref_type, ref_id, idempotency_key, balance_after, created_by, created_at
-            FROM customer_loyalty_transactions
-            WHERE customer_id = $1 AND idempotency_key = $2
-            LIMIT 1
-            """);
-        cmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Integer, Value = customerId });
-        cmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Varchar, Value = idempotencyKey });
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct)) return null;
-        return ReadTransaction(reader);
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<CustomerLoyaltyTransactionsRow>().Where(t => t.CustomerId == customerId && t.IdempotencyKey == idempotencyKey)
+            .Select(TransactionProjection).FirstOrDefaultAsync(ct);
     }
 
     public async Task<LoyaltyTransactionDto> InsertAdjustmentAsync(
@@ -128,26 +97,9 @@ public sealed class NpgsqlLoyaltyRepository(NpgsqlDataSource dataSource, TimePro
 
     public async Task<IReadOnlyList<LoyaltyReconciliationDto>> GetReconciliationsAsync(CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT customer_id, cached, ledger_sum, drift
-            FROM v_loyalty_reconciliation
-            WHERE drift <> 0
-            ORDER BY customer_id
-            """);
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        var list = new List<LoyaltyReconciliationDto>();
-        while (await reader.ReadAsync(ct))
-        {
-            list.Add(new LoyaltyReconciliationDto(
-                CustomerId: reader.GetInt32(0),
-                Cached: reader.GetInt32(1),
-                LedgerSum: reader.GetInt32(2),
-                Drift: reader.GetInt32(3)
-            ));
-        }
-
-        return list;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<VLoyaltyReconciliationRow>().Where(r => r.Drift != 0).OrderBy(r => r.CustomerId)
+            .Select(r => new LoyaltyReconciliationDto(r.CustomerId, r.Cached, r.LedgerSum, r.Drift)).ToListAsync(ct);
     }
 
     public async Task<int?> AwardForRentalAsync(

@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 using Car_Rental_System_BE.Application.Services.Security;
 using Car_Rental_System_BE.Domain.Entities;
 using Car_Rental_System_BE.Domain.Interfaces;
@@ -9,9 +11,8 @@ public sealed class NpgsqlUserRepository(NpgsqlDataSource dataSource) : IUserRep
 {
     public async Task<bool> EmailExistsAsync(string email, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("SELECT EXISTS (SELECT 1 FROM users WHERE email = $1)");
-        command.Parameters.AddWithValue(email);
-        return (bool)(await command.ExecuteScalarAsync(ct))!;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<UsersRow>().AnyAsync(user => user.Email == email, ct);
     }
 
     public async Task CreateCustomerAsync(User user, CancellationToken ct)
@@ -31,10 +32,10 @@ public sealed class NpgsqlUserRepository(NpgsqlDataSource dataSource) : IUserRep
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
-        await using var find = new NpgsqlCommand("SELECT id FROM users WHERE email = $1", connection, transaction);
-        find.Parameters.AddWithValue(email);
-        var existing = await find.ExecuteScalarAsync(ct);
-        var userId = existing is int id ? id : await CreateGoogleUserAsync(connection, transaction, email, fullName, ct);
+        await using var db = VehicleRentalDbContext.Create(connection, transaction);
+        var existing = await db.Set<UsersRow>().Where(user => user.Email == email)
+            .Select(user => (int?)user.Id).FirstOrDefaultAsync(ct);
+        var userId = existing ?? await CreateGoogleUserAsync(connection, transaction, email, fullName, ct);
         await using var customer = new NpgsqlCommand("INSERT INTO customers (user_id) SELECT $1 WHERE NOT EXISTS (SELECT 1 FROM customers WHERE user_id = $1)", connection, transaction);
         customer.Parameters.AddWithValue(userId);
         await customer.ExecuteNonQueryAsync(ct);

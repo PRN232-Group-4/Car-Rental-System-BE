@@ -24,7 +24,7 @@ Admin/Manager nhận đủ tổng; CustomerService nhận rentals/inspections/li
 
 ## Bổ sung 21/10/2026: hồ sơ nhân viên và cơ sở hiện tại
 
-- POST `/api/staff/from-user` chỉ Admin: `{userId, departmentId?, facilityId?, hiredDate?, licenseNumber?, licenseType?, licenseIssueDate?, licenseExpiryDate?, licenseImageUrl?}`. userId bắt buộc, các ID phải dương. Trả 201 Staff; 400 validation/reference/GPLX, 404 tài khoản thiếu/khóa, 409 đã có hồ sơ, 401/403 quyền. Giữ identity/password/roles, thêm Staff marker, Driver suy ra từ roles lưu thật; non-driver không lưu GPLX. Response dùng envelope 6 trường và message theo ngữ cảnh.
+- POST `/api/staff/from-user` dành cho Admin/Manager: `{userId, departmentId?, facilityId?, hiredDate?, licenseNumber?, licenseType?, licenseIssueDate?, licenseExpiryDate?, licenseImageUrl?}`. userId bắt buộc, các ID phải dương. Trả 201 Staff; 400 validation/reference/GPLX, 404 tài khoản thiếu/khóa, 409 đã có hồ sơ, 401/403 quyền. Giữ identity/password/roles, thêm Staff marker, Driver suy ra từ roles lưu thật; non-driver không lưu GPLX. Response dùng envelope 6 trường và message theo ngữ cảnh.
 - Staff response thêm `roles: string[]`; `isDriver` phản ánh role Driver thực tế. GET staff/drivers vẫn phân trang theo contract chung.
 - GET `/api/account/profile` thêm `facilityName: string|null` từ cơ sở được phân công; mọi role xem cơ sở của chính mình, không mở rộng quyền directory.
 - GET/PUT inspection-assignment thêm `technicianEmail`; GET/POST/PUT maintenance thêm `assignedStaffEmail` và `facilityName` nullable để hiển thị trực tiếp.
@@ -272,7 +272,7 @@ Login:
 | --- | --- | --- | --- | --- |
 | POST | `/api/media/avatar` | Login | `file` | 200 / `StoredImage` |
 | POST | `/api/media/vehicle` | Management | `file` | 200 / `StoredImage` |
-| POST | `/api/media/staff-license` | Admin | `file` | 200 / `StoredImage` |
+| POST | `/api/media/staff-license` | Management (Admin/Manager) | `file` | 200 / `StoredImage` |
 | POST | `/api/media/inspection` | Inspection | `file` | 200 / `StoredImage` |
 | POST | `/api/media/report` | Nhân viên có quyền report + `staff_id` | `file` | 200 / `StoredImage` |
 
@@ -298,9 +298,9 @@ Avatar: file khác rỗng, tối đa **5 MiB**, MIME bắt đầu bằng `image/
 | GET | `/api/staff` | Management | `search?`, `page=1`, `pageSize=20` | 200 / `StaffPage` |
 | GET | `/api/staff/drivers` | Management | `search?`, `page=1`, `pageSize=20` | 200 / `StaffPage` |
 | GET | `/api/staff/{id}` | Management | Không | 200 / `Staff` |
-| POST | `/api/staff` | Admin | `CreateStaffRequest` | 201 / `Staff` |
-| PUT | `/api/staff/{id}` | Admin | `UpdateStaffRequest` | 200 / `Staff` |
-| DELETE | `/api/staff/{id}` | Admin | Không | 200 / null; deactivate |
+| POST | `/api/staff` | Management (Admin/Manager) | `CreateStaffRequest` | 201 / `Staff` |
+| PUT | `/api/staff/{id}` | Management (Admin/Manager) | `UpdateStaffRequest` | 200 / `Staff` |
+| DELETE | `/api/staff/{id}` | Management (Admin/Manager) | Không | 200 / null; deactivate |
 | GET | `/api/departments` | Management | Không | 200 / `OrganizationUnit[]` |
 | POST | `/api/departments` | Admin | `NameRequest` | 201 / `OrganizationUnit` |
 | PUT | `/api/departments/{id}` | Admin | `NameRequest` | 200 / `OrganizationUnit` |

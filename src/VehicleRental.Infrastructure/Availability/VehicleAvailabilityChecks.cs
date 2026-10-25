@@ -1,6 +1,8 @@
 using Car_Rental_System_BE.Application.Availability;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Domain.Availability;
+using Car_Rental_System_BE.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -47,46 +49,30 @@ internal static class VehicleAvailabilityChecks
     public static async Task<AvailabilityResult> EvaluateAsync(
         NpgsqlConnection connection, NpgsqlTransaction? transaction, int vehicleId, TimeRange window, int? excludeRentalId, int bufferMinutes, CancellationToken ct)
     {
-        string? status;
-        await using (var command = new NpgsqlCommand("SELECT status FROM vehicles WHERE id=@id", connection, transaction))
-        {
-            command.Parameters.AddWithValue("id", vehicleId);
-            var found = await command.ExecuteScalarAsync(ct);
-            if (found is null) return AvailabilityResult.Blocked(AvailabilityReason.NotFound);
-            status = found as string;
-        }
+        await using var db = VehicleRentalDbContext.Create(connection, transaction);
+        var status = await db.Set<VehiclesRow>().Where(v => v.Id == vehicleId).Select(v => v.Status).FirstOrDefaultAsync(ct);
+        if (status is null) return AvailabilityResult.Blocked(AvailabilityReason.NotFound);
         if (status == "maintenance") return AvailabilityResult.Blocked(AvailabilityReason.Maintenance);
         if (!BookingStatusRules.IsBookableVehicleStatus(status)) return AvailabilityResult.Blocked(AvailabilityReason.Inactive);
 
-        await using (var command = new NpgsqlCommand("""
-            SELECT starts_at, upper(period) FROM vehicle_bookings
-            WHERE vehicle_id=@id AND is_blocking AND (@exclude::int IS NULL OR rental_id<>@exclude::int)
-              AND period && tsrange(@from, @to + make_interval(mins => @buffer), '[)')
-            ORDER BY starts_at LIMIT 1
-            """, connection, transaction))
-        {
-            command.Parameters.AddWithValue("id", vehicleId);
-            command.Parameters.Add(Sql.Typed("exclude", NpgsqlDbType.Integer, excludeRentalId));
-            command.Parameters.Add(Sql.Timestamp("from", window.From));
-            command.Parameters.Add(Sql.Timestamp("to", window.To));
-            command.Parameters.AddWithValue("buffer", bufferMinutes);
-            await using var reader = await command.ExecuteReaderAsync(ct);
-            if (await reader.ReadAsync(ct))
-                return AvailabilityResult.Blocked(AvailabilityReason.Booked, new(reader.GetDateTime(0), reader.GetDateTime(1)));
-        }
+        var bookingRange = NpgsqlVehicleSearchRepository.Range(window.From, window.To.AddMinutes(bufferMinutes));
+        var booking = await db.Set<VehicleBookingsRow>()
+            .Where(b => b.VehicleId == vehicleId && b.IsBlocking && (excludeRentalId == null || b.RentalId != excludeRentalId)
+                && b.Period!.Value.Overlaps(bookingRange))
+            .OrderBy(b => b.StartsAt).Select(b => new { b.StartsAt, End = b.Period!.Value.UpperBound }).FirstOrDefaultAsync(ct);
+        if (booking is not null)
+            return AvailabilityResult.Blocked(AvailabilityReason.Booked, new(booking.StartsAt, booking.End));
 
-        await using (var command = new NpgsqlCommand("""
-            SELECT lower(blocked_range), upper(blocked_range) FROM v_vehicle_maintenance_blocks
-            WHERE vehicle_id=@id AND blocked_range && tsrange(@from, @to, '[)')
-            ORDER BY lower(blocked_range) LIMIT 1
-            """, connection, transaction))
+        var maintenanceRange = NpgsqlVehicleSearchRepository.Range(window.From, window.To);
+        var maintenance = await db.Set<VVehicleMaintenanceBlocksRow>()
+            .Where(b => b.VehicleId == vehicleId && b.BlockedRange.Overlaps(maintenanceRange))
+            .OrderBy(b => b.BlockedRange.LowerBound).Select(b => new { b.BlockedRange }).FirstOrDefaultAsync(ct);
+        if (maintenance is not null)
         {
-            command.Parameters.AddWithValue("id", vehicleId);
-            command.Parameters.Add(Sql.Timestamp("from", window.From));
-            command.Parameters.Add(Sql.Timestamp("to", window.To));
-            await using var reader = await command.ExecuteReaderAsync(ct);
-            if (await reader.ReadAsync(ct))
-                return AvailabilityResult.Blocked(AvailabilityReason.Maintenance, new(Sql.Bound(reader, 0), Sql.Bound(reader, 1)));
+            var range = maintenance.BlockedRange;
+            DateTime? start = range.LowerBoundInfinite || range.LowerBound == DateTime.MinValue || range.LowerBound == DateTime.MaxValue ? null : range.LowerBound;
+            DateTime? end = range.UpperBoundInfinite || range.UpperBound == DateTime.MinValue || range.UpperBound == DateTime.MaxValue ? null : range.UpperBound;
+            return AvailabilityResult.Blocked(AvailabilityReason.Maintenance, new(start, end));
         }
 
         return AvailabilityResult.Free;

@@ -1,9 +1,10 @@
 using Car_Rental_System_BE.Application.Availability;
 using Car_Rental_System_BE.Application.Assignments;
 using Car_Rental_System_BE.Domain.Availability;
-using Npgsql;
-using NpgsqlTypes;
+using Car_Rental_System_BE.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace Car_Rental_System_BE.Infrastructure.Availability;
 
@@ -11,52 +12,29 @@ public sealed class NpgsqlDriverAvailability(NpgsqlDataSource dataSource, IOptio
 {
     public async Task<bool> AnyAvailableAsync(TimeRange? window, DateTime nowUtc, CancellationToken ct, int? facilityId = null)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(ct);
-        if (window is { } w)
-        {
-            const string sql = """
-                SELECT EXISTS (
-                    SELECT 1 FROM staffs s
-                    JOIN users u ON u.id = s.user_id
-                    WHERE s.is_driver = true AND u.is_active = true
-                      AND (@facilityId::int IS NULL OR s.facility_id = @facilityId)
-                      AND s.license_expiry_date >= @toDate
-                      AND NOT EXISTS (
-                          SELECT 1 FROM vehicle_assignments a
-                          JOIN rentals r ON r.id = a.rental_id
-                          LEFT JOIN hour_rental_detail h ON h.rental_id = r.id
-                          LEFT JOIN longterm_rental_contract l ON l.rental_id = r.id
-                          WHERE a.driver_staff_id = s.id AND a.status = 'assigned'
-                            AND r.status NOT IN ('cancelled', 'completed', 'expired')
-                            AND COALESCE(a.period, tsrange(COALESCE(h.start_time, l.start_time),
-                                COALESCE(h.end_time, l.end_time) + make_interval(mins => a.buffer_minutes), '[)'))
-                                && tsrange(@from, @to + make_interval(mins => @buffer), '[)')
-                      )
-                )
-                """;
-            await using var command = new NpgsqlCommand(sql, connection);
-            command.Parameters.Add(Sql.Timestamp("from", w.From));
-            command.Parameters.Add(Sql.Timestamp("to", w.To));
-            command.Parameters.AddWithValue("facilityId", (object?)facilityId ?? DBNull.Value);
-            command.Parameters.AddWithValue("buffer", options?.Value.DriverBufferMinutes ?? 60);
-            command.Parameters.Add(new NpgsqlParameter("toDate", NpgsqlDbType.Date) { Value = DateOnly.FromDateTime(w.To) });
-            return (bool)(await command.ExecuteScalarAsync(ct))!;
-        }
-        else
-        {
-            const string sql = """
-                SELECT EXISTS (
-                    SELECT 1 FROM staffs s
-                    JOIN users u ON u.id = s.user_id
-                    WHERE s.is_driver = true AND u.is_active = true
-                      AND (@facilityId::int IS NULL OR s.facility_id = @facilityId)
-                      AND s.license_expiry_date >= @nowDate
-                )
-                """;
-            await using var command = new NpgsqlCommand(sql, connection);
-            command.Parameters.AddWithValue("facilityId", (object?)facilityId ?? DBNull.Value);
-            command.Parameters.Add(new NpgsqlParameter("nowDate", NpgsqlDbType.Date) { Value = DateOnly.FromDateTime(nowUtc) });
-            return (bool)(await command.ExecuteScalarAsync(ct))!;
-        }
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var throughDate = DateOnly.FromDateTime(window?.To ?? nowUtc);
+        var drivers = from s in db.Set<StaffsRow>()
+            join u in db.Set<UsersRow>() on s.UserId equals u.Id
+            where s.IsDriver && u.IsActive && (facilityId == null || s.FacilityId == facilityId)
+                && s.LicenseExpiryDate >= throughDate
+            select s;
+        if (window is not { } w) return await drivers.AnyAsync(ct);
+
+        var range = NpgsqlVehicleSearchRepository.Range(w.From, w.To.AddMinutes(options?.Value.DriverBufferMinutes ?? 60));
+        var fromTime = NpgsqlVehicleSearchRepository.Timestamp(w.From);
+        var to = NpgsqlVehicleSearchRepository.Timestamp(w.To.AddMinutes(options?.Value.DriverBufferMinutes ?? 60));
+        var busy = from a in db.Set<VehicleAssignmentsRow>()
+            join r in db.Set<RentalsRow>() on a.RentalId equals r.Id
+            join h0 in db.Set<HourRentalDetailRow>() on r.Id equals h0.RentalId into hours
+            from h in hours.DefaultIfEmpty()
+            join l0 in db.Set<LongtermRentalContractRow>() on r.Id equals l0.RentalId into contracts
+            from l in contracts.DefaultIfEmpty()
+            where a.Status == "assigned" && r.Status != "cancelled" && r.Status != "completed" && r.Status != "expired"
+                && (a.Period != null ? a.Period!.Value.Overlaps(range)
+                    : ((h.StartTime ?? l.StartTime) == null || (h.StartTime ?? l.StartTime) < to)
+                      && ((h.EndTime ?? l.EndTime) == null || (h.EndTime ?? l.EndTime)!.Value.AddMinutes(a.BufferMinutes) > fromTime))
+            select a.DriverStaffId;
+        return await drivers.AnyAsync(s => !busy.Contains(s.Id), ct);
     }
 }

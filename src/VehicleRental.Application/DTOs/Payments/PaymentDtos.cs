@@ -1,3 +1,6 @@
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
+
 namespace Car_Rental_System_BE.Application.DTOs.Payments;
 
 public sealed record InvoicePayment(int InvoiceId, int RentalId, int CustomerId, string InvoiceNumber, decimal Amount, string Status);
@@ -18,3 +21,15 @@ public sealed record CheckoutRequest(long OrderCode, decimal Amount, string Desc
 public sealed record CheckoutResult(long OrderCode, string PaymentLinkId, string CheckoutUrl);
 public sealed record PayOsWebhook(long OrderCode, decimal Amount, string Reference, string Code, string Signature, IReadOnlyDictionary<string, object?> Data);
 
+public sealed record RefundRequest([param: Range(1, double.MaxValue)] decimal Amount);
+public sealed record PayOsWebhookRequest(string Code, bool Success, PayOsWebhookData Data, [param: Required] string Signature);
+public sealed class PayOsWebhookData
+{
+    public long OrderCode { get; init; }
+    public decimal Amount { get; init; }
+    public string Code { get; init; } = "";
+    public string? Reference { get; init; }
+    public string PaymentLinkId { get; init; } = "";
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public Dictionary<string, JsonElement> Raw { get; init; } = [];
+}

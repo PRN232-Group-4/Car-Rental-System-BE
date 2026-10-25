@@ -1,3 +1,5 @@
+using Car_Rental_System_BE.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Car_Rental_System_BE.Application.DTOs.Accounts;
 using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
@@ -7,42 +9,36 @@ namespace Car_Rental_System_BE.Infrastructure.Repositories;
 
 public sealed class NpgsqlUserAdministrationRepository(NpgsqlDataSource dataSource, IAuditRequestContext? auditContext = null) : IUserAdministrationRepository
 {
-    private const string Select = """
-        SELECT u.id,u.email,COALESCE(u.fullname,''),u.phone,u.avatar,u.gender,u.address,u.is_active,u.created_at,
-          ARRAY(SELECT DISTINCT r.name FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=u.id ORDER BY r.name),
-          (SELECT c.id FROM customers c WHERE c.user_id=u.id), (SELECT s.id FROM staffs s WHERE s.user_id=u.id)
-        FROM users u
-        """;
-    private const string Filter = """
-         WHERE ($1::text IS NULL OR u.email ILIKE '%'||$1||'%' OR u.fullname ILIKE '%'||$1||'%' OR u.phone ILIKE '%'||$1||'%')
-           AND ($2::text IS NULL OR EXISTS(SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=u.id AND lower(r.name)=lower($2)))
-           AND ($3::boolean IS NULL OR u.is_active=$3)
-        """;
+    private static IQueryable<AdministrativeUser> Project(VehicleRentalDbContext db, IQueryable<UsersRow> users) =>
+        users.Select(u => new AdministrativeUser(u.Id, u.Email, u.Fullname ?? "", u.Phone, u.Avatar,
+            u.Gender, u.Address, u.IsActive, u.CreatedAt,
+            (from membership in db.Set<UserRolesRow>() join role in db.Set<RolesRow>() on membership.RoleId equals role.Id
+             where membership.UserId == u.Id orderby role.Name select role.Name).Distinct().OrderBy(name => name).ToArray(),
+            db.Set<CustomersRow>().Where(c => c.UserId == u.Id).Select(c => (int?)c.Id).SingleOrDefault(),
+            db.Set<StaffsRow>().Where(staff => staff.UserId == u.Id).Select(staff => (int?)staff.Id).SingleOrDefault()));
 
     public async Task<AdministrativeUserPage> ListAsync(UserListQuery query, CancellationToken ct)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(ct);
-        await using var transaction = await connection.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, ct);
-        await using var count = new NpgsqlCommand("SELECT COUNT(*) FROM users u" + Filter, connection, transaction);
-        AddFilters(count, query);
-        var total = Convert.ToInt32(await count.ExecuteScalarAsync(ct));
-        await using var command = new NpgsqlCommand(Select + Filter + " ORDER BY u.id DESC LIMIT $4 OFFSET $5", connection, transaction);
-        AddFilters(command, query);
-        command.Parameters.AddWithValue(query.PageSize);
-        command.Parameters.AddWithValue(((long)query.Page - 1) * query.PageSize);
-        var items = new List<AdministrativeUser>();
-        await using (var reader = await command.ExecuteReaderAsync(ct))
-            while (await reader.ReadAsync(ct)) items.Add(Read(reader));
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, ct);
+        var pattern = "%" + query.Search + "%";
+        var users = db.Set<UsersRow>().Where(u =>
+            (query.Search == null || EF.Functions.ILike(u.Email, pattern) || EF.Functions.ILike(u.Fullname!, pattern) || EF.Functions.ILike(u.Phone!, pattern))
+            && (query.IsActive == null || u.IsActive == query.IsActive)
+            && (query.Role == null || (from membership in db.Set<UserRolesRow>()
+                join role in db.Set<RolesRow>() on membership.RoleId equals role.Id
+                where membership.UserId == u.Id && role.Name.ToLower() == query.Role.ToLower() select role.Id).Any()));
+        var total = await users.CountAsync(ct);
+        var offset = ((long)query.Page - 1) * query.PageSize;
+        var items = offset >= total ? [] : await Project(db, users.OrderByDescending(u => u.Id).Skip((int)offset).Take(query.PageSize)).ToListAsync(ct);
         await transaction.CommitAsync(ct);
         return new(items, query.Page, query.PageSize, total);
     }
 
     public async Task<AdministrativeUser?> FindAsync(int id, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand(Select + " WHERE u.id=$1");
-        command.Parameters.AddWithValue(id);
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        return await reader.ReadAsync(ct) ? Read(reader) : null;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await Project(db, db.Set<UsersRow>().Where(u => u.Id == id)).SingleOrDefaultAsync(ct);
     }
 
     public Task<AdministrativeUser> SetStatusAsync(int id, bool isActive, string reason, int actorUserId, CancellationToken ct) =>
@@ -114,10 +110,8 @@ public sealed class NpgsqlUserAdministrationRepository(NpgsqlDataSource dataSour
         await ExecuteAsync(connection, transaction,
             "INSERT INTO user_administration_audit(user_id,actor_user_id,action,reason,ip_address) VALUES($1,$2,$3,$4,$5)", ct,
             id, actorUserId, action, (object?)reason ?? DBNull.Value, (object?)auditContext?.IpAddress ?? DBNull.Value);
-        await using var read = new NpgsqlCommand(Select + " WHERE u.id=$1", connection, transaction);
-        read.Parameters.AddWithValue(id);
-        AdministrativeUser user;
-        await using (var reader = await read.ExecuteReaderAsync(ct)) { await reader.ReadAsync(ct); user = Read(reader); }
+        await using var db = VehicleRentalDbContext.Create(connection, transaction);
+        var user = await Project(db, db.Set<UsersRow>().Where(u => u.Id == id)).SingleAsync(ct);
         await transaction.CommitAsync(ct);
         return user;
     }
@@ -170,15 +164,4 @@ public sealed class NpgsqlUserAdministrationRepository(NpgsqlDataSource dataSour
         await command.ExecuteNonQueryAsync(ct);
     }
 
-    private static void AddFilters(NpgsqlCommand command, UserListQuery query)
-    {
-        command.Parameters.AddWithValue((object?)query.Search ?? DBNull.Value);
-        command.Parameters.AddWithValue((object?)query.Role ?? DBNull.Value);
-        command.Parameters.AddWithValue((object?)query.IsActive ?? DBNull.Value);
-    }
-
-    private static AdministrativeUser Read(NpgsqlDataReader r) => new(r.GetInt32(0), r.GetString(1), r.GetString(2),
-        Text(r, 3), Text(r, 4), Text(r, 5), Text(r, 6), r.GetBoolean(7), r.GetDateTime(8), r.GetFieldValue<string[]>(9),
-        r.IsDBNull(10) ? null : r.GetInt32(10), r.IsDBNull(11) ? null : r.GetInt32(11));
-    private static string? Text(NpgsqlDataReader r, int ordinal) => r.IsDBNull(ordinal) ? null : r.GetString(ordinal);
 }

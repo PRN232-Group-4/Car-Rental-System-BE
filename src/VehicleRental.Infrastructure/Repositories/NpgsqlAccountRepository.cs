@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 using Car_Rental_System_BE.Application.DTOs.Accounts;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Npgsql;
@@ -8,25 +10,25 @@ public sealed class NpgsqlAccountRepository(NpgsqlDataSource dataSource) : IAcco
 {
     public async Task<Account?> FindByEmailAsync(string email, CancellationToken ct)
     {
-        const string sql = """
-            SELECT u.id, u.email, COALESCE(u.fullname, ''), u.gender, u.phone, u.avatar, u.password_hash,
-                   COALESCE(array_agg(r.name) FILTER (WHERE r.name IS NOT NULL), ARRAY[]::varchar[]), s.id, s.department_id, d.name, s.facility_id, u.authorization_version, f.name
-            FROM users u
-            LEFT JOIN staffs s ON s.user_id = u.id
-            LEFT JOIN departments d ON d.id = s.department_id
-            LEFT JOIN facilities f ON f.id = s.facility_id
-            LEFT JOIN user_roles ur ON ur.user_id = u.id
-            LEFT JOIN roles r ON r.id = ur.role_id
-            WHERE u.email = $1 AND u.is_active = TRUE
-            GROUP BY u.id, u.email, u.fullname, u.gender, u.phone, u.avatar, u.password_hash, s.id, d.name, f.name
-            """;
-        await using var command = dataSource.CreateCommand(sql);
-        command.Parameters.AddWithValue(email);
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct)) return null;
-        return new Account(reader.GetInt32(0), reader.GetString(1), reader.GetString(2),
-            reader.IsDBNull(3) ? null : reader.GetString(3), reader.IsDBNull(4) ? null : reader.GetString(4),
-            reader.IsDBNull(5) ? null : reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetString(6), reader.GetFieldValue<string[]>(7), reader.IsDBNull(8) ? null : reader.GetInt32(8), reader.IsDBNull(9) ? null : reader.GetInt32(9), reader.IsDBNull(10) ? null : reader.GetString(10), reader.IsDBNull(11) ? null : reader.GetInt32(11), reader.GetInt32(12), reader.IsDBNull(13) ? null : reader.GetString(13));
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var row = await (from user in db.Set<UsersRow>()
+            where user.Email == email && user.IsActive
+            from staff in db.Set<StaffsRow>().Where(s => s.UserId == user.Id).DefaultIfEmpty()
+            from department in db.Set<DepartmentsRow>().Where(d => d.Id == staff.DepartmentId).DefaultIfEmpty()
+            from facility in db.Set<FacilitiesRow>().Where(f => f.Id == staff.FacilityId).DefaultIfEmpty()
+            select new
+            {
+                user.Id, user.Email, user.Fullname, user.Gender, user.Phone, user.Avatar, user.PasswordHash,
+                StaffId = (int?)staff.Id, DepartmentId = (int?)staff.DepartmentId,
+                DepartmentName = department.Name, FacilityId = (int?)staff.FacilityId,
+                FacilityName = facility.Name, user.AuthorizationVersion,
+                Roles = (from membership in db.Set<UserRolesRow>()
+                    join role in db.Set<RolesRow>() on membership.RoleId equals role.Id
+                    where membership.UserId == user.Id select role.Name).ToArray()
+            }).FirstOrDefaultAsync(ct);
+        return row is null ? null : new Account(row.Id, row.Email, row.Fullname ?? "", row.Gender, row.Phone,
+            row.Avatar, row.PasswordHash, row.Roles, row.StaffId, row.DepartmentId, row.DepartmentName,
+            row.FacilityId, row.AuthorizationVersion, row.FacilityName);
     }
 
     public async Task UpdateProfileAsync(string email, AccountProfile profile, CancellationToken ct)

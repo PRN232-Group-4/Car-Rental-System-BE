@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Inspections;
 using Car_Rental_System_BE.Application.Lifecycle;
@@ -9,20 +11,19 @@ public sealed class NpgsqlInspectionAssignmentRepository(NpgsqlDataSource dataSo
 {
     public async Task<InspectionAssignment?> GetAsync(int rentalId, CancellationToken ct, string inspectionType = "pre_rental")
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT r.vehicle_id, a.technician_staff_id, COALESCE(u.fullname,u.email), a.assigned_at, a.assigned_by, u.email
-            FROM rentals r
-            LEFT JOIN inspection_assignments a ON a.rental_id=r.id AND a.vehicle_id=r.vehicle_id AND a.inspection_type=$2
-            LEFT JOIN staffs s ON s.id=a.technician_staff_id
-            LEFT JOIN users u ON u.id=s.user_id
-            WHERE r.id=$1
-            """);
-        command.Parameters.AddWithValue(rentalId);
-        command.Parameters.AddWithValue(inspectionType);
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct)) throw new NotFoundException("RENTAL_NOT_FOUND", "Không tìm thấy đơn thuê.");
-        return reader.IsDBNull(1) ? null : new(rentalId, reader.GetInt32(0), reader.GetInt32(1),
-            reader.IsDBNull(2) ? "" : reader.GetString(2), reader.GetDateTime(3), reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5));
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var row = await (from rental in db.Set<RentalsRow>()
+            from assignment in db.Set<InspectionAssignmentsRow>().Where(a => a.RentalId == rental.Id &&
+                a.VehicleId == rental.VehicleId && a.InspectionType == inspectionType).DefaultIfEmpty()
+            from staff in db.Set<StaffsRow>().Where(s => s.Id == assignment.TechnicianStaffId).DefaultIfEmpty()
+            from user in db.Set<UsersRow>().Where(u => u.Id == staff.UserId).DefaultIfEmpty()
+            where rental.Id == rentalId
+            select new { rental.VehicleId, TechnicianId = (int?)assignment.TechnicianStaffId,
+                Name = user.Fullname ?? user.Email, AssignedAt = (DateTime?)assignment.AssignedAt,
+                assignment.AssignedBy, user.Email }).FirstOrDefaultAsync(ct);
+        if (row is null) throw new NotFoundException("RENTAL_NOT_FOUND", "Không tìm thấy đơn thuê.");
+        return row.TechnicianId is null ? null : new(rentalId, row.VehicleId, row.TechnicianId.Value,
+            row.Name ?? "", row.AssignedAt!.Value, row.AssignedBy, row.Email);
     }
 
     public Task<InspectionAssignment> AssignAsync(int rentalId, int technicianStaffId, string assignedBy, CancellationToken ct, string inspectionType = "pre_rental") =>
@@ -69,14 +70,10 @@ public sealed class NpgsqlInspectionAssignmentRepository(NpgsqlDataSource dataSo
             technicianName = reader.GetString(0);
             technicianEmail = reader.GetString(1);
         }
-        await using (var evidence = new NpgsqlCommand("SELECT EXISTS(SELECT 1 FROM inspections WHERE rental_id=$1 AND vehicle_id=$2 AND inspection_type=$3)", connection, transaction))
-        {
-            evidence.Parameters.AddWithValue(rentalId);
-            evidence.Parameters.AddWithValue(vehicleId);
-            evidence.Parameters.AddWithValue(inspectionType);
-            if (await evidence.ExecuteScalarAsync(ct) is true)
+        await using (var db = VehicleRentalDbContext.Create(connection, transaction))
+            if (await db.Set<InspectionsRow>().AnyAsync(i => i.RentalId == rentalId && i.VehicleId == vehicleId &&
+                    i.InspectionType == inspectionType, ct))
                 throw new ConflictException("INSPECTION_ALREADY_RECORDED", "Xe đã có biên bản ở giai đoạn kiểm tra này; không thể ghi đè hoặc đổi phân công.");
-        }
         await using var save = new NpgsqlCommand("""
             INSERT INTO inspection_assignments(rental_id,vehicle_id,technician_staff_id,assigned_by,inspection_type)
             VALUES($1,$2,$3,$4,$5)
