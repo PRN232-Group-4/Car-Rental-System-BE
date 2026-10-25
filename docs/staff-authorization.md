@@ -10,7 +10,7 @@ The authoritative capability matrix is [FR-007](../specs/FR-007-rbac.md). `Staff
 
 ## Create and update staff
 
-Only Admin can call `POST /api/staff` or `PUT /api/staff/{id}`. Add `staffRole` to the existing staff payload:
+Admin and Manager can call `POST /api/staff`, `POST /api/staff/from-user`, `PUT /api/staff/{id}` and `DELETE /api/staff/{id}`, as approved on 2026-10-21. Both can upload driver license evidence through `POST /api/media/staff-license` (Management policy). Add `staffRole` to the existing staff payload:
 
 ```json
 {
@@ -41,7 +41,7 @@ Call `PUT /api/departments/{departmentId}/members/{userId}` with no request body
 
 The target must be active and the department must exist. Missing/inactive users return 404; invalid department returns 400. This replaces the user's single department membership. It does not promote someone to Manager, change specialty, or modify other profile fields. Existing Staff/Manager accounts without a staff profile receive a minimal profile. Existing roles are preserved. Success returns the normal envelope with updated `Staff` data and message `Employee assigned to department successfully.` Old access/refresh credentials are invalidated; the target signs in again.
 
-Admin and Manager can read `GET /api/departments`, `GET /api/staff`, `GET /api/staff/{id}`, and `GET /api/staff/drivers`. Personnel creation, full update, deactivation, and department CRUD remain Admin-only. Manager assignments operate across departments; membership does not impose a department scope. Administrative role provisioning remains outside this endpoint. No new migration is required; authorization-version triggers from migration 0008 must already be installed.
+Admin and Manager can read `GET /api/departments`, `GET /api/staff`, `GET /api/staff/{id}`, and `GET /api/staff/drivers`. Personnel creation, full update and deactivation allow Admin/Manager; department CRUD remains Admin-only. Manager assignments operate across departments; membership does not impose a department scope. Administrative role provisioning remains outside this endpoint. No new migration is required; authorization-version triggers from migration 0008 must already be installed.
 
 ## Session and profile
 

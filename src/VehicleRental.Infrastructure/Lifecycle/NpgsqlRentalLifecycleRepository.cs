@@ -1,3 +1,5 @@
+using Car_Rental_System_BE.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Lifecycle;
 using Car_Rental_System_BE.Domain.Availability;
@@ -12,124 +14,62 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
 {
     public async Task<RentalLifecycleEntity?> GetForUpdateAsync(int rentalId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT r.id, r.customer_id, r.vehicle_id, r.policy_id, r.customer_subscription_id,
-                   r.is_subscription, r.rental_type, r.status, r.vat_price, r.deposit_price,
-                   r.overtime_price, r.total_price,
-                   COALESCE(h.start_time, l.start_time) AS sched_start,
-                   COALESCE(h.end_time, l.end_time) AS sched_end,
-                   COALESCE(h.has_driver, l.has_driver, false) AS has_driver,
-                   COALESCE(h.hourly_price_snapshot, 0) AS unit_hourly,
-                   COALESCE(l.monthly_price_snapshot, 0) AS monthly_snapshot,
-                   COALESCE(p.overtime_fee_rate, 0) AS overtime_fee_rate,
-                   COALESCE(p.vat_rate, 10) AS vat_rate,
-                   r.confirmed_at, r.started_at, r.returned_at, r.completed_at,
-                   r.cancelled_at, r.cancelled_by, r.cancel_reason, r.overtime_hours,
-                   EXISTS(SELECT 1 FROM rental_contract_documents d WHERE d.rental_id=r.id),
-                   r.expire_at, r.expired_at
-            FROM rentals r
-            LEFT JOIN hour_rental_detail h ON h.rental_id = r.id
-            LEFT JOIN longterm_rental_contract l ON l.rental_id = r.id
-            LEFT JOIN rental_policies p ON p.id = r.policy_id
-            WHERE r.id = $1
-            """);
-        cmd.Parameters.AddWithValue(rentalId);
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct)) return null;
-
-        var statusStr = reader.GetString(7);
-        var status = RentalStatusExtensions.FromDbString(statusStr);
-
-        return new RentalLifecycleEntity(
-            Id: reader.GetInt32(0),
-            CustomerId: reader.GetInt32(1),
-            VehicleId: reader.GetInt32(2),
-            PolicyId: reader.IsDBNull(3) ? null : reader.GetInt32(3),
-            CustomerSubscriptionId: reader.IsDBNull(4) ? null : reader.GetInt32(4),
-            IsSubscription: reader.GetBoolean(5),
-            RentalType: reader.GetString(6),
-            Status: status,
-            VatPrice: reader.GetDecimal(8),
-            DepositPrice: reader.GetDecimal(9),
-            OvertimePrice: reader.GetDecimal(10),
-            TotalPrice: reader.GetDecimal(11),
-            ScheduledStart: reader.GetDateTime(12),
-            ScheduledEnd: reader.GetDateTime(13),
-            HasDriver: reader.GetBoolean(14),
-            UnitHourlyPrice: reader.GetDecimal(15),
-            MonthlyPriceSnapshot: reader.GetDecimal(16),
-            OvertimeFeeRate: reader.GetDecimal(17),
-            VatRate: reader.GetDecimal(18),
-            ConfirmedAt: reader.IsDBNull(19) ? null : reader.GetDateTime(19),
-            StartedAt: reader.IsDBNull(20) ? null : reader.GetDateTime(20),
-            ReturnedAt: reader.IsDBNull(21) ? null : reader.GetDateTime(21),
-            CompletedAt: reader.IsDBNull(22) ? null : reader.GetDateTime(22),
-            CancelledAt: reader.IsDBNull(23) ? null : reader.GetDateTime(23),
-            CancelledBy: reader.IsDBNull(24) ? null : reader.GetString(24),
-            CancelReason: reader.IsDBNull(25) ? null : reader.GetString(25),
-            OvertimeHours: reader.GetInt32(26),
-            HasUploadedContract: reader.GetBoolean(27),
-            ExpireAt: reader.IsDBNull(28) ? null : reader.GetDateTime(28),
-            ExpiredAt: reader.IsDBNull(29) ? null : reader.GetDateTime(29)
-        );
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var row = await (from r in db.Set<RentalsRow>()
+                         join hourly in db.Set<HourRentalDetailRow>() on r.Id equals hourly.RentalId into hours
+                         from h in hours.DefaultIfEmpty()
+                         join contract in db.Set<LongtermRentalContractRow>() on r.Id equals contract.RentalId into contracts
+                         from l in contracts.DefaultIfEmpty()
+                         join policy in db.Set<RentalPoliciesRow>() on r.PolicyId equals policy.Id into policies
+                         from p in policies.DefaultIfEmpty()
+                         where r.Id == rentalId
+                         select new { Rental = r, Start = h.StartTime ?? l.StartTime, End = h.EndTime ?? l.EndTime,
+                             HasDriver = (bool?)h.HasDriver ?? (bool?)l.HasDriver ?? false, Hourly = h.HourlyPriceSnapshot ?? 0,
+                             Monthly = l.MonthlyPriceSnapshot ?? 0, OvertimeRate = (decimal?)p.OvertimeFeeRate ?? 0, VatRate = (decimal?)p.VatRate ?? 10,
+                             HasContract = db.Set<RentalContractDocumentsRow>().Any(d => d.RentalId == r.Id) }).SingleOrDefaultAsync(ct);
+        if (row is null) return null;
+        var rental = row.Rental;
+        return new RentalLifecycleEntity(rental.Id, rental.CustomerId, rental.VehicleId, rental.PolicyId,
+            rental.CustomerSubscriptionId, rental.IsSubscription, rental.RentalType, RentalStatusExtensions.FromDbString(rental.Status),
+            rental.VatPrice, rental.DepositPrice, rental.OvertimePrice, rental.TotalPrice, row.Start!.Value, row.End!.Value,
+            row.HasDriver, row.Hourly, row.Monthly, row.OvertimeRate, row.VatRate, rental.ConfirmedAt, rental.StartedAt,
+            rental.ReturnedAt, rental.CompletedAt, rental.CancelledAt, rental.CancelledBy, rental.CancelReason,
+            rental.OvertimeHours, row.HasContract, rental.ExpireAt, rental.ExpiredAt);
     }
 
     public async Task<bool> HasPassingPreInspectionAsync(int rentalId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT EXISTS(SELECT 1 FROM inspections i JOIN rentals r ON r.id=i.rental_id AND r.vehicle_id=i.vehicle_id
-                WHERE i.rental_id = $1 AND i.inspection_type = 'pre_rental' AND i.is_ok = true)
-            """);
-        cmd.Parameters.AddWithValue(rentalId);
-        return (bool)(await cmd.ExecuteScalarAsync(ct))!;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await (from i in db.Set<InspectionsRow>() join r in db.Set<RentalsRow>() on new { i.RentalId, i.VehicleId } equals new { RentalId = r.Id, r.VehicleId }
+                      where i.RentalId == rentalId && i.InspectionType == "pre_rental" && i.IsOk == true select i.Id).AnyAsync(ct);
     }
 
     public async Task<bool> HasPostInspectionAsync(int rentalId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT EXISTS(SELECT 1 FROM inspections i JOIN rentals r ON r.id=i.rental_id AND r.vehicle_id=i.vehicle_id
-                WHERE i.rental_id = $1 AND i.inspection_type = 'post_rental')
-            """);
-        cmd.Parameters.AddWithValue(rentalId);
-        return (bool)(await cmd.ExecuteScalarAsync(ct))!;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await (from i in db.Set<InspectionsRow>() join r in db.Set<RentalsRow>() on new { i.RentalId, i.VehicleId } equals new { RentalId = r.Id, r.VehicleId }
+                      where i.RentalId == rentalId && i.InspectionType == "post_rental" select i.Id).AnyAsync(ct);
     }
 
     public async Task<bool> IsPostInspectionOkAsync(int rentalId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT COALESCE((SELECT i.is_ok FROM inspections i JOIN rentals r ON r.id=i.rental_id AND r.vehicle_id=i.vehicle_id
-                WHERE i.rental_id = $1 AND i.inspection_type = 'post_rental' ORDER BY i.id DESC LIMIT 1), false)
-            """);
-        cmd.Parameters.AddWithValue(rentalId);
-        return (bool)(await cmd.ExecuteScalarAsync(ct))!;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await (from i in db.Set<InspectionsRow>() join r in db.Set<RentalsRow>() on new { i.RentalId, i.VehicleId } equals new { RentalId = r.Id, r.VehicleId }
+                      where i.RentalId == rentalId && i.InspectionType == "post_rental" orderby i.Id descending select i.IsOk).FirstOrDefaultAsync(ct) ?? false;
     }
 
     public async Task<bool> HasValidAssignmentAsync(int rentalId, bool hasDriver, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT EXISTS(
-                SELECT 1 FROM vehicle_assignments a JOIN rentals r ON r.id=a.rental_id AND r.vehicle_id=a.vehicle_id
-                WHERE a.rental_id = $1 AND a.status = 'assigned'
-                  AND ($2 = false OR a.driver_staff_id IS NOT NULL)
-            )
-            """);
-        cmd.Parameters.AddWithValue(rentalId);
-        cmd.Parameters.AddWithValue(hasDriver);
-        return (bool)(await cmd.ExecuteScalarAsync(ct))!;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await (from a in db.Set<VehicleAssignmentsRow>() join r in db.Set<RentalsRow>() on new { a.RentalId, a.VehicleId } equals new { RentalId = r.Id, r.VehicleId }
+                      where a.RentalId == rentalId && a.Status == "assigned" && (!hasDriver || a.DriverStaffId != null) select a.Id).AnyAsync(ct);
     }
 
     public async Task<bool> IsCustomerLicenseValidAsync(int customerId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT EXISTS(
-                SELECT 1 FROM customer_license_records
-                WHERE customer_id = $1 AND status = 'approved'
-                  AND expiry_date >= CURRENT_DATE
-            )
-            """);
-        cmd.Parameters.AddWithValue(customerId);
-        return (bool)(await cmd.ExecuteScalarAsync(ct))!;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<CustomerLicenseRecordsRow>().AnyAsync(l => l.CustomerId == customerId
+            && l.Status == "approved" && l.ExpiryDate >= DateOnly.FromDateTime(DateTime.Today), ct);
     }
 
     public async Task UpdateToPreInspectionAsync(int rentalId, DateTime confirmedAt, ActorContext actor, CancellationToken ct)
@@ -467,25 +407,12 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
     /// </summary>
     public async Task<IReadOnlyList<int>> ListExpiringRentalIdsAsync(DateTime now, int limit, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT r.id
-            FROM rentals r
-            WHERE r.status IN ('pending','pre_inspection')
-              AND r.expire_at IS NOT NULL AND r.expire_at <= $1
-              AND NOT (r.confirmed_at IS NOT NULL
-                       AND (r.is_subscription OR EXISTS(
-                           SELECT 1 FROM invoices i
-                           WHERE i.rental_id = r.id AND i.kind = 'rental' AND i.status = 'paid')))
-            ORDER BY r.expire_at, r.id
-            LIMIT $2
-            """);
-        cmd.Parameters.Add(Sql.Timestamp("", now));
-        cmd.Parameters.AddWithValue(limit);
-
-        var ids = new List<int>();
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct)) ids.Add(reader.GetInt32(0));
-        return ids;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var nowAt = DateTime.SpecifyKind(now, DateTimeKind.Unspecified);
+        return await db.Set<RentalsRow>().Where(r => (r.Status == "pending" || r.Status == "pre_inspection")
+            && r.ExpireAt != null && r.ExpireAt <= nowAt && !(r.ConfirmedAt != null && (r.IsSubscription
+                || db.Set<InvoicesRow>().Any(i => i.RentalId == r.Id && i.Kind == "rental" && i.Status == "paid"))))
+            .OrderBy(r => r.ExpireAt).ThenBy(r => r.Id).Take(limit).Select(r => r.Id).ToListAsync(ct);
     }
 
     public async Task<RentalStatus?> UpdateToExpiredAsync(
@@ -566,62 +493,19 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
 
     public async Task<IReadOnlyList<RentalStatusHistoryEntry>> GetHistoryAsync(int rentalId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT id, rental_id, from_status, to_status, actor_user_id, actor_email, actor_role, reason, created_at
-            FROM rental_status_history
-            WHERE rental_id = $1
-            ORDER BY id ASC
-            """);
-        cmd.Parameters.AddWithValue(rentalId);
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        var list = new List<RentalStatusHistoryEntry>();
-        while (await reader.ReadAsync(ct))
-        {
-            list.Add(new RentalStatusHistoryEntry(
-                Id: reader.GetInt64(0),
-                RentalId: reader.GetInt32(1),
-                FromStatus: reader.IsDBNull(2) ? null : reader.GetString(2),
-                ToStatus: reader.GetString(3),
-                ActorUserId: reader.IsDBNull(4) ? null : reader.GetInt32(4),
-                ActorEmail: reader.IsDBNull(5) ? null : reader.GetString(5),
-                ActorRole: reader.IsDBNull(6) ? null : reader.GetString(6),
-                Reason: reader.IsDBNull(7) ? null : reader.GetString(7),
-                CreatedAt: reader.GetDateTime(8)
-            ));
-        }
-        return list;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<RentalStatusHistoryRow>().Where(h => h.RentalId == rentalId).OrderBy(h => h.Id)
+            .Select(h => new RentalStatusHistoryEntry(h.Id, h.RentalId, h.FromStatus, h.ToStatus, h.ActorUserId,
+                h.ActorEmail, h.ActorRole, h.Reason, h.CreatedAt)).ToListAsync(ct);
     }
 
     public async Task<RentalSettlementDto?> GetSettlementAsync(int rentalId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT rental_id, scheduled_end, returned_at, overtime_minutes, overtime_hours,
-                   overtime_amount, overtime_vat, deposit_held, deposit_deducted,
-                   shortfall_invoice_id, refund_payment_id, damage_review_required, created_at
-            FROM rental_settlements
-            WHERE rental_id = $1
-            """);
-        cmd.Parameters.AddWithValue(rentalId);
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct)) return null;
-
-        return new RentalSettlementDto(
-            RentalId: reader.GetInt32(0),
-            ScheduledEnd: reader.GetDateTime(1),
-            ReturnedAt: reader.GetDateTime(2),
-            OvertimeMinutes: reader.GetInt32(3),
-            OvertimeHours: reader.GetInt32(4),
-            OvertimeAmount: reader.GetDecimal(5),
-            OvertimeVat: reader.GetDecimal(6),
-            DepositHeld: reader.GetDecimal(7),
-            DepositDeducted: reader.GetDecimal(8),
-            ShortfallInvoiceId: reader.IsDBNull(9) ? null : reader.GetInt32(9),
-            RefundPaymentId: reader.IsDBNull(10) ? null : reader.GetInt32(10),
-            DamageReviewRequired: reader.GetBoolean(11),
-            CreatedAt: reader.GetDateTime(12)
-        );
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<RentalSettlementsRow>().Where(s => s.RentalId == rentalId)
+            .Select(s => new RentalSettlementDto(s.RentalId, s.ScheduledEnd, s.ReturnedAt, s.OvertimeMinutes, s.OvertimeHours,
+                s.OvertimeAmount, s.OvertimeVat, s.DepositHeld, s.DepositDeducted, s.ShortfallInvoiceId,
+                s.RefundPaymentId, s.DamageReviewRequired, s.CreatedAt, null, null)).SingleOrDefaultAsync(ct);
     }
 
     private static async Task InsertHistoryAsync(

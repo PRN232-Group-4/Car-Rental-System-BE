@@ -2,6 +2,8 @@ using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Lifecycle;
 using Car_Rental_System_BE.Infrastructure.Availability;
 using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 namespace Car_Rental_System_BE.Infrastructure.Lifecycle;
@@ -32,8 +34,7 @@ public sealed class NpgsqlRentalContractDocumentRepository(NpgsqlDataSource data
             VALUES($1,$2,$3,$4,$5,$6)
             ON CONFLICT(rental_id) DO UPDATE SET content=EXCLUDED.content,content_type=EXCLUDED.content_type,
                 file_name=EXCLUDED.file_name,signed_at=EXCLUDED.signed_at,uploaded_by=EXCLUDED.uploaded_by,
-                uploaded_at=(now() AT TIME ZONE 'utc');
-            UPDATE longterm_rental_contract SET contract_link=$7,signed_at=$5 WHERE rental_id=$1
+                uploaded_at=(now() AT TIME ZONE 'utc')
             """, connection, transaction))
         {
             save.Parameters.AddWithValue(rentalId);
@@ -42,17 +43,25 @@ public sealed class NpgsqlRentalContractDocumentRepository(NpgsqlDataSource data
             save.Parameters.AddWithValue(document.FileName);
             save.Parameters.Add(Sql.Timestamp("", signedAt));
             save.Parameters.AddWithValue(actor.Email);
-            save.Parameters.AddWithValue($"/api/rentals/{rentalId}/contract/document");
             await save.ExecuteNonQueryAsync(ct);
+        }
+        // Positional parameters use PostgreSQL's extended query protocol, which accepts
+        // one statement per command. Both writes still commit or roll back together.
+        await using (var projection = new NpgsqlCommand(
+            "UPDATE longterm_rental_contract SET contract_link=$2,signed_at=$3 WHERE rental_id=$1", connection, transaction))
+        {
+            projection.Parameters.AddWithValue(rentalId);
+            projection.Parameters.AddWithValue($"/api/rentals/{rentalId}/contract/document");
+            projection.Parameters.Add(Sql.Timestamp("", signedAt));
+            await projection.ExecuteNonQueryAsync(ct);
         }
         await transaction.CommitAsync(ct);
     }
 
     public async Task<RentalContractDocument?> GetAsync(int rentalId, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("SELECT content,content_type,file_name FROM rental_contract_documents WHERE rental_id=$1");
-        command.Parameters.AddWithValue(rentalId);
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        return await reader.ReadAsync(ct) ? new(reader.GetFieldValue<byte[]>(0), reader.GetString(1), reader.GetString(2)) : null;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<RentalContractDocumentsRow>().Where(d => d.RentalId == rentalId)
+            .Select(d => new RentalContractDocument(d.Content, d.ContentType, d.FileName)).FirstOrDefaultAsync(ct);
     }
 }

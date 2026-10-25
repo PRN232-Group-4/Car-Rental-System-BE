@@ -3,7 +3,7 @@ using Xunit;
 
 namespace VehicleRental.Tests;
 
-/// <summary>Runs 0011 against a database that already holds data (as production would) and replays it.</summary>
+/// <summary>Runs the vehicle-booking migration against populated legacy data and replays it.</summary>
 public sealed class VehicleBookingMigrationTests : IAsyncLifetime
 {
     private static string Admin => Environment.GetEnvironmentVariable("TEST_DATABASE_ADMIN")
@@ -25,7 +25,8 @@ public sealed class VehicleBookingMigrationTests : IAsyncLifetime
         _db = NpgsqlDataSource.Create(new NpgsqlConnectionStringBuilder(Admin) { Database = _database }.ConnectionString);
         await Run(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "docs", "db", "Init.sql")));
         var all = Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "db", "migrations"), "*.sql").Order(StringComparer.Ordinal).ToList();
-        _migration = await File.ReadAllTextAsync(all.Single(p => Path.GetFileName(p).StartsWith("0015_", StringComparison.Ordinal)));
+        const string migrationFile = "0015_vehicle_bookings_and_availability.sql";
+        _migration = await File.ReadAllTextAsync(all.Single(p => Path.GetFileName(p) == migrationFile));
         foreach (var path in all.Where(p => string.CompareOrdinal(Path.GetFileName(p), "0015_") < 0))
             await Run(await File.ReadAllTextAsync(path));
     }
@@ -49,7 +50,7 @@ public sealed class VehicleBookingMigrationTests : IAsyncLifetime
 
     private async Task<int> LegacyRentalAsync(int customer, int vehicle, DateTime start, DateTime end, string status)
     {
-        // 0011 is not applied yet, so no trigger/constraint: legacy data may overlap freely.
+        // The booking migration is not applied yet, so legacy schedules may overlap freely.
         var id = (int)(await Seed.ScalarAsync(_db, "INSERT INTO rentals(customer_id,vehicle_id,rental_type,status) VALUES($1,$2,'hourly',$3) RETURNING id", customer, vehicle, status))!;
         await Seed.ScalarAsync(_db, "INSERT INTO hour_rental_detail(rental_id,start_time,end_time) VALUES($1,$2,$3)", id, start, end);
         return id;

@@ -312,8 +312,11 @@ public sealed class CustomerLicenseUploadTests : IAsyncLifetime
 
     [Theory]
     [InlineData("Customer", "/api/media/staff-license", false)]
-    [InlineData("Manager", "/api/media/staff-license", false)]
+    [InlineData("Manager", "/api/media/staff-license", true)]
     [InlineData("Admin", "/api/media/staff-license", true)]
+    [InlineData("Driver", "/api/media/staff-license", false)]
+    [InlineData("Maintenance", "/api/media/staff-license", false)]
+    [InlineData("CustomerService", "/api/media/staff-license", false)]
     [InlineData("Maintenance", "/api/media/inspection", true)]
     [InlineData("Driver", "/api/media/inspection", false)]
     [InlineData("Driver", "/api/media/report", true)]
@@ -328,6 +331,19 @@ public sealed class CustomerLicenseUploadTests : IAsyncLifetime
         using var response = await _client.PostAsync(path, form);
         using var body = await Envelope(response, allowed ? 200 : 403, allowed);
         Assert.Equal(allowed ? 1 : 0, _images.Uploads);
+        Assert.Equal(0, _repository.Saves);
+        if (allowed)
+        {
+            Assert.Equal("https://res.cloudinary.com/test/license.png", body.RootElement.GetProperty("data").GetProperty("secureUrl").GetString());
+            Assert.Equal(Png, _images.Bytes);
+            Assert.Equal(path switch
+            {
+                "/api/media/staff-license" => "staff-licenses",
+                "/api/media/inspection" => "inspections",
+                "/api/media/report" => "reports",
+                _ => throw new InvalidOperationException("Unexpected media route.")
+            }, _images.Folder);
+        }
     }
 
     [Fact]

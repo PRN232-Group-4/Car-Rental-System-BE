@@ -1,3 +1,5 @@
+using Car_Rental_System_BE.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Car_Rental_System_BE.Application.Lifecycle;
 using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Loyalty;
@@ -12,51 +14,29 @@ public sealed class RentalPaymentGateAdapter(NpgsqlDataSource dataSource) : IRen
 {
     public async Task<bool> IsRentalInvoicePaidAsync(int rentalId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT EXISTS(SELECT 1 FROM invoices WHERE rental_id = $1 AND kind='rental' AND status = 'paid')
-            """);
-        cmd.Parameters.AddWithValue(rentalId);
-        return (bool)(await cmd.ExecuteScalarAsync(ct))!;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<InvoicesRow>().AnyAsync(i => i.RentalId == rentalId && i.Kind == "rental" && i.Status == "paid", ct);
     }
 
     public async Task<int?> GetPrimaryInvoiceIdAsync(int rentalId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT id FROM invoices
-            WHERE rental_id = $1
-            ORDER BY CASE WHEN kind = 'rental' THEN 0 ELSE 1 END, id ASC
-            LIMIT 1
-            """);
-        cmd.Parameters.AddWithValue(rentalId);
-        var res = await cmd.ExecuteScalarAsync(ct);
-        return res is int id ? id : null;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<InvoicesRow>().Where(i => i.RentalId == rentalId).OrderBy(i => i.Kind == "rental" ? 0 : 1)
+            .ThenBy(i => i.Id).Select(i => (int?)i.Id).FirstOrDefaultAsync(ct);
     }
 
     public async Task<decimal> GetDepositHeldAsync(int rentalId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT CASE
-                WHEN is_subscription THEN 0
-                WHEN EXISTS(SELECT 1 FROM invoices WHERE rental_id = $1 AND status = 'paid') THEN deposit_price
-                ELSE 0
-            END
-            FROM rentals WHERE id = $1
-            """);
-        cmd.Parameters.AddWithValue(rentalId);
-        var res = await cmd.ExecuteScalarAsync(ct);
-        return res is decimal d ? d : 0m;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<RentalsRow>().Where(r => r.Id == rentalId).Select(r => r.IsSubscription ? 0m
+            : db.Set<InvoicesRow>().Any(i => i.RentalId == rentalId && i.Status == "paid") ? r.DepositPrice : 0m).SingleOrDefaultAsync(ct);
     }
 
     public async Task<decimal> GetTotalPaidAmountAsync(int rentalId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT COALESCE(SUM(amount), 0)
-            FROM payments
-            WHERE rental_id = $1 AND status = 'paid' AND type <> 'refund'
-            """);
-        cmd.Parameters.AddWithValue(rentalId);
-        var res = await cmd.ExecuteScalarAsync(ct);
-        return res is decimal d ? d : 0m;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<PaymentsRow>().Where(p => p.RentalId == rentalId && p.Status == "paid" && p.Type != null && p.Type != "refund")
+            .SumAsync(p => (decimal?)p.Amount, ct) ?? 0m;
     }
 
     public async Task<int> CreateRefundPaymentAsync(
@@ -144,13 +124,10 @@ public sealed class InvoiceGatewayAdapter(NpgsqlDataSource dataSource, TimeProvi
         DateTime dueAt,
         CancellationToken ct)
     {
-        // Check if an overtime invoice already exists for idempotency
-        await using var checkCmd = dataSource.CreateCommand("""
-            SELECT id FROM invoices WHERE rental_id = $1 AND kind = 'overtime' LIMIT 1
-            """);
-        checkCmd.Parameters.AddWithValue(rentalId);
-        var existing = await checkCmd.ExecuteScalarAsync(ct);
-        if (existing is int existingId) return existingId;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var existingId = await db.Set<InvoicesRow>().Where(i => i.RentalId == rentalId && i.Kind == "overtime")
+            .Select(i => (int?)i.Id).FirstOrDefaultAsync(ct);
+        if (existingId.HasValue) return existingId.Value;
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
         var invoiceNumber = $"INV-{now:yyyyMMdd}-{rentalId}-OT";
@@ -233,15 +210,9 @@ public sealed class CurrentCustomerService(NpgsqlDataSource dataSource) : ICurre
     {
         if (string.IsNullOrWhiteSpace(email)) return null;
 
-        await using var cmd = dataSource.CreateCommand("""
-            SELECT c.id
-            FROM customers c
-            JOIN users u ON u.id = c.user_id
-            WHERE LOWER(u.email) = LOWER($1) AND u.is_active = true
-            LIMIT 1
-            """);
-        cmd.Parameters.AddWithValue(email.Trim());
-        var res = await cmd.ExecuteScalarAsync(ct);
-        return res is int id ? id : null;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var normalized = email.Trim().ToLowerInvariant();
+        return await (from c in db.Set<CustomersRow>() join u in db.Set<UsersRow>() on c.UserId equals u.Id
+                      where u.Email.ToLower() == normalized && u.IsActive select (int?)c.Id).FirstOrDefaultAsync(ct);
     }
 }

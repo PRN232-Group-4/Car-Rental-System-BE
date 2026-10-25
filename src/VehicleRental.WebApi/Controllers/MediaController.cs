@@ -44,7 +44,7 @@ public sealed class MediaController(IMediaService media) : ControllerBase
         return Ok(image);
     }
 
-    /// <summary>Admin uploads a driver's license image before creating or updating staff.</summary>
+    /// <summary>Admin or Manager uploads a driver's license image before creating or updating staff.</summary>
     [Authorize(Policy = AuthorizationPolicies.Management)]
     [HttpPost("staff-license")]
     [Consumes("multipart/form-data")]
@@ -53,7 +53,7 @@ public sealed class MediaController(IMediaService media) : ControllerBase
     public async Task<IActionResult> UploadStaffLicense(IFormFile? file, CancellationToken ct) =>
         await UploadEvidence(file, 5 * 1024 * 1024, media.UploadStaffLicenseAsync, ct);
 
-    /// <summary>Admin or Maintenance with a staff profile uploads inspection evidence.</summary>
+    /// <summary>Admin, Manager or Maintenance with a staff profile uploads inspection evidence.</summary>
     [Authorize(Policy = AuthorizationPolicies.Inspection)]
     [HttpPost("inspection")]
     [Consumes("multipart/form-data")]

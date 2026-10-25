@@ -1,63 +1,46 @@
 using Car_Rental_System_BE.Application.DTOs.Accounts;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 namespace Car_Rental_System_BE.Infrastructure.Repositories;
 
 public sealed class NpgsqlAuditLogRepository(NpgsqlDataSource dataSource) : IAuditLogRepository
 {
-    private const string Source = """
-        WITH audit AS (
-            SELECT a.id,a.created_at,a.actor_user_id,actor.email AS actor_email,actor.fullname AS actor_name,
-                CASE a.action WHEN 'role:add' THEN 'role_assigned' WHEN 'role:remove' THEN 'role_removed'
-                    WHEN 'deactivate' THEN 'account_locked' WHEN 'activate' THEN 'account_unlocked'
-                    WHEN 'sessions:revoke' THEN 'session_revoked' ELSE a.action END AS action,
-                a.user_id,target.email AS target_email,target.fullname AS target_name,a.reason,a.ip_address,a.status
-            FROM user_administration_audit a
-            LEFT JOIN users actor ON actor.id=a.actor_user_id
-            LEFT JOIN users target ON target.id=a.user_id
-        )
-        """;
-    private const string Filter = """
-         WHERE ($1::text IS NULL
-             OR strpos(lower(COALESCE(actor_email,'')),lower($1))>0
-             OR strpos(lower(COALESCE(actor_name,'')),lower($1))>0
-             OR strpos(lower(COALESCE(target_email,'')),lower($1))>0
-             OR strpos(lower(COALESCE(target_name,'')),lower($1))>0
-             OR strpos(lower('AUD-'||id::text),lower($1))>0
-             OR strpos(actor_user_id::text,$1)>0 OR strpos(user_id::text,$1)>0)
-           AND ($2::text IS NULL OR action=$2)
-        """;
-
     public async Task<AuditLogPage> ListAsync(AuditLogQuery query, CancellationToken ct)
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, ct);
-        await using var count = new NpgsqlCommand(Source + "SELECT COUNT(*) FROM audit" + Filter, connection, transaction);
-        AddFilters(count, query);
-        var total = Convert.ToInt32(await count.ExecuteScalarAsync(ct));
-        await using var command = new NpgsqlCommand(Source + """
-            SELECT id,created_at,actor_user_id,actor_email,actor_name,action,user_id,target_email,reason,ip_address,status
-            FROM audit
-            """ + Filter + " ORDER BY created_at DESC,id DESC LIMIT $3 OFFSET $4", connection, transaction);
-        AddFilters(command, query);
-        command.Parameters.AddWithValue(query.PageSize);
-        command.Parameters.AddWithValue(((long)query.Page - 1) * query.PageSize);
-        var items = new List<AuditLogItem>();
-        await using (var reader = await command.ExecuteReaderAsync(ct))
-            while (await reader.ReadAsync(ct))
-                items.Add(new($"AUD-{reader.GetInt64(0)}", reader.GetDateTime(1), reader.GetInt32(2),
-                    Text(reader, 3), Text(reader, 4), reader.GetString(5), reader.GetInt32(6), Text(reader, 7),
-                    Text(reader, 8), Text(reader, 9), reader.GetString(10)));
+        await using var db = VehicleRentalDbContext.Create(connection, transaction);
+        var source = from audit in db.Set<UserAdministrationAuditRow>()
+            from actor in db.Set<UsersRow>().Where(u => u.Id == audit.ActorUserId).DefaultIfEmpty()
+            from target in db.Set<UsersRow>().Where(u => u.Id == audit.UserId).DefaultIfEmpty()
+            select new
+            {
+                audit.Id, audit.CreatedAt, audit.ActorUserId, ActorEmail = actor.Email, ActorName = actor.Fullname,
+                Action = audit.Action == "role:add" ? "role_assigned" : audit.Action == "role:remove" ? "role_removed" :
+                    audit.Action == "deactivate" ? "account_locked" : audit.Action == "activate" ? "account_unlocked" :
+                    audit.Action == "sessions:revoke" ? "session_revoked" : audit.Action,
+                audit.UserId, TargetEmail = target.Email, TargetName = target.Fullname,
+                audit.Reason, audit.IpAddress, audit.Status
+            };
+        if (query.Search is { } search)
+        {
+            var term = search.ToLower();
+            source = source.Where(a => (a.ActorEmail ?? "").ToLower().Contains(term) ||
+                (a.ActorName ?? "").ToLower().Contains(term) || (a.TargetEmail ?? "").ToLower().Contains(term) ||
+                (a.TargetName ?? "").ToLower().Contains(term) || ("AUD-" + a.Id).ToLower().Contains(term) ||
+                a.ActorUserId.ToString().Contains(search) || a.UserId.ToString().Contains(search));
+        }
+        if (query.Action is { } action) source = source.Where(a => a.Action == action);
+        var total = await source.CountAsync(ct);
+        var offset = ((long)query.Page - 1) * query.PageSize;
+        var rows = offset >= total ? [] : await source.OrderByDescending(a => a.CreatedAt).ThenByDescending(a => a.Id)
+            .Skip((int)offset).Take(query.PageSize).ToListAsync(ct);
+        var items = rows.Select(a => new AuditLogItem($"AUD-{a.Id}", a.CreatedAt, a.ActorUserId,
+            a.ActorEmail, a.ActorName, a.Action, a.UserId, a.TargetEmail, a.Reason, a.IpAddress, a.Status)).ToList();
         await transaction.CommitAsync(ct);
         return new(items, query.Page, query.PageSize, total);
     }
-
-    private static void AddFilters(NpgsqlCommand command, AuditLogQuery query)
-    {
-        command.Parameters.AddWithValue((object?)query.Search ?? DBNull.Value);
-        command.Parameters.AddWithValue((object?)query.Action ?? DBNull.Value);
-    }
-
-    private static string? Text(NpgsqlDataReader reader, int ordinal) => reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
 }

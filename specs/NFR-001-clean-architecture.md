@@ -1,5 +1,15 @@
 # NFR-001 — Clean Architecture
 
+## Entity Framework và tổ chức file — 2026-10-25
+
+- Truy vấn đọc dữ liệu thông thường ở Infrastructure dùng Entity Framework Core với provider PostgreSQL, LINQ projection và no-tracking; không đưa EF vào Domain/Application.
+- Ánh xạ schema hiện có, không tự tạo/chạy EF migration, không thêm foreign key hoặc thay đổi contract API.
+- Giữ SQL đặc thù PostgreSQL cho ghi nguyên tử, trigger, advisory/row lock và các kiểm tra trong transaction cần giữ thứ tự khóa. EF tham gia cùng connection/transaction khi đọc trong transaction.
+- Phân trang, tổng sau lọc, thứ tự ổn định, kết quả trang rỗng và phép tính nghiệp vụ phải giữ nguyên.
+- Gộp file nhỏ khi cùng feature/contract; giữ namespace, public type và ranh giới kiến trúc. Không gom controller/service/repository vào một file.
+- Kiểm chứng bằng build, regression hiện có và test mapping/truy vấn trên PostgreSQL tạm, không chạy trên DB ứng dụng.
+- Hoàn tất regression: sửa fixture/test lỗi cũ cho phù hợp invariant GPLX, hợp đồng đã upload và quyền hiện hành; giữ assertions kiểm tra nghiệp vụ. Toàn suite phải xanh, không skip ca lỗi hoặc giảm validation sản phẩm để làm test qua.
+
 ## Reference layout — 2026-10-07
 
 Theo hình cấu trúc do người dùng cung cấp:

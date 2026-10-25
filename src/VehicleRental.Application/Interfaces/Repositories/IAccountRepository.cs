@@ -8,3 +8,5 @@ public interface IAccountRepository
     Task UpdateProfileAsync(string email, AccountProfile profile, CancellationToken ct);
     Task UpdatePasswordHashAsync(string email, string passwordHash, CancellationToken ct);
 }
+
+public sealed class AccountNotFoundException : Exception;

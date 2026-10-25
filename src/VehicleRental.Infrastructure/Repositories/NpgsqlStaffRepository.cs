@@ -1,3 +1,5 @@
+using Car_Rental_System_BE.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.DTOs.Organization;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
@@ -9,56 +11,51 @@ namespace Car_Rental_System_BE.Infrastructure.Repositories;
 
 public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffRepository
 {
-    private const string StaffSelect = """
-        SELECT s.id, u.id, u.email, COALESCE(u.fullname, ''), u.phone,
-               s.department_id, d.name, s.facility_id, f.name, s.hired_date,
-               EXISTS(SELECT 1 FROM user_roles dr JOIN roles rr ON rr.id=dr.role_id WHERE dr.user_id=u.id AND rr.name='Driver'),
-               s.license_number, s.license_type, s.license_issue_date, s.license_expiry_date,
-               s.license_img, s.rating, u.is_active,
-               (SELECT r.name FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=u.id AND r.name IN ('CustomerService','Driver','Maintenance') ORDER BY r.name LIMIT 1),
-               u.avatar, u.gender, u.address,
-               (SELECT COUNT(DISTINCT a.rental_id)::integer FROM vehicle_assignments a WHERE a.driver_staff_id=s.id),
-               (SELECT a.rental_id FROM vehicle_assignments a JOIN rentals r ON r.id=a.rental_id
-                WHERE a.driver_staff_id=s.id AND a.status='assigned' AND r.status='renting' ORDER BY a.assigned_at DESC,a.id DESC LIMIT 1),
-               ARRAY(SELECT DISTINCT rr.name FROM user_roles ur JOIN roles rr ON rr.id=ur.role_id WHERE ur.user_id=u.id ORDER BY rr.name)
-        FROM staffs s
-        JOIN users u ON u.id = s.user_id
-        LEFT JOIN departments d ON d.id = s.department_id
-        LEFT JOIN facilities f ON f.id = s.facility_id
-        """;
+    private static IQueryable<Staff> Project(VehicleRentalDbContext db, IQueryable<StaffsRow> staff) =>
+        from s in staff
+        join u in db.Set<UsersRow>() on s.UserId equals u.Id
+        join department in db.Set<DepartmentsRow>() on s.DepartmentId equals department.Id into departments
+        from d in departments.DefaultIfEmpty()
+        join facility in db.Set<FacilitiesRow>() on s.FacilityId equals facility.Id into facilities
+        from f in facilities.DefaultIfEmpty()
+        select new Staff(s.Id, u.Id, u.Email, u.Fullname ?? "", u.Phone, s.DepartmentId, d == null ? null : d.Name,
+            s.FacilityId, f == null ? null : f.Name, s.HiredDate,
+            (from ur in db.Set<UserRolesRow>() join r in db.Set<RolesRow>() on ur.RoleId equals r.Id
+             where ur.UserId == u.Id && r.Name == "Driver" select r.Id).Any(),
+            s.LicenseNumber, s.LicenseType, s.LicenseIssueDate, s.LicenseExpiryDate, s.LicenseImg, s.Rating, u.IsActive,
+            (from ur in db.Set<UserRolesRow>() join r in db.Set<RolesRow>() on ur.RoleId equals r.Id
+             where ur.UserId == u.Id && (r.Name == "CustomerService" || r.Name == "Driver" || r.Name == "Maintenance")
+             orderby r.Name select r.Name).FirstOrDefault(),
+            u.Avatar, u.Gender, u.Address,
+            db.Set<VehicleAssignmentsRow>().Where(a => a.DriverStaffId == s.Id).Select(a => a.RentalId).Distinct().Count(),
+            (from a in db.Set<VehicleAssignmentsRow>() join r in db.Set<RentalsRow>() on a.RentalId equals r.Id
+             where a.DriverStaffId == s.Id && a.Status == "assigned" && r.Status == "renting"
+             orderby a.AssignedAt descending, a.Id descending select (int?)a.RentalId).FirstOrDefault())
+        {
+            Roles = (from ur in db.Set<UserRolesRow>() join r in db.Set<RolesRow>() on ur.RoleId equals r.Id
+                     where ur.UserId == u.Id select r.Name).Distinct().OrderBy(name => name).ToArray()
+        };
 
     public async Task<StaffPage> SearchAsync(string? search, bool? isDriver, int page, int pageSize, CancellationToken ct)
     {
-        const string filter = """
-
-            WHERE u.is_active = TRUE
-              AND ($1::boolean IS NULL OR EXISTS(SELECT 1 FROM user_roles dr JOIN roles rr ON rr.id=dr.role_id WHERE dr.user_id=u.id AND rr.name='Driver') = $1::boolean)
-              AND ($2::text IS NULL OR u.email ILIKE '%' || $2 || '%' OR u.fullname ILIKE '%' || $2 || '%'
-                   OR u.phone ILIKE '%' || $2 || '%' OR s.license_number ILIKE '%' || $2 || '%')
-            """;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
         var normalizedSearch = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
-        await using var count = dataSource.CreateCommand("SELECT COUNT(*) FROM staffs s JOIN users u ON u.id = s.user_id " + filter);
-        count.Parameters.AddWithValue((object?)isDriver ?? DBNull.Value);
-        count.Parameters.AddWithValue((object?)normalizedSearch ?? DBNull.Value);
-        var total = Convert.ToInt32(await count.ExecuteScalarAsync(ct));
-
-        await using var command = dataSource.CreateCommand(StaffSelect + filter + " ORDER BY s.id DESC LIMIT $3 OFFSET $4");
-        command.Parameters.AddWithValue((object?)isDriver ?? DBNull.Value);
-        command.Parameters.AddWithValue((object?)normalizedSearch ?? DBNull.Value);
-        command.Parameters.AddWithValue(pageSize);
-        command.Parameters.AddWithValue(((long)page - 1) * pageSize);
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        var items = new List<Staff>();
-        while (await reader.ReadAsync(ct)) items.Add(Read(reader));
-        return new StaffPage(items, page, pageSize, total);
+        var pattern = "%" + normalizedSearch + "%";
+        var staff = db.Set<StaffsRow>().Where(s => db.Set<UsersRow>().Any(u => u.Id == s.UserId && u.IsActive
+            && (normalizedSearch == null || EF.Functions.ILike(u.Email, pattern) || EF.Functions.ILike(u.Fullname!, pattern)
+                || EF.Functions.ILike(u.Phone!, pattern) || EF.Functions.ILike(s.LicenseNumber!, pattern)))
+            && (isDriver == null || (from ur in db.Set<UserRolesRow>() join r in db.Set<RolesRow>() on ur.RoleId equals r.Id
+                where ur.UserId == s.UserId && r.Name == "Driver" select r.Id).Any() == isDriver));
+        var total = await staff.CountAsync(ct);
+        var offset = ((long)page - 1) * pageSize;
+        var items = offset >= total ? [] : await Project(db, staff.OrderByDescending(s => s.Id).Skip((int)offset).Take(pageSize)).ToListAsync(ct);
+        return new(items, page, pageSize, total);
     }
 
     public async Task<Staff?> FindByIdAsync(int staffId, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand(StaffSelect + " WHERE s.id = $1");
-        command.Parameters.AddWithValue(staffId);
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        return await reader.ReadAsync(ct) ? Read(reader) : null;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await Project(db, db.Set<StaffsRow>().Where(s => s.Id == staffId)).SingleOrDefaultAsync(ct);
     }
 
     public async Task<Staff> CreateFromUserAsync(CreateStaffFromUser command, CancellationToken ct)
@@ -72,19 +69,14 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
             account.Parameters.AddWithValue(command.UserId);
             if (await account.ExecuteScalarAsync(ct) is null) throw new StaffNotFoundException();
         }
-        await using (var existing = new NpgsqlCommand("SELECT EXISTS(SELECT 1 FROM staffs WHERE user_id=$1)", connection, transaction))
-        {
-            existing.Parameters.AddWithValue(command.UserId);
-            if (await existing.ExecuteScalarAsync(ct) is true)
-                throw new StaffConflictException("Tài khoản đã có hồ sơ nhân viên. Hãy mở hồ sơ để cập nhật.");
-        }
+        await using var db = VehicleRentalDbContext.Create(connection, transaction);
+        if (await db.Set<StaffsRow>().AnyAsync(staff => staff.UserId == command.UserId, ct))
+            throw new StaffConflictException("Tài khoản đã có hồ sơ nhân viên. Hãy mở hồ sơ để cập nhật.");
         await ValidateReferencesAsync(connection, transaction, command.DepartmentId, command.FacilityId, ct);
-        bool isDriver;
-        await using (var role = new NpgsqlCommand("SELECT EXISTS(SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=$1 AND r.name='Driver')", connection, transaction))
-        {
-            role.Parameters.AddWithValue(command.UserId);
-            isDriver = await role.ExecuteScalarAsync(ct) is true;
-        }
+        var isDriver = await (from membership in db.Set<UserRolesRow>()
+            join role in db.Set<RolesRow>() on membership.RoleId equals role.Id
+            where membership.UserId == command.UserId && role.Name == "Driver"
+            select role.Id).AnyAsync(ct);
         StaffValidator.ValidateDriver(isDriver, command.LicenseNumber, command.LicenseExpiryDate, command.LicenseIssueDate);
         // Existing account identity and roles are authoritative; no password or specialty replacement.
         await using var insert = new NpgsqlCommand("""
@@ -182,11 +174,10 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
         account.Parameters.AddWithValue(userId);
         if (await account.ExecuteScalarAsync(ct) is null) throw new StaffNotFoundException();
 
-        await using var roles = new NpgsqlCommand("SELECT r.name FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=$1", connection, transaction);
-        roles.Parameters.AddWithValue(userId);
-        var names = new HashSet<string>(StringComparer.Ordinal);
-        await using (var reader = await roles.ExecuteReaderAsync(ct))
-            while (await reader.ReadAsync(ct)) names.Add(reader.GetString(0));
+        await using var db = VehicleRentalDbContext.Create(connection, transaction);
+        var names = new HashSet<string>(await (from membership in db.Set<UserRolesRow>()
+            join role in db.Set<RolesRow>() on membership.RoleId equals role.Id
+            where membership.UserId == userId select role.Name).ToListAsync(ct), StringComparer.Ordinal);
         if (!actorIsAdmin && (names.Contains("Manager") || names.Contains("Admin")))
             throw new OrganizationAssignmentForbiddenException();
         if (!names.Contains("Manager") && !names.Contains("Staff"))
@@ -222,9 +213,13 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
 
     private static async Task<bool> ExistsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string table, int id, CancellationToken ct)
     {
-        await using var command = new NpgsqlCommand($"SELECT EXISTS (SELECT 1 FROM {table} WHERE id = $1)", connection, transaction);
-        command.Parameters.AddWithValue(id);
-        return (bool)(await command.ExecuteScalarAsync(ct))!;
+        await using var db = VehicleRentalDbContext.Create(connection, transaction);
+        return table switch
+        {
+            "departments" => await db.Set<DepartmentsRow>().AnyAsync(unit => unit.Id == id, ct),
+            "facilities" => await db.Set<FacilitiesRow>().AnyAsync(unit => unit.Id == id, ct),
+            _ => throw new ArgumentOutOfRangeException(nameof(table))
+        };
     }
 
     private static async Task<int> InsertUserAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CreateStaff command, string passwordHash, CancellationToken ct)
@@ -284,8 +279,4 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
         await assign.ExecuteNonQueryAsync(ct);
     }
 
-    private static Staff Read(NpgsqlDataReader reader) => new(reader.GetInt32(0), reader.GetInt32(1), reader.GetString(2), reader.GetString(3), NullableString(reader, 4), NullableInt(reader, 5), NullableString(reader, 6), NullableInt(reader, 7), NullableString(reader, 8), NullableDate(reader, 9), reader.GetBoolean(10), NullableString(reader, 11), NullableString(reader, 12), NullableDate(reader, 13), NullableDate(reader, 14), NullableString(reader, 15), reader.IsDBNull(16) ? null : reader.GetDecimal(16), reader.GetBoolean(17), NullableString(reader, 18), NullableString(reader, 19), NullableString(reader, 20), NullableString(reader, 21), reader.GetInt32(22), NullableInt(reader, 23)) { Roles = reader.GetFieldValue<string[]>(24) };
-    private static string? NullableString(NpgsqlDataReader reader, int ordinal) => reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
-    private static int? NullableInt(NpgsqlDataReader reader, int ordinal) => reader.IsDBNull(ordinal) ? null : reader.GetInt32(ordinal);
-    private static DateOnly? NullableDate(NpgsqlDataReader reader, int ordinal) => reader.IsDBNull(ordinal) ? null : reader.GetFieldValue<DateOnly>(ordinal);
 }

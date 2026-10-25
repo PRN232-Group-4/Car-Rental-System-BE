@@ -1,3 +1,5 @@
+using Car_Rental_System_BE.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Car_Rental_System_BE.Application.DTOs.Payments;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
@@ -85,10 +87,12 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
 
     public async Task<InvoicePayment?> GetInvoiceForCustomerAsync(int invoiceId, string email, CancellationToken ct)
     {
-        await using var c = dataSource.CreateCommand("SELECT i.id,i.rental_id,r.customer_id,i.invoice_number,i.amount,i.status FROM invoices i JOIN rentals r ON r.id=i.rental_id JOIN customers cu ON cu.id=r.customer_id JOIN users u ON u.id=cu.user_id WHERE i.id=$1 AND u.email=$2");
-        c.Parameters.AddWithValue(invoiceId); c.Parameters.AddWithValue(email);
-        await using var r = await c.ExecuteReaderAsync(ct);
-        return await r.ReadAsync(ct) ? new(r.GetInt32(0), r.GetInt32(1), r.GetInt32(2), r.GetString(3), r.GetDecimal(4), r.GetString(5)) : null;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await (from i in db.Set<InvoicesRow>() join rental in db.Set<RentalsRow>() on i.RentalId equals rental.Id
+                      join customer in db.Set<CustomersRow>() on rental.CustomerId equals customer.Id
+                      join user in db.Set<UsersRow>() on customer.UserId equals user.Id
+                      where i.Id == invoiceId && user.Email == email
+                      select new InvoicePayment(i.Id, i.RentalId, rental.CustomerId, i.InvoiceNumber, i.Amount, i.Status)).SingleOrDefaultAsync(ct);
     }
 
     public async Task<PaymentResult> CompleteInvoiceAsync(int invoiceId, decimal amount, string reference, CancellationToken ct)
@@ -171,26 +175,34 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
 
     public async Task<IReadOnlyList<InvoiceSummary>> ListInvoicesAsync(string? email, CancellationToken ct)
     {
-        await using var c = dataSource.CreateCommand("SELECT i.id,i.rental_id,i.invoice_number,i.amount,i.vat_amount,i.status,i.issued_at,i.due_at FROM invoices i JOIN rentals r ON r.id=i.rental_id JOIN customers cu ON cu.id=r.customer_id JOIN users u ON u.id=cu.user_id WHERE ($1::text IS NULL OR u.email=$1) ORDER BY i.id DESC");
-        c.Parameters.AddWithValue((object?)email ?? DBNull.Value);
-        await using var r = await c.ExecuteReaderAsync(ct);
-        var items = new List<InvoiceSummary>();
-        while (await r.ReadAsync(ct)) items.Add(ReadInvoice(r));
-        return items;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await (from i in db.Set<InvoicesRow>() join r in db.Set<RentalsRow>() on i.RentalId equals r.Id
+                      join customer in db.Set<CustomersRow>() on r.CustomerId equals customer.Id
+                      join user in db.Set<UsersRow>() on customer.UserId equals user.Id
+                      where email == null || user.Email == email orderby i.Id descending
+                      select new InvoiceSummary(i.Id, i.RentalId, i.InvoiceNumber, i.Amount, i.VatAmount, i.Status, i.IssuedAt, i.DueAt)).ToListAsync(ct);
     }
 
     public async Task<InvoiceDetail?> GetInvoiceAsync(int invoiceId, string? email, CancellationToken ct)
     {
-        await using var c = dataSource.CreateCommand("SELECT i.id,i.rental_id,i.invoice_number,i.amount,i.vat_amount,i.status,i.issued_at,i.due_at,i.kind,r.status,r.confirmed_at,i.payment_method,(SELECT o.id FROM rental_orders o WHERE o.rental_id=r.id),i.checkout_started_at,EXISTS(SELECT 1 FROM rental_settlements s WHERE s.rental_id=r.id AND s.shortfall_invoice_id=i.id) FROM invoices i JOIN rentals r ON r.id=i.rental_id JOIN customers cu ON cu.id=r.customer_id JOIN users u ON u.id=cu.user_id WHERE i.id=$2 AND ($1::text IS NULL OR u.email=$1)");
-        c.Parameters.AddWithValue((object?)email ?? DBNull.Value); c.Parameters.AddWithValue(invoiceId);
-        await using var r = await c.ExecuteReaderAsync(ct);
-        if (!await r.ReadAsync(ct)) return null;
-        var summary = ReadInvoice(r);
-        var blocked = InvoiceCheckoutPolicy.BlockedReason(summary.Status, r.GetString(8), r.GetString(9), r.IsDBNull(10) ? null : r.GetDateTime(10));
-        var overtime = r.GetString(8) == "overtime" && r.GetString(9) == "completed" && r.GetBoolean(14);
-        if (r.GetString(8) == "overtime" && !overtime) blocked = "OVERTIME_INVOICE_REQUIRED";
-        var canCash = blocked is null && (overtime ? r.IsDBNull(13) : r.GetString(8) == "rental" && r.GetString(11) == "cash");
-        return new(summary.Id, summary.RentalId, summary.InvoiceNumber, summary.Amount, summary.VatAmount, summary.Status, summary.IssuedAt, summary.DueAt, blocked is null, blocked, r.GetString(11), r.IsDBNull(12) ? null : r.GetInt32(12), r.GetString(8), canCash, blocked is null && overtime && r.GetString(11) == "payos");
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var row = await (from i in db.Set<InvoicesRow>() join rental in db.Set<RentalsRow>() on i.RentalId equals rental.Id
+                         join customer in db.Set<CustomersRow>() on rental.CustomerId equals customer.Id
+                         join user in db.Set<UsersRow>() on customer.UserId equals user.Id
+                         where i.Id == invoiceId && (email == null || user.Email == email)
+                         select new { Invoice = i, Rental = rental,
+                             OrderId = db.Set<RentalOrdersRow>().Where(o => o.RentalId == rental.Id).Select(o => (int?)o.Id).SingleOrDefault(),
+                             Settled = db.Set<RentalSettlementsRow>().Any(settlement => settlement.RentalId == rental.Id && settlement.ShortfallInvoiceId == i.Id) })
+            .SingleOrDefaultAsync(ct);
+        if (row is null) return null;
+        var invoice = row.Invoice;
+        var blocked = InvoiceCheckoutPolicy.BlockedReason(invoice.Status, invoice.Kind, row.Rental.Status, row.Rental.ConfirmedAt);
+        var overtime = invoice.Kind == "overtime" && row.Rental.Status == "completed" && row.Settled;
+        if (invoice.Kind == "overtime" && !overtime) blocked = "OVERTIME_INVOICE_REQUIRED";
+        var canCash = blocked is null && (overtime ? invoice.CheckoutStartedAt == null : invoice.Kind == "rental" && invoice.PaymentMethod == "cash");
+        return new(invoice.Id, invoice.RentalId, invoice.InvoiceNumber, invoice.Amount, invoice.VatAmount,
+            invoice.Status, invoice.IssuedAt, invoice.DueAt, blocked is null, blocked, invoice.PaymentMethod,
+            row.OrderId, invoice.Kind, canCash, blocked is null && overtime && invoice.PaymentMethod == "payos");
     }
 
     public async Task<InvoiceSummary> CreateInvoiceForRentalAsync(int rentalId, CancellationToken ct)
@@ -218,12 +230,13 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
 
     public async Task<IReadOnlyList<PaymentSummary>> ListPaymentsAsync(string? email, int? invoiceId, CancellationToken ct)
     {
-        await using var c = dataSource.CreateCommand("SELECT p.id,p.rental_id,p.invoice_id,p.type,p.amount,p.status,p.method,p.provider_reference,p.paid_at,p.created_at FROM payments p JOIN customers cu ON cu.id=p.customer_id JOIN users u ON u.id=cu.user_id WHERE ($1::text IS NULL OR u.email=$1) AND ($2::int IS NULL OR p.invoice_id=$2) ORDER BY p.id DESC");
-        c.Parameters.AddWithValue((object?)email ?? DBNull.Value); c.Parameters.AddWithValue((object?)invoiceId ?? DBNull.Value);
-        await using var r = await c.ExecuteReaderAsync(ct);
-        var items = new List<PaymentSummary>();
-        while (await r.ReadAsync(ct)) items.Add(ReadPayment(r));
-        return items;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await (from p in db.Set<PaymentsRow>() join customer in db.Set<CustomersRow>() on p.CustomerId equals customer.Id
+                      join user in db.Set<UsersRow>() on customer.UserId equals user.Id
+                      where (email == null || user.Email == email) && (invoiceId == null || p.InvoiceId == invoiceId)
+                      orderby p.Id descending
+                      select new PaymentSummary(p.Id, p.RentalId, p.InvoiceId, p.Type, p.Amount, p.Status,
+                          p.Method, p.ProviderReference, p.PaidAt, p.CreatedAt)).ToListAsync(ct);
     }
 
     public async Task<PaymentSummary> ReviewRefundAsync(int refundId, bool approve, string reviewer, CancellationToken ct)
@@ -250,12 +263,13 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
 
     public async Task<PlanCheckout> CreatePlanCheckoutAsync(int planId, string email, CancellationToken ct)
     {
-        await using var lookup = dataSource.CreateCommand("SELECT c.id,p.price,p.name FROM customers c JOIN users u ON u.id=c.user_id JOIN subscription_plans p ON p.id=$2 AND p.is_active=true WHERE u.email=$1");
-        lookup.Parameters.AddWithValue(email); lookup.Parameters.AddWithValue(planId);
-        await using var reader = await lookup.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct)) throw new KeyNotFoundException("Subscription plan was not found or is inactive.");
-        var customerId = reader.GetInt32(0); var price = reader.GetDecimal(1); var name = reader.GetString(2);
-        await reader.CloseAsync();
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var plan = await (from customer in db.Set<CustomersRow>() join user in db.Set<UsersRow>() on customer.UserId equals user.Id
+                          from p in db.Set<SubscriptionPlansRow>()
+                          where user.Email == email && p.Id == planId && p.IsActive
+                          select new { CustomerId = customer.Id, p.Price, p.Name }).SingleOrDefaultAsync(ct)
+            ?? throw new KeyNotFoundException("Subscription plan was not found or is inactive.");
+        var customerId = plan.CustomerId; var price = plan.Price; var name = plan.Name;
         await using var insert = dataSource.CreateCommand("INSERT INTO payments(rental_id,invoice_id,customer_id,is_subscription_payment,plan_id,amount,status,type,method) VALUES(NULL,NULL,$1,true,$2,$3,'pending','subscription','payos') RETURNING id");
         insert.Parameters.AddWithValue(customerId); insert.Parameters.AddWithValue(planId); insert.Parameters.AddWithValue(price);
         var paymentId = (int)(await insert.ExecuteScalarAsync(ct))!;
@@ -313,10 +327,12 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
 
     public async Task<PlanPurchaseStatus?> GetPlanPurchaseAsync(long orderCode, string email, CancellationToken ct)
     {
-        await using var c = dataSource.CreateCommand("SELECT p.status FROM payments p JOIN customers cu ON cu.id=p.customer_id JOIN users u ON u.id=cu.user_id WHERE p.id=$1 AND p.is_subscription_payment=true AND p.plan_id IS NOT NULL AND u.email=$2");
-        c.Parameters.AddWithValue(SubscriptionOrderCodes.ToPaymentId(orderCode)); c.Parameters.AddWithValue(email);
-        await using var r = await c.ExecuteReaderAsync(ct);
-        return await r.ReadAsync(ct) ? new(orderCode, r.GetString(0)) : null;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var paymentId = SubscriptionOrderCodes.ToPaymentId(orderCode);
+        return await (from p in db.Set<PaymentsRow>() join customer in db.Set<CustomersRow>() on p.CustomerId equals customer.Id
+                      join user in db.Set<UsersRow>() on customer.UserId equals user.Id
+                      where p.Id == paymentId && p.IsSubscriptionPayment && p.PlanId != null && user.Email == email
+                      select new PlanPurchaseStatus(orderCode, p.Status)).SingleOrDefaultAsync(ct);
     }
 
     private static InvoiceSummary ReadInvoice(NpgsqlDataReader r) => new(r.GetInt32(0), r.GetInt32(1), r.GetString(2), r.GetDecimal(3), r.GetDecimal(4), r.GetString(5), r.GetDateTime(6), r.IsDBNull(7) ? null : r.GetDateTime(7));

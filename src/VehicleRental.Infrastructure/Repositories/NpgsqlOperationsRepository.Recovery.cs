@@ -1,5 +1,7 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Npgsql;
+using Microsoft.EntityFrameworkCore;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 
 namespace Car_Rental_System_BE.Infrastructure.Repositories;
 
@@ -140,13 +142,14 @@ public sealed partial class NpgsqlOperationsRepository
 
     public async Task<IReadOnlyList<DriverShift>> ListDriverShiftsAsync(int? driver, DateTime from, DateTime to, CancellationToken ct)
     {
+        from = Car_Rental_System_BE.Infrastructure.Availability.NpgsqlVehicleSearchRepository.Timestamp(from);
+        to = Car_Rental_System_BE.Infrastructure.Availability.NpgsqlVehicleSearchRepository.Timestamp(to);
         if (to <= from) throw new ArgumentException("End must be after start.");
-        await using var command = dataSource.CreateCommand("SELECT id,driver_staff_id,start_time,end_time,status FROM driver_shifts WHERE ($1::int IS NULL OR driver_staff_id=$1) AND start_time<$3 AND end_time>$2 ORDER BY start_time,id");
-        Add(command, driver, from, to);
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        var rows = new List<DriverShift>();
-        while (await reader.ReadAsync(ct)) rows.Add(new(reader.GetInt32(0),reader.GetInt32(1),reader.GetDateTime(2),reader.GetDateTime(3),reader.GetString(4)));
-        return rows;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<DriverShiftsRow>().AsNoTracking()
+            .Where(x => (driver == null || x.DriverStaffId == driver) && x.StartTime < to && x.EndTime > from)
+            .OrderBy(x => x.StartTime).ThenBy(x => x.Id)
+            .Select(x => new DriverShift(x.Id, x.DriverStaffId, x.StartTime, x.EndTime, x.Status)).ToListAsync(ct);
     }
 
     private static async Task RequirePassedPreAsync(NpgsqlConnection cn, NpgsqlTransaction tx, int rental, int vehicle, CancellationToken ct)
@@ -253,12 +256,12 @@ public sealed partial class NpgsqlOperationsRepository
 
     public async Task<IReadOnlyList<IncidentReport>> ListReportsAsync(int? staff, int? rental, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("SELECT id,rental_id,vehicle_id,reporter_staff_id,type,description,status,maintenance_id,image_urls FROM reports WHERE reporter_staff_id IS NOT NULL AND ($1::int IS NULL OR reporter_staff_id=$1) AND ($2::int IS NULL OR rental_id=$2) ORDER BY id DESC");
-        Add(command, staff, rental);
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        var rows = new List<IncidentReport>();
-        while (await reader.ReadAsync(ct)) rows.Add(new(reader.GetInt32(0),reader.GetInt32(1),reader.GetInt32(2),reader.GetInt32(3),reader.GetString(4),reader.GetString(5),reader.GetString(6),reader.IsDBNull(7)?null:reader.GetInt32(7),S(reader,8)));
-        return rows;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<ReportsRow>().AsNoTracking().Where(x => x.ReporterStaffId != null &&
+            (staff == null || x.ReporterStaffId == staff) && (rental == null || x.RentalId == rental))
+            .OrderByDescending(x => x.Id).Select(x => new IncidentReport(x.Id, x.RentalId!.Value, x.VehicleId!.Value,
+                x.ReporterStaffId!.Value, x.Type!, x.Description!, x.Status!, x.MaintenanceId, x.ImageUrls,
+                null, null, null, null, null, null, null)).ToListAsync(ct);
     }
 
     private static async Task ValidateMaintenanceAsync(NpgsqlConnection cn, NpgsqlTransaction tx, Maintenance x, CancellationToken ct)

@@ -53,11 +53,12 @@ public sealed class RentalLifecycleIntegrationTests(PostgresFixture db) : IClass
         var (cId, email) = await Seed.CustomerAsync(db.DataSource);
         var vId = await Seed.VehicleAsync(db.DataSource);
 
-        // Ensure customer has approved license for self drive
+        // The simulated trip is in 2032; eligibility must cover its end, not one year from the host clock.
+        var licenseExpiry = DateOnly.FromDateTime(end).AddYears(1);
         await Seed.ScalarAsync(db.DataSource, """
-            UPDATE customers SET license_status = 'approved', license_expiry_date = CURRENT_DATE + 365
+            UPDATE customers SET license_status = 'approved', license_expiry_date = $2
             WHERE id = $1
-            """, cId);
+            """, cId, licenseExpiry);
 
         var hours = (decimal)(end - start).TotalHours;
         var rent = unitHourly * hours;

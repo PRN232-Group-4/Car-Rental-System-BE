@@ -1,6 +1,8 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Npgsql;
+using Microsoft.EntityFrameworkCore;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 
 namespace Car_Rental_System_BE.Infrastructure.Repositories;
 
@@ -8,26 +10,27 @@ public sealed partial class NpgsqlOperationsRepository
 {
     public async Task<CustomerLicense?> GetLicenseAsync(string email, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("SELECT c.id,c.license_number,c.license_type,c.license_issue_date,c.license_expiry_date,c.license_img,COALESCE(c.license_status,'pending') FROM customers c JOIN users u ON u.id=c.user_id WHERE u.email=$1");
-        Add(cmd, email);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct)) return null;
-        var customerId = reader.GetInt32(0);
-        var legacy = new CustomerLicense(S(reader,1),S(reader,2),D(reader,3),D(reader,4),S(reader,5),reader.GetString(6));
-        await reader.CloseAsync();
-        var licenses = await ReadLicensesAsync(dataSource, customerId, ct);
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var row = await (from c in db.Set<CustomersRow>().AsNoTracking()
+            join u in db.Set<UsersRow>() on c.UserId equals u.Id
+            where u.Email == email
+            select new { c.Id, c.LicenseNumber, c.LicenseType, c.LicenseIssueDate, c.LicenseExpiryDate, c.LicenseImg, c.LicenseStatus })
+            .FirstOrDefaultAsync(ct);
+        if (row is null) return null;
+        var legacy = new CustomerLicense(row.LicenseNumber, row.LicenseType, row.LicenseIssueDate,
+            row.LicenseExpiryDate, row.LicenseImg, row.LicenseStatus ?? "pending");
+        var licenses = await ReadLicensesAsync(dataSource, row.Id, ct);
         var selected = licenses.FirstOrDefault(x => x.Number == legacy.Number?.Trim()) ?? legacy;
         return selected with { Licenses = licenses };
     }
 
     internal static async Task<IReadOnlyList<CustomerLicense>> ReadLicensesAsync(NpgsqlDataSource source, int customerId, CancellationToken ct)
     {
-        await using var cmd = source.CreateCommand("SELECT number,type,issue_date,expiry_date,image_url,status,id FROM customer_license_records WHERE customer_id=$1 ORDER BY id DESC NULLS LAST,number");
-        Add(cmd, customerId);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        var result = new List<CustomerLicense>();
-        while (await reader.ReadAsync(ct)) result.Add(ReadLicense(reader));
-        return result;
+        await using var db = VehicleRentalDbContext.Create(source);
+        return await db.Set<CustomerLicenseRecordsRow>().AsNoTracking().Where(x => x.CustomerId == customerId)
+            .OrderByDescending(x => x.Id != null).ThenByDescending(x => x.Id).ThenBy(x => x.Number)
+            .Select(x => new CustomerLicense(x.Number, x.Type, x.IssueDate, x.ExpiryDate, x.ImageUrl, x.Status) { Id = x.Id })
+            .ToListAsync(ct);
     }
 
     private static CustomerLicense ReadLicense(NpgsqlDataReader reader) =>

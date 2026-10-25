@@ -16,7 +16,7 @@ Dự án được xây dựng theo phong cách **Clean Architecture (Onion Archi
 - **Nguyên tắc phụ thuộc một chiều (Dependency Inversion):**
   $$\text{Domain} \longleftarrow \text{Application} \longleftarrow \text{Infrastructure} \longleftarrow \text{WebApi}$$
 - **Độc lập hạ tầng (Infrastructure Independence):** Lớp `Application` và `Domain` hoàn toàn độc lập với framework HTTP, ORM, cơ sở dữ liệu và thư viện bên ngoài.
-- **Không sử dụng ORM nặng:** Sử dụng trực tiếp `NpgsqlDataSource` (ADO.NET) để kiểm soát 100% hiệu năng, transaction và câu lệnh SQL.
+- **Truy vấn đọc bằng EF Core:** LINQ và no-tracking trong Infrastructure, ánh xạ schema PostgreSQL hiện có. Giữ Npgsql cho ghi dữ liệu, transaction và khóa đặc thù; xem [ADR-012](docs/decisions/ADR-012-entity-framework-read-queries.md).
 - **Chủ đích không dùng Khóa Ngoại vật lý (No Physical Foreign Keys):** Toàn vẹn tham chiếu logic do các Use Cases và Repositories đảm bảo.
 - **Bảo mật Session:** Không sử dụng JWT Bearer; sử dụng Cookie Session kết hợp Redis Ticket Store để hỗ trợ thu hồi phiên đăng nhập tức thì.
 
@@ -152,6 +152,7 @@ graph LR
 | Tên Service / Interface | Lớp Thực thi (Implementation) | Vòng đời (Lifetime) | Công dụng |
 |---|---|---|---|
 | `NpgsqlDataSource` | `NpgsqlDataSource.Create(...)` | **Singleton** | Connection pool kết nối cơ sở dữ liệu PostgreSQL |
+| `VehicleRentalDbContext` | factory từ data source | **Mỗi thao tác** | EF Core no-tracking; có thể dùng chung connection/transaction hiện có |
 | `IConnectionMultiplexer` | `ConnectionMultiplexer.Connect(...)` | **Singleton** | Quản lý socket kết nối Redis |
 | `RedisTicketStore` | `RedisTicketStore` | **Singleton** | Lưu trữ ticket phiên đăng nhập Cookie vào Redis |
 | `RedisConnectionHostedService` | `RedisConnectionHostedService` | **HostedService** | Kiểm tra liveness và độ trễ kết nối Redis khi khởi động |
@@ -173,7 +174,7 @@ graph LR
 ### 4.1. Không sử dụng Khóa Ngoại vật lý (No Foreign Keys)
 - Cơ sở dữ liệu cố ý bỏ các ràng buộc `FOREIGN KEY` để tránh lock cascading và tối ưu hóa tốc độ ghi.
 - Tất cả các trường `*_id` (như `user_id`, `vehicle_id`, `rental_id`,...) là **khóa ngoại logic**.
-- Tầng Application và Repository sử dụng `NpgsqlTransaction` để đảm bảo tính nguyên tử khi thêm/sửa đổi trên nhiều bảng liên quan.
+- Repository ở Infrastructure sử dụng `NpgsqlTransaction` để đảm bảo tính nguyên tử khi thêm/sửa đổi trên nhiều bảng liên quan. EF có thể đọc trong cùng transaction; Application không phụ thuộc driver hoặc ORM.
 
 ### 4.2. Triggers Nghiệp vụ Bắt buộc (Database Triggers)
 1. **Trigger `trg_invoice_no_subscription`**:  

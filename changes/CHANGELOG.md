@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-10-25 — [Entity Framework cho truy vấn đọc và gộp file](2026-10-25-entity-framework-read-queries.md)
+
 - 2026-10-23 — [Số lượt thuê theo ngày trong chuỗi doanh thu](2026-10-23-dashboard-rental-volume.md)
 
 - 2026-10-23 — [Caddy đứng trước API trong deploy docker compose](2026-10-23-caddy-reverse-proxy.md)

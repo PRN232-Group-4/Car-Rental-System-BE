@@ -1,6 +1,8 @@
-using System.Text;
+using System.Text.RegularExpressions;
 using Car_Rental_System_BE.Application.Availability;
 using Car_Rental_System_BE.Domain.Availability;
+using Car_Rental_System_BE.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -8,349 +10,172 @@ namespace Car_Rental_System_BE.Infrastructure.Availability;
 
 public sealed class NpgsqlVehicleSearchRepository(NpgsqlDataSource dataSource) : IVehicleSearchRepository
 {
-    private const string FuelSql = "translate(lower(trim(t.fuel_type)), 'ĐĂỆẦ', 'đăệầ')";
-    private const string ElectricSql = "(ecd.vehicle_id IS NOT NULL OR emd.vehicle_id IS NOT NULL OR " + FuelSql + " IN ('electric', 'điện', 'thuần điện'))";
-    private const string TypeSql = "COALESCE(NULLIF(lower(trim(t.type)), ''), CASE WHEN cd.vehicle_id IS NOT NULL OR ecd.vehicle_id IS NOT NULL THEN 'car' WHEN md.vehicle_id IS NOT NULL OR emd.vehicle_id IS NOT NULL THEN 'motorbike' END)";
-    private const string TransmissionSql = "CASE WHEN cd.transmission ILIKE '%cvt%' THEN 'cvt' WHEN lower(trim(cd.transmission)) IN ('automatic', 'at') OR cd.transmission ILIKE '%tự động%' THEN 'automatic' WHEN lower(trim(cd.transmission)) IN ('manual', 'mt') OR cd.transmission ILIKE '%số sàn%' THEN 'manual' ELSE lower(trim(cd.transmission)) END";
-
     public async Task<VehicleSearchResult> SearchAsync(VehicleSearchQuery query, int bufferMinutes, bool? driverAvailable, CancellationToken ct)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(ct);
-
-        var priceCol = query.RentalType == "longterm" ? "v.rental_price_longterm" : "v.rental_price_hourly";
-        var sql = new StringBuilder($"""
-            SELECT v.id,
-                   v.vehicle_type_id, t.name, t.fuel_type,
-                   v.brand, v.model, v.year_of_manufacture, v.color,
-                   v.main_img_url, v.current_location,
-                   v.facility_id, f.name,
-                   v.rental_price_hourly, v.rental_price_longterm,
-                   cd.seat_count, cd.transmission,
-                   md.bike_type, md.has_storage_box,
-                   COALESCE(ecd.max_range_km, emd.max_range_km),
-                   COALESCE(ecd.battery_capacity, emd.battery_capacity),
-                   COALESCE({ElectricSql}, false) AS is_electric,
-                   COUNT(*) OVER() AS total_count, {TypeSql} AS type, v.allowed_license_types
-            FROM vehicles v
-            JOIN vehicle_types t ON t.id = v.vehicle_type_id
-            LEFT JOIN facilities f ON f.id = v.facility_id
-            LEFT JOIN car_detail cd ON cd.vehicle_id = v.id
-            LEFT JOIN motorbike_detail md ON md.vehicle_id = v.id
-            LEFT JOIN electric_car_detail ecd ON ecd.vehicle_id = v.id
-            LEFT JOIN electric_motorbike_detail emd ON emd.vehicle_id = v.id
-            WHERE v.status = 'available'
-              AND EXISTS (SELECT 1 FROM unnest(v.allowed_license_types) AS configured_license(license_type)
-                  WHERE configured_license.license_type ~ '[^[:space:]]')
-              AND NOT EXISTS (SELECT 1 FROM rentals active_rental WHERE active_rental.vehicle_id=v.id
-                  AND active_rental.status IN ('renting','post_inspection'))
-            """);
-
-        await using var command = new NpgsqlCommand { Connection = connection };
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var matches =
+            from v in db.Set<VehiclesRow>()
+            join t in db.Set<VehicleTypesRow>() on v.VehicleTypeId equals t.Id
+            join f0 in db.Set<FacilitiesRow>() on v.FacilityId equals f0.Id into facilities
+            from f in facilities.DefaultIfEmpty()
+            join cd0 in db.Set<CarDetailRow>() on v.Id equals cd0.VehicleId into cars
+            from cd in cars.DefaultIfEmpty()
+            join md0 in db.Set<MotorbikeDetailRow>() on v.Id equals md0.VehicleId into bikes
+            from md in bikes.DefaultIfEmpty()
+            join ec0 in db.Set<ElectricCarDetailRow>() on v.Id equals ec0.VehicleId into electricCars
+            from ec in electricCars.DefaultIfEmpty()
+            join em0 in db.Set<ElectricMotorbikeDetailRow>() on v.Id equals em0.VehicleId into electricBikes
+            from em in electricBikes.DefaultIfEmpty()
+            let fuel = t.FuelType == null ? null : t.FuelType!.Trim().ToLower()
+                .Replace("Đ", "đ").Replace("Ă", "ă").Replace("Ệ", "ệ").Replace("Ầ", "ầ")
+            let type = t.Type != null && t.Type!.Trim() != "" ? t.Type!.Trim().ToLower()
+                : cd != null || ec != null ? "car" : md != null || em != null ? "motorbike" : null
+            let transmission = cd!.Transmission! == null ? null :
+                EF.Functions.ILike(cd!.Transmission!, "%cvt%") ? "cvt" :
+                cd!.Transmission!.Trim().ToLower() == "automatic" || cd!.Transmission!.Trim().ToLower() == "at" || EF.Functions.ILike(cd!.Transmission!, "%tự động%") ? "automatic" :
+                cd!.Transmission!.Trim().ToLower() == "manual" || cd!.Transmission!.Trim().ToLower() == "mt" || EF.Functions.ILike(cd!.Transmission!, "%số sàn%") ? "manual" : cd!.Transmission!.Trim().ToLower()
+            where v.Status == "available" && v.AllowedLicenseTypes.Any(license => Regex.IsMatch(license, "[^[:space:]]"))
+                && !db.Set<RentalsRow>().Any(r => r.VehicleId == v.Id && (r.Status == "renting" || r.Status == "post_inspection"))
+            select new
+            {
+                Vehicle = v, TypeId = t.Id, TypeName = t.Name, t.FuelType, Type = type,
+                FacilityName = f.Name, SeatCount = cd.SeatCount, RawTransmission = cd!.Transmission!, Transmission = transmission,
+                BikeType = md.BikeType, HasStorageBox = md.HasStorageBox,
+                MaxRange = ec.MaxRangeKm ?? em.MaxRangeKm, BatteryCapacity = ec.BatteryCapacity ?? em.BatteryCapacity,
+                IsElectric = ec != null || em != null || fuel == "electric" || fuel == "điện" || fuel == "thuần điện",
+                Fuel = fuel,
+                Price = query.RentalType == "longterm" ? v.RentalPriceLongterm : v.RentalPriceHourly,
+                SearchText = string.Join(" ", new[] { v.Brand, v.Model, v.YearOfManufacture.ToString(), f.Name, v.CurrentLocation }).ToLower(),
+                Name = string.Join(" ", new[] { v.Brand, v.Model }).ToLower()
+            };
 
         if (query.Category is { } category)
         {
-            sql.Append($" AND {TypeSql} = @categoryType AND COALESCE({ElectricSql}, false) = @categoryElectric");
-            command.Parameters.AddWithValue("categoryType", category.EndsWith("motorbike", StringComparison.Ordinal) ? "motorbike" : "car");
-            command.Parameters.AddWithValue("categoryElectric", category.StartsWith("electric_", StringComparison.Ordinal));
+            var categoryType = category.EndsWith("motorbike", StringComparison.Ordinal) ? "motorbike" : "car";
+            var electric = category.StartsWith("electric_", StringComparison.Ordinal);
+            matches = matches.Where(x => x.Type == categoryType && x.IsElectric == electric);
         }
-
-        if (query.Window is { } w)
+        if (query.Window is { } window)
         {
-            sql.Append("""
-                 AND NOT EXISTS (
-                     SELECT 1 FROM vehicle_bookings vb
-                     WHERE vb.vehicle_id = v.id AND vb.is_blocking
-                       AND vb.period && tsrange(@from, @to + make_interval(mins => @buffer), '[)')
-                 )
-                 AND NOT EXISTS (
-                     SELECT 1 FROM v_vehicle_maintenance_blocks mb
-                     WHERE mb.vehicle_id = v.id
-                       AND mb.blocked_range && tsrange(@from, @to, '[)')
-                 )
-                """);
-            command.Parameters.Add(Sql.Timestamp("from", w.From));
-            command.Parameters.Add(Sql.Timestamp("to", w.To));
-            command.Parameters.AddWithValue("buffer", bufferMinutes);
+            var bookingRange = Range(window.From, window.To.AddMinutes(bufferMinutes));
+            var maintenanceRange = Range(window.From, window.To);
+            matches = matches.Where(x => !db.Set<VehicleBookingsRow>().Any(b => b.VehicleId == x.Vehicle.Id && b.IsBlocking && b.Period!.Value.Overlaps(bookingRange))
+                && !db.Set<VVehicleMaintenanceBlocksRow>().Any(b => b.VehicleId == x.Vehicle.Id && b.BlockedRange.Overlaps(maintenanceRange)));
         }
-
-        if (query.VehicleTypeId is { } vt)
-        {
-            sql.Append(" AND v.vehicle_type_id = @typeId");
-            command.Parameters.AddWithValue("typeId", vt);
-        }
-
-        if (query.FacilityId is { } fac)
-        {
-            sql.Append(" AND v.facility_id = @facilityId");
-            command.Parameters.AddWithValue("facilityId", fac);
-        }
-
+        if (query.VehicleTypeId is { } typeId) matches = matches.Where(x => x.Vehicle.VehicleTypeId == typeId);
+        if (query.FacilityId is { } facilityId) matches = matches.Where(x => x.Vehicle.FacilityId == facilityId);
         if (!string.IsNullOrWhiteSpace(query.Brand))
         {
-            sql.Append(" AND lower(v.brand) = lower(@brand)");
-            command.Parameters.AddWithValue("brand", query.Brand.Trim());
+            var brand = query.Brand.Trim().ToLowerInvariant();
+            matches = matches.Where(x => x.Vehicle.Brand != null && x.Vehicle.Brand.ToLower() == brand);
         }
-
         if (!string.IsNullOrWhiteSpace(query.Q))
         {
-            sql.Append(" AND lower(concat_ws(' ', v.brand, v.model, v.year_of_manufacture::text, f.name, v.current_location)) LIKE @qPattern");
-            command.Parameters.AddWithValue("qPattern", $"%{EscapeLike(query.Q.Trim().ToLowerInvariant())}%");
+            var pattern = $"%{EscapeLike(query.Q.Trim().ToLowerInvariant())}%";
+            matches = matches.Where(x => EF.Functions.Like(x.SearchText, pattern));
         }
-
-        if (query.MinPrice is { } minP)
-        {
-            sql.Append($" AND {priceCol} >= @minPrice");
-            command.Parameters.AddWithValue("minPrice", minP);
-        }
-
-        if (query.MaxPrice is { } maxP)
-        {
-            sql.Append($" AND {priceCol} <= @maxPrice");
-            command.Parameters.AddWithValue("maxPrice", maxP);
-        }
-
-        if (query.SeatCount is { } seats)
-        {
-            sql.Append(" AND cd.seat_count >= @seatCount");
-            command.Parameters.AddWithValue("seatCount", seats);
-        }
-
+        if (query.MinPrice is { } minPrice) matches = matches.Where(x => x.Price >= minPrice);
+        if (query.MaxPrice is { } maxPrice) matches = matches.Where(x => x.Price <= maxPrice);
+        if (query.SeatCount is { } seats) matches = matches.Where(x => x.SeatCount >= seats);
         if (!string.IsNullOrWhiteSpace(query.Transmission))
         {
             var transmission = query.Transmission.Trim().ToLowerInvariant();
-            if (transmission == "automatic")
-                sql.Append($" AND ({TransmissionSql}) IN ('automatic', 'cvt')");
-            else
-            {
-                sql.Append($" AND (lower(trim(cd.transmission)) = @transmission OR ({TransmissionSql}) = @transmission)");
-                command.Parameters.AddWithValue("transmission", transmission);
-            }
+            matches = transmission == "automatic"
+                ? matches.Where(x => x.Transmission == "automatic" || x.Transmission == "cvt")
+                : matches.Where(x => x.RawTransmission != null && x.RawTransmission.Trim().ToLower() == transmission || x.Transmission == transmission);
         }
-
         if (!string.IsNullOrWhiteSpace(query.BikeType))
         {
-            sql.Append(" AND lower(md.bike_type) = lower(@bikeType)");
-            command.Parameters.AddWithValue("bikeType", query.BikeType.Trim());
+            var bikeType = query.BikeType.Trim().ToLowerInvariant();
+            matches = matches.Where(x => x.BikeType != null && x.BikeType.ToLower() == bikeType);
         }
-
-        if (query.MinRangeKm is { } minRange)
-        {
-            sql.Append(" AND COALESCE(ecd.max_range_km, emd.max_range_km) >= @minRangeKm");
-            command.Parameters.AddWithValue("minRangeKm", minRange);
-        }
-
-        if (query.YearFrom is { } yf)
-        {
-            sql.Append(" AND v.year_of_manufacture >= @yearFrom");
-            command.Parameters.AddWithValue("yearFrom", yf);
-        }
-
+        if (query.MinRangeKm is { } minRange) matches = matches.Where(x => x.MaxRange >= minRange);
+        if (query.YearFrom is { } year) matches = matches.Where(x => x.Vehicle.YearOfManufacture >= year);
         if (!string.IsNullOrWhiteSpace(query.FuelType))
         {
             var fuel = query.FuelType.Trim().ToLowerInvariant();
-            if (fuel is "electric" or "điện" or "thuần điện")
-                sql.Append($" AND COALESCE({ElectricSql}, false)");
-            else if (fuel is "petrol" or "gasoline" or "xăng")
-                sql.Append($" AND {FuelSql} IN ('petrol', 'gasoline', 'xăng')");
-            else
+            matches = fuel switch
             {
-                sql.Append($" AND {FuelSql} = @fuelType");
-                command.Parameters.AddWithValue("fuelType", fuel);
-            }
+                "electric" or "điện" or "thuần điện" => matches.Where(x => x.IsElectric),
+                "petrol" or "gasoline" or "xăng" => matches.Where(x => x.Fuel == "petrol" || x.Fuel == "gasoline" || x.Fuel == "xăng"),
+                _ => matches.Where(x => x.Fuel == fuel)
+            };
         }
-
-        var orderClause = query.Sort switch
+        var total = await matches.CountAsync(ct);
+        var ordered = query.Sort switch
         {
-            "price_asc" => $"ORDER BY {priceCol} ASC NULLS LAST, v.id ASC",
-            "price_desc" => $"ORDER BY {priceCol} DESC NULLS LAST, v.id ASC",
-            "newest" => "ORDER BY v.year_of_manufacture DESC NULLS LAST, v.id DESC",
-            "name_asc" => "ORDER BY lower(concat_ws(' ', v.brand, v.model)) ASC, v.id ASC",
-            _ => "ORDER BY v.id DESC"
+            "price_asc" => matches.OrderBy(x => x.Price == null).ThenBy(x => x.Price).ThenBy(x => x.Vehicle.Id),
+            "price_desc" => matches.OrderBy(x => x.Price == null).ThenByDescending(x => x.Price).ThenBy(x => x.Vehicle.Id),
+            "newest" => matches.OrderBy(x => x.Vehicle.YearOfManufacture == null).ThenByDescending(x => x.Vehicle.YearOfManufacture).ThenByDescending(x => x.Vehicle.Id),
+            "name_asc" => matches.OrderBy(x => x.Name).ThenBy(x => x.Vehicle.Id),
+            _ => matches.OrderByDescending(x => x.Vehicle.Id)
         };
-        var filteredSql = sql.ToString();
-        sql.Append($" {orderClause} LIMIT @limit OFFSET @offset");
-
-        command.Parameters.AddWithValue("limit", query.PageSize);
-        command.Parameters.AddWithValue("offset", ((long)query.Page - 1) * query.PageSize);
-        command.CommandText = sql.ToString();
-
-        var items = new List<VehicleSearchItem>();
-        var total = 0;
-        double? durationHours = query.Window is { } window ? window.Duration.TotalHours : null;
-        AppliedWindow? appliedWindow = query.Window is { } win ? new(win.From, win.To, bufferMinutes) : null;
-
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
-        {
-            total = Convert.ToInt32(reader.GetInt64(21));
-            var id = reader.GetInt32(0);
-            var vTypeId = reader.GetInt32(1);
-            var vTypeName = reader.GetString(2);
-            var fuelType = reader.IsDBNull(3) ? null : reader.GetString(3);
-            var brand = reader.IsDBNull(4) ? null : reader.GetString(4);
-            var model = reader.IsDBNull(5) ? null : reader.GetString(5);
-            var year = reader.IsDBNull(6) ? null : (int?)reader.GetInt32(6);
-            var color = reader.IsDBNull(7) ? null : reader.GetString(7);
-            var imgUrl = reader.IsDBNull(8) ? null : reader.GetString(8);
-            var location = reader.IsDBNull(9) ? null : reader.GetString(9);
-            var facId = reader.IsDBNull(10) ? null : (int?)reader.GetInt32(10);
-            var facName = reader.IsDBNull(11) ? null : reader.GetString(11);
-            var priceH = reader.IsDBNull(12) ? null : (decimal?)reader.GetDecimal(12);
-            var priceL = reader.IsDBNull(13) ? null : (decimal?)reader.GetDecimal(13);
-            var seatCount = reader.IsDBNull(14) ? null : (int?)reader.GetInt32(14);
-            var transmission = reader.IsDBNull(15) ? null : reader.GetString(15);
-            var bikeType = reader.IsDBNull(16) ? null : reader.GetString(16);
-            var hasBox = reader.IsDBNull(17) ? null : (bool?)reader.GetBoolean(17);
-            var maxRange = reader.IsDBNull(18) ? null : (decimal?)reader.GetDecimal(18);
-            var batCap = reader.IsDBNull(19) ? null : reader.GetString(19);
-            var isElectric = reader.GetBoolean(20);
-
-            var typeRef = new VehicleTypeRef(vTypeId, vTypeName, fuelType, reader.IsDBNull(22) ? null : reader.GetString(22));
-            var facRef = facId is not null && facName is not null ? new FacilityRef(facId.Value, facName) : null;
-            var summary = new VehicleSummary(seatCount, transmission, bikeType, hasBox, maxRange, batCap);
-            var badges = new VehicleBadges(isElectric, driverAvailable, priceH is not null);
-
-            items.Add(new VehicleSearchItem(
-                id, typeRef, brand, model, year, color, imgUrl, location, facRef,
-                priceH, priceL, summary, badges, durationHours) { AllowedLicenseTypes = reader.GetFieldValue<string[]>(23) });
-        }
-
-        await reader.DisposeAsync();
-        if (items.Count == 0)
-        {
-            await using var count = new NpgsqlCommand("SELECT COUNT(*) FROM (" + filteredSql + ") matches", connection);
-            foreach (NpgsqlParameter parameter in command.Parameters)
-                if (parameter.ParameterName is not ("limit" or "offset"))
-                    count.Parameters.Add(parameter.Clone());
-            total = Convert.ToInt32(await count.ExecuteScalarAsync(ct));
-        }
+        var offset = ((long)query.Page - 1) * query.PageSize;
+        var rows = offset >= total ? [] : await ordered.Skip((int)offset).Take(query.PageSize).ToListAsync(ct);
+        double? durationHours = query.Window?.Duration.TotalHours;
+        var items = rows.Select(x => new VehicleSearchItem(x.Vehicle.Id,
+            new VehicleTypeRef(x.TypeId, x.TypeName, x.FuelType, x.Type), x.Vehicle.Brand, x.Vehicle.Model,
+            x.Vehicle.YearOfManufacture, x.Vehicle.Color, x.Vehicle.MainImgUrl, x.Vehicle.CurrentLocation,
+            x.Vehicle.FacilityId is { } id && x.FacilityName != null ? new FacilityRef(id, x.FacilityName) : null,
+            x.Vehicle.RentalPriceHourly, x.Vehicle.RentalPriceLongterm,
+            new VehicleSummary(x.SeatCount, x.RawTransmission, x.BikeType, x.HasStorageBox, x.MaxRange, x.BatteryCapacity),
+            new VehicleBadges(x.IsElectric, driverAvailable, x.Vehicle.RentalPriceHourly != null), durationHours)
+            { AllowedLicenseTypes = x.Vehicle.AllowedLicenseTypes }).ToList();
+        AppliedWindow? appliedWindow = query.Window is { } applied ? new(applied.From, applied.To, bufferMinutes) : null;
         return new VehicleSearchResult(items, query.Page, query.PageSize, total, appliedWindow);
     }
 
     public async Task<ActiveRentalPolicy?> GetActivePolicyAsync(int vehicleTypeId, CancellationToken ct)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(ct);
-        const string sql = """
-            SELECT id, vehicle_type_id, name, vat_rate, deposit_percentage, overtime_fee_rate
-            FROM rental_policies
-            WHERE (vehicle_type_id = @typeId OR vehicle_type_id IS NULL) AND is_active = true
-            ORDER BY (vehicle_type_id IS NOT NULL) DESC, id DESC
-            LIMIT 1
-            """;
-        await using var command = new NpgsqlCommand(sql, connection);
-        command.Parameters.AddWithValue("typeId", vehicleTypeId);
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct)) return null;
-
-        return new ActiveRentalPolicy(
-            reader.GetInt32(0),
-            reader.IsDBNull(1) ? null : reader.GetInt32(1),
-            reader.GetString(2),
-            reader.GetDecimal(3),
-            reader.GetDecimal(4),
-            reader.GetDecimal(5));
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<RentalPoliciesRow>().Where(p => p.IsActive && (p.VehicleTypeId == vehicleTypeId || p.VehicleTypeId == null))
+            .OrderByDescending(p => p.VehicleTypeId != null).ThenByDescending(p => p.Id)
+            .Select(p => new ActiveRentalPolicy(p.Id, p.VehicleTypeId, p.Name, p.VatRate, p.DepositPercentage, p.OvertimeFeeRate)).FirstOrDefaultAsync(ct);
     }
 
     public async Task<bool> VehicleExistsAsync(int vehicleId, CancellationToken ct)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(ct);
-        await using var command = new NpgsqlCommand("SELECT EXISTS(SELECT 1 FROM vehicles WHERE id = @id)", connection);
-        command.Parameters.AddWithValue("id", vehicleId);
-        return (bool)(await command.ExecuteScalarAsync(ct))!;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<VehiclesRow>().AnyAsync(v => v.Id == vehicleId, ct);
     }
 
     public async Task<IReadOnlyList<BusySlot>> ListBusySlotsAsync(int vehicleId, TimeRange window, CancellationToken ct)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(ct);
-        var slots = new List<BusySlot>();
-
-        await using (var cmd = new NpgsqlCommand("""
-            SELECT starts_at, upper(period) FROM vehicle_bookings
-            WHERE vehicle_id = @id AND is_blocking AND period && tsrange(@from, @to, '[)')
-            ORDER BY starts_at
-            """, connection))
-        {
-            cmd.Parameters.AddWithValue("id", vehicleId);
-            cmd.Parameters.Add(Sql.Timestamp("from", window.From));
-            cmd.Parameters.Add(Sql.Timestamp("to", window.To));
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
-            {
-                var start = reader.GetDateTime(0);
-                var end = reader.GetDateTime(1);
-                var clippedStart = start < window.From ? window.From : start;
-                var clippedEnd = end > window.To ? window.To : end;
-                if (clippedEnd > clippedStart)
-                    slots.Add(new BusySlot(clippedStart, clippedEnd, "booking"));
-            }
-        }
-
-        await using (var cmd = new NpgsqlCommand("""
-            SELECT lower(blocked_range), upper(blocked_range) FROM v_vehicle_maintenance_blocks
-            WHERE vehicle_id = @id AND blocked_range && tsrange(@from, @to, '[)')
-            ORDER BY lower(blocked_range)
-            """, connection))
-        {
-            cmd.Parameters.AddWithValue("id", vehicleId);
-            cmd.Parameters.Add(Sql.Timestamp("from", window.From));
-            cmd.Parameters.Add(Sql.Timestamp("to", window.To));
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
-            {
-                var start = Sql.Bound(reader, 0) ?? window.From;
-                var end = Sql.Bound(reader, 1) ?? window.To;
-                var clippedStart = start < window.From ? window.From : start;
-                var clippedEnd = end > window.To ? window.To : end;
-                if (clippedEnd > clippedStart)
-                    slots.Add(new BusySlot(clippedStart, clippedEnd, "maintenance"));
-            }
-        }
-
-        return slots.OrderBy(s => s.From).ToList();
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var range = Range(window.From, window.To);
+        var bookings = await db.Set<VehicleBookingsRow>()
+            .Where(b => b.VehicleId == vehicleId && b.IsBlocking && b.Period!.Value.Overlaps(range))
+            .OrderBy(b => b.StartsAt).Select(b => new { Start = b.StartsAt, End = b.Period!.Value.UpperBound }).ToListAsync(ct);
+        var maintenance = await db.Set<VVehicleMaintenanceBlocksRow>()
+            .Where(b => b.VehicleId == vehicleId && b.BlockedRange.Overlaps(range))
+            .OrderBy(b => b.BlockedRange.LowerBound).Select(b => b.BlockedRange).ToListAsync(ct);
+        var slots = bookings.Select(b => new BusySlot(b.Start < window.From ? window.From : b.Start, b.End > window.To ? window.To : b.End, "booking")).ToList();
+        slots.AddRange(maintenance.Select(b => new BusySlot(
+            b.LowerBoundInfinite || b.LowerBound < window.From ? window.From : b.LowerBound,
+            b.UpperBoundInfinite || b.UpperBound > window.To ? window.To : b.UpperBound, "maintenance")));
+        return slots.Where(s => s.To > s.From).OrderBy(s => s.From).ToList();
     }
 
     public async Task<IReadOnlyList<AffectedRental>> ListAffectedRentalsAsync(int vehicleId, DateTime nowUtc, CancellationToken ct)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(ct);
-        const string sql = """
-            SELECT r.id, COALESCE(u.fullname, u.email),
-                   COALESCE(h.start_time, l.start_time) AS start_time,
-                   COALESCE(h.end_time, l.end_time) AS end_time,
-                   r.status
-            FROM rentals r
-            JOIN customers c ON c.id = r.customer_id
-            JOIN users u ON u.id = c.user_id
-            LEFT JOIN hour_rental_detail h ON h.rental_id = r.id
-            LEFT JOIN longterm_rental_contract l ON l.rental_id = r.id
-            WHERE r.vehicle_id = @id
-              AND r.status IN ('pending', 'pre_inspection', 'renting')
-              AND (
-                  COALESCE(h.start_time, l.start_time) >= @now
-                  OR EXISTS (
-                      SELECT 1 FROM v_vehicle_maintenance_blocks mb
-                      WHERE mb.vehicle_id = r.vehicle_id
-                        AND mb.blocked_range && tsrange(COALESCE(h.start_time, l.start_time), COALESCE(h.end_time, l.end_time), '[)')
-                  )
-              )
-            ORDER BY COALESCE(h.start_time, l.start_time), r.id
-            """;
-        await using var command = new NpgsqlCommand(sql, connection);
-        command.Parameters.AddWithValue("id", vehicleId);
-        command.Parameters.Add(Sql.Timestamp("now", nowUtc));
-
-        var result = new List<AffectedRental>();
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
-        {
-            result.Add(new AffectedRental(
-                reader.GetInt32(0),
-                reader.IsDBNull(1) ? null : reader.GetString(1),
-                reader.GetDateTime(2),
-                reader.GetDateTime(3),
-                reader.GetString(4)));
-        }
-        return result;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var now = Timestamp(nowUtc);
+        return await (from r in db.Set<RentalsRow>()
+            join c in db.Set<CustomersRow>() on r.CustomerId equals c.Id
+            join u in db.Set<UsersRow>() on c.UserId equals u.Id
+            join h0 in db.Set<HourRentalDetailRow>() on r.Id equals h0.RentalId into hours
+            from h in hours.DefaultIfEmpty()
+            join l0 in db.Set<LongtermRentalContractRow>() on r.Id equals l0.RentalId into contracts
+            from l in contracts.DefaultIfEmpty()
+            let start = h.StartTime ?? l.StartTime
+            let end = h.EndTime ?? l.EndTime
+            where r.VehicleId == vehicleId && (r.Status == "pending" || r.Status == "pre_inspection" || r.Status == "renting")
+                && (start >= now || db.Set<VVehicleMaintenanceBlocksRow>().Any(b => b.VehicleId == r.VehicleId && !b.BlockedRange.IsEmpty && (b.BlockedRange.LowerBoundInfinite || b.BlockedRange.LowerBound < end) && (b.BlockedRange.UpperBoundInfinite || b.BlockedRange.UpperBound > start)))
+            orderby start, r.Id
+            select new AffectedRental(r.Id, u.Fullname ?? u.Email, start!.Value, end!.Value, r.Status)).ToListAsync(ct);
     }
 
+    internal static DateTime Timestamp(DateTime value) => DateTime.SpecifyKind(value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : value, DateTimeKind.Unspecified);
+    internal static NpgsqlRange<DateTime> Range(DateTime from, DateTime to) => new(Timestamp(from), true, Timestamp(to), false);
     private static string EscapeLike(string s) => s.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_");
 }
