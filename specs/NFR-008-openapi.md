@@ -1,5 +1,15 @@
 # NFR-008 — OpenAPI
 
+## Tên tài nguyên số ít/số nhiều — 2026-10-25
+
+- Đường dẫn nhắm tới tập hợp dùng số nhiều: `/api/customers`, `/api/vehicles`, `/api/rentals`; POST tạo mới trên tập hợp giữ số nhiều.
+- Tài nguyên có ID dùng số ít: `/api/customer/{id}`, `/api/vehicle/{id}`, `/api/rental/{id}`. Tài nguyên con áp dụng cùng quy tắc: `/api/user/{id}/roles` là tập hợp vai trò, `/api/department/{departmentId}/member/{userId}` nhắm một thành viên.
+- Singleton/action và danh từ tập hợp hoặc không đếm được (`account`, `profile`, `staff`, `media`) không thêm `s` máy móc. Nhóm chức năng không đại diện một bản ghi có ID giữ tên theo chức năng.
+- Cập nhật đồng bộ route, Location khi tạo, Swagger, tài liệu API, test và FE. Không đổi DTO, response envelope, phân quyền hoặc nghiệp vụ vì đổi URL.
+- Acceptance: collection và singleton có đường dẫn đúng; URL detail cũ không xuất hiện trong Swagger; HTTP gọi route mới và Location hoạt động; danh sách con vẫn phân biệt với một bản ghi con.
+
+Quyết định: [ADR-013](../docs/decisions/ADR-013-api-resource-number.md). Thay đổi: [gộp file và tên API](../changes/2026-10-25-file-consolidation-api-number.md).
+
 ## 2026-10-22 — Thứ tự mặc định danh sách Admin
 
 - Xe: `created_at DESC, id DESC`; customer/GPLX, cơ sở, vai trò, hồ sơ nhân viên: ID giảm dần (các bảng này không có ngày tạo hồ sơ). SQL xếp trước LIMIT/OFFSET, giữ filter và tổng.

@@ -92,19 +92,19 @@ public sealed class RoleApiTests : IAsyncLifetime
     {
         using var created = await SendAsync(HttpMethod.Post, "/api/roles", body: new RoleRequest(" Auditor "));
         using var createdJson = await EnvelopeAsync(created, 201);
-        Assert.EndsWith("/api/roles/9", created.Headers.Location!.ToString());
+        Assert.EndsWith("/api/role/9", created.Headers.Location!.ToString());
         Assert.Equal("Auditor", createdJson.RootElement.GetProperty("data").GetProperty("name").GetString());
-        using var found = await SendAsync(HttpMethod.Get, "/api/roles/9");
+        using var found = await SendAsync(HttpMethod.Get, "/api/role/9");
         using var foundJson = await EnvelopeAsync(found, 200);
         Assert.False(foundJson.RootElement.GetProperty("data").GetProperty("isSystem").GetBoolean());
-        using var updated = await SendAsync(HttpMethod.Put, "/api/roles/9", body: new RoleRequest("Reviewer"));
+        using var updated = await SendAsync(HttpMethod.Put, "/api/role/9", body: new RoleRequest("Reviewer"));
         using var updatedJson = await EnvelopeAsync(updated, 200);
         Assert.Equal("Reviewer", updatedJson.RootElement.GetProperty("data").GetProperty("name").GetString());
-        using var missing = await SendAsync(HttpMethod.Get, "/api/roles/999");
+        using var missing = await SendAsync(HttpMethod.Get, "/api/role/999");
         using var missingJson = await EnvelopeAsync(missing, 404);
-        using var protectedRole = await SendAsync(HttpMethod.Delete, "/api/roles/1");
+        using var protectedRole = await SendAsync(HttpMethod.Delete, "/api/role/1");
         using var protectedJson = await EnvelopeAsync(protectedRole, 409);
-        using var deleted = await SendAsync(HttpMethod.Delete, "/api/roles/9");
+        using var deleted = await SendAsync(HttpMethod.Delete, "/api/role/9");
         using var deletedJson = await EnvelopeAsync(deleted, 200);
         Assert.True(_repository.Deleted);
     }
@@ -134,12 +134,50 @@ public sealed class RoleApiTests : IAsyncLifetime
     {
         using var json = JsonDocument.Parse(await _client.GetStringAsync("/swagger/v1/swagger.json"));
         var paths = json.RootElement.GetProperty("paths");
-        foreach (var (path, method, success) in new[] { ("/api/roles", "get", "200"), ("/api/roles", "post", "201"), ("/api/roles/{id}", "get", "200"), ("/api/roles/{id}", "put", "200"), ("/api/roles/{id}", "delete", "200") })
+        foreach (var (path, method, success) in new[] { ("/api/roles", "get", "200"), ("/api/roles", "post", "201"), ("/api/role/{id}", "get", "200"), ("/api/role/{id}", "put", "200"), ("/api/role/{id}", "delete", "200") })
         {
             var responses = paths.GetProperty(path).GetProperty(method).GetProperty("responses");
             foreach (var code in new[] { success, "400", "401", "403" })
                 Assert.Equal(6, responses.GetProperty(code).GetProperty("content").GetProperty("application/json").GetProperty("schema").GetProperty("required").GetArrayLength());
         }
+    }
+
+    [Fact]
+    public async Task Swagger_uses_plural_collections_and_singular_identified_resources()
+    {
+        using var json = JsonDocument.Parse(await _client.GetStringAsync("/swagger/v1/swagger.json"));
+        var paths = json.RootElement.GetProperty("paths");
+        foreach (var collection in new[] { "customers", "vehicles", "rentals", "users", "roles", "devices", "handovers", "invoices" })
+            Assert.True(paths.TryGetProperty("/api/" + collection, out _), collection);
+        foreach (var path in new[] {
+            "/api/customer/{customerId}", "/api/vehicle/{id}", "/api/rental/{id}",
+            "/api/user/{id}", "/api/role/{id}", "/api/device/{id}", "/api/handover/{rentalId}",
+            "/api/department/{departmentId}/member/{userId}", "/api/facility/{facilityId}/member/{userId}",
+            "/api/rental/mine/{id}", "/api/rental/{id}/inspection-assignment", "/api/rental/{id}/assignments",
+            "/api/rental/{id}/assignable-vehicles", "/api/user/{id}/roles", "/api/tracking/vehicle/{vehicleId}/history" })
+            Assert.True(paths.TryGetProperty(path, out _), path);
+        var plurals = new HashSet<string> {
+            "customers", "vehicles", "rentals", "users", "roles", "devices", "handovers", "departments", "facilities",
+            "reports", "shifts", "invoices", "payments", "refunds", "checkouts", "purchases", "alerts", "vehicle-types",
+            "rental-policies", "subscription-plans", "members", "replacement-inspections", "ratings" };
+        foreach (var path in paths.EnumerateObject())
+        {
+            var segments = path.Name.Split('/');
+            for (var i = 1; i < segments.Length; i++)
+                if (segments[i].StartsWith('{'))
+                    Assert.DoesNotContain(segments[i - 1], plurals);
+        }
+    }
+
+    [Theory]
+    [InlineData("/api/customers/9")]
+    [InlineData("/api/roles/9")]
+    [InlineData("/api/vehicles/9")]
+    [InlineData("/api/rentals/9")]
+    public async Task Old_plural_single_resource_URLs_are_not_aliases(string path)
+    {
+        using var response = await SendAsync(HttpMethod.Get, path);
+        using var json = await EnvelopeAsync(response, 404);
     }
 
     private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, string? role = "Admin", object? body = null)

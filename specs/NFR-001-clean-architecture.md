@@ -1,5 +1,13 @@
 # NFR-001 — Clean Architecture
 
+## Gộp phần Customer detail còn lại — 2026-10-25
+
+- Gộp `CustomerService.Detail.cs` vào `CustomerService.cs` và `CustomersController.Detail.cs` vào `CustomersController.cs`; bỏ `partial` khi lớp không còn phần khai báo khác.
+- Giữ DTO `CustomerDetail` và test chi tiết riêng vì chúng mô tả contract/tình huống kiểm chứng, không phải file implementation bị chia nhỏ.
+- Acceptance: không còn file `*Detail*` trong `src`; service/controller gọi cùng use case và giữ dữ liệu, quyền, xử lý not-found; build và regression Customer detail đạt.
+
+Xem [thay đổi](../changes/2026-10-25-file-consolidation-api-number.md).
+
 ## Entity Framework và tổ chức file — 2026-10-25
 
 - Truy vấn đọc dữ liệu thông thường ở Infrastructure dùng Entity Framework Core với provider PostgreSQL, LINQ projection và no-tracking; không đưa EF vào Domain/Application.

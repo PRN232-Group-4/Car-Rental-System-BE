@@ -13,7 +13,7 @@ namespace Car_Rental_System_BE.Controllers;
 public sealed class RentalEditingController(IRentalEditingService editing) : ControllerBase
 {
     /// <summary>Updates vehicle, schedule and driver preference before pickup, preserving financial and operational evidence.</summary>
-    [HttpPut("{id:int}")]
+    [HttpPut("~/api/rental/{id:int}")]
     [ProducesResponseType(typeof(Rental), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]

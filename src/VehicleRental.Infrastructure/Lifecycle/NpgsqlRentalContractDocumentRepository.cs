@@ -51,7 +51,7 @@ public sealed class NpgsqlRentalContractDocumentRepository(NpgsqlDataSource data
             "UPDATE longterm_rental_contract SET contract_link=$2,signed_at=$3 WHERE rental_id=$1", connection, transaction))
         {
             projection.Parameters.AddWithValue(rentalId);
-            projection.Parameters.AddWithValue($"/api/rentals/{rentalId}/contract/document");
+            projection.Parameters.AddWithValue($"/api/rental/{rentalId}/contract/document");
             projection.Parameters.Add(Sql.Timestamp("", signedAt));
             await projection.ExecuteNonQueryAsync(ct);
         }

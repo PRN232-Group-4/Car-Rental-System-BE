@@ -86,7 +86,7 @@ public sealed class OperationsCompletionApiTests : IAsyncLifetime
     [InlineData("Customer",403)] [InlineData("Maintenance",403)] [InlineData(null,401)]
     public async Task Moderation_enforces_management_authorization(string? role,int status)
     {
-        using var request=new HttpRequestMessage(HttpMethod.Patch,"/api/ratings/1"){Content=JsonContent.Create(new{status="hidden",reason="Personal information"})};
+        using var request=new HttpRequestMessage(HttpMethod.Patch,"/api/rating/1"){Content=JsonContent.Create(new{status="hidden",reason="Personal information"})};
         if(role is not null)request.Headers.Add("X-Test-Role",role);
         using var response=await client.SendAsync(request);using var json=await Envelope(response,status);
         if(status!=200)return;
@@ -97,10 +97,10 @@ public sealed class OperationsCompletionApiTests : IAsyncLifetime
     [Fact]
     public async Task Reply_and_report_status_return_enriched_contracts()
     {
-        using var reply=new HttpRequestMessage(HttpMethod.Post,"/api/ratings/1/reply"){Content=JsonContent.Create(new{text="Reviewed"})};reply.Headers.Add("X-Test-Role","Manager");
+        using var reply=new HttpRequestMessage(HttpMethod.Post,"/api/rating/1/reply"){Content=JsonContent.Create(new{text="Reviewed"})};reply.Headers.Add("X-Test-Role","Manager");
         using var response=await client.SendAsync(reply);using var json=await Envelope(response,200);
         Assert.Equal("Reviewed",json.RootElement.GetProperty("data").GetProperty("reply").GetProperty("text").GetString());
-        using var report=new HttpRequestMessage(HttpMethod.Patch,"/api/reports/1/status"){Content=JsonContent.Create(new{status="in_progress",reason="Accepted"})};report.Headers.Add("X-Test-Role","Manager");
+        using var report=new HttpRequestMessage(HttpMethod.Patch,"/api/report/1/status"){Content=JsonContent.Create(new{status="in_progress",reason="Accepted"})};report.Headers.Add("X-Test-Role","Manager");
         using var result=await client.SendAsync(report);using var reportJson=await Envelope(result,200);
         var data=reportJson.RootElement.GetProperty("data");
         Assert.Equal("in_progress",data.GetProperty("status").GetString());
@@ -132,9 +132,9 @@ public sealed class OperationsCompletionApiTests : IAsyncLifetime
     {
         using var json=JsonDocument.Parse(await client.GetStringAsync("/swagger/v1/swagger.json"));
         var paths=json.RootElement.GetProperty("paths");
-        Assert.True(paths.GetProperty("/api/ratings/{id}").TryGetProperty("patch",out _));
-        Assert.True(paths.GetProperty("/api/ratings/{id}/reply").TryGetProperty("post",out _));
-        Assert.True(paths.GetProperty("/api/reports/{id}/status").TryGetProperty("patch",out _));
+        Assert.True(paths.GetProperty("/api/rating/{id}").TryGetProperty("patch",out _));
+        Assert.True(paths.GetProperty("/api/rating/{id}/reply").TryGetProperty("post",out _));
+        Assert.True(paths.GetProperty("/api/report/{id}/status").TryGetProperty("patch",out _));
     }
     private static async Task<JsonDocument> Envelope(HttpResponseMessage response,int code)
     {

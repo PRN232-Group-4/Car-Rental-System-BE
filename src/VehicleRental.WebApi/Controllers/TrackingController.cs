@@ -45,7 +45,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     /// Retrieves the latest known position of a vehicle.
     /// </summary>
     [Authorize]
-    [HttpGet("vehicles/{vehicleId:int}/last-position")]
+    [HttpGet("vehicle/{vehicleId:int}/last-position")]
     [ProducesResponseType<VehicleLocationDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> LastPosition(int vehicleId, CancellationToken ct)
     {
@@ -60,7 +60,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     /// Retrieves paginated historical GPS positions for a vehicle within an optional time range.
     /// </summary>
     [Authorize]
-    [HttpGet("vehicles/{vehicleId:int}/history")]
+    [HttpGet("vehicle/{vehicleId:int}/history")]
     [ProducesResponseType<LocationHistoryPage>(StatusCodes.Status200OK)]
     public async Task<IActionResult> History(
         int vehicleId,
@@ -97,7 +97,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     /// Reconstructs the traveled route, metrics, and GPS breadcrumbs for a rental.
     /// </summary>
     [Authorize]
-    [HttpGet("rentals/{rentalId:int}/route")]
+    [HttpGet("rental/{rentalId:int}/route")]
     [ProducesResponseType<RentalRouteSummaryDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Route(int rentalId, CancellationToken ct)
     {
@@ -116,7 +116,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     /// Verifies if a vehicle is returned at the designated facility and generates an alert if deviated.
     /// </summary>
     [Authorize]
-    [HttpPost("rentals/{rentalId:int}/verify-dropoff")]
+    [HttpPost("rental/{rentalId:int}/verify-dropoff")]
     [ProducesResponseType<DropoffVerificationResult>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]
@@ -172,7 +172,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     /// Marks a tracking alert as resolved by staff.
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.Management)]
-    [HttpPost("alerts/{alertId:long}/resolve")]
+    [HttpPost("alert/{alertId:long}/resolve")]
     [ProducesResponseType<TrackingAlertDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> ResolveAlert(long alertId, CancellationToken ct)
     {

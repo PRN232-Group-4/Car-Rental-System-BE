@@ -20,7 +20,7 @@ public sealed class RolesController(IRoleService roles) : ControllerBase
     [ProducesResponseType<RolePage>(StatusCodes.Status200OK)]
     public async Task<IActionResult> List([FromQuery] RoleListQuery query, CancellationToken ct) => Ok(await roles.ListAsync(query, ct));
 
-    [HttpGet("{id:int}")]
+    [HttpGet("~/api/role/{id:int}")]
     [ProducesResponseType<RoleDetails>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Get([Range(1, int.MaxValue)] int id, CancellationToken ct)
@@ -38,13 +38,13 @@ public sealed class RolesController(IRoleService roles) : ControllerBase
         return CreatedAtAction(nameof(Get), new { id = role.Id }, role);
     }
 
-    [HttpPut("{id:int}")]
+    [HttpPut("~/api/role/{id:int}")]
     [ProducesResponseType<RoleDetails>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Update([Range(1, int.MaxValue)] int id, RoleRequest request, CancellationToken ct) => Ok(await roles.UpdateAsync(id, request, ct));
 
-    [HttpDelete("{id:int}")]
+    [HttpDelete("~/api/role/{id:int}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]

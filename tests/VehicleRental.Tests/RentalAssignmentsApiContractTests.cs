@@ -30,11 +30,11 @@ public sealed class RentalAssignmentsApiContractTests
     }
 
     [Theory]
-    [InlineData("AssignDriver", typeof(HttpPostAttribute), "rentals/{id:int}/assignments/driver")]
-    [InlineData("ReplaceVehicle", typeof(HttpPostAttribute), "rentals/{id:int}/assignments/vehicle")]
-    [InlineData("ListAssignments", typeof(HttpGetAttribute), "rentals/{id:int}/assignments")]
-    [InlineData("ListAssignableDrivers", typeof(HttpGetAttribute), "rentals/{id:int}/assignable-drivers")]
-    [InlineData("ListAssignableVehicles", typeof(HttpGetAttribute), "rentals/{id:int}/assignable-vehicles")]
+    [InlineData("AssignDriver", typeof(HttpPostAttribute), "rental/{id:int}/assignments/driver")]
+    [InlineData("ReplaceVehicle", typeof(HttpPostAttribute), "rental/{id:int}/assignments/vehicle")]
+    [InlineData("ListAssignments", typeof(HttpGetAttribute), "rental/{id:int}/assignments")]
+    [InlineData("ListAssignableDrivers", typeof(HttpGetAttribute), "rental/{id:int}/assignable-drivers")]
+    [InlineData("ListAssignableVehicles", typeof(HttpGetAttribute), "rental/{id:int}/assignable-vehicles")]
     public void Controller_endpoints_have_correct_routes_and_policy(string actionName, Type httpMethodAttr, string template)
     {
         var method = typeof(RentalAssignmentsController).GetMethod(actionName);
@@ -87,7 +87,7 @@ public sealed class RentalAssignmentsApiContractTests
 
         var obsolete = method.GetCustomAttribute<ObsoleteAttribute>();
         Assert.NotNull(obsolete);
-        Assert.Contains("POST /api/rentals/{id}/assignments/driver", obsolete.Message);
+        Assert.Contains("POST /api/rental/{id}/assignments/driver", obsolete.Message);
     }
 
     [Theory]

@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-10-25 — [Gộp Customer detail và chuẩn hóa tên API số ít/số nhiều](2026-10-25-file-consolidation-api-number.md)
+
 - 2026-10-25 — [Entity Framework cho truy vấn đọc và gộp file](2026-10-25-entity-framework-read-queries.md)
 
 - 2026-10-23 — [Số lượt thuê theo ngày trong chuỗi doanh thu](2026-10-23-dashboard-rental-volume.md)
