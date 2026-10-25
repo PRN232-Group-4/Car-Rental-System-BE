@@ -90,7 +90,13 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
         {
             var file = new ByteArrayContent(bytes ?? Pdf);
             file.Headers.ContentType = new MediaTypeHeaderValue(mime);
-            form.Add(file, "file", name);
+            // RFC 5987 encodes quotes/path segments without HttpClient rejecting the
+            // header before the request reaches the server's filename sanitization.
+            file.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data")
+            {
+                Name = "file", FileNameStar = name
+            };
+            form.Add(file);
         }
         if (!noDate) form.Add(new StringContent(signedAt ?? DateTime.UtcNow.AddMinutes(-1).ToString("O")), "signedAt");
         return form;

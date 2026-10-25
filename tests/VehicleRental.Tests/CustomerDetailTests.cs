@@ -45,7 +45,12 @@ public sealed class CustomerDetailTests(PostgresFixture db) : IClassFixture<Post
     [Fact]
     public async Task Detail_preserves_nullable_fields_and_excludes_missing_logical_user()
     {
-        var (customerId, _) = await Seed.CustomerAsync(db.DataSource, "pending");
+        var (customerId, _) = await Seed.CustomerAsync(db.DataSource, "pending", withLicense: false);
+        // Seed.CustomerAsync normally supplies valid license metadata; this case explicitly tests its absence.
+        await Seed.ScalarAsync(db.DataSource, """
+            UPDATE customers SET license_type=NULL,license_issue_date=NULL,license_expiry_date=NULL,license_img=NULL
+            WHERE id=$1
+            """, customerId);
         await Seed.ScalarAsync(db.DataSource, "UPDATE users SET fullname=NULL WHERE id=(SELECT user_id FROM customers WHERE id=$1)", customerId);
         var repository = new NpgsqlCustomerRepository(db.DataSource);
         var result = await repository.FindByIdAsync(customerId, default);

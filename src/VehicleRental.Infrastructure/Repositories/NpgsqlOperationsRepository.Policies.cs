@@ -2,6 +2,8 @@ using System.Data;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Validators;
 using Npgsql;
+using Microsoft.EntityFrameworkCore;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 
 namespace Car_Rental_System_BE.Infrastructure.Repositories;
 
@@ -9,16 +11,13 @@ public sealed partial class NpgsqlOperationsRepository
 {
     public async Task<bool> VehicleTypeExistsAsync(int id, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM vehicle_types WHERE id=$1)");
-        command.Parameters.AddWithValue(id);
-        return (bool)(await command.ExecuteScalarAsync(ct))!;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<VehicleTypesRow>().AnyAsync(x => x.Id == id, ct);
     }
-
     public async Task<bool> HasActivePolicyAsync(int? vehicleTypeId, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("SELECT EXISTS(SELECT 1 FROM rental_policies WHERE vehicle_type_id IS NOT DISTINCT FROM $1::int AND is_active=true)");
-        command.Parameters.AddWithValue((object?)vehicleTypeId ?? DBNull.Value);
-        return (bool)(await command.ExecuteScalarAsync(ct))!;
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<RentalPoliciesRow>().AnyAsync(x => x.VehicleTypeId == vehicleTypeId && x.IsActive, ct);
     }
 
     public async Task<RentalPolicy> CreatePolicyAsync(RentalPolicy policy, CancellationToken ct)
@@ -55,23 +54,19 @@ public sealed partial class NpgsqlOperationsRepository
     public async Task<RentalPolicyPage> ListPoliciesAsync(int page, int pageSize, CancellationToken ct)
     {
         RentalPolicyValidator.ValidatePagination(page, pageSize);
-        await using var connection = await dataSource.OpenConnectionAsync(ct);
-        await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
-        await using var total = new NpgsqlCommand("SELECT COUNT(*) FROM rental_policies", connection, transaction);
-        var totalCount = Convert.ToInt32(await total.ExecuteScalarAsync(ct));
-        await using var command = new NpgsqlCommand("""
-            SELECT p.id,p.vehicle_type_id,p.name,p.vat_rate,p.overtime_fee_rate,p.deposit_percentage,p.is_active,
-                (SELECT COUNT(*) FROM rentals r WHERE r.policy_id=p.id) AS rental_count,
-                (SELECT t.name FROM vehicle_types t WHERE t.id=p.vehicle_type_id), p.managed_by, p.created_at
-            FROM rental_policies p ORDER BY p.id DESC LIMIT $1 OFFSET $2
-            """, connection, transaction);
-        command.Parameters.AddWithValue(pageSize);
-        command.Parameters.AddWithValue(((long)page - 1) * pageSize);
-        var items = new List<RentalPolicy>();
-        await using (var reader = await command.ExecuteReaderAsync(ct))
-            while (await reader.ReadAsync(ct)) items.Add(ReadPolicyWithCount(reader));
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
+        var query = db.Set<RentalPoliciesRow>().AsNoTracking();
+        var totalCount = await query.CountAsync(ct);
+        var offset = ((long)page - 1) * pageSize;
+        var items = offset > int.MaxValue ? new List<RentalPolicy>() : await query.OrderByDescending(p => p.Id)
+            .Skip((int)offset).Take(pageSize).Select(p => new RentalPolicy(p.Id, p.VehicleTypeId,
+                p.Name, p.VatRate, p.OvertimeFeeRate, p.DepositPercentage, p.IsActive,
+                db.Set<RentalsRow>().LongCount(r => r.PolicyId == p.Id),
+                db.Set<VehicleTypesRow>().Where(t => t.Id == p.VehicleTypeId).Select(t => t.Name).FirstOrDefault(),
+                p.ManagedBy, p.CreatedAt)).ToListAsync(ct);
         await transaction.CommitAsync(ct);
-        return new RentalPolicyPage(items, page, pageSize, totalCount);
+        return new(items, page, pageSize, totalCount);
     }
 
     private static RentalPolicy ReadPolicyWithCount(NpgsqlDataReader reader) => ReadPolicy(reader) with { RentalCount = reader.GetInt64(7), VehicleTypeName = S(reader,8), ManagedBy = reader.IsDBNull(9)?null:reader.GetInt32(9), CreatedAt = reader.GetDateTime(10) };
@@ -86,12 +81,40 @@ public sealed partial class NpgsqlOperationsRepository
 
     private static async Task<bool> HasActivePolicyInScopeAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int? typeId, int? excludedId, CancellationToken ct)
     {
+        await using var db = VehicleRentalDbContext.Create(connection, transaction);
+        return await db.Set<RentalPoliciesRow>().AnyAsync(p => p.VehicleTypeId == typeId && p.IsActive &&
+            (excludedId == null || p.Id != excludedId), ct);
+    }
+
+    public async Task<RentalPolicy?> SetPolicyStatusAsync(int id, bool isActive, CancellationToken ct)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        await using var lookup = new NpgsqlCommand("SELECT vehicle_type_id,is_active FROM rental_policies WHERE id=$1 FOR UPDATE", connection, transaction);
+        lookup.Parameters.AddWithValue(id);
+        int? typeId;
+        bool wasActive;
+        await using (var reader = await lookup.ExecuteReaderAsync(ct))
+        {
+            if (!await reader.ReadAsync(ct)) return null;
+            typeId = reader.IsDBNull(0) ? null : reader.GetInt32(0);
+            wasActive = reader.GetBoolean(1);
+        }
+        await LockPolicyScopeAsync(connection, transaction, typeId, ct);
+        if (isActive && !wasActive && await HasActivePolicyInScopeAsync(connection, transaction, typeId, id, ct))
+            throw new InvalidOperationException("Phạm vi loại xe này đã có chính sách đang hoạt động. Vui lòng tạm ngưng chính sách cũ trước khi kích hoạt.");
         await using var command = new NpgsqlCommand("""
-            SELECT EXISTS(SELECT 1 FROM rental_policies
-                WHERE vehicle_type_id IS NOT DISTINCT FROM $1::int AND is_active=true
-                AND ($2::int IS NULL OR id<>$2::int))
+            UPDATE rental_policies SET is_active = $2 WHERE id = $1
+            RETURNING id, vehicle_type_id, name, vat_rate, overtime_fee_rate, deposit_percentage, is_active,
+                (SELECT COUNT(*) FROM rentals r WHERE r.policy_id=rental_policies.id),
+                (SELECT t.name FROM vehicle_types t WHERE t.id=rental_policies.vehicle_type_id), managed_by, created_at
             """, connection, transaction);
-        Add(command, typeId, excludedId);
-        return (bool)(await command.ExecuteScalarAsync(ct))!;
+        command.Parameters.AddWithValue(id);
+        command.Parameters.AddWithValue(isActive);
+        RentalPolicy? result;
+        await using (var reader = await command.ExecuteReaderAsync(ct))
+            result = await reader.ReadAsync(ct) ? ReadPolicyWithCount(reader) : null;
+        await transaction.CommitAsync(ct);
+        return result;
     }
 }

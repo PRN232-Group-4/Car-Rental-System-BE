@@ -1,7 +1,7 @@
 # FR-007 — RBAC
 - **Status:** In progress; **Priority:** P0; **Milestone:** M2
 
-Roles: Customer, Staff (employee marker only), CustomerService, Driver, Maintenance (Technician in UI), Manager, Admin. Department is organizational metadata, not an implicit permission grant. Only Admin assigns staff specialties. Existing Staff accounts require explicit specialty assignment; no automatic CustomerService backfill.
+Roles: Customer, Staff (employee marker only), CustomerService, Driver, Maintenance (Technician in UI), Manager, Admin. Department is organizational metadata, not an implicit permission grant. Admin/Manager may manage operational staff specialties through staff CRUD; global account-role membership remains Admin-only. Existing Staff accounts require explicit specialty assignment; no automatic CustomerService backfill.
 
 The Admin-only [role catalog](FR-041-role-catalog.md) supports custom persisted roles and account membership. Custom names do not implicitly grant built-in policy capabilities. Built-in role names are immutable and cannot be deleted; assigned custom roles must be unassigned before rename/deletion. Admin and Manager may read the [account-administration audit directory](FR-037-user-administration.md).
 
@@ -9,7 +9,8 @@ Staff creation passwords follow the same 6–20 character limit as registration/
 
 | Capability | Roles |
 |---|---|
-| Organization/staff CRUD, refund approval, destructive catalog actions | Admin |
+| Department CRUD and refund approval | Admin |
+| Staff/facility CRUD, staff-license upload, destructive fleet/plan catalog actions | Admin, Manager |
 | Read staff/departments; assign Staff to a department | Admin, Manager |
 | Assign Manager to a department (including Manager + Staff targets) | Admin |
 | Assign Staff to a facility | Admin, Manager |
@@ -17,7 +18,7 @@ Staff creation passwords follow the same 6–20 character limit as registration/
 | Vehicle catalog, subscription plans, rental policies, dashboard | Admin, Manager |
 | License review, rental lifecycle/assignment, invoices, payment/refund requests | Admin, Manager, CustomerService |
 | Customer directory list/detail | Admin, Manager, CustomerService |
-| Inspections | Admin or Maintenance, with own active staff profile |
+| Inspections | Admin, Manager or Maintenance, with own active staff profile |
 | Maintenance management | Admin, Manager, Maintenance |
 | Driver schedule | Admin/Manager all; Driver own assignments |
 | Rental detail | Admin/Manager/CustomerService/Maintenance; Customer own; Driver assigned |

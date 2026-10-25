@@ -1,5 +1,9 @@
 # Tiến độ
 
+## Entity Framework và gộp file — 2026-10-25
+
+Truy vấn đọc thông thường dùng LINQ/EF Core ở Infrastructure, mapping 46 bảng/3 view hiện có. Giữ SQL cho ghi, khóa và kiểm tra nội bộ trong transaction; không migration/deploy. Gộp 12 file nhỏ, tổng source `src` 246 → 236. Build solution và publish Release đạt 0 warning/error. Toàn suite **1.248/1.248 pass, 0 fail/skip** sau sửa 12 fixture/test lỗi cũ và thêm 3 ca kiểm tra từ chối quyền upload. Không nới điều kiện nghiệp vụ. Docker Desktop chưa mở được Linux engine dù đã thử khởi động, nên container chưa kiểm chứng. Xem [thay đổi](../changes/2026-10-25-entity-framework-read-queries.md), [ADR-012](decisions/ADR-012-entity-framework-read-queries.md) và [báo cáo gộp file](file-consolidation-review.md).
+
 ## Tự động hết hạn yêu cầu đặt xe — 2026-10-23
 
 Thêm trạng thái `expired`, cột `expire_at`/`expired_at` (migration 0032) và job quét mỗi phút: yêu cầu chưa được duyệt hoặc chưa thanh toán trong cửa sổ cấu hình (mặc định 1 giờ kể từ lúc đặt) tự hết hạn, hủy hóa đơn chưa thu và giải phóng lịch xe. Đặt xe phải cách giờ nhận tối thiểu 1 giờ; đơn hết hạn không duyệt/không thanh toán được, thanh toán muộn sau hạn được ghi ledger và tự tạo yêu cầu hoàn tiền. 32 test FR-042 đạt trên PostgreSQL tạm; toàn bộ suite 1144 đạt, 3 lỗi có sẵn từ trước. Chưa deploy, chưa gửi thông báo email. Xem [FR-042](../specs/FR-042-rental-expiry.md), [thay đổi](../changes/2026-10-23-rental-expiry.md).

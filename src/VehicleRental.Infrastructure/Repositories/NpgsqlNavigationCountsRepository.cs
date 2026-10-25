@@ -1,5 +1,8 @@
+using System.Data;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 namespace Car_Rental_System_BE.Infrastructure.Repositories;
@@ -8,27 +11,23 @@ public sealed class NpgsqlNavigationCountsRepository(NpgsqlDataSource dataSource
 {
     public async Task<NavigationCounts> GetAsync(NavigationAccess access, CancellationToken ct)
     {
-        // One statement observes all queues at the same PostgreSQL snapshot; EXISTS avoids
-        // counting multiple inspection evidence rows or customer/user join duplicates.
-        await using var command = dataSource.CreateCommand("""
-            SELECT
-                (SELECT COUNT(*) FROM rentals WHERE $1 AND status='pending'),
-                (SELECT COUNT(*) FROM rentals r WHERE $2 AND r.status IN ('pre_inspection','post_inspection')
-                    AND NOT EXISTS (SELECT 1 FROM inspections i WHERE i.rental_id=r.id AND i.vehicle_id=r.vehicle_id
-                        AND i.inspection_type=CASE r.status WHEN 'pre_inspection' THEN 'pre_rental' ELSE 'post_rental' END)),
-                (SELECT COUNT(*) FROM vehicle_maintenance WHERE $3 AND status IN ('open','scheduled')),
-                (SELECT COUNT(*) FROM reports WHERE status='open' AND reporter_staff_id IS NOT NULL
-                    AND ($4 OR reporter_staff_id=$5)),
-                (SELECT COUNT(*) FROM customers c WHERE $1 AND EXISTS(SELECT 1 FROM customer_license_records cl WHERE cl.customer_id=c.id AND cl.status='pending')
-                    AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.user_id))
-            """);
-        command.Parameters.AddWithValue(access.CustomerService);
-        command.Parameters.AddWithValue(access.Inspections);
-        command.Parameters.AddWithValue(access.Maintenance);
-        command.Parameters.AddWithValue(access.AllReports);
-        command.Parameters.AddWithValue(NpgsqlTypes.NpgsqlDbType.Integer, (object?)access.ReportStaffId ?? DBNull.Value);
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        await reader.ReadAsync(ct);
-        return new(reader.GetInt64(0), reader.GetInt64(1), reader.GetInt64(2), reader.GetInt64(3), reader.GetInt64(4));
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        // All counts retain the same snapshot even though EF sends separate aggregate queries.
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
+        var pending = access.CustomerService
+            ? await db.Set<RentalsRow>().LongCountAsync(r => r.Status == "pending", ct) : 0;
+        var inspections = access.Inspections
+            ? await db.Set<RentalsRow>().LongCountAsync(r => (r.Status == "pre_inspection" || r.Status == "post_inspection")
+                && !db.Set<InspectionsRow>().Any(i => i.RentalId == r.Id && i.VehicleId == r.VehicleId
+                    && i.InspectionType == (r.Status == "pre_inspection" ? "pre_rental" : "post_rental")), ct) : 0;
+        var maintenance = access.Maintenance
+            ? await db.Set<VehicleMaintenanceRow>().LongCountAsync(m => m.Status == "open" || m.Status == "scheduled", ct) : 0;
+        var reports = await db.Set<ReportsRow>().LongCountAsync(r => r.Status == "open" && r.ReporterStaffId != null
+            && (access.AllReports || r.ReporterStaffId == access.ReportStaffId), ct);
+        var licenses = access.CustomerService
+            ? await db.Set<CustomersRow>().LongCountAsync(c => db.Set<CustomerLicenseRecordsRow>()
+                .Any(l => l.CustomerId == c.Id && l.Status == "pending") && db.Set<UsersRow>().Any(u => u.Id == c.UserId), ct) : 0;
+        await transaction.CommitAsync(ct);
+        return new(pending, inspections, maintenance, reports, licenses);
     }
 }

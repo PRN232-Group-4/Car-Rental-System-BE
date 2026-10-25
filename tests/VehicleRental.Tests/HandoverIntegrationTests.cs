@@ -1,3 +1,4 @@
+using System.Text;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Handovers;
 using Car_Rental_System_BE.Application.Lifecycle;
@@ -30,6 +31,13 @@ public sealed class HandoverIntegrationTests(PostgresFixture db) : IClassFixture
         var start = DateTime.UtcNow.AddHours(1);
         var rental = await Operations.CreateRentalAsync(email, vehicle, null, rentalType, start,
             rentalType == "hourly" ? start.AddHours(2) : start.AddDays(30), false, null, false, default);
+        if (rentalType == "longterm")
+        {
+            // A contract URL alone is insufficient: handover requires private persisted upload evidence.
+            var document = new RentalContractDocument(Encoding.ASCII.GetBytes("%PDF-1.4\n%%EOF\n"), "application/pdf", "signed-contract.pdf");
+            await new NpgsqlRentalContractDocumentRepository(db.DataSource)
+                .SaveAsync(rental.Id, document, DateTime.UtcNow.AddMinutes(-1), Actor, default);
+        }
         var invoice = (int)(await Seed.ScalarAsync(db.DataSource, "SELECT id FROM invoices WHERE rental_id=$1", rental.Id))!;
         var amount = (decimal)(await Seed.ScalarAsync(db.DataSource, "SELECT amount FROM invoices WHERE id=$1", invoice))!;
         if (paid) await Scenarios.CompleteInvoiceAsync(db.DataSource, invoice, amount);

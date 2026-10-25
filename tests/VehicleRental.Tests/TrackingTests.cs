@@ -433,3 +433,55 @@ public sealed class TrackingTests
             Task.FromResult(new DirectionsResult(originLat, originLng, destLat, destLng, 1000, 120, "", Array.Empty<PositionDto>()));
     }
 }
+
+public sealed class TrackingEfIntegrationTests(PostgresFixture fixture) : IClassFixture<PostgresFixture>
+{
+    [Fact]
+    public async Task Device_positions_and_nearby_queries_preserve_values_filters_and_empty_pages()
+    {
+        var db = fixture.DataSource;
+        var vehicle = await Seed.VehicleAsync(db);
+        var device = "ef-" + Guid.NewGuid().ToString("N");
+        var repo = new Car_Rental_System_BE.Infrastructure.Repositories.NpgsqlTrackingRepository(db);
+        await repo.CreateDeviceAsync(device, vehicle, "device-hash", null, default);
+        Assert.Equal((true, vehicle), await repo.AuthenticateDeviceAsync(device, "device-hash", default));
+        Assert.Equal((false, 0), await repo.AuthenticateDeviceAsync(device, "wrong", default));
+        Assert.Null((await repo.GetDeviceByIdAsync(device, default))!.LastPingAt);
+        Assert.Single((await repo.ListDevicesAsync(vehicle, true, 1, 20, default)).Items);
+        var time = DateTimeOffset.UtcNow.AddMinutes(-10);
+        var first = new PositionDto(10.77, 106.7, time, 12.5f, null, 3f);
+        var last = new PositionDto(10.771, 106.701, time.AddMinutes(1), null, 90f, null);
+        await repo.InsertPositionsBatchAsync(device, vehicle, [first, last], default);
+        await repo.UpsertLastPositionAsync(vehicle, device, last, "Test address", default);
+        var history = await repo.GetPositionsHistoryAsync(vehicle, time.AddSeconds(-1), time.AddMinutes(2), 1, 1, default);
+        Assert.Equal(2, history.TotalCount);
+        Assert.Equal(last.Lat, Assert.Single(history.Items).Lat, 6);
+        var empty = await repo.GetPositionsHistoryAsync(vehicle, null, null, int.MaxValue, 100, default);
+        Assert.Equal(2, empty.TotalCount);
+        Assert.Empty(empty.Items);
+        Assert.Equal(2, (await repo.GetPositionsForRentalAsync(vehicle, time.AddSeconds(-1), time.AddMinutes(2), default)).Count);
+        Assert.Equal("Test address", (await repo.GetLastPositionAsync(vehicle, default))!.Address);
+        var nearby = await repo.FindNearbyVehiclesAsync(last.Lat, last.Lng, 100, 1, 20, default);
+        Assert.Contains(nearby.Items, x => x.VehicleId == vehicle && x.DistanceMeters < 1);
+        Assert.Empty((await repo.FindNearbyVehiclesAsync(0, 0, 100, 1, 20, default)).Items);
+    }
+
+    [Fact]
+    public async Task Geofence_and_alert_queries_preserve_optional_fields_and_resolution_filters()
+    {
+        var db = fixture.DataSource;
+        var vehicle = await Seed.VehicleAsync(db);
+        var repo = new Car_Rental_System_BE.Infrastructure.Repositories.NpgsqlTrackingRepository(db);
+        var zone = await repo.CreateGeofenceAsync(new("EF zone", "circle", 10.77, 106.7, 200), default);
+        Assert.Contains(await repo.ListActiveGeofencesAsync(default), z => z.Id == zone.Id);
+        Assert.Contains((await repo.ListGeofencesAsync(1, 100, default)).Items, z => z.Id == zone.Id);
+        await repo.RecordGeofenceEventAsync(vehicle, null, zone.Id, "enter", 10.77, 106.7, DateTimeOffset.UtcNow, default);
+        var events = await repo.ListGeofenceEventsAsync(vehicle, null, 1, 20, default);
+        Assert.Equal(zone.Name, Assert.Single(events.Items).GeofenceName);
+        var alert = await repo.CreateAlertAsync(null, vehicle, "off_route", "warning", "EF alert", 10.77, 106.7, null, null, null, default);
+        Assert.Equal(alert.Id, Assert.Single((await repo.ListAlertsAsync(null, vehicle, false, 1, 20, default)).Items).Id);
+        await repo.ResolveAlertAsync(alert.Id, "ef@test.local", default);
+        Assert.Empty((await repo.ListAlertsAsync(null, vehicle, false, 1, 20, default)).Items);
+        Assert.True(Assert.Single((await repo.ListAlertsAsync(null, vehicle, true, 1, 20, default)).Items).IsResolved);
+    }
+}

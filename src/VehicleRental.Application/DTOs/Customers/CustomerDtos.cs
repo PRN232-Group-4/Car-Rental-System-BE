@@ -20,3 +20,14 @@ public sealed record CustomerListItem(int Id, int UserId, string Email, string? 
     string? AvatarUrl, bool IsActive, string LicenseStatus, int LoyaltyPoint);
 
 public sealed record CustomerPage(IReadOnlyList<CustomerListItem> Items, int Page, int PageSize, int TotalCount);
+
+public sealed record CustomerDetail(int Id, int UserId, string Email, string? FullName, string? Gender,
+    string? Phone, string? AvatarUrl, bool IsActive, CustomerLicenseDetail License, CustomerLoyaltyDetail Loyalty);
+
+public sealed record CustomerLicenseDetail(string? Number, string? Type, DateOnly? IssueDate,
+    DateOnly? ExpiryDate, string? ImageUrl, string Status)
+{
+    public IReadOnlyList<Car_Rental_System_BE.Application.DTOs.Operations.CustomerLicense> Licenses { get; init; } = [];
+}
+
+public sealed record CustomerLoyaltyDetail(int Points);
