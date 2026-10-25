@@ -17,7 +17,7 @@ public sealed class PaymentsController(IPaymentService payments) : ControllerBas
 {
     /// <summary>Staff confirms actual cash receipt after rental approval; atomically issues the paid order.</summary>
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
-    [HttpPost("invoices/{invoiceId:int}/cash-confirmation")]
+    [HttpPost("invoice/{invoiceId:int}/cash-confirmation")]
     [ProducesResponseType<PaymentResult>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -28,7 +28,7 @@ public sealed class PaymentsController(IPaymentService payments) : ControllerBas
 
     /// <summary>Creates a PayOS checkout for an unpaid, settled overtime invoice; only provider verification marks paid.</summary>
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
-    [HttpPost("invoices/{invoiceId:int}/staff-checkout")]
+    [HttpPost("invoice/{invoiceId:int}/staff-checkout")]
     [ProducesResponseType<CheckoutResult>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -43,7 +43,7 @@ public sealed class PaymentsController(IPaymentService payments) : ControllerBas
     }
 
     [Authorize(Policy = AuthorizationPolicies.Customer)]
-    [HttpPost("invoices/{invoiceId:int}/checkout")]
+    [HttpPost("invoice/{invoiceId:int}/checkout")]
     [ProducesResponseType<CheckoutResult>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
@@ -54,7 +54,7 @@ public sealed class PaymentsController(IPaymentService payments) : ControllerBas
     }
 
     [Authorize(Policy = AuthorizationPolicies.Customer)]
-    [HttpPost("subscription-plans/{planId:int}/purchase")]
+    [HttpPost("subscription-plan/{planId:int}/purchase")]
     [ProducesResponseType<CheckoutResult>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> PurchasePlan(int planId, CancellationToken ct)
@@ -66,7 +66,7 @@ public sealed class PaymentsController(IPaymentService payments) : ControllerBas
     // FE gọi khi trình duyệt quay về từ cancelUrl: payOS KHÔNG gửi webhook khi khách huỷ link,
     // nên phải hỏi lại payOS rồi mới đánh dấu 'cancelled' (không tin query param của FE).
     [Authorize(Policy = AuthorizationPolicies.Customer)]
-    [HttpPost("payments/checkouts/{orderCode:long}/cancel")]
+    [HttpPost("payments/checkout/{orderCode:long}/cancel")]
     [ProducesResponseType<CheckoutCancellation>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -78,7 +78,7 @@ public sealed class PaymentsController(IPaymentService payments) : ControllerBas
 
     // Polled by the FE after PayOS returns, to know when the webhook has activated the subscription.
     [Authorize(Policy = AuthorizationPolicies.Customer)]
-    [HttpGet("subscription-plans/purchases/{orderCode:long}")]
+    [HttpGet("subscription-plans/purchase/{orderCode:long}")]
     [ProducesResponseType<PlanPurchaseStatus>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PlanPurchase(long orderCode, CancellationToken ct) =>
@@ -104,7 +104,7 @@ public sealed class PaymentsController(IPaymentService payments) : ControllerBas
     }
 
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
-    [HttpPost("payments/{paymentId:int}/refunds")]
+    [HttpPost("payment/{paymentId:int}/refunds")]
     [ProducesResponseType<PaymentResult>(StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Refund(int paymentId, RefundRequest request, CancellationToken ct)
     {
@@ -119,20 +119,20 @@ public sealed class PaymentsController(IPaymentService payments) : ControllerBas
     public Task<IReadOnlyList<InvoiceSummary>> Invoices(CancellationToken ct) => payments.ListInvoicesAsync(Scope(), ct);
 
     [Authorize(Policy = AuthorizationPolicies.FinancialRead)]
-    [HttpGet("invoices/{invoiceId:int}")]
+    [HttpGet("invoice/{invoiceId:int}")]
     [ProducesResponseType<InvoiceDetail>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Invoice(int invoiceId, CancellationToken ct) => await payments.GetInvoiceAsync(invoiceId, Scope(), ct) is { } x ? Ok(x) : Problem("Invoice was not found.", statusCode: StatusCodes.Status404NotFound);
 
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
-    [HttpPost("rentals/{rentalId:int}/invoice")]
+    [HttpPost("rental/{rentalId:int}/invoice")]
     [ProducesResponseType<InvoiceSummary>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> CreateInvoice(int rentalId, CancellationToken ct)
     {
         var invoice = await payments.CreateInvoiceForRentalAsync(rentalId, ct);
-        return Created($"api/invoices/{invoice.Id}", invoice);
+        return Created($"/api/invoice/{invoice.Id}", invoice);
     }
 
     [Authorize(Policy = AuthorizationPolicies.FinancialRead)]
@@ -141,14 +141,14 @@ public sealed class PaymentsController(IPaymentService payments) : ControllerBas
     public Task<IReadOnlyList<PaymentSummary>> Payments([FromQuery] int? invoiceId, CancellationToken ct) => payments.ListPaymentsAsync(Scope(), invoiceId, ct);
 
     [Authorize(Roles = "Admin")]
-    [HttpPost("payments/refunds/{refundId:int}/approve")]
+    [HttpPost("payments/refund/{refundId:int}/approve")]
     [ProducesResponseType<PaymentSummary>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ApproveRefund(int refundId, CancellationToken ct) => Ok(await payments.ReviewRefundAsync(refundId, true, Email(), ct));
 
     [Authorize(Roles = "Admin")]
-    [HttpPost("payments/refunds/{refundId:int}/reject")]
+    [HttpPost("payments/refund/{refundId:int}/reject")]
     [ProducesResponseType<PaymentSummary>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

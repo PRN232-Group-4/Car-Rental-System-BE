@@ -28,7 +28,7 @@ public sealed class RentalLifecycleController(
     /// Staff approval opens checkout; payment is required later before handover for direct rentals.
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
-    [HttpPost("{id:int}/confirm")]
+    [HttpPost("~/api/rental/{id:int}/confirm")]
     [ProducesResponseType(typeof(RentalLifecycleResult), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -47,7 +47,7 @@ public sealed class RentalLifecycleController(
     /// Requires passing pre-rental inspection, valid assignment, and valid driver license for self-drive.
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
-    [HttpPost("{id:int}/start")]
+    [HttpPost("~/api/rental/{id:int}/start")]
     [ProducesResponseType(typeof(RentalLifecycleResult), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -66,7 +66,7 @@ public sealed class RentalLifecycleController(
     /// Records the effective returned_at timestamp.
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
-    [HttpPost("{id:int}/return")]
+    [HttpPost("~/api/rental/{id:int}/return")]
     [ProducesResponseType(typeof(RentalLifecycleResult), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -85,7 +85,7 @@ public sealed class RentalLifecycleController(
     /// Requires post-rental inspection recorded.
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
-    [HttpPost("{id:int}/complete")]
+    [HttpPost("~/api/rental/{id:int}/complete")]
     [ProducesResponseType(typeof(RentalLifecycleResult), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -103,7 +103,7 @@ public sealed class RentalLifecycleController(
     /// Cancels a rental according to cancellation policies (customer self-cancel or staff cancellation).
     /// </summary>
     [Authorize]
-    [HttpPost("{id:int}/cancel")]
+    [HttpPost("~/api/rental/{id:int}/cancel")]
     [ProducesResponseType(typeof(RentalLifecycleResult), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -122,7 +122,7 @@ public sealed class RentalLifecycleController(
     /// Previews cancellation eligibility, fees and refund amount for the rental.
     /// </summary>
     [Authorize]
-    [HttpGet("{id:int}/cancellation-preview")]
+    [HttpGet("~/api/rental/{id:int}/cancellation-preview")]
     [ProducesResponseType(typeof(CancellationPreview), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]

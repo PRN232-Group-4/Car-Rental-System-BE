@@ -158,6 +158,9 @@ public sealed class ApiSuccessResponseOperationFilter : IOperationFilter
             operation.Summary = "Set rental policy active status (Admin/Manager).";
             operation.Description = "Sets only isActive; policy terms and existing rental snapshots remain unchanged. Repeating the same status is idempotent. Activation is rejected if another active policy exists in the same scope. rentalCount is preserved in the response.";
         }
+        operation.Description = (operation.Description ?? "") +
+            " Route naming uses plural collection resources and singular resources addressed by ID; creating an item targets the plural collection. Singleton resources and action names keep their own names.";
+
         foreach (var code in new[] { "400", "404", "405", "500" })
             operation.Responses.TryAdd(code, new OpenApiResponse());
 

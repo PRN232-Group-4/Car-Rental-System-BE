@@ -147,8 +147,8 @@ public sealed class RentalOperationsApiTests : IAsyncLifetime
         foreach (var (method, path, body) in new[] {
             (HttpMethod.Get, "/api/rentals", (string?)null),
             (HttpMethod.Get, "/api/handovers", (string?)null),
-            (HttpMethod.Post, "/api/handovers/7/confirm", (string?)null),
-            (HttpMethod.Put, "/api/rentals/7", ValidEdit) })
+            (HttpMethod.Post, "/api/handover/7/confirm", (string?)null),
+            (HttpMethod.Put, "/api/rental/7", ValidEdit) })
         {
             using var response = await Send(method, path, role, body);
             using var json = await Envelope(response, code);
@@ -163,7 +163,7 @@ public sealed class RentalOperationsApiTests : IAsyncLifetime
     [InlineData("{\"vehicleId\":1,\"startTime\":\"2032-07-01T08:00:00Z\",\"endTime\":\"2032-07-01T12:00:00Z\"}")]
     public async Task Missing_edit_fields_or_malformed_body_return_400(string body)
     {
-        using var response = await Send(HttpMethod.Put, "/api/rentals/7", "Manager", body);
+        using var response = await Send(HttpMethod.Put, "/api/rental/7", "Manager", body);
         using var json = await Envelope(response, 400);
         Assert.True(json.RootElement.GetProperty("error").TryGetProperty("errors", out _));
         Assert.Equal(0, _editing.Calls);
@@ -172,11 +172,11 @@ public sealed class RentalOperationsApiTests : IAsyncLifetime
     [Fact]
     public async Task Edit_and_handover_return_single_envelope_and_business_messages()
     {
-        using var updated = await Send(HttpMethod.Put, "/api/rentals/7", "CustomerService", ValidEdit);
+        using var updated = await Send(HttpMethod.Put, "/api/rental/7", "CustomerService", ValidEdit);
         using var edit = await Envelope(updated, 200);
         Assert.Equal("Rental updated successfully.", edit.RootElement.GetProperty("message").GetString());
         Assert.Equal(7, edit.RootElement.GetProperty("data").GetProperty("id").GetInt32());
-        using var handedOver = await Send(HttpMethod.Post, "/api/handovers/7/confirm", "Manager");
+        using var handedOver = await Send(HttpMethod.Post, "/api/handover/7/confirm", "Manager");
         using var handover = await Envelope(handedOver, 200);
         Assert.Equal("Vehicle handover confirmed successfully.", handover.RootElement.GetProperty("message").GetString());
         var data = handover.RootElement.GetProperty("data");
@@ -188,7 +188,7 @@ public sealed class RentalOperationsApiTests : IAsyncLifetime
     [Fact]
     public async Task Editing_after_start_returns_conflict_envelope()
     {
-        using var response = await Send(HttpMethod.Put, "/api/rentals/9", "Manager", ValidEdit);
+        using var response = await Send(HttpMethod.Put, "/api/rental/9", "Manager", ValidEdit);
         using var json = await Envelope(response, 409);
         Assert.Contains("not started", json.RootElement.GetProperty("message").GetString());
         Assert.Equal("RENTAL_NOT_EDITABLE", json.RootElement.GetProperty("error").GetProperty("code").GetString());
@@ -220,7 +220,7 @@ public sealed class RentalOperationsApiTests : IAsyncLifetime
         Assert.Equal(3m,item.GetProperty("subscriptionHoursUsed").GetDecimal());
         Assert.Equal("WAITING_CONFIRMATION",item.GetProperty("nextAction").GetString());
         Assert.Equal("0901234567",item.GetProperty("facility").GetProperty("phone").GetString());
-        using var detailResponse=await Send(HttpMethod.Get,"/api/rentals/mine/1","Customer");
+        using var detailResponse=await Send(HttpMethod.Get,"/api/rental/mine/1","Customer");
         using var detailJson=await Envelope(detailResponse,200);
         var detail=detailJson.RootElement.GetProperty("data");
         Assert.Equal(JsonValueKind.Object,detail.GetProperty("facility").ValueKind);
@@ -232,7 +232,7 @@ public sealed class RentalOperationsApiTests : IAsyncLifetime
     {
         using var json = JsonDocument.Parse(await _client.GetStringAsync("/swagger/v1/swagger.json"));
         var paths = json.RootElement.GetProperty("paths");
-        foreach (var (path, method) in new[] { ("/api/rentals/{id}", "put"), ("/api/handovers", "get"), ("/api/handovers/{rentalId}", "get"), ("/api/handovers/{rentalId}/confirm", "post") })
+        foreach (var (path, method) in new[] { ("/api/rental/{id}", "put"), ("/api/handovers", "get"), ("/api/handover/{rentalId}", "get"), ("/api/handover/{rentalId}/confirm", "post") })
         {
             var responses = paths.GetProperty(path).GetProperty(method).GetProperty("responses");
             foreach (var code in new[] { "200", "400", "401", "403", "500" })

@@ -4,7 +4,7 @@ using Car_Rental_System_BE.Application.Interfaces.Services;
 
 namespace Car_Rental_System_BE.Application.Services;
 
-public sealed partial class CustomerService(ICustomerRepository repository) : ICustomerService
+public sealed class CustomerService(ICustomerRepository repository) : ICustomerService
 {
     public Task<CustomerPage> ListAsync(CustomerListQuery query, CancellationToken ct)
     {
@@ -24,5 +24,11 @@ public sealed partial class CustomerService(ICustomerRepository repository) : IC
             Page = query.Page,
             PageSize = query.PageSize
         }, ct);
+    }
+
+    public Task<CustomerDetail?> FindByIdAsync(int customerId, CancellationToken ct)
+    {
+        if (customerId <= 0) throw new ArgumentOutOfRangeException(nameof(customerId), "Customer ID must be positive.");
+        return repository.FindByIdAsync(customerId, ct);
     }
 }

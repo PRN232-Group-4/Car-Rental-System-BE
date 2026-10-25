@@ -31,14 +31,14 @@ public sealed class HandoversController(IHandoverService service) : ControllerBa
         Ok(await service.ListAsync(new HandoverFilter(status, customerId, vehicleId, from, to, page, pageSize), ct));
 
     /// <summary>Retrieves inspection evidence, vehicle, customer and audit details for an active handover.</summary>
-    [HttpGet("{rentalId:int}")]
+    [HttpGet("~/api/handover/{rentalId:int}")]
     [ProducesResponseType<HandoverDetail>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Detail([Range(1, int.MaxValue)] int rentalId, CancellationToken ct) =>
         Ok(await service.GetAsync(rentalId, ct));
 
     /// <summary>Confirms successful handover and starts the rental after inspection and assignment checks.</summary>
-    [HttpPost("{rentalId:int}/confirm")]
+    [HttpPost("~/api/handover/{rentalId:int}/confirm")]
     [ProducesResponseType<HandoverConfirmation>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]

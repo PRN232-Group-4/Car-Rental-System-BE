@@ -15,7 +15,7 @@ public sealed class SignedContractUploadForm
 }
 
 [ApiController]
-[Route("api/rentals/{id:int}/contract")]
+[Route("api/rental/{id:int}/contract")]
 [Authorize(Roles = "Customer,Admin,Manager,CustomerService")]
 public sealed class RentalContractDocumentsController(IRentalContractDocumentService documents) : ControllerBase
 {

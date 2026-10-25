@@ -39,13 +39,13 @@ public sealed class DevicesController(ITrackingService trackingService) : Contro
     public async Task<IActionResult> Register([FromBody] RegisterDeviceRequest request, CancellationToken ct)
     {
         var result = await trackingService.RegisterDeviceAsync(request, ct);
-        return Created($"api/devices/{result.Id}", result);
+        return Created($"/api/device/{result.Id}", result);
     }
 
     /// <summary>
     /// Retrieves details of a specific tracking device.
     /// </summary>
-    [HttpGet("{id}")]
+    [HttpGet("~/api/device/{id}")]
     [ProducesResponseType<TrackingDeviceDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Get(string id, CancellationToken ct)
     {
@@ -58,7 +58,7 @@ public sealed class DevicesController(ITrackingService trackingService) : Contro
     /// <summary>
     /// Updates status or assigned vehicle for a tracking device.
     /// </summary>
-    [HttpPut("{id}")]
+    [HttpPut("~/api/device/{id}")]
     [ProducesResponseType<TrackingDeviceDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Update(string id, [FromBody] UpdateDeviceRequest request, CancellationToken ct)
     {

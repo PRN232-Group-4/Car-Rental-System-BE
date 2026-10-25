@@ -72,7 +72,7 @@ public sealed class CustomerDetailApiTests : IAsyncLifetime
     [InlineData("CustomerService")]
     public async Task Authorized_detail_returns_safe_nested_profile_with_success_envelope(string role)
     {
-        using var response = await GetAsync("/api/customers/7", role);
+        using var response = await GetAsync("/api/customer/7", role);
         using var json = await AssertEnvelope(response, 200);
         Assert.Equal("Customer retrieved successfully.", json.RootElement.GetProperty("message").GetString());
         var profile = json.RootElement.GetProperty("data");
@@ -96,7 +96,7 @@ public sealed class CustomerDetailApiTests : IAsyncLifetime
     [InlineData("Maintenance", 403)]
     public async Task Customer_profile_denies_unauthorized_roles_without_reading_repository(string? role, int code)
     {
-        using var response = await GetAsync("/api/customers/7", role);
+        using var response = await GetAsync("/api/customer/7", role);
         using var json = await AssertEnvelope(response, code);
         Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("data").ValueKind);
         Assert.Null(_repository.LastCustomerId);
@@ -107,7 +107,7 @@ public sealed class CustomerDetailApiTests : IAsyncLifetime
     [InlineData(-1)]
     public async Task Nonpositive_customer_id_returns_validation_without_reading_repository(int customerId)
     {
-        using var response = await GetAsync($"/api/customers/{customerId}", "CustomerService");
+        using var response = await GetAsync($"/api/customer/{customerId}", "CustomerService");
         using var json = await AssertEnvelope(response, 400);
         Assert.True(json.RootElement.GetProperty("error").TryGetProperty("errors", out _));
         Assert.Null(_repository.LastCustomerId);
@@ -116,7 +116,7 @@ public sealed class CustomerDetailApiTests : IAsyncLifetime
     [Fact]
     public async Task Missing_customer_returns_not_found_in_envelope()
     {
-        using var response = await GetAsync("/api/customers/99", "CustomerService");
+        using var response = await GetAsync("/api/customer/99", "CustomerService");
         using var json = await AssertEnvelope(response, 404);
         Assert.Equal("Customer was not found.", json.RootElement.GetProperty("message").GetString());
         Assert.Equal(99, _repository.LastCustomerId);
@@ -126,7 +126,7 @@ public sealed class CustomerDetailApiTests : IAsyncLifetime
     public async Task Swagger_exposes_customer_detail_and_all_response_codes()
     {
         using var json = JsonDocument.Parse(await _client.GetStringAsync("/swagger/v1/swagger.json"));
-        var operation = json.RootElement.GetProperty("paths").GetProperty("/api/customers/{customerId}").GetProperty("get");
+        var operation = json.RootElement.GetProperty("paths").GetProperty("/api/customer/{customerId}").GetProperty("get");
         var responses = operation.GetProperty("responses");
         foreach (var code in new[] { "200", "400", "401", "403", "404" }) Assert.True(responses.TryGetProperty(code, out _));
         var schema = responses.GetProperty("200").GetProperty("content").GetProperty("application/json").GetProperty("schema");

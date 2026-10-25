@@ -68,7 +68,7 @@ public sealed class OperationalDirectoryTests(PostgresFixture db):IClassFixture<
         var vehicle=await Seed.VehicleAsync(db.DataSource);var technician=await StaffAsync();
         await Seed.ScalarAsync(db.DataSource,"INSERT INTO vehicle_maintenance(vehicle_id,assigned_staff_id,status,is_safe) VALUES($1,$2,'scheduled',false)",vehicle,technician.Id);
         await using var host=await HostAsync();using var client=Client(host);
-        foreach(var route in new[]{$"/api/vehicles/{vehicle}","/api/vehicles?pageSize=100"})
+        foreach(var route in new[]{$"/api/vehicle/{vehicle}","/api/vehicles?pageSize=100"})
         {
             using var request=Request(HttpMethod.Get,route,role);using var response=await client.SendAsync(request);using var json=await Envelope(response,200);
             var data=json.RootElement.GetProperty("data");

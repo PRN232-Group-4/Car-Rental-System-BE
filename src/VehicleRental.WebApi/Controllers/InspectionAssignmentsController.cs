@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Car_Rental_System_BE.WebApi.Controllers;
 
 [ApiController]
-[Route("api/rentals/{id:int}/inspection-assignment")]
+[Route("api/rental/{id:int}/inspection-assignment")]
 public sealed class InspectionAssignmentsController(IInspectionAssignmentService service) : ControllerBase
 {
     /// <summary>Admin confirms technician dispatch and a passing pre/post-rental check together. Does not overwrite existing evidence.</summary>

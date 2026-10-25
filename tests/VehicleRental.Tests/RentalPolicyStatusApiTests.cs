@@ -152,7 +152,7 @@ public sealed class RentalPolicyStatusApiTests : IAsyncLifetime
             Assert.True(schemas.GetProperty("RentalPolicyPage").GetProperty("properties").TryGetProperty(name, out _));
         Assert.Equal("int64", schemas.GetProperty("RentalPolicy").GetProperty("properties").GetProperty("rentalCount").GetProperty("format").GetString());
         Assert.Equal(1, schemas.GetProperty("PolicyRequest").GetProperty("properties").GetProperty("vehicleTypeId").GetProperty("minimum").GetInt32());
-        var operation = root.GetProperty("paths").GetProperty("/api/rental-policies/{id}/status").GetProperty("patch");
+        var operation = root.GetProperty("paths").GetProperty("/api/rental-policy/{id}/status").GetProperty("patch");
         Assert.Contains("Admin/Manager", operation.GetProperty("summary").GetString());
         var request = root.GetProperty("components").GetProperty("schemas").GetProperty("PolicyStatusRequest");
         Assert.Contains(request.GetProperty("required").EnumerateArray(), property => property.GetString() == "isActive");
@@ -168,7 +168,7 @@ public sealed class RentalPolicyStatusApiTests : IAsyncLifetime
 
     private async Task<HttpResponseMessage> Patch(int id, string body, string? role)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Patch, $"/api/rental-policies/{id}/status")
+        using var request = new HttpRequestMessage(HttpMethod.Patch, $"/api/rental-policy/{id}/status")
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json")
         };
