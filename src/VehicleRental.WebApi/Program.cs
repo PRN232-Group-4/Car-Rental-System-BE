@@ -50,6 +50,17 @@ builder.Logging.AddSimpleConsole(options =>
 
 // Add services to the container.
 builder.Services.AddControllers(options => options.Filters.Add<ApiSuccessResponseFilter>());
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy => policy
+        .WithOrigins(
+            "https://car-rental-system-fe.phucthan308.workers.dev",
+            "http://localhost:3000",
+            "http://localhost:5000")
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials());
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -403,6 +414,7 @@ if (!app.Environment.IsProduction())
 }
 
 app.UseHttpsRedirection();
+app.UseCors();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
