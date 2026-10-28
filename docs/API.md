@@ -185,7 +185,7 @@ BE dùng JWT access token và refresh token lưu phiên trong Redis. Login thàn
 - Logout thu hồi phiên hiện tại; logout-all, đổi/reset mật khẩu thu hồi mọi phiên. Thay quyền hoặc cập nhật/phân công nhân sự cũng có thể làm token cũ mất hiệu lực.
 - JWT được kiểm tra với trạng thái phiên Redis và `authorization_version` của account.
 - Cookie `Secure` cần môi trường HTTPS phù hợp. Profile local đang dùng HTTP, nên cần cấu hình HTTPS/proxy phù hợp để kiểm thử đầy đủ đăng nhập bằng cookie.
-- `Program.cs` hiện chưa cấu hình CORS. Frontend khác origin cần proxy/cấu hình triển khai phù hợp; chỉ đặt `credentials: "include"` không giải quyết toàn bộ CORS và SameSite.
+- CORS cho phép đúng ba origin: `https://car-rental-system-fe.phucthan308.workers.dev`, `http://localhost:3000`, `http://localhost:5000`; cho phép mọi method/header và credentials. Preflight được xử lý trước rate limiter và xác thực. Client dùng cookie cần `credentials: "include"`; các quy tắc `SameSite=Lax`/`Secure` vẫn áp dụng, nên request cross-site dùng cookie vẫn cần proxy/HTTPS phù hợp.
 
 ### Ký hiệu quyền dùng trong các bảng
 

@@ -1,5 +1,9 @@
 # Tiến độ
 
+## CORS frontend — 2026-10-28
+
+Thêm CORS cho FE Cloudflare Workers và HTTP localhost cổng 3000/5000 trong mọi môi trường; cho phép method/header và credentials, preflight trước rate limiting/xác thực. Build đạt 0 warning/error; 34/34 `ApiResponseTests` hiện có đạt. Xem [thay đổi](../changes/2026-10-28-frontend-cors.md). Chưa deploy; cần triển khai lại BE.
+
 ## Gộp Customer detail và tên API số ít/số nhiều — 2026-10-25
 
 Gộp hai partial detail còn lại của Customer vào controller/service chính; `src` giảm 236 → 234 file C#. API tập hợp giữ số nhiều, tài nguyên có ID dùng số ít; đồng bộ route, Location, Swagger metadata, FE adapters/schema và mock e2e. URL hợp đồng cũ đã lưu được chuẩn hóa khi đọc qua cả EF/ADO, không migration. Rà 179 controller actions không trùng route. Build warnings-as-errors đạt; toàn suite BE **1.254/1.254 pass, 0 fail/skip** trên PostgreSQL 18 tạm UTC; FE typecheck và **97/97 test liên quan** đạt. URL đổi không tương thích ngược, cần phát hành BE/FE đồng bộ. Xem [thay đổi](../changes/2026-10-25-file-consolidation-api-number.md), [ADR-013](decisions/ADR-013-api-resource-number.md). Chưa deploy.

@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-10-28 — [CORS cho frontend deploy và localhost 3000/5000](2026-10-28-frontend-cors.md)
+
 - 2026-10-25 — [Gộp Customer detail và chuẩn hóa tên API số ít/số nhiều](2026-10-25-file-consolidation-api-number.md)
 
 - 2026-10-25 — [Entity Framework cho truy vấn đọc và gộp file](2026-10-25-entity-framework-read-queries.md)
