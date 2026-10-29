@@ -39,7 +39,7 @@ public sealed class SessionController(ISessionService sessions) : ControllerBase
         var refreshToken = Request.Cookies[AuthCookies.RefreshTokenName];
         if (string.IsNullOrWhiteSpace(refreshToken)) return Unauthorized();
         var tokens = await sessions.RefreshAsync(refreshToken, ct);
-        if (tokens is null) { AuthCookies.Clear(Response); return Unauthorized(); }
+        if (tokens is null) { AuthCookies.Clear(Request, Response); return Unauthorized(); }
         WriteTokens(tokens);
         return NoContent();
     }
@@ -50,7 +50,7 @@ public sealed class SessionController(ISessionService sessions) : ControllerBase
     {
         var refreshToken = Request.Cookies[AuthCookies.RefreshTokenName];
         if (!string.IsNullOrWhiteSpace(refreshToken)) await sessions.LogoutAsync(refreshToken, ct);
-        AuthCookies.Clear(Response);
+        AuthCookies.Clear(Request, Response);
         return NoContent();
     }
 
@@ -62,10 +62,10 @@ public sealed class SessionController(ISessionService sessions) : ControllerBase
         var email = User.FindFirstValue(ClaimTypes.Email);
         if (string.IsNullOrWhiteSpace(email)) return Forbid();
         await sessions.LogoutAllAsync(email, ct);
-        AuthCookies.Clear(Response);
+        AuthCookies.Clear(Request, Response);
         return NoContent();
     }
     private void WriteTokens(SessionTokens tokens) =>
-        AuthCookies.Write(Response, tokens.AccessToken, tokens.Refresh.Token, tokens.Refresh.ExpiresUtc, tokens.AccessTokenLifetime);
+        AuthCookies.Write(Request, Response, tokens.AccessToken, tokens.Refresh.Token, tokens.Refresh.ExpiresUtc, tokens.AccessTokenLifetime);
 
 }
