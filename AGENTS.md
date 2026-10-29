@@ -20,7 +20,7 @@ Service không kế thừa repository interface; SQL chỉ nằm ở Infrastruct
 ## Quy tắc nghiệp vụ bắt buộc
 - Xác thực: email lower-case; OTP 6 số có TTL, cooldown, giới hạn sai và rate limit email/IP. Không log OTP, API key, mật khẩu, cookie hoặc connection string. Tạo `users`/`customers` chỉ sau verify thành công.
 - Mật khẩu: đăng ký/đăng nhập và mật khẩu mới khi tạo nhân viên/đổi/reset phải từ **6 đến 20 ký tự** (bao gồm hai mốc), dùng giới hạn chung trong `PasswordRules`. Không cắt ngắn hoặc trim mật khẩu để vượt qua validation. PBKDF2/Argon2 có salt; đổi/reset mật khẩu thu hồi mọi session.
-- Session: cookie `HttpOnly`, `Secure`, `SameSite=Lax`; ticket Redis với absolute + sliding expiry; logout xóa ticket.
+- Session: cookie `HttpOnly`, `Secure`; `SameSite=Lax` mặc định, `SameSite=None` khi request có header `Origin` (web cross-site); ticket Redis với absolute + sliding expiry; logout xóa ticket.
 - Thuê xe: không chồng lịch; long-term khóa xe; pre-inspection đạt trước `renting`; post-inspection trước `completed`; fail khóa xe, staff report riêng, Manager giao maintenance (FR-031).
 - Payment: subscription rental không invoice; direct rental phải qua invoice; snapshot giá/policy lúc đặt.
 

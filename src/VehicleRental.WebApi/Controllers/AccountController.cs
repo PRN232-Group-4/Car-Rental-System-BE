@@ -124,7 +124,7 @@ public sealed class AccountController(IRegistrationWorkflow registration, IPassw
         if (string.IsNullOrWhiteSpace(email)) return Forbid();
         try { await passwordChanges.CompleteAsync(email, request.CurrentPassword, request.Otp, request.NewPassword, ct); }
         catch (PasswordChangeException error) { return PasswordChangeError(error); }
-        AuthCookies.Clear(Response);
+        AuthCookies.Clear(Request, Response);
         return NoContent();
     }
 
