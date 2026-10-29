@@ -9,3 +9,12 @@ Secure cookie, PBKDF2, OTP TTL/attempt/cooldown implemented. Authentication requ
 - [x] Process CORS preflight before rate limiting, authentication, and authorization. Existing cookie SameSite/Secure rules still apply.
 
 Change: [Frontend CORS](../changes/2026-10-28-frontend-cors.md).
+
+## Cookie SameSite — 2026-10-29
+
+- [x] Request có header `Origin` (browser cross-site: Flutter web `http://localhost:5000` → API Railway, FE Cloudflare Workers → API) nhận cookie `HttpOnly`, `Secure`, `SameSite=None`.
+- [x] Request không có `Origin` (native Android/iOS, server-to-server) giữ `SameSite=Lax`.
+- [x] `Clear` dùng cùng `SameSite` với `Write` để logout xóa đúng cookie.
+- [ ] CSRF token — vẫn còn thiếu; `SameSite=None` bỏ lớp bảo vệ CSRF dựa trên SameSite cho client trình duyệt, hiện bù bằng CORS whitelist + API chỉ nhận JSON.
+
+Change: [Cookie SameSite](../changes/2026-10-29-cookie-samesite-cross-site.md).

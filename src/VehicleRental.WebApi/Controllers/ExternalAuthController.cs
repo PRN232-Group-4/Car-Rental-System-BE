@@ -33,7 +33,7 @@ public sealed class ExternalAuthController(IOptions<GoogleAuthOptions> google, I
         if (string.IsNullOrWhiteSpace(email)) return RedirectToLogin("error");
         var tokens = await sessions.SignInExternalAsync(email, ct);
         if (tokens is null) return RedirectToLogin("error");
-        AuthCookies.Write(Response, tokens.AccessToken, tokens.Refresh.Token, tokens.Refresh.ExpiresUtc, tokens.AccessTokenLifetime);
+        AuthCookies.Write(Request, Response, tokens.AccessToken, tokens.Refresh.Token, tokens.Refresh.ExpiresUtc, tokens.AccessTokenLifetime);
         await HttpContext.SignOutAsync("External");
         return RedirectToLogin("ok");
     }

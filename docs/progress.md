@@ -1,5 +1,9 @@
 # Tiến độ
 
+## Cookie SameSite cho web cross-site — 2026-10-29
+
+`AuthCookies.Write`/`Clear` chọn `SameSite=None` khi request có header `Origin` (browser gọi API khác domain: Flutter web `http://localhost:5000` → Railway, FE Cloudflare Workers → API) và giữ `SameSite=Lax` cho native/server-to-server; `HttpOnly`/`Secure` không đổi, `Clear` dùng cùng `SameSite` với `Write`. Sửa lỗi login trả 200 nhưng `GET /api/account/profile` trả 401 vì trình duyệt chặn `Set-Cookie` `SameSite=Lax` từ response cross-site. Chưa build/chạy test trong phiên này; chưa deploy. Xem [thay đổi](../changes/2026-10-29-cookie-samesite-cross-site.md).
+
 ## CORS frontend — 2026-10-28
 
 Thêm CORS cho FE Cloudflare Workers và HTTP localhost cổng 3000/5000 trong mọi môi trường; cho phép method/header và credentials, preflight trước rate limiting/xác thực. Build đạt 0 warning/error; 34/34 `ApiResponseTests` hiện có đạt. Xem [thay đổi](../changes/2026-10-28-frontend-cors.md). Chưa deploy; cần triển khai lại BE.
