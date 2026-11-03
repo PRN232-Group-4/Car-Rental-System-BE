@@ -1,4 +1,4 @@
-namespace VehicleRental.Domain.Loyalty;
+namespace Car_Rental_System_BE.Domain.Loyalty;
 
 public enum LoyaltyTransactionType
 {

@@ -13,7 +13,7 @@ using Car_Rental_System_BE.Infrastructure.Services.Registration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using VehicleRental.Domain.Lifecycle;
+using Car_Rental_System_BE.Domain.Lifecycle;
 using Xunit;
 
 namespace VehicleRental.Tests;
@@ -125,14 +125,22 @@ public sealed class OperationalNotificationTests
         var status = action switch { "start" => RentalStatus.PreInspection, "return" => RentalStatus.Renting, "complete" => RentalStatus.PostInspection, _ => RentalStatus.Pending };
         var entity = new RentalLifecycleEntity(72, 12, 1, null, null, false, "hourly", status, 10, 0, 0, 110,
             now.AddHours(-1), now.AddHours(1), false, 100, 0, 0, 10, null, now.AddHours(-1), now, null, null, null, null, 0);
-        var repo = Proxy<IRentalLifecycleRepository>((method, _) => method.Name switch
+        var repo = Proxy<IRentalLifecycleRepository>((method, args) => method.Name switch
         {
-            "GetForUpdateAsync" => Task.FromResult<RentalLifecycleEntity?>(entity),
+            "GetAsync" => Task.FromResult<RentalLifecycleEntity?>(entity),
             "HasPassingPreInspectionAsync" or "HasValidAssignmentAsync" or "IsCustomerLicenseValidAsync" or "HasPostInspectionAsync" or "IsPostInspectionOkAsync" => Task.FromResult(true),
+            "SettleCompletionAsync" => Settle((SettlementPlan)args[1]!),
             _ when method.Name.StartsWith("UpdateTo") => Commit(),
             _ => throw new NotSupportedException(method.Name)
         });
         Task Commit() { committed = true; return Task.CompletedTask; }
+        Task<RentalSettlementDto> Settle(SettlementPlan plan)
+        {
+            Commit();
+            return Task.FromResult(new RentalSettlementDto(72, plan.ScheduledEnd, plan.ReturnedAt, plan.OvertimeMinutes,
+                plan.OvertimeHours, plan.OvertimeAmount, plan.OvertimeVat, plan.DepositHeld, plan.DepositDeducted,
+                null, null, plan.DamageReviewRequired, plan.CompletedAt));
+        }
         var gate = Proxy<IRentalPaymentGate>((method, _) => method.Name switch
         {
             "IsRentalInvoicePaidAsync" => Task.FromResult(true),

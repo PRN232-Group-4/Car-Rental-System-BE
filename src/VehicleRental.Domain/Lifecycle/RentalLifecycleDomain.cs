@@ -1,4 +1,4 @@
-namespace VehicleRental.Domain.Lifecycle;
+namespace Car_Rental_System_BE.Domain.Lifecycle;
 
 public enum RentalStatus
 {
@@ -332,5 +332,45 @@ public static class SettlementCalculator
             Shortfall: shortfall,
             RefundAmount: refund
         );
+    }
+}
+
+/// <summary>
+/// Phase 2 / D2: how the overtime of a subscription rental is split between the package and money.
+/// <see cref="HoursCharged"/> is taken out of the remaining package hours; <see cref="ExcessHours"/> is
+/// what the package could not cover and must be billed on a supplementary invoice.
+/// </summary>
+public sealed record PackageHourAllocation(
+    decimal HoursCharged,
+    decimal ExcessHours,
+    decimal ExcessAmount,
+    decimal ExcessVat
+);
+
+public static class PackageHourAllocator
+{
+    /// <param name="overtimeHours">Overtime hours of the rental (whole hours, see <see cref="OvertimeCalculator"/>).</param>
+    /// <param name="remainingPackageHours">Remaining hours of the subscription. NULL means the package has no limit.</param>
+    public static PackageHourAllocation Allocate(
+        int overtimeHours,
+        decimal? remainingPackageHours,
+        decimal unitHourlyPrice,
+        decimal overtimeFeeRate,
+        decimal vatRate)
+    {
+        if (overtimeHours < 0) throw new ArgumentOutOfRangeException(nameof(overtimeHours));
+        if (remainingPackageHours is < 0) throw new ArgumentOutOfRangeException(nameof(remainingPackageHours));
+        if (unitHourlyPrice < 0) throw new ArgumentOutOfRangeException(nameof(unitHourlyPrice));
+        if (overtimeFeeRate < 0) throw new ArgumentOutOfRangeException(nameof(overtimeFeeRate));
+        if (vatRate < 0) throw new ArgumentOutOfRangeException(nameof(vatRate));
+
+        // The package pays for what it still has, the customer pays for the rest. Never more than the
+        // overtime itself, so a rental can never be charged twice for the same hour.
+        var charged = remainingPackageHours is { } remaining ? Math.Min(overtimeHours, remaining) : overtimeHours;
+        var excess = overtimeHours - charged;
+        var amount = MoneyRounding.RoundVnd(excess * unitHourlyPrice * (1m + (overtimeFeeRate / 100m)));
+        var vat = MoneyRounding.RoundVnd(amount * (vatRate / 100m));
+
+        return new PackageHourAllocation(charged, excess, amount, vat);
     }
 }

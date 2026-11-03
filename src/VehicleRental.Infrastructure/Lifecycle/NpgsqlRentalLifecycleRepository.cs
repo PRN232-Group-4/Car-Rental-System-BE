@@ -6,13 +6,17 @@ using Car_Rental_System_BE.Domain.Availability;
 using Car_Rental_System_BE.Infrastructure.Availability;
 using Npgsql;
 using Car_Rental_System_BE.Infrastructure.Repositories;
-using VehicleRental.Domain.Lifecycle;
+using Car_Rental_System_BE.Domain.Lifecycle;
 
 namespace Car_Rental_System_BE.Infrastructure.Lifecycle;
 
 public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource) : IRentalLifecycleRepository
 {
-    public async Task<RentalLifecycleEntity?> GetForUpdateAsync(int rentalId, CancellationToken ct)
+    /// <summary>
+    /// Plain read of one rental - NO lock is taken here (Phase 2 / D-3: the old name GetAsync was a lie).
+    /// Callers that need to mutate must go through a method that locks inside its own transaction.
+    /// </summary>
+    public async Task<RentalLifecycleEntity?> GetAsync(int rentalId, CancellationToken ct)
     {
         await using var db = VehicleRentalDbContext.Create(dataSource);
         var row = await (from r in db.Set<RentalsRow>()
@@ -251,96 +255,211 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
         await tx.CommitAsync(ct);
     }
 
-    public async Task UpdateToCompletedAsync(
+    /// <summary>
+    /// Phase 2 / D-1: the whole completion of one rental in ONE transaction and in a fixed lock order:
+    /// <list type="number">
+    /// <item>advisory lock on the rental id (same key every other lifecycle write uses);</item>
+    /// <item><c>rentals ... FOR UPDATE</c> - the rental is locked FIRST, so two concurrent settlements of the
+    /// same rental serialise here and the loser sees the winner's status below;</item>
+    /// <item>state re-check: the rental must still be <c>post_inspection</c>;</item>
+    /// <item><c>customer_subscriptions ... FOR UPDATE</c> - the subscription is locked SECOND, and only for a
+    /// subscription rental, which is the only case where its remaining hours are read for writing.</item>
+    /// </list>
+    /// The mutation phase then runs refund, invoice, package hours and loyalty points through the ports on this
+    /// same connection and transaction (see <see cref="AmbientTransactionScope"/>): any failure anywhere rolls
+    /// the whole completion back, including money already written.
+    /// </summary>
+    public async Task<RentalSettlementDto> SettleCompletionAsync(
         int rentalId,
-        int vehicleId,
-        DateTime completedAt,
-        DateTime returnedAt,
-        decimal overtimePrice,
-        decimal vatPrice,
-        decimal totalPrice,
-        int overtimeHours,
-        RentalSettlementDto settlement,
+        SettlementPlan plan,
+        SettlementParticipants participants,
         ActorContext actor,
         CancellationToken ct)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
 
+        // 1. Advisory lock first, exactly like every other lifecycle write for this rental.
         await using (var lockCmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock($1)", conn, tx))
         {
             lockCmd.Parameters.AddWithValue(rentalId);
             await lockCmd.ExecuteNonQueryAsync(ct);
         }
 
-        await using (var checkCmd = new NpgsqlCommand("SELECT status FROM rentals WHERE id = $1 FOR UPDATE", conn, tx))
+        // 2. Lock the RENTAL first. Never the subscription before this row.
+        string currentStatus;
+        int vehicleId;
+        int customerId;
+        bool isSubscription;
+        int? subscriptionId;
+        await using (var checkCmd = new NpgsqlCommand("""
+            SELECT status, vehicle_id, customer_id, is_subscription, customer_subscription_id
+            FROM rentals
+            WHERE id = $1
+            FOR UPDATE
+            """, conn, tx))
         {
             checkCmd.Parameters.AddWithValue(rentalId);
-            var curStatus = (string?)(await checkCmd.ExecuteScalarAsync(ct));
-            if (curStatus == "completed")
-            {
-                throw new ConflictException("ALREADY_IN_STATE", "Rental is already in completed status.");
-            }
-            if (curStatus != "post_inspection")
-            {
-                throw new ConflictException("ILLEGAL_TRANSITION", $"Rental cannot be completed from {curStatus}.");
-            }
+            await using var reader = await checkCmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+                throw new NotFoundException("RENTAL_NOT_FOUND", $"Rental {rentalId} was not found.");
+            currentStatus = reader.GetString(0);
+            vehicleId = reader.GetInt32(1);
+            customerId = reader.GetInt32(2);
+            isSubscription = reader.GetBoolean(3);
+            subscriptionId = reader.IsDBNull(4) ? null : reader.GetInt32(4);
         }
 
-        await using var cmdRental = new NpgsqlCommand("""
-            UPDATE rentals
-            SET status = 'completed', completed_at = $2, returned_at = $3,
-                overtime_price = $4, vat_price = $5, total_price = $6,
-                overtime_hours = $7, status_changed_at = now()
-            WHERE id = $1
-            """, conn, tx);
-        cmdRental.Parameters.AddWithValue(rentalId);
-        cmdRental.Parameters.AddWithValue(completedAt);
-        cmdRental.Parameters.AddWithValue(returnedAt);
-        cmdRental.Parameters.AddWithValue(overtimePrice);
-        cmdRental.Parameters.AddWithValue(vatPrice);
-        cmdRental.Parameters.AddWithValue(totalPrice);
-        cmdRental.Parameters.AddWithValue(overtimeHours);
-        await cmdRental.ExecuteNonQueryAsync(ct);
+        // 3. Re-check the state inside the transaction: this is what rejects the losing concurrent request.
+        if (currentStatus == "completed")
+            throw new ConflictException("ALREADY_IN_STATE", "Rental is already in completed status.");
+        if (currentStatus != "post_inspection")
+            throw new ConflictException("ILLEGAL_TRANSITION", $"Rental cannot be completed from {currentStatus}.");
 
-        // Release vehicle to available if not under maintenance
-        await using var cmdVehicle = new NpgsqlCommand("""
-            UPDATE vehicles
-            SET is_renting = false,
-                status = CASE WHEN status = 'maintenance' THEN 'maintenance' ELSE 'available' END
-            WHERE id = $1
-            """, conn, tx);
-        cmdVehicle.Parameters.AddWithValue(vehicleId);
-        await cmdVehicle.ExecuteNonQueryAsync(ct);
+        // 4. Only now, and only for a subscription rental, lock the subscription and read the hours it has left.
+        decimal? remainingPackageHours = null;
+        if (isSubscription && subscriptionId is int lockedSubscriptionId)
+        {
+            await using var subscription = new NpgsqlCommand(
+                "SELECT remaining_hours FROM customer_subscriptions WHERE id = $1 FOR UPDATE", conn, tx);
+            subscription.Parameters.AddWithValue(lockedSubscriptionId);
+            var value = await subscription.ExecuteScalarAsync(ct);
+            remainingPackageHours = value is decimal remaining ? remaining : null;
+        }
 
-        // Insert settlement record
-        await using var cmdSettlement = new NpgsqlCommand("""
-            INSERT INTO rental_settlements(
-                rental_id, scheduled_end, returned_at,
-                overtime_minutes, overtime_hours, overtime_amount, overtime_vat,
-                deposit_held, deposit_deducted, shortfall_invoice_id, refund_payment_id,
-                damage_review_required, created_at
-            )
-            VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-            ON CONFLICT (rental_id) DO NOTHING
-            """, conn, tx);
-        cmdSettlement.Parameters.AddWithValue(rentalId);
-        cmdSettlement.Parameters.AddWithValue(settlement.ScheduledEnd);
-        cmdSettlement.Parameters.AddWithValue(settlement.ReturnedAt);
-        cmdSettlement.Parameters.AddWithValue(settlement.OvertimeMinutes);
-        cmdSettlement.Parameters.AddWithValue(settlement.OvertimeHours);
-        cmdSettlement.Parameters.AddWithValue(settlement.OvertimeAmount);
-        cmdSettlement.Parameters.AddWithValue(settlement.OvertimeVat);
-        cmdSettlement.Parameters.AddWithValue(settlement.DepositHeld);
-        cmdSettlement.Parameters.AddWithValue(settlement.DepositDeducted);
-        cmdSettlement.Parameters.AddWithValue((object?)settlement.ShortfallInvoiceId ?? DBNull.Value);
-        cmdSettlement.Parameters.AddWithValue((object?)settlement.RefundPaymentId ?? DBNull.Value);
-        cmdSettlement.Parameters.AddWithValue(settlement.DamageReviewRequired);
-        cmdSettlement.Parameters.AddWithValue(settlement.CreatedAt);
-        await cmdSettlement.ExecuteNonQueryAsync(ct);
+        // 5. Mutate. Everything below is inside this transaction; the ambient scope makes the adapters join it.
+        int? shortfallInvoiceId = null;
+        int? refundPaymentId = null;
 
-        await InsertHistoryAsync(conn, tx, rentalId, "post_inspection", "completed", actor, "Rental completed and settled", ct);
+        using (AmbientTransactionScope.Begin(conn, tx))
+        {
+            // 5a. Direct rental shortfall: billed as the post-return overtime invoice, as before.
+            if (!isSubscription && plan.Shortfall > 0)
+            {
+                shortfallInvoiceId = await participants.InvoiceGateway.CreateOvertimeInvoiceAsync(
+                    rentalId, plan.Shortfall, plan.OvertimeVat, plan.InvoiceDueAt, ct);
+            }
+
+            // 5b. Subscription rental: the package pays what it still has, the customer pays the excess.
+            if (isSubscription && subscriptionId is int subscriptionToCharge && plan.OvertimeHours > 0)
+            {
+                var allocation = PackageHourAllocator.Allocate(
+                    plan.OvertimeHours, remainingPackageHours, plan.UnitHourlyPrice, plan.OvertimeFeeRate, plan.VatRate);
+
+                // The per-rental ledger is written BEFORE remaining_hours moves: ux_subscription_hour_ledger_rental
+                // makes a second settlement of this rental fail on the index instead of deducting twice.
+                await using (var ledger = new NpgsqlCommand("""
+                    INSERT INTO subscription_hour_ledger(rental_id, customer_subscription_id, hours)
+                    VALUES($1, $2, $3)
+                    """, conn, tx))
+                {
+                    ledger.Parameters.AddWithValue(rentalId);
+                    ledger.Parameters.AddWithValue(subscriptionToCharge);
+                    ledger.Parameters.AddWithValue(allocation.HoursCharged);
+                    await ledger.ExecuteNonQueryAsync(ct);
+                }
+
+                // Exactly one deduction site for the whole completion.
+                await participants.SubscriptionUsage.DeductRemainingHoursAsync(
+                    subscriptionToCharge, allocation.HoursCharged, ct);
+
+                // D2: the hours the package could not cover are billed, not dropped.
+                if (allocation.ExcessHours > 0)
+                {
+                    shortfallInvoiceId = await participants.InvoiceGateway.CreateSupplementaryInvoiceAsync(
+                        rentalId, allocation.ExcessAmount, allocation.ExcessVat, plan.InvoiceDueAt, ct);
+                }
+            }
+
+            // 5c. Refund on the ambient transaction (Phase 2 / D-5).
+            if (plan.RefundAmount > 0)
+            {
+                refundPaymentId = await participants.PaymentGate.CreateRefundPaymentAsync(
+                    rentalId, customerId, plan.RefundInvoiceId, plan.RefundAmount, isSubscription, ct);
+            }
+
+            // 5d. Loyalty points on the ambient transaction, and a failure here is fatal (Phase 2 / D-5).
+            if (plan.LoyaltyBasisAmount is { } loyaltyBasis)
+            {
+                await participants.LoyaltyAward.AwardPointsAsync(customerId, rentalId, loyaltyBasis, ct);
+            }
+
+            await using (var cmdRental = new NpgsqlCommand("""
+                UPDATE rentals
+                SET status = 'completed', completed_at = $2, returned_at = $3,
+                    overtime_price = $4, vat_price = $5, total_price = $6,
+                    overtime_hours = $7, status_changed_at = now()
+                WHERE id = $1
+                """, conn, tx))
+            {
+                cmdRental.Parameters.AddWithValue(rentalId);
+                cmdRental.Parameters.AddWithValue(plan.CompletedAt);
+                cmdRental.Parameters.AddWithValue(plan.ReturnedAt);
+                cmdRental.Parameters.AddWithValue(plan.OvertimeAmount);
+                cmdRental.Parameters.AddWithValue(plan.NewVatPrice);
+                cmdRental.Parameters.AddWithValue(plan.NewTotalPrice);
+                cmdRental.Parameters.AddWithValue(plan.OvertimeHours);
+                await cmdRental.ExecuteNonQueryAsync(ct);
+            }
+
+            // Release vehicle to available if not under maintenance
+            await using (var cmdVehicle = new NpgsqlCommand("""
+                UPDATE vehicles
+                SET is_renting = false,
+                    status = CASE WHEN status = 'maintenance' THEN 'maintenance' ELSE 'available' END
+                WHERE id = $1
+                """, conn, tx))
+            {
+                cmdVehicle.Parameters.AddWithValue(vehicleId);
+                await cmdVehicle.ExecuteNonQueryAsync(ct);
+            }
+
+            // Insert settlement record. No ON CONFLICT: a second settlement must be an error, not a silent no-op.
+            await using (var cmdSettlement = new NpgsqlCommand("""
+                INSERT INTO rental_settlements(
+                    rental_id, scheduled_end, returned_at,
+                    overtime_minutes, overtime_hours, overtime_amount, overtime_vat,
+                    deposit_held, deposit_deducted, shortfall_invoice_id, refund_payment_id,
+                    damage_review_required, created_at
+                )
+                VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                """, conn, tx))
+            {
+                cmdSettlement.Parameters.AddWithValue(rentalId);
+                cmdSettlement.Parameters.AddWithValue(plan.ScheduledEnd);
+                cmdSettlement.Parameters.AddWithValue(plan.ReturnedAt);
+                cmdSettlement.Parameters.AddWithValue(plan.OvertimeMinutes);
+                cmdSettlement.Parameters.AddWithValue(plan.OvertimeHours);
+                cmdSettlement.Parameters.AddWithValue(plan.OvertimeAmount);
+                cmdSettlement.Parameters.AddWithValue(plan.OvertimeVat);
+                cmdSettlement.Parameters.AddWithValue(plan.DepositHeld);
+                cmdSettlement.Parameters.AddWithValue(plan.DepositDeducted);
+                cmdSettlement.Parameters.AddWithValue((object?)shortfallInvoiceId ?? DBNull.Value);
+                cmdSettlement.Parameters.AddWithValue((object?)refundPaymentId ?? DBNull.Value);
+                cmdSettlement.Parameters.AddWithValue(plan.DamageReviewRequired);
+                cmdSettlement.Parameters.AddWithValue(plan.CompletedAt);
+                await cmdSettlement.ExecuteNonQueryAsync(ct);
+            }
+
+            await InsertHistoryAsync(conn, tx, rentalId, "post_inspection", "completed", actor, "Rental completed and settled", ct);
+        }
+
         await tx.CommitAsync(ct);
+
+        return new RentalSettlementDto(
+            RentalId: rentalId,
+            ScheduledEnd: plan.ScheduledEnd,
+            ReturnedAt: plan.ReturnedAt,
+            OvertimeMinutes: plan.OvertimeMinutes,
+            OvertimeHours: plan.OvertimeHours,
+            OvertimeAmount: plan.OvertimeAmount,
+            OvertimeVat: plan.OvertimeVat,
+            DepositHeld: plan.DepositHeld,
+            DepositDeducted: plan.DepositDeducted,
+            ShortfallInvoiceId: shortfallInvoiceId,
+            RefundPaymentId: refundPaymentId,
+            DamageReviewRequired: plan.DamageReviewRequired,
+            CreatedAt: plan.CompletedAt);
     }
 
     public async Task UpdateToCancelledAsync(

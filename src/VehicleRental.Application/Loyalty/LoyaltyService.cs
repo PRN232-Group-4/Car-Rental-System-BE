@@ -1,5 +1,5 @@
 using Car_Rental_System_BE.Application.Common.Errors;
-using VehicleRental.Domain.Loyalty;
+using Car_Rental_System_BE.Domain.Loyalty;
 
 namespace Car_Rental_System_BE.Application.Loyalty;
 

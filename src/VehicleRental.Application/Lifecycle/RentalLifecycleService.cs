@@ -1,5 +1,5 @@
 using Car_Rental_System_BE.Application.Common.Errors;
-using VehicleRental.Domain.Lifecycle;
+using Car_Rental_System_BE.Domain.Lifecycle;
 
 namespace Car_Rental_System_BE.Application.Lifecycle;
 
@@ -20,7 +20,7 @@ public sealed class RentalLifecycleService(
 
     public async Task<RentalLifecycleResult> ConfirmAsync(int id, ActorContext actor, CancellationToken ct)
     {
-        var rental = await repository.GetForUpdateAsync(id, ct)
+        var rental = await repository.GetAsync(id, ct)
             ?? throw new NotFoundException("RENTAL_NOT_FOUND", $"Rental {id} was not found.");
 
         var outcome = RentalStateMachine.Evaluate(rental.Status, RentalTrigger.Confirm);
@@ -46,7 +46,7 @@ public sealed class RentalLifecycleService(
 
     public async Task<RentalLifecycleResult> StartAsync(int id, ActorContext actor, CancellationToken ct)
     {
-        var rental = await repository.GetForUpdateAsync(id, ct)
+        var rental = await repository.GetAsync(id, ct)
             ?? throw new NotFoundException("RENTAL_NOT_FOUND", $"Rental {id} was not found.");
 
         var outcome = RentalStateMachine.Evaluate(rental.Status, RentalTrigger.Start);
@@ -100,7 +100,7 @@ public sealed class RentalLifecycleService(
 
     public async Task<RentalLifecycleResult> ReturnAsync(int id, DateTime? returnedAt, ActorContext actor, CancellationToken ct)
     {
-        var rental = await repository.GetForUpdateAsync(id, ct)
+        var rental = await repository.GetAsync(id, ct)
             ?? throw new NotFoundException("RENTAL_NOT_FOUND", $"Rental {id} was not found.");
 
         var outcome = RentalStateMachine.Evaluate(rental.Status, RentalTrigger.Return);
@@ -133,7 +133,7 @@ public sealed class RentalLifecycleService(
 
     public async Task<RentalLifecycleResult> CompleteAsync(int id, ActorContext actor, CancellationToken ct)
     {
-        var rental = await repository.GetForUpdateAsync(id, ct)
+        var rental = await repository.GetAsync(id, ct)
             ?? throw new NotFoundException("RENTAL_NOT_FOUND", $"Rental {id} was not found.");
 
         var outcome = RentalStateMachine.Evaluate(rental.Status, RentalTrigger.Complete);
@@ -176,64 +176,48 @@ public sealed class RentalLifecycleService(
         var depositHeld = await paymentGate.GetDepositHeldAsync(id, ct);
         var settlementCalc = SettlementCalculator.Calculate(depositHeld, overtime.OvertimeTotal);
 
-        int? shortfallInvoiceId = null;
-        if (settlementCalc.Shortfall > 0)
-        {
-            if (!rental.IsSubscription)
-            {
-                var dueAt = now.AddHours(72);
-                shortfallInvoiceId = await invoiceGateway.CreateOvertimeInvoiceAsync(
-                    id, settlementCalc.Shortfall, overtime.OvertimeVat, dueAt, ct);
-            }
-            else
-            {
-                // Subscription shortfall handling
-                await subscriptionUsage.DeductRemainingHoursAsync(
-                    rental.CustomerSubscriptionId ?? 0, overtime.OvertimeHours, ct);
-            }
-        }
+        int? refundInvoiceId = settlementCalc.RefundAmount > 0
+            ? await paymentGate.GetPrimaryInvoiceIdAsync(id, ct)
+            : null;
 
-        int? refundPaymentId = null;
-        if (settlementCalc.RefundAmount > 0)
-        {
-            var primaryInvoiceId = await paymentGate.GetPrimaryInvoiceIdAsync(id, ct);
-            refundPaymentId = await paymentGate.CreateRefundPaymentAsync(
-                id, rental.CustomerId, primaryInvoiceId, settlementCalc.RefundAmount, rental.IsSubscription, ct);
-        }
+        // The loyalty base is derived from the post-settlement price, exactly as before. Subscription
+        // rentals award no points, so the basis stays null for them.
+        var newVatPrice = rental.VatPrice + overtime.OvertimeVat;
+        var newTotalPrice = rental.TotalPrice + overtime.OvertimeTotal;
+        decimal? loyaltyBasis = rental.IsSubscription
+            ? null
+            : Math.Max(0m, newTotalPrice - newVatPrice - rental.DepositPrice);
 
-        var settlementDto = new RentalSettlementDto(
-            RentalId: id,
-            ScheduledEnd: rental.ScheduledEnd,
+        // Everything below happens in ONE transaction inside the repository (Phase 2 / D-1): no invoice, no
+        // refund, no package hour and no loyalty point can be committed while the rental is not completed.
+        var plan = new SettlementPlan(
+            CompletedAt: now,
             ReturnedAt: effectiveReturnedAt,
+            ScheduledEnd: rental.ScheduledEnd,
             OvertimeMinutes: overtime.OvertimeMinutes,
             OvertimeHours: overtime.OvertimeHours,
             OvertimeAmount: overtime.OvertimeAmount,
             OvertimeVat: overtime.OvertimeVat,
+            UnitHourlyPrice: unitHourly,
+            OvertimeFeeRate: rental.OvertimeFeeRate,
+            VatRate: rental.VatRate,
             DepositHeld: depositHeld,
             DepositDeducted: settlementCalc.DepositDeducted,
-            ShortfallInvoiceId: shortfallInvoiceId,
-            RefundPaymentId: refundPaymentId,
-            DamageReviewRequired: !isPostInspectionOk,
-            CreatedAt: now
-        );
+            Shortfall: rental.IsSubscription ? 0m : settlementCalc.Shortfall,
+            RefundAmount: settlementCalc.RefundAmount,
+            RefundInvoiceId: refundInvoiceId,
+            InvoiceDueAt: now.AddHours(72),
+            NewVatPrice: newVatPrice,
+            NewTotalPrice: newTotalPrice,
+            LoyaltyBasisAmount: loyaltyBasis,
+            DamageReviewRequired: !isPostInspectionOk);
 
-        var newVatPrice = rental.VatPrice + overtime.OvertimeVat;
-        var newTotalPrice = rental.TotalPrice + overtime.OvertimeTotal;
-
-        await repository.UpdateToCompletedAsync(
-            id, rental.VehicleId, now, effectiveReturnedAt, overtime.OvertimeAmount, newVatPrice, newTotalPrice, overtime.OvertimeHours, settlementDto, actor, ct);
-
-        // Hooks in transaction order
-        if (rental.IsSubscription && rental.CustomerSubscriptionId.HasValue && overtime.OvertimeHours > 0)
-        {
-            await subscriptionUsage.DeductRemainingHoursAsync(rental.CustomerSubscriptionId.Value, overtime.OvertimeHours, ct);
-        }
-
-        if (!rental.IsSubscription)
-        {
-            var netRentBasis = Math.Max(0m, newTotalPrice - newVatPrice - rental.DepositPrice);
-            await loyaltyAward.AwardPointsAsync(rental.CustomerId, id, netRentBasis, ct);
-        }
+        var settlementDto = await repository.SettleCompletionAsync(
+            id,
+            plan,
+            new SettlementParticipants(paymentGate, invoiceGateway, subscriptionUsage, loyaltyAward),
+            actor,
+            ct);
 
         await eventSink.PublishStatusChangedAsync(
             new RentalStatusChangedEvent(id, rental.Status, RentalStatus.Completed, now, actor), ct);
@@ -243,7 +227,7 @@ public sealed class RentalLifecycleService(
 
     public async Task<RentalLifecycleResult> CancelAsync(int id, CancelRentalCommand command, ActorContext actor, CancellationToken ct)
     {
-        var rental = await repository.GetForUpdateAsync(id, ct)
+        var rental = await repository.GetAsync(id, ct)
             ?? throw new NotFoundException("RENTAL_NOT_FOUND", $"Rental {id} was not found.");
 
         var outcome = RentalStateMachine.Evaluate(rental.Status, RentalTrigger.Cancel);
@@ -315,7 +299,7 @@ public sealed class RentalLifecycleService(
 
     public async Task<CancellationPreview> GetCancellationPreviewAsync(int id, ActorContext actor, CancellationToken ct)
     {
-        var rental = await repository.GetForUpdateAsync(id, ct)
+        var rental = await repository.GetAsync(id, ct)
             ?? throw new NotFoundException("RENTAL_NOT_FOUND", $"Rental {id} was not found.");
 
         var cancellationActor = actor.Role switch

@@ -4,7 +4,7 @@ using Car_Rental_System_BE.Infrastructure.Lifecycle;
 using Car_Rental_System_BE.Infrastructure.Loyalty;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
-using VehicleRental.Domain.Lifecycle;
+using Car_Rental_System_BE.Domain.Lifecycle;
 using Xunit;
 
 namespace VehicleRental.Tests;

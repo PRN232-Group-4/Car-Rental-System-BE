@@ -262,9 +262,9 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
         using var missing = await Envelope(response, 404);
         await Operations.SaveRentalContractAsync(rental.Id, "https://example.test/legacy.pdf", DateTime.UtcNow.AddMinutes(-2), default);
         Assert.False((await Operations.GetRentalAsync(rental.Id, default))!.HasUploadedContract);
-        Assert.False((await new NpgsqlRentalLifecycleRepository(db.DataSource).GetForUpdateAsync(rental.Id, default))!.HasUploadedContract);
+        Assert.False((await new NpgsqlRentalLifecycleRepository(db.DataSource).GetAsync(rental.Id, default))!.HasUploadedContract);
         using var uploaded = await Upload(rental.Id, Form());
-        Assert.True((await new NpgsqlRentalLifecycleRepository(db.DataSource).GetForUpdateAsync(rental.Id, default))!.HasUploadedContract);
+        Assert.True((await new NpgsqlRentalLifecycleRepository(db.DataSource).GetAsync(rental.Id, default))!.HasUploadedContract);
     }
 
     [Fact]

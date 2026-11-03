@@ -1,6 +1,6 @@
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Lifecycle;
-using VehicleRental.Domain.Lifecycle;
+using Car_Rental_System_BE.Domain.Lifecycle;
 using Xunit;
 
 namespace VehicleRental.Tests;
@@ -301,13 +301,23 @@ public sealed class RentalLifecycleServiceTests
         var result = await service.CompleteAsync(100, new(1, "staff@test.local", "Staff"), CancellationToken.None);
 
         Assert.Equal("completed", result.ToStatus);
-        Assert.True(_repo.UpdatedToCompleted);
-        Assert.NotNull(_repo.LastSettlement);
-        Assert.Equal(2, _repo.LastSettlement.OvertimeHours);
-        Assert.Equal(200_000m, _repo.LastSettlement.DepositDeducted);
-        Assert.Equal(1001, _repo.LastSettlement.ShortfallInvoiceId);
-        Assert.Null(_repo.LastSettlement.RefundPaymentId);
-        Assert.Equal(1, _loyaltyAward.Calls);
+        Assert.True(_repo.Settled);
+        var plan = Assert.IsType<SettlementPlan>(_repo.LastPlan);
+        Assert.Equal(2, plan.OvertimeHours);
+        Assert.Equal(400_000m, plan.OvertimeAmount);
+        Assert.Equal(40_000m, plan.OvertimeVat);
+        Assert.Equal(200_000m, plan.DepositHeld);
+        Assert.Equal(200_000m, plan.DepositDeducted);
+        // The deposit cannot cover the overtime: the 240k shortfall is the 'overtime' invoice the settlement raises.
+        Assert.Equal(240_000m, plan.Shortfall);
+        Assert.Equal(0m, plan.RefundAmount);
+        Assert.Null(plan.RefundInvoiceId);
+        // 1,000,000 rent + 440,000 overtime - 140,000 VAT - 200,000 deposit.
+        Assert.Equal(1_100_000m, plan.LoyaltyBasisAmount);
+        // The settlement receives the real ports, so the loyalty award happens inside its transaction.
+        Assert.Same(_loyaltyAward, _repo.LastParticipants?.LoyaltyAward);
+        Assert.Same(_paymentGate, _repo.LastParticipants?.PaymentGate);
+        Assert.Same(_invoiceGateway, _repo.LastParticipants?.InvoiceGateway);
     }
 
     [Fact]
@@ -329,10 +339,38 @@ public sealed class RentalLifecycleServiceTests
         var result = await service.CompleteAsync(100, new(1, "staff@test.local", "Staff"), CancellationToken.None);
 
         Assert.Equal("completed", result.ToStatus);
-        Assert.NotNull(_repo.LastSettlement);
-        Assert.Equal(0, _repo.LastSettlement.OvertimeHours);
-        Assert.Equal(500_000m, _paymentGate.LastRefundAmount);
-        Assert.Equal(2001, _repo.LastSettlement.RefundPaymentId);
+        var plan = Assert.IsType<SettlementPlan>(_repo.LastPlan);
+        Assert.Equal(0, plan.OvertimeHours);
+        Assert.Equal(0m, plan.Shortfall);
+        Assert.Equal(500_000m, plan.DepositHeld);
+        Assert.Equal(0m, plan.DepositDeducted);
+        Assert.Equal(500_000m, plan.RefundAmount);
+        Assert.Equal(55, plan.RefundInvoiceId);
+    }
+
+    [Fact]
+    public async Task Complete_of_a_subscription_rental_awards_no_loyalty_points_and_bills_no_direct_shortfall()
+    {
+        var service = CreateService();
+        var rental = CreateDefaultRental(status: RentalStatus.PostInspection, isSubscription: true, deposit: 0m) with
+        {
+            ScheduledEnd = FixedNow,
+            ReturnedAt = FixedNow.AddHours(4)
+        };
+        _repo.Entity = rental;
+        _repo.PostInspectionRecorded = true;
+        _repo.PostInspectionOk = true;
+        _paymentGate.DepositHeld = 0m;
+
+        await service.CompleteAsync(100, new(1, "staff@test.local", "Staff"), CancellationToken.None);
+
+        var plan = Assert.IsType<SettlementPlan>(_repo.LastPlan);
+        Assert.Equal(4, plan.OvertimeHours);
+        // A subscription rental never raises the direct-rental shortfall invoice and never awards points:
+        // the package covers what it can and the excess is a supplementary invoice decided inside the settlement.
+        Assert.Equal(0m, plan.Shortfall);
+        Assert.Null(plan.LoyaltyBasisAmount);
+        Assert.Equal(0m, plan.RefundAmount);
     }
 
     // =========================================================================
@@ -406,11 +444,13 @@ public sealed class RentalLifecycleServiceTests
         public bool UpdatedToPreInspection { get; set; }
         public bool UpdatedToRenting { get; set; }
         public bool UpdatedToPostInspection { get; set; }
-        public bool UpdatedToCompleted { get; set; }
+        public bool Settled { get; set; }
         public bool UpdatedToCancelled { get; set; }
+        public SettlementPlan? LastPlan { get; set; }
+        public SettlementParticipants? LastParticipants { get; set; }
         public RentalSettlementDto? LastSettlement { get; set; }
 
-        public Task<RentalLifecycleEntity?> GetForUpdateAsync(int rentalId, CancellationToken ct) =>
+        public Task<RentalLifecycleEntity?> GetAsync(int rentalId, CancellationToken ct) =>
             Task.FromResult(Entity);
 
         public Task<bool> HasPassingPreInspectionAsync(int rentalId, CancellationToken ct) =>
@@ -458,11 +498,15 @@ public sealed class RentalLifecycleServiceTests
             return Task.CompletedTask;
         }
 
-        public Task UpdateToCompletedAsync(int rentalId, int vehicleId, DateTime completedAt, DateTime returnedAt, decimal overtimePrice, decimal vatPrice, decimal totalPrice, int overtimeHours, RentalSettlementDto settlement, ActorContext actor, CancellationToken ct)
+        public Task<RentalSettlementDto> SettleCompletionAsync(int rentalId, SettlementPlan plan, SettlementParticipants participants, ActorContext actor, CancellationToken ct)
         {
-            UpdatedToCompleted = true;
-            LastSettlement = settlement;
-            return Task.CompletedTask;
+            Settled = true;
+            LastPlan = plan;
+            LastParticipants = participants;
+            LastSettlement = new RentalSettlementDto(rentalId, plan.ScheduledEnd, plan.ReturnedAt, plan.OvertimeMinutes,
+                plan.OvertimeHours, plan.OvertimeAmount, plan.OvertimeVat, plan.DepositHeld, plan.DepositDeducted,
+                null, null, plan.DamageReviewRequired, plan.CompletedAt);
+            return Task.FromResult(LastSettlement);
         }
 
         public Task UpdateToCancelledAsync(int rentalId, int vehicleId, DateTime cancelledAt, string cancelledBy, string reason, ActorContext actor, CancellationToken ct)
@@ -507,11 +551,20 @@ public sealed class RentalLifecycleServiceTests
     {
         public Task<int> CreateOvertimeInvoiceAsync(int rentalId, decimal amount, decimal vatAmount, DateTime dueAt, CancellationToken ct) =>
             Task.FromResult(1001);
+
+        public Task<int> CreateSupplementaryInvoiceAsync(int rentalId, decimal amount, decimal vatAmount, DateTime dueAt, CancellationToken ct) =>
+            Task.FromResult(1002);
     }
 
     private sealed class StubSubscriptionUsage : ISubscriptionUsage
     {
-        public Task DeductRemainingHoursAsync(int subscriptionId, int hours, CancellationToken ct) => Task.CompletedTask;
+        public decimal Deducted { get; private set; }
+
+        public Task DeductRemainingHoursAsync(int subscriptionId, decimal hours, CancellationToken ct)
+        {
+            Deducted += hours;
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class StubLoyaltyAward : ILoyaltyAward

@@ -1,4 +1,4 @@
-using VehicleRental.Domain.Lifecycle;
+using Car_Rental_System_BE.Domain.Lifecycle;
 
 namespace Car_Rental_System_BE.Application.Lifecycle;
 
@@ -36,6 +36,50 @@ public sealed record RentalSettlementDto(
     DateTime CreatedAt,
     DateTime? ExpireAt = null,
     DateTime? ExpiredAt = null
+);
+
+/// <summary>
+/// Phase 2 / D-1: everything <c>CompleteAsync</c> decides before it writes anything - the money of the
+/// settlement, already calculated. <see cref="IRentalLifecycleRepository.SettleCompletionAsync"/> applies it
+/// atomically and only re-derives what needs a row lock (the package hours still left on the subscription).
+/// </summary>
+public sealed record SettlementPlan(
+    DateTime CompletedAt,
+    DateTime ReturnedAt,
+    DateTime ScheduledEnd,
+    int OvertimeMinutes,
+    int OvertimeHours,
+    decimal OvertimeAmount,
+    decimal OvertimeVat,
+    decimal UnitHourlyPrice,
+    decimal OvertimeFeeRate,
+    decimal VatRate,
+    decimal DepositHeld,
+    decimal DepositDeducted,
+    // Direct rentals only: the part of the overtime the deposit could not cover, billed as an 'overtime' invoice.
+    decimal Shortfall,
+    decimal RefundAmount,
+    // Invoice the refund is booked against (the rental invoice of a direct rental).
+    int? RefundInvoiceId,
+    DateTime InvoiceDueAt,
+    // Prices the rental ends the settlement with (rent + VAT, overtime included).
+    decimal NewVatPrice,
+    decimal NewTotalPrice,
+    // Base for the loyalty award. NULL means the completion awards no points (subscription rentals).
+    decimal? LoyaltyBasisAmount,
+    bool DamageReviewRequired
+);
+
+/// <summary>
+/// The outward ports the settlement calls from inside its own transaction. They are handed to the
+/// repository so the refund, the invoice, the package hours and the loyalty points join that transaction
+/// instead of committing on their own connections (Phase 2 / D-5).
+/// </summary>
+public sealed record SettlementParticipants(
+    IRentalPaymentGate PaymentGate,
+    IInvoiceGateway InvoiceGateway,
+    ISubscriptionUsage SubscriptionUsage,
+    ILoyaltyAward LoyaltyAward
 );
 
 public sealed record RentalLifecycleEntity(
@@ -203,7 +247,12 @@ public sealed record RentalStatusChangedEvent(
 
 public interface IRentalLifecycleRepository
 {
-    Task<RentalLifecycleEntity?> GetForUpdateAsync(int rentalId, CancellationToken ct);
+    /// <summary>
+    /// Plain read of one rental. It takes NO lock: the name used to be GetAsync, which was a lie.
+    /// Locks are taken only inside <see cref="SettleCompletionAsync"/> (rental first, subscription second)
+    /// and inside the other UpdateTo* methods, which re-check the state in their own transaction.
+    /// </summary>
+    Task<RentalLifecycleEntity?> GetAsync(int rentalId, CancellationToken ct);
     Task<bool> HasPassingPreInspectionAsync(int rentalId, CancellationToken ct);
     Task<bool> HasPostInspectionAsync(int rentalId, CancellationToken ct);
     Task<bool> IsPostInspectionOkAsync(int rentalId, CancellationToken ct);
@@ -212,7 +261,14 @@ public interface IRentalLifecycleRepository
     Task UpdateToPreInspectionAsync(int rentalId, DateTime confirmedAt, ActorContext actor, CancellationToken ct);
     Task UpdateToRentingAsync(int rentalId, int vehicleId, DateTime startedAt, ActorContext actor, CancellationToken ct);
     Task UpdateToPostInspectionAsync(int rentalId, DateTime returnedAt, ActorContext actor, CancellationToken ct);
-    Task UpdateToCompletedAsync(int rentalId, int vehicleId, DateTime completedAt, DateTime returnedAt, decimal overtimePrice, decimal vatPrice, decimal totalPrice, int overtimeHours, RentalSettlementDto settlement, ActorContext actor, CancellationToken ct);
+    /// <summary>
+    /// Phase 2 / D-1: the whole completion in ONE transaction, always in this lock order:
+    /// advisory lock(rentalId) -> rentals FOR UPDATE -> state re-check -> customer_subscriptions FOR UPDATE.
+    /// Refund, invoice, package hours and loyalty points are written through <paramref name="participants"/>
+    /// on the same connection and transaction, so any failure rolls the entire completion back.
+    /// </summary>
+    Task<RentalSettlementDto> SettleCompletionAsync(
+        int rentalId, SettlementPlan plan, SettlementParticipants participants, ActorContext actor, CancellationToken ct);
     Task UpdateToCancelledAsync(int rentalId, int vehicleId, DateTime cancelledAt, string cancelledBy, string reason, ActorContext actor, CancellationToken ct);
     /// <summary>FR-042: danh sách yêu cầu đã quá hạn duyệt/thanh toán, cũ nhất trước, giới hạn theo lô.</summary>
     Task<IReadOnlyList<int>> ListExpiringRentalIdsAsync(DateTime now, int limit, CancellationToken ct);
@@ -240,11 +296,18 @@ public interface IRentalPaymentGate
 public interface IInvoiceGateway
 {
     Task<int> CreateOvertimeInvoiceAsync(int rentalId, decimal amount, decimal vatAmount, DateTime dueAt, CancellationToken ct);
+
+    /// <summary>
+    /// Phase 2 / D2: a subscription rental that runs past its remaining package hours is billed for the
+    /// excess on its own invoice. One per rental (ux_invoices_rental_supplementary).
+    /// </summary>
+    Task<int> CreateSupplementaryInvoiceAsync(int rentalId, decimal amount, decimal vatAmount, DateTime dueAt, CancellationToken ct);
 }
 
 public interface ISubscriptionUsage
 {
-    Task DeductRemainingHoursAsync(int subscriptionId, int hours, CancellationToken ct);
+    /// <summary>Package hours are fractional (NUMERIC(10,2)), so the amount taken is fractional too.</summary>
+    Task DeductRemainingHoursAsync(int subscriptionId, decimal hours, CancellationToken ct);
 }
 
 public interface ILoyaltyAward
