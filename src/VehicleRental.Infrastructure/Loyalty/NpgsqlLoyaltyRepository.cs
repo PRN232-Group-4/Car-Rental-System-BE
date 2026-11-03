@@ -30,12 +30,35 @@ public sealed class NpgsqlLoyaltyRepository(NpgsqlDataSource dataSource, TimePro
         return await db.Set<CustomersRow>().Where(c => c.Id == customerId).Select(c => c.LoyaltyPoint).FirstOrDefaultAsync(ct);
     }
 
+    /// <summary>
+    /// Phase 2 / D-4: the lifetime total <c>LoyaltyAwardAdapter.AwardPointsAsync</c> turns into a tier (and so into
+    /// a multiplier) is read inside the settlement transaction. It therefore has to run on the settlement's own
+    /// connection and transaction like every other participant of <see cref="AmbientTransactionScope"/>:
+    /// <list type="bullet">
+    /// <item>a second pooled connection here would leave every settlement holding two connections, so a pool of N
+    /// can deadlock at exactly N simultaneous settlements;</item>
+    /// <item>the tier was computed from COMMITTED rows only, so it could not see the points this same settlement
+    /// had already written and the multiplier came from data one step behind.</item>
+    /// </list>
+    /// Outside a settlement (<see cref="AmbientTransactionScope.Current"/> is null) nothing changes.
+    /// </summary>
     public async Task<int> GetLifetimeEarnedAsync(int customerId, CancellationToken ct)
     {
-        await using var db = VehicleRentalDbContext.Create(dataSource);
+        await using var db = CreateReadContext();
         return await db.Set<CustomerLoyaltyTransactionsRow>().Where(t => t.CustomerId == customerId && t.Type == "earn")
             .SumAsync(t => (int?)t.Points, ct) ?? 0;
     }
+
+    /// <summary>
+    /// The read context for this repository: joined to the ambient settlement transaction when one is open on this
+    /// call chain, otherwise a context on its own pooled connection exactly as before. Disposing a context built
+    /// from the ambient connection does not close that connection or end its transaction (the context does not own
+    /// them); the settlement still commits.
+    /// </summary>
+    private VehicleRentalDbContext CreateReadContext() =>
+        AmbientTransactionScope.Current is { } ambient
+            ? VehicleRentalDbContext.Create(ambient.Connection, ambient.Transaction)
+            : VehicleRentalDbContext.Create(dataSource);
 
     public async Task<(IReadOnlyList<LoyaltyTransactionDto> Items, int TotalCount)> ListTransactionsAsync(
         int customerId, string? type, int page, int pageSize, CancellationToken ct)
