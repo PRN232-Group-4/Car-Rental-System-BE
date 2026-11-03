@@ -3,7 +3,6 @@ using Car_Rental_System_BE.Application.Availability;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Domain.Assignments;
 using Car_Rental_System_BE.Domain.Availability;
-using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace VehicleRental.Tests;

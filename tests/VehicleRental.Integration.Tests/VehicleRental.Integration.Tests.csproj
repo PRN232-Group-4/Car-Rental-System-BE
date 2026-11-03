@@ -5,7 +5,6 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
-    <RootNamespace>VehicleRental.Tests</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,9 +18,15 @@
     <ProjectReference Include="..\..\src\VehicleRental.Infrastructure\VehicleRental.Infrastructure.csproj" />
   </ItemGroup>
 
+  <!-- PostgresFixture applies docs/db/Init.sql plus every db/migrations/*.sql at runtime. -->
   <ItemGroup>
     <None Include="..\..\docs\db\Init.sql" Link="docs\db\Init.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\db\migrations\*.sql" Link="db\migrations\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Shared with VehicleRental.Application.Tests: both compile the same source file instead of a fifth project. -->
+  <ItemGroup>
+    <Compile Include="..\Shared\WorkflowMemory.cs" Link="Shared\WorkflowMemory.cs" />
   </ItemGroup>
 
 </Project>

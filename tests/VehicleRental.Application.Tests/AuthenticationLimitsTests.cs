@@ -185,31 +185,4 @@ public sealed class AuthenticationLimitsTests
         public Func<MethodInfo, object?[], object?> Handler { get; set; } = null!;
         protected override object? Invoke(MethodInfo? method, object?[]? args) => Handler(method!, args!);
     }
-
-    public sealed class WorkflowMemory : IWorkflowStateStore
-    {
-        public Dictionary<string, string> Values { get; } = [];
-        private readonly Dictionary<string, DateTimeOffset> expiries = [];
-        public Task<string?> GetAsync(string key, CancellationToken ct)
-        { lock (Values) { RemoveExpired(key); return Task.FromResult(Values.GetValueOrDefault(key)); } }
-        public Task<TimeSpan?> GetTimeToLiveAsync(string key, CancellationToken ct)
-        { lock (Values) { RemoveExpired(key); return Task.FromResult<TimeSpan?>(expiries.TryGetValue(key, out var expiry) ? expiry - DateTimeOffset.UtcNow : null); } }
-        public Task SetAsync(string key, string value, TimeSpan? expiry, CancellationToken ct)
-        { Assert.NotNull(expiry); lock (Values) { Values[key] = value; expiries[key] = DateTimeOffset.UtcNow.Add(expiry.Value); } return Task.CompletedTask; }
-        public Task DeleteAsync(string key, CancellationToken ct) { Expire(key); return Task.CompletedTask; }
-        public Task<bool> CompareExchangeAsync(string key, string? expected, string? replacement, TimeSpan expiry, CancellationToken ct)
-        {
-            Assert.True(expiry > TimeSpan.Zero);
-            lock (Values)
-            {
-                RemoveExpired(key);
-                if (Values.GetValueOrDefault(key) != expected) return Task.FromResult(false);
-                if (replacement is null) Expire(key);
-                else { Values[key] = replacement; expiries[key] = DateTimeOffset.UtcNow.Add(expiry); }
-                return Task.FromResult(true);
-            }
-        }
-        public void Expire(string key) { lock (Values) { Values.Remove(key); expiries.Remove(key); } }
-        private void RemoveExpired(string key) { if (expiries.TryGetValue(key, out var expiry) && expiry <= DateTimeOffset.UtcNow) Expire(key); }
-    }
 }

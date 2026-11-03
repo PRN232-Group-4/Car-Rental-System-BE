@@ -33,7 +33,7 @@ public sealed class RefreshAuthorizationTests
             ["Staff", "CustomerService"], AuthorizationVersion: currentVersion);
         var controller = new SessionController(new SessionService(accounts, store,
             new JwtTokenService(Options.Create(new JwtOptions { SigningKey = new string('x', 64) }), Options.Create(new TokenOptions())),
-            new AuthenticationLimitsTests.WorkflowMemory(), new Car_Rental_System_BE.Application.DTOs.Options.RegistrationOptions()))
+            new WorkflowMemory(), new Car_Rental_System_BE.Application.DTOs.Options.RegistrationOptions()))
         { ControllerContext = new() { HttpContext = new DefaultHttpContext() } };
         controller.Request.Headers.Cookie = $"refresh_token={issued.Token}";
         var result = await controller.Refresh(default);

@@ -3,14 +3,9 @@ using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Car_Rental_System_BE.Application.DTOs.Accounts;
 using Car_Rental_System_BE.Application.DTOs.Options;
 using Car_Rental_System_BE.Application.Interfaces.External;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Application.Services;
-using Car_Rental_System_BE.Domain.Entities;
-using Car_Rental_System_BE.Domain.Interfaces;
-using Car_Rental_System_BE.Infrastructure.Persistence;
-using Car_Rental_System_BE.Infrastructure.Repositories;
-using Car_Rental_System_BE.Infrastructure.Services;
+using Car_Rental_System_BE.Infrastructure;
 using Car_Rental_System_BE.Infrastructure.Services.Authentication;
 using Car_Rental_System_BE.Infrastructure.Services.Media;
 using Car_Rental_System_BE.Infrastructure.Services.Payments;
@@ -20,7 +15,6 @@ using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
-using StackExchange.Redis;
 using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
@@ -28,15 +22,11 @@ using Microsoft.AspNetCore.HttpOverrides;
 using System.Security.Claims;
 using System.Text;
 using Car_Rental_System_BE.Application.Availability;
-using Car_Rental_System_BE.Infrastructure.Availability;
 using Car_Rental_System_BE.Application.Assignments;
-using Car_Rental_System_BE.Infrastructure.Assignments;
 using Car_Rental_System_BE.Application.Lifecycle;
 using Car_Rental_System_BE.Application.Handovers;
 using Car_Rental_System_BE.Application.Inspections;
-using Car_Rental_System_BE.Infrastructure.Lifecycle;
 using Car_Rental_System_BE.Application.Loyalty;
-using Car_Rental_System_BE.Infrastructure.Loyalty;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 
@@ -115,72 +105,18 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 
-var connectionString = builder.Configuration.GetConnectionString("RentalDatabase") ?? builder.Configuration["DATABASE_URL"];
-if (string.IsNullOrWhiteSpace(connectionString) && builder.Environment.IsDevelopment())
-    connectionString = "Host=localhost;Port=5432;Database=car_rental;Username=postgres;Password=postgres";
+// Infrastructure owns the Npgsql data source, the Redis connection, hosted services
+// and every repository/adapter registration. Program.cs only composes it.
+builder.Services.AddInfrastructure(builder.Configuration);
 
-if (!string.IsNullOrWhiteSpace(connectionString))
-{
-    builder.Services.AddSingleton<NpgsqlDataSource>(services =>
-    {
-        var settings = new NpgsqlConnectionStringBuilder(ToNpgsqlConnectionString(connectionString));
-        if (services.GetRequiredService<IOptions<DatabaseMigrationOptions>>().Value.SkipTypeLoading)
-            settings.ServerCompatibilityMode = ServerCompatibilityMode.NoTypeLoading;
-        return NpgsqlDataSource.Create(settings.ConnectionString);
-    });
-    builder.Services.AddOptions<DatabaseMigrationOptions>()
-        .Bind(builder.Configuration.GetSection(DatabaseMigrationOptions.SectionName));
-    builder.Services.AddHostedService<DatabaseMigrationHostedService>();
-    builder.Services.AddHostedService<SubscriptionExpiryHostedService>();
-    builder.Services.AddHostedService<TelemetryRetentionHostedService>();
-    // FR-042: quét yêu cầu đặt xe quá hạn duyệt/thanh toán mỗi phút.
-    builder.Services.AddHostedService<RentalExpiryHostedService>();
-}
-
-var redisConnection = builder.Configuration["Redis:ConnectionString"] ?? builder.Configuration["REDIS_URL"];
-if (string.IsNullOrWhiteSpace(redisConnection) && builder.Environment.IsDevelopment())
-    redisConnection = "localhost:6379";
-
-if (string.IsNullOrWhiteSpace(redisConnection))
-    throw new InvalidOperationException("Redis:ConnectionString (or REDIS_URL) must be configured.");
-
-builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
-{
-    return ConnectionMultiplexer.Connect(ToRedisConfiguration(redisConnection));
-});
-builder.Services.AddHttpClient<IBrevoEmailSender, BrevoEmailSender>();
-builder.Services.AddHttpClient<IOperationalEmailSender, BrevoOperationalEmailSender>();
-builder.Services.AddScoped<IOperationalNotificationRecipients, NpgsqlOperationalNotificationRecipients>();
-builder.Services.AddScoped<IOperationalNotifications, OperationalNotifications>();
-builder.Services.AddHttpClient<IPaymentGateway, PayOsPaymentGateway>(client => client.BaseAddress = new Uri("https://api-merchant.payos.vn/"));
-builder.Services.AddHttpClient<IMapClient, MapboxClient>(client =>
-{
-    client.Timeout = TimeSpan.FromSeconds(15);
-}).RemoveAllLoggers(); // Provider query strings contain access_token.
-builder.Services.AddScoped<IUserRepository, NpgsqlUserRepository>();
-builder.Services.AddScoped<IAccountRepository, NpgsqlAccountRepository>();
-builder.Services.AddScoped<ICustomerRepository, NpgsqlCustomerRepository>();
-builder.Services.AddScoped<IStaffRepository, NpgsqlStaffRepository>();
-builder.Services.AddScoped<IInspectionAssignmentRepository, NpgsqlInspectionAssignmentRepository>();
 builder.Services.AddScoped<IInspectionAssignmentService, InspectionAssignmentService>();
-builder.Services.AddScoped<IInspectionDirectoryRepository,NpgsqlInspectionDirectoryRepository>();
 builder.Services.AddScoped<IInspectionDirectoryService,InspectionDirectoryService>();
-builder.Services.AddScoped<IOperationsRepository, NpgsqlOperationsRepository>();
-builder.Services.AddScoped<IUserAdministrationRepository, NpgsqlUserAdministrationRepository>();
-builder.Services.AddScoped<IAuditLogRepository, NpgsqlAuditLogRepository>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IAuditRequestContext, HttpAuditRequestContext>();
-builder.Services.AddScoped<IRoleRepository, NpgsqlRoleRepository>();
 builder.Services.AddScoped<IRoleService, RoleService>();
-builder.Services.AddScoped<IDashboardRepository, NpgsqlDashboardRepository>();
-builder.Services.AddScoped<INavigationCountsRepository, NpgsqlNavigationCountsRepository>();
 builder.Services.AddScoped<INavigationCountsService, NavigationCountsService>();
-builder.Services.AddScoped<IOperationsCompletionRepository, NpgsqlOperationsCompletionRepository>();
-builder.Services.AddScoped<IRentalEditingRepository, NpgsqlOperationsRepository>();
 builder.Services.AddScoped<IRentalEditingService, RentalEditingService>();
-builder.Services.AddScoped<IPaymentRepository, NpgsqlPaymentRepository>();
-builder.Services.AddScoped<ITrackingRepository, NpgsqlTrackingRepository>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IUserService, UserService>();
@@ -192,11 +128,9 @@ builder.Services.AddScoped<IOperationsCompletionService, OperationsCompletionSer
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IMediaService, MediaService>();
 builder.Services.AddScoped<IRentalContractDocumentService, RentalContractDocumentService>();
-builder.Services.AddScoped<IRentalContractDocumentRepository, NpgsqlRentalContractDocumentRepository>();
 builder.Services.AddScoped<ISessionService, SessionService>();
 builder.Services.AddScoped<ITrackingService, TrackingService>();
 builder.Services.AddScoped<IMapService, MapService>();
-builder.Services.AddSingleton<IWorkflowStateStore, RedisWorkflowStateStore>();
 builder.Services.AddSingleton(provider => provider.GetRequiredService<IOptions<RegistrationOptions>>().Value);
 builder.Services.AddSingleton(provider => provider.GetRequiredService<IOptions<AvailabilityOptions>>().Value);
 builder.Services.AddSingleton(provider => provider.GetRequiredService<IOptions<MapboxOptions>>().Value);
@@ -209,21 +143,10 @@ builder.Services.AddScoped(provider =>
 builder.Services.AddScoped<IRegistrationWorkflow, RegistrationService>();
 builder.Services.AddScoped<IPasswordResetWorkflow, PasswordResetService>();
 builder.Services.AddScoped<IPasswordChangeWorkflow, PasswordChangeService>();
-builder.Services.AddSingleton<IImageStorage, CloudinaryImageStorage>();
-builder.Services.AddHostedService<RedisConnectionHostedService>();
-builder.Services.AddSingleton<RedisRefreshTokenStore>();
 builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddSingleton<IAccessTokenIssuer>(provider => provider.GetRequiredService<JwtTokenService>());
-builder.Services.AddSingleton<IRefreshTokenStore>(provider => provider.GetRequiredService<RedisRefreshTokenStore>());
-builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddScoped<IVehicleSearchRepository, NpgsqlVehicleSearchRepository>();
-builder.Services.AddScoped<IVehicleAvailabilityService, NpgsqlVehicleAvailabilityService>();
-builder.Services.AddScoped<IDriverAvailability, NpgsqlDriverAvailability>();
 builder.Services.AddScoped<VehicleSearchService>();
 builder.Services.Configure<AssignmentOptions>(builder.Configuration.GetSection(AssignmentOptions.SectionName));
-builder.Services.AddScoped<NpgsqlAssignmentRepository>();
-builder.Services.AddScoped<IAssignmentRepository>(sp => sp.GetRequiredService<NpgsqlAssignmentRepository>());
-builder.Services.AddScoped<IMaintenanceIncidentGateway>(sp => sp.GetRequiredService<NpgsqlAssignmentRepository>());
 builder.Services.AddScoped<IAssignmentService>(sp =>
 {
     var repo = sp.GetRequiredService<IAssignmentRepository>();
@@ -246,19 +169,9 @@ builder.Services.AddOptions<LoyaltyOptions>()
     }, "Loyalty options configuration validation failed.")
     .ValidateOnStart();
 builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<LoyaltyOptions>>().Value);
-builder.Services.AddScoped<ILoyaltyRepository, NpgsqlLoyaltyRepository>();
 builder.Services.AddScoped<ILoyaltyService, LoyaltyService>();
 builder.Services.AddScoped<ILoyaltyRedemption>(sp => (LoyaltyService)sp.GetRequiredService<ILoyaltyService>());
 
-builder.Services.AddScoped<NpgsqlRentalLifecycleRepository>();
-builder.Services.AddScoped<IRentalLifecycleRepository>(sp => sp.GetRequiredService<NpgsqlRentalLifecycleRepository>());
-builder.Services.AddScoped<IRentalPaymentGate, RentalPaymentGateAdapter>();
-builder.Services.AddScoped<IInvoiceGateway, InvoiceGatewayAdapter>();
-builder.Services.AddScoped<ISubscriptionUsage, SubscriptionUsageAdapter>();
-builder.Services.AddScoped<ILoyaltyAward, LoyaltyAwardAdapter>();
-builder.Services.AddScoped<IRentalEventSink, RentalEventSink>();
-builder.Services.AddScoped<ICurrentCustomer, CurrentCustomerService>();
-builder.Services.AddScoped<IRentalQueryRepository, NpgsqlRentalQueries>();
 builder.Services.AddScoped<IRentalQueries, RentalQueryService>();
 builder.Services.AddScoped<IHandoverService, HandoverService>();
 builder.Services.AddScoped<IRentalExpiryService>(sp => new RentalExpiryService(
@@ -440,43 +353,3 @@ app.MapGet("/health", async (NpgsqlDataSource? dataSource, CancellationToken can
 app.MapControllers();
 
 app.Run();
-
-static ConfigurationOptions ToRedisConfiguration(string value)
-{
-    ConfigurationOptions options;
-    if (Uri.TryCreate(value, UriKind.Absolute, out var uri) && (uri.Scheme == "redis" || uri.Scheme == "rediss"))
-    {
-        options = new ConfigurationOptions { Ssl = uri.Scheme == "rediss", SslHost = uri.Host };
-        options.EndPoints.Add(uri.Host, uri.IsDefaultPort ? 6379 : uri.Port);
-        var credentials = uri.UserInfo.Split(':', 2, StringSplitOptions.None);
-        if (credentials.Length == 2)
-        {
-            options.User = Uri.UnescapeDataString(credentials[0]);
-            options.Password = Uri.UnescapeDataString(credentials[1]);
-        }
-    }
-    else options = ConfigurationOptions.Parse(value);
-
-    options.AbortOnConnectFail = false;
-    options.ConnectRetry = 3;
-    options.ConnectTimeout = 5_000;
-    return options;
-}
-
-static string ToNpgsqlConnectionString(string value)
-{
-    if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || (uri.Scheme != "postgres" && uri.Scheme != "postgresql")) return value;
-    var credentials = uri.UserInfo.Split(':', 2, StringSplitOptions.None);
-    var builder = new NpgsqlConnectionStringBuilder
-    {
-        Host = uri.Host,
-        Port = uri.IsDefaultPort ? 5432 : uri.Port,
-        Database = Uri.UnescapeDataString(uri.AbsolutePath.TrimStart('/')),
-        Username = credentials.Length > 0 ? Uri.UnescapeDataString(credentials[0]) : string.Empty,
-        Password = credentials.Length == 2 ? Uri.UnescapeDataString(credentials[1]) : string.Empty
-    };
-    var sslMode = uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
-        .FirstOrDefault(item => item.StartsWith("sslmode=", StringComparison.OrdinalIgnoreCase))?.Split('=', 2)[1];
-    if (sslMode is not null && Enum.TryParse<Npgsql.SslMode>(sslMode, true, out var parsedMode)) builder.SslMode = parsedMode;
-    return builder.ConnectionString;
-}
