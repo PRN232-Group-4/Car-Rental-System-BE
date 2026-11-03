@@ -1,4 +1,3 @@
-using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Lifecycle;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using VehicleRental.Tests.Phase0;
@@ -8,11 +7,16 @@ namespace VehicleRental.Tests;
 
 /// <summary>
 /// Phase 2 / D2: the supplementary invoice of a subscription rental is raised, idempotent and visible as an
-/// unpaid receivable, but the shipped payment rules cannot settle it: ck_payments_invoice_rule forbids an
-/// invoice_id on a subscription payment and trg_payment_match_rental forbids a non-subscription payment on a
-/// subscription rental. Collecting it therefore needs a decision (which of the two money rules may be relaxed),
-/// so this test locks the safe interim behaviour instead: the collection endpoints refuse it up front, before a
-/// provider ever takes the customer's money, rather than failing on the trigger after the money moved.
+/// unpaid receivable - and it is collectable.
+///
+/// History: 0033 raised the invoice but two money rules made it unpayable (ck_payments_invoice_rule forbade an
+/// invoice on a subscription payment, trg_payment_match_rental forbade a non-subscription payment on a
+/// subscription rental), so this test used to lock an interim behaviour: the collection endpoints refused the
+/// invoice up front. Migration 0034 opened exactly one path - a payment whose invoice kind is 'supplementary' -
+/// and this test now asserts the outcome the customer actually needs: the invoice is payable and, once paid,
+/// nothing is left outstanding. The collection mechanics themselves are covered in
+/// <see cref="SupplementaryInvoiceCollectionTests"/> and the database guards in
+/// <see cref="SupplementaryInvoiceDatabaseGuardTests"/>.
 ///
 /// It reuses the Phase 0 harness (same fixture, same fixed numbers) but stays out of the Phase0 collection so
 /// the locked Phase 0 baseline stays exactly six facts.
@@ -20,7 +24,7 @@ namespace VehicleRental.Tests;
 public sealed class SupplementaryInvoiceTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
     [Fact]
-    public async Task The_excess_overtime_invoice_is_an_unpaid_receivable_that_the_collection_paths_refuse_up_front()
+    public async Task The_excess_overtime_invoice_is_an_unpaid_receivable_that_the_collection_paths_accept()
     {
         // 5 overtime hours against 2 remaining package hours => 3 excess hours => 300,000 + 10% VAT.
         var returnedAt = Phase0Harness.ScheduledEnd.AddHours(5);
@@ -38,17 +42,17 @@ public sealed class SupplementaryInvoiceTests(PostgresFixture db) : IClassFixtur
 
         var payments = new NpgsqlPaymentRepository(db.DataSource);
 
-        // Cash receipt: refused because the kind is not one the cash path can settle.
-        var cash = await Assert.ThrowsAsync<ConflictException>(() =>
-            payments.ConfirmCashAsync(invoiceId, "staff@phase2.local", CancellationToken.None));
-        Assert.Equal("INVOICE_NOT_PAYABLE", cash.Code);
+        // Both collection paths now accept it, exactly like an overtime invoice.
+        var detail = (await payments.GetInvoiceAsync(invoiceId, rental.Email, CancellationToken.None))!;
+        Assert.True(detail.CanPay);
+        Assert.Null(detail.PaymentBlockedReason);
 
-        // Online checkout: refused before any payment link can be created for it.
-        var checkout = await Assert.ThrowsAsync<ConflictException>(() =>
-            payments.ReserveInvoiceCheckoutAsync(invoiceId, rental.Email, CancellationToken.None));
-        Assert.Equal("INVOICE_NOT_PAYABLE", checkout.Code);
+        // Online checkout reserves the invoice (this used to be refused with INVOICE_NOT_PAYABLE). The reserved
+        // amount is invoices.amount, the same figure overtime checkouts use; VAT stays on the invoice.
+        var reservation = await payments.ReserveInvoiceCheckoutAsync(invoiceId, rental.Email, CancellationToken.None);
+        Assert.Equal(300_000m, reservation!.Amount);
 
-        // Nothing was written and nothing is half paid.
+        // Nothing was written by the reservation alone: still unpaid, still no payment row.
         Assert.Equal("unpaid", await Seed.ScalarAsync(db.DataSource, "SELECT status FROM invoices WHERE id=$1", invoiceId));
         Assert.Equal(0, await Seed.CountAsync(db.DataSource, "SELECT COUNT(*) FROM payments WHERE invoice_id=$1", invoiceId));
         Assert.Equal(330_000m, await Phase0Harness.PayableInvoiceTotalAsync(db.DataSource, rental.RentalId));

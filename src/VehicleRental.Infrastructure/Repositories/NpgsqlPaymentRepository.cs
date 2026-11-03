@@ -36,12 +36,6 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
         }
         if (rentalStatus == "cancelled")
             throw new ConflictException("INVOICE_NOT_PAYABLE", "A cancelled rental cannot be checked out.");
-        // Phase 2: a subscription rental's supplementary invoice cannot be collected yet: ck_payments_invoice_rule
-        // and trg_payment_match_rental make an invoice-linked payment on a subscription rental impossible, so a
-        // PayOS link would take the customer's money and then fail to record it. Refuse before the provider is
-        // involved. (Reuses the existing code, so no response contract changes.)
-        if (await KindAsync(cn, tx, invoiceId, ct) == InvoiceKinds.Supplementary)
-            throw new ConflictException("INVOICE_NOT_PAYABLE", "Hóa đơn phụ phí của đơn theo gói chưa hỗ trợ thanh toán trực tuyến.");
         // FR-042: đơn đã hết hạn không được tạo link thanh toán mới.
         if (rentalStatus == "expired")
             throw new ConflictException("RENTAL_EXPIRED", "Đơn thuê đã hết hạn vì chưa được duyệt hoặc chưa thanh toán trong thời hạn. Vui lòng tạo đơn mới.");
@@ -57,12 +51,15 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
             invoice.Parameters.AddWithValue((object?)email ?? DBNull.Value);
             invoice.Parameters.AddWithValue(rentalId);
             InvoicePayment result;
-            bool overtime;
+            bool postReturnCharge;
             await using (var reader = await invoice.ExecuteReaderAsync(ct))
             {
                 if (!await reader.ReadAsync(ct)) return null;
-                overtime = reader.GetString(5) == "overtime";
-                if ((email is null && !overtime) || (overtime && rentalStatus != "completed"))
+                // D2: a subscription rental's supplementary invoice is a post-return charge exactly like an
+                // overtime invoice - cash at the counter or a staff PayOS link, but only after the settlement
+                // that raised it. Both kinds therefore take the same guards below.
+                postReturnCharge = reader.GetString(5) is InvoiceKinds.Overtime or InvoiceKinds.Supplementary;
+                if ((email is null && !postReturnCharge) || (postReturnCharge && rentalStatus != "completed"))
                     throw new ConflictException("OVERTIME_INVOICE_REQUIRED", "Chỉ tạo link thu phụ phí đã quyết toán.");
                 if (reader.GetString(4) != "unpaid")
                     throw new ConflictException("INVOICE_NOT_PAYABLE", "Only unpaid invoices can be checked out.");
@@ -72,7 +69,7 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
                     throw new ConflictException("RENTAL_CONFIRMATION_REQUIRED", "Đơn thuê cần được nhân viên xác nhận trước khi thanh toán.");
                 result = new(invoiceId, reader.GetInt32(0), reader.GetInt32(1), reader.GetString(2), reader.GetDecimal(3), reader.GetString(4));
             }
-            if (overtime)
+            if (postReturnCharge)
             {
                 await using var linked = new NpgsqlCommand("SELECT EXISTS(SELECT 1 FROM rental_settlements WHERE rental_id=$1 AND shortfall_invoice_id=$2)", cn, tx);
                 linked.Parameters.AddWithValue(rentalId); linked.Parameters.AddWithValue(invoiceId);
@@ -89,13 +86,6 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
         {
             throw new ConflictException("INVOICE_CHECKOUT_BUSY", "The invoice is being processed. Retry after the current payment operation completes.");
         }
-    }
-
-    private static async Task<string?> KindAsync(NpgsqlConnection cn, NpgsqlTransaction tx, int invoiceId, CancellationToken ct)
-    {
-        await using var cmd = new NpgsqlCommand("SELECT kind FROM invoices WHERE id=$1", cn, tx);
-        cmd.Parameters.AddWithValue(invoiceId);
-        return await cmd.ExecuteScalarAsync(ct) as string;
     }
 
     public async Task<InvoicePayment?> GetInvoiceForCustomerAsync(int invoiceId, string email, CancellationToken ct)
@@ -143,7 +133,9 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
         if (invoiceStatus == "paid") throw new InvalidOperationException("Invoice is already paid without this provider reference.");
         await using var add = new NpgsqlCommand("INSERT INTO payments(rental_id,invoice_id,customer_id,is_subscription_payment,amount,status,type,method,paid_at,provider_reference) VALUES($1,$2,$3,false,$4,'paid',$6,'payos',now(),$5) RETURNING id", cn, tx);
         add.Parameters.AddWithValue(rentalId); add.Parameters.AddWithValue(invoiceId); add.Parameters.AddWithValue(customerId); add.Parameters.AddWithValue(amount); add.Parameters.AddWithValue(reference);
-        add.Parameters.AddWithValue(kind == "overtime" ? "overtime" : "rental");
+        // D2: a supplementary receipt is recorded as 'overtime' (never a new type) so the existing idempotent
+        // lookups and the overtime revenue aggregate cover it unchanged.
+        add.Parameters.AddWithValue(kind is InvoiceKinds.Overtime or InvoiceKinds.Supplementary ? "overtime" : "rental");
         var id = (int)(await add.ExecuteScalarAsync(ct))!;
         await using var update = new NpgsqlCommand("UPDATE invoices SET status='paid' WHERE id=$1", cn, tx); update.Parameters.AddWithValue(invoiceId); await update.ExecuteNonQueryAsync(ct);
         var orderId = kind == "rental" ? await RentalOrderWriter.EnsurePaidAsync(cn, tx, rentalId, ct) : null;
@@ -204,15 +196,16 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
         if (row is null) return null;
         var invoice = row.Invoice;
         var blocked = InvoiceCheckoutPolicy.BlockedReason(invoice.Status, invoice.Kind, row.Rental.Status, row.Rental.ConfirmedAt);
-        var overtime = invoice.Kind == "overtime" && row.Rental.Status == "completed" && row.Settled;
-        if (invoice.Kind == "overtime" && !overtime) blocked = "OVERTIME_INVOICE_REQUIRED";
-        // Phase 2: the supplementary invoice of a subscription rental is a receivable the current payment rules
-        // cannot settle (see ReserveInvoiceCheckoutAsync). Say so instead of advertising it as payable.
-        if (invoice.Kind == InvoiceKinds.Supplementary) blocked = "INVOICE_NOT_PAYABLE";
-        var canCash = blocked is null && (overtime ? invoice.CheckoutStartedAt == null : invoice.Kind == "rental" && invoice.PaymentMethod == "cash");
+        // D2: a supplementary invoice is a post-return charge of the package rental and is collectable exactly like
+        // an overtime invoice - cash at the counter and a staff PayOS link, but only once the settlement that raised
+        // it exists. Its payment carries is_subscription_payment = false on purpose (see fn_check_payment_matches_rental).
+        var postReturnCharge = (invoice.Kind is InvoiceKinds.Overtime or InvoiceKinds.Supplementary)
+            && row.Rental.Status == "completed" && row.Settled;
+        if ((invoice.Kind is InvoiceKinds.Overtime or InvoiceKinds.Supplementary) && !postReturnCharge) blocked = "OVERTIME_INVOICE_REQUIRED";
+        var canCash = blocked is null && (postReturnCharge ? invoice.CheckoutStartedAt == null : invoice.Kind == InvoiceKinds.Rental && invoice.PaymentMethod == "cash");
         return new(invoice.Id, invoice.RentalId, invoice.InvoiceNumber, invoice.Amount, invoice.VatAmount,
             invoice.Status, invoice.IssuedAt, invoice.DueAt, blocked is null, blocked, invoice.PaymentMethod,
-            row.OrderId, invoice.Kind, canCash, blocked is null && overtime && invoice.PaymentMethod == "payos");
+            row.OrderId, invoice.Kind, canCash, blocked is null && postReturnCharge && invoice.PaymentMethod == "payos");
     }
 
     public async Task<InvoiceSummary> CreateInvoiceForRentalAsync(int rentalId, CancellationToken ct)

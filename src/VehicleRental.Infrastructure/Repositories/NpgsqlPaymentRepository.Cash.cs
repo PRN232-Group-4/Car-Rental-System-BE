@@ -33,11 +33,16 @@ public sealed partial class NpgsqlPaymentRepository
             amount = reader.GetDecimal(0); status = reader.GetString(1); kind = reader.GetString(2);
             method = reader.GetString(3); checkoutStarted = !reader.IsDBNull(4); linkedSettlement = reader.GetBoolean(5);
         }
-        if (kind is not ("rental" or "overtime"))
+        // D2: a subscription rental's supplementary invoice is a post-return charge collected exactly like an
+        // 'overtime' invoice: cash at the counter, only after the settlement that raised it, and only while no
+        // online checkout has started. Its payment is written with is_subscription_payment = false (the customer
+        // pays, not the package), which is what fn_check_payment_matches_rental now allows for this kind.
+        var postReturnCharge = kind is InvoiceKinds.Overtime or InvoiceKinds.Supplementary;
+        if (kind is not ("rental" or "overtime" or InvoiceKinds.Supplementary))
             throw new ConflictException("INVOICE_NOT_PAYABLE", "Loại hóa đơn không thể thu tiền mặt.");
-        if (kind == "overtime" && (rentalStatus != "completed" || !linkedSettlement))
+        if (postReturnCharge && (rentalStatus != "completed" || !linkedSettlement))
             throw new ConflictException("OVERTIME_INVOICE_REQUIRED", "Cần quyết toán trả xe trước khi thu phụ phí.");
-        if (kind != "overtime" && method != "cash")
+        if (!postReturnCharge && method != "cash")
             throw new ConflictException("PAYMENT_METHOD_MISMATCH", "Hóa đơn này không chọn thanh toán tiền mặt.");
         if (status == "paid")
         {
@@ -55,7 +60,7 @@ public sealed partial class NpgsqlPaymentRepository
         }
         var blocked = InvoiceCheckoutPolicy.BlockedReason(status, kind, rentalStatus, confirmedAt);
         if (blocked is not null) throw new ConflictException(blocked, blocked == "RENTAL_CONFIRMATION_REQUIRED" ? "Cần xác nhận yêu cầu thuê trước khi ghi nhận thu tiền mặt." : "Hóa đơn không thể thanh toán.");
-        if (kind == "overtime" && checkoutStarted)
+        if (postReturnCharge && checkoutStarted)
             throw new ConflictException("PAYMENT_IN_PROGRESS", "Đã bắt đầu thanh toán online; không thể thu thêm tiền mặt cho hóa đơn này.");
         var cashReference = $"cash:{invoiceId}";
         await using var add = new NpgsqlCommand("""
@@ -64,7 +69,9 @@ public sealed partial class NpgsqlPaymentRepository
             """, cn, tx);
         add.Parameters.AddWithValue(rentalId); add.Parameters.AddWithValue(invoiceId); add.Parameters.AddWithValue(customerId);
         add.Parameters.AddWithValue(amount); add.Parameters.AddWithValue(cashReference); add.Parameters.AddWithValue(reviewer);
-        add.Parameters.AddWithValue(kind == "overtime" ? "overtime" : "rental");
+        // D2: a subscription rental's supplementary receipt is recorded as 'overtime' (never a new type), so the
+        // idempotent lookup above and the overtime revenue aggregate cover it unchanged.
+        add.Parameters.AddWithValue(postReturnCharge ? "overtime" : "rental");
         var paymentId = (int)(await add.ExecuteScalarAsync(ct))!;
         await using var paid = new NpgsqlCommand("UPDATE invoices SET status='paid',payment_method='cash' WHERE id=$1", cn, tx);
         paid.Parameters.AddWithValue(invoiceId); await paid.ExecuteNonQueryAsync(ct);

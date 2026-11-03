@@ -19,11 +19,18 @@ public sealed class RentalPaymentGateAdapter(NpgsqlDataSource dataSource) : IRen
         return await db.Set<InvoicesRow>().AnyAsync(i => i.RentalId == rentalId && i.Kind == "rental" && i.Status == "paid", ct);
     }
 
+    /// <summary>
+    /// Phase 2 / D2: restricted to the <c>rental</c> kind. This id is only ever used for refunds, and a
+    /// subscription rental now also carries a <c>supplementary</c> invoice; the old "prefer kind='rental', else
+    /// anything" ordering would have handed that one out as the primary invoice. Today this is unreachable
+    /// (<see cref="GetDepositHeldAsync"/> returns 0 for subscription rentals, so no deposit refund is ever raised
+    /// for them), so this closes a latent hole rather than fixing a live bug.
+    /// </summary>
     public async Task<int?> GetPrimaryInvoiceIdAsync(int rentalId, CancellationToken ct)
     {
         await using var db = VehicleRentalDbContext.Create(dataSource);
-        return await db.Set<InvoicesRow>().Where(i => i.RentalId == rentalId).OrderBy(i => i.Kind == "rental" ? 0 : 1)
-            .ThenBy(i => i.Id).Select(i => (int?)i.Id).FirstOrDefaultAsync(ct);
+        return await db.Set<InvoicesRow>().Where(i => i.RentalId == rentalId && i.Kind == "rental")
+            .OrderBy(i => i.Id).Select(i => (int?)i.Id).FirstOrDefaultAsync(ct);
     }
 
     public async Task<decimal> GetDepositHeldAsync(int rentalId, CancellationToken ct)
