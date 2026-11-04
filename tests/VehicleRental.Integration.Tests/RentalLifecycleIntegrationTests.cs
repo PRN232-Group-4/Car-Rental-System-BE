@@ -235,10 +235,16 @@ public sealed class RentalLifecycleIntegrationTests(PostgresFixture db) : IClass
 
         var otInvoiceAmount = (decimal)(await Seed.ScalarAsync(db.DataSource,
             "SELECT amount FROM invoices WHERE id=$1", settlement.ShortfallInvoiceId))!;
+        var otInvoiceVat = (decimal)(await Seed.ScalarAsync(db.DataSource,
+            "SELECT vat_amount FROM invoices WHERE id=$1", settlement.ShortfallInvoiceId))!;
         var otKind = (string)(await Seed.ScalarAsync(db.DataSource,
             "SELECT kind FROM invoices WHERE id=$1", settlement.ShortfallInvoiceId))!;
 
+        // invoices.amount is the total the customer must pay. For a direct rental that is plan.Shortfall, which is
+        // already VAT-inclusive (440,000 overtime total less the 100,000 deposit), and vat_amount is the VAT
+        // breakdown INSIDE it. The caller must not add the VAT again.
         Assert.Equal(340_000m, otInvoiceAmount);
+        Assert.Equal(40_000m, otInvoiceVat);
         Assert.Equal("overtime", otKind);
     }
 

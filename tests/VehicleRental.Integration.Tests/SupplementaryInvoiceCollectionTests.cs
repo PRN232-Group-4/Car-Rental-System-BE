@@ -37,18 +37,22 @@ public sealed class SupplementaryInvoiceCollectionTests(PostgresFixture db) : IC
         var invoiceId = settlement.ShortfallInvoiceId
             ?? throw new Xunit.Sdk.XunitException("the settlement raised no supplementary invoice for the 3 excess hours.");
         var charge = Convert.ToDecimal(await Seed.ScalarAsync(db.DataSource, "SELECT amount FROM invoices WHERE id=$1", invoiceId));
-        var payable = Convert.ToDecimal(await Seed.ScalarAsync(db.DataSource, "SELECT amount + vat_amount FROM invoices WHERE id=$1", invoiceId));
+        var vat = Convert.ToDecimal(await Seed.ScalarAsync(db.DataSource, "SELECT vat_amount FROM invoices WHERE id=$1", invoiceId));
         Assert.Equal("supplementary", await Seed.ScalarAsync(db.DataSource, "SELECT kind FROM invoices WHERE id=$1", invoiceId));
-        return (rental.RentalId, rental.Email, invoiceId, charge, payable);
+        Assert.Equal(30_000m, vat);
+        // invoices.amount IS the payable figure now: it is the total, VAT included, so the charge the collection
+        // paths record and the amount the customer still owes are the same number.
+        return (rental.RentalId, rental.Email, invoiceId, charge, charge);
     }
 
     [Fact]
     public async Task A_supplementary_invoice_is_collected_by_cash_as_an_overtime_payment_carrying_no_package_flag()
     {
         var (rentalId, email, invoiceId, charge, payable) = await SupplementaryInvoiceAsync();
-        // Unchanged pricing: the invoice stays 300,000 + 10% VAT, and - exactly like an overtime invoice - the
-        // collection records invoices.amount (the receipt amount the provider is told to charge), not amount + VAT.
-        Assert.Equal(300_000m, charge);
+        // Unchanged pricing: the excess hours stay 300,000 + 10% VAT, and - exactly like an overtime invoice - the
+        // collection records invoices.amount, which is now the TOTAL the customer owes (330,000) with vat_amount
+        // held inside it as the breakdown, not an extra charge on top of it.
+        Assert.Equal(330_000m, charge);
         Assert.Equal(330_000m, payable);
 
         // Before the receipt: the invoice reports as payable, with the same two capabilities overtime exposes.
@@ -95,7 +99,7 @@ public sealed class SupplementaryInvoiceCollectionTests(PostgresFixture db) : IC
     public async Task Two_concurrent_cash_confirmations_of_one_supplementary_invoice_write_exactly_one_paid_payment()
     {
         var (_, _, invoiceId, charge, payable) = await SupplementaryInvoiceAsync();
-        Assert.Equal(300_000m, charge);
+        Assert.Equal(330_000m, charge);
         Assert.Equal(330_000m, payable);
 
         // Two independent repositories (each opens its own pooled connection), released together so the two
@@ -137,7 +141,7 @@ public sealed class SupplementaryInvoiceCollectionTests(PostgresFixture db) : IC
     public async Task Two_different_PayOS_checkouts_for_one_supplementary_invoice_record_exactly_one_paid_payment()
     {
         var (_, _, invoiceId, charge, payable) = await SupplementaryInvoiceAsync();
-        Assert.Equal(300_000m, charge);
+        Assert.Equal(330_000m, charge);
         Assert.Equal(330_000m, payable);
 
         // Two links can legitimately be issued before either is paid (the marker is only a "checkout started"
@@ -216,7 +220,7 @@ public sealed class SupplementaryInvoiceCollectionTests(PostgresFixture db) : IC
         Assert.Equal(PostgresErrorCodes.RaiseException, rejected.SqlState);
         Assert.Contains("không khớp rental", rejected.MessageText);
         Assert.Equal(other.InvoiceId, await Seed.ScalarAsync(db.DataSource, "SELECT invoice_id FROM payments WHERE id=$1", paymentId));
-        Assert.Equal(payable, Convert.ToDecimal(await Seed.ScalarAsync(db.DataSource, "SELECT amount+vat_amount FROM invoices WHERE id=$1", supplementaryInvoiceId)));
+        Assert.Equal(payable, Convert.ToDecimal(await Seed.ScalarAsync(db.DataSource, "SELECT amount FROM invoices WHERE id=$1", supplementaryInvoiceId)));
 
         // The trigger is not simply refusing every UPDATE: re-setting the SAME invoice is a no-op that passes.
         await Seed.ScalarAsync(db.DataSource, "UPDATE payments SET invoice_id=$2 WHERE id=$1", paymentId, other.InvoiceId);

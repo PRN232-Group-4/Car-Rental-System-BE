@@ -116,6 +116,17 @@ public sealed class InvoiceGatewayAdapter(NpgsqlDataSource dataSource, TimeProvi
     private async Task<int> CreateExcessInvoiceAsync(
         int rentalId, decimal amount, decimal vatAmount, DateTime dueAt, string kind, string numberSuffix, CancellationToken ct)
     {
+        // invoices.amount is the TOTAL the customer must pay, VAT included; invoices.vat_amount is a breakdown
+        // component INSIDE that total, exactly like a rental invoice (CreateInvoiceForRentalAsync writes
+        // amount = total_price + deposit_price, where total_price already contains VAT). The collection paths
+        // (ConfirmCashAsync, CompleteInvoiceAsync, ReserveInvoiceCheckoutAsync) charge invoices.amount only.
+        //
+        // Therefore EVERY caller passes a VAT-inclusive total here. The two callers reach that differently and
+        // must not be conflated: the direct-rental overtime path passes plan.Shortfall, which is already
+        // VAT-inclusive, while the subscription path passes a genuinely pre-VAT excess and adds its VAT first.
+        // Adding VAT inside this method double-charged the direct-rental path (measured: 200,000 + 20,000 VAT
+        // was written as 240,000 against 220,000 owed).
+
         // Inside the settlement the invoice must be written on the settlement's connection and transaction,
         // otherwise a later failure would leave an invoice behind for a rental that never completed.
         var ambient = AmbientTransactionScope.Current;

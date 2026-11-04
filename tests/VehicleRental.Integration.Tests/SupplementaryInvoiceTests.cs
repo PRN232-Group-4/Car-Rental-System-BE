@@ -37,7 +37,9 @@ public sealed class SupplementaryInvoiceTests(PostgresFixture db) : IClassFixtur
             ?? throw new Xunit.Sdk.XunitException("the settlement raised no supplementary invoice for the 3 excess hours.");
 
         Assert.Equal("supplementary", await Seed.ScalarAsync(db.DataSource, "SELECT kind FROM invoices WHERE id=$1", invoiceId));
-        Assert.Equal(330_000m, Convert.ToDecimal(await Seed.ScalarAsync(db.DataSource, "SELECT amount + vat_amount FROM invoices WHERE id=$1", invoiceId)));
+        // invoices.amount is the total the customer owes, VAT included; vat_amount is a breakdown inside it.
+        Assert.Equal(330_000m, Convert.ToDecimal(await Seed.ScalarAsync(db.DataSource, "SELECT amount FROM invoices WHERE id=$1", invoiceId)));
+        Assert.Equal(30_000m, Convert.ToDecimal(await Seed.ScalarAsync(db.DataSource, "SELECT vat_amount FROM invoices WHERE id=$1", invoiceId)));
         Assert.Equal(330_000m, await Phase0Harness.PayableInvoiceTotalAsync(db.DataSource, rental.RentalId));
 
         var payments = new NpgsqlPaymentRepository(db.DataSource);
@@ -48,9 +50,10 @@ public sealed class SupplementaryInvoiceTests(PostgresFixture db) : IClassFixtur
         Assert.Null(detail.PaymentBlockedReason);
 
         // Online checkout reserves the invoice (this used to be refused with INVOICE_NOT_PAYABLE). The reserved
-        // amount is invoices.amount, the same figure overtime checkouts use; VAT stays on the invoice.
+        // amount is invoices.amount, which IS the total the customer pays - the VAT is a line inside it, not an
+        // extra charge on top.
         var reservation = await payments.ReserveInvoiceCheckoutAsync(invoiceId, rental.Email, CancellationToken.None);
-        Assert.Equal(300_000m, reservation!.Amount);
+        Assert.Equal(330_000m, reservation!.Amount);
 
         // Nothing was written by the reservation alone: still unpaid, still no payment row.
         Assert.Equal("unpaid", await Seed.ScalarAsync(db.DataSource, "SELECT status FROM invoices WHERE id=$1", invoiceId));

@@ -364,10 +364,13 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
                     subscriptionToCharge, allocation.HoursCharged, ct);
 
                 // D2: the hours the package could not cover are billed, not dropped.
+                // The allocator returns a genuinely PRE-VAT excess, so this caller adds the VAT to form the
+                // VAT-inclusive total that CreateExcessInvoiceAsync expects. The direct-rental overtime caller
+                // above already passes a VAT-inclusive Shortfall and must not add VAT again.
                 if (allocation.ExcessHours > 0)
                 {
                     shortfallInvoiceId = await participants.InvoiceGateway.CreateSupplementaryInvoiceAsync(
-                        rentalId, allocation.ExcessAmount, allocation.ExcessVat, plan.InvoiceDueAt, ct);
+                        rentalId, allocation.ExcessAmount + allocation.ExcessVat, allocation.ExcessVat, plan.InvoiceDueAt, ct);
                 }
             }
 

@@ -132,7 +132,7 @@ internal static class Phase0Harness
     /// <summary>Total the customer still has to pay for a rental: every invoice still open (unpaid).</summary>
     public static async Task<decimal> PayableInvoiceTotalAsync(NpgsqlDataSource db, int rentalId)
         => Convert.ToDecimal(await Seed.ScalarAsync(db,
-            "SELECT COALESCE(SUM(amount + vat_amount), 0) FROM invoices WHERE rental_id=$1 AND status='unpaid'", rentalId));
+            "SELECT COALESCE(SUM(amount), 0) FROM invoices WHERE rental_id=$1 AND status='unpaid'", rentalId));
 
     public static Task<int> CountAsync(NpgsqlDataSource db, string sql, params object?[] values)
         => Seed.CountAsync(db, sql, values);

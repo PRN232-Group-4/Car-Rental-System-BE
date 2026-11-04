@@ -16,6 +16,10 @@ public sealed class OvertimeCollectionIntegrationTests(PostgresFixture db) : ICl
         await new NpgsqlRentalLifecycleRepository(db.DataSource).UpdateToPreInspectionAsync(rental.RentalId, DateTime.UtcNow, new(1, "staff@test.local", "Admin"), default);
         await Payments.CompleteInvoiceAsync(rental.InvoiceId, rental.InvoiceAmount, Guid.NewGuid().ToString(), default);
         await Seed.ScalarAsync(db.DataSource, "UPDATE rentals SET status='completed',returned_at=now(),completed_at=now() WHERE id=$1", rental.RentalId);
+        // Fixture shape must match what production raises: a direct-rental overtime invoice carries the
+        // VAT-inclusive total in amount (plan.Shortfall is already VAT-inclusive) and the VAT inside it as
+        // vat_amount. So a 140,000 fee with 10,000 VAT is amount=150,000, vat_amount=10,000, and 150,000 is what
+        // the collection paths charge.
         var invoice = (int)(await Seed.ScalarAsync(db.DataSource, "INSERT INTO invoices(rental_id,invoice_number,amount,vat_amount,status,kind) VALUES($1,$2,150,10,'unpaid','overtime') RETURNING id", rental.RentalId, Guid.NewGuid().ToString()))!;
         if (linked) await Seed.ScalarAsync(db.DataSource, "INSERT INTO rental_settlements(rental_id,scheduled_end,returned_at,overtime_minutes,overtime_hours,overtime_amount,overtime_vat,shortfall_invoice_id) VALUES($1,now()-interval '2 hours',now(),120,2,140,10,$2)", rental.RentalId, invoice);
         return (rental, invoice);
