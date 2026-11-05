@@ -80,8 +80,15 @@ public sealed class LoyaltySettlementConnectionTests(PostgresFixture db) : IClas
 
     /// <summary>
     /// The settlement path must hold exactly ONE pooled connection. Measured from the server's side
-    /// (<c>pg_stat_activity</c>, filtered on the settlement data source's application name), from inside the
-    /// settlement transaction, immediately before and immediately after the loyalty read.
+    /// (<c>pg_stat_activity</c>) from inside the settlement transaction, immediately before and immediately after
+    /// the loyalty read.
+    ///
+    /// Deliberately NOT filtered on <c>application_name</c>: a connection pooler such as Neon's does not carry the
+    /// client's application name through to the backend, so that filter silently sees zero rows there and the
+    /// measurement becomes blind rather than failing. Instead this counts BUSY backends on this test database and
+    /// excludes the observing connection, which is portable across a direct connection and a pooler: idle pooled
+    /// connections from the fixtures are excluded by <c>state &lt;&gt; 'idle'</c>, and an open settlement
+    /// transaction always occupies exactly one backend.
     /// </summary>
     [Fact]
     public async Task The_settlement_awards_loyalty_on_its_own_connection_and_opens_no_second_one()
@@ -170,8 +177,12 @@ public sealed class LoyaltySettlementConnectionTests(PostgresFixture db) : IClas
     private async Task<int> ProbeBackendCountAsync(CancellationToken ct)
     {
         await using var command = db.DataSource.CreateCommand(
-            "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND application_name = $1");
-        command.Parameters.AddWithValue(ProbeApplicationName);
+            """
+            SELECT count(*) FROM pg_stat_activity
+            WHERE datname = current_database()
+              AND pid <> pg_backend_pid()
+              AND state <> 'idle'
+            """);
         return Convert.ToInt32(await command.ExecuteScalarAsync(ct));
     }
 
