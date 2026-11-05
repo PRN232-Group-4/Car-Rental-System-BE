@@ -1,5 +1,9 @@
 # Tiến độ
 
+## Phase 2 quyết toán thuê một transaction và hoá đơn supplementary, 2026-11-05
+
+Phase 2 gồm `9b2e5b4` (quyết toán hoàn tất trong một transaction, trừ giờ gói đúng một lần, migration 0033), `e56372b` (loyalty đọc trên connection của transaction), `ce8f7c4` (hoá đơn supplementary thu được bằng cash và PayOS, migration 0034), `7eb105a` (VAT trên hoá đơn supplementary) và `356b6c7` (route trạng thái cũ gọi lifecycle service). Writer báo build 0 warning và toàn suite 1.299 đạt sau commit cuối; reviewer độc lập báo 1.422 đạt tại `248de35`. Phase 2 **không có bản ghi review độc lập** nào. Message `7eb105a` hướng dẫn chạy backfill VAT trước khi phát hành; hướng dẫn đó sai và đã được đính chính: production không cần backfill VAT, chỉ hoá đơn `kind='supplementary'` trong database dev/test đã chạy `ce8f7c4` trước `7eb105a` mới cần sửa. Hai CHECK của migration 0034 mới chỉ validate trên DB rỗng và DB seed demo, nên dòng production vi phạm sẽ làm migration fail. Chưa push/deploy. Xem [thay đổi](../changes/2026-11-05-phase2-rental-settlement.md).
+
 ## Tách slice Billing, xác minh Handovers và Inspections, tách Dispatch và Maintenance, 2026-11-05
 
 Billing đã tách tại `c031bb1`, giữ API và logic tài chính. Lead kiểm build 0 warning/error và 81 test contract đạt; worker báo toàn suite Neon 1.380 test đạt. Handovers và Inspections đã có slice riêng từ trước nên 3.2 và 3.3 chỉ xác minh; Lead chạy 175 và 87 test trên Neon, tất cả đạt. Dispatch tại `44a1f93`: ca làm tài xế chuyển sang slice Assignments với SQL giữ nguyên từng byte, và route lỗi thời `POST /api/rental/{id}/assignments` bị xóa theo yêu cầu, nên đây là thay đổi API không tương thích ngược; cổng kiểm tra ca trực chỉ route cũ có nay mất và được ghi thành nợ kỹ thuật. Maintenance tại `3a4e730`: slice riêng, ba route giữ nguyên, 77 dòng SQL giữ nguyên từng byte.

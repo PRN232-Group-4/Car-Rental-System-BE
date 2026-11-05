@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-11-05 — [Phase 2: quyết toán thuê một transaction, hoá đơn supplementary và đính chính backfill VAT](2026-11-05-phase2-rental-settlement.md)
+
 - 2026-11-05 — [Tách Billing, xác minh Handovers và Inspections](2026-11-05-slice-extraction.md)
 
 - 2026-10-29 — [Cookie SameSite=None cho web cross-site](2026-10-29-cookie-samesite-cross-site.md)
