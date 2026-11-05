@@ -43,10 +43,6 @@ public sealed class AuthorizationTests
     [InlineData("AddVehicle", "Staff", false)]
     [InlineData("AddVehicle", "CustomerService", false)]
     [InlineData("AddVehicle", "Manager", true)]
-    [InlineData("AddMaintenance", "Driver", false)]
-    [InlineData("AddMaintenance", "CustomerService", false)]
-    [InlineData("AddMaintenance", "Maintenance", false)]
-    [InlineData("AddMaintenance", "Manager", true)]
     [InlineData("ReviewLicense", "Driver", false)]
     [InlineData("ReviewLicense", "CustomerService", true)]
     [InlineData("Hourly", "Staff", false)]
@@ -71,6 +67,25 @@ public sealed class AuthorizationTests
     [InlineData("DeleteFacility", "Manager", true)]
     public async Task Operations_enforce_capability_matrix(string action, string role, bool allowed) =>
         Assert.Equal(allowed, await AuthorizeEndpoint<OperationsController>(action, Principal(role, 7)));
+
+    /// <summary>
+    /// The three maintenance actions moved to MaintenanceController. They are looked up on the controller that
+    /// actually owns them now, so a policy left behind on OperationsController cannot pass this matrix.
+    /// </summary>
+    [Theory]
+    [InlineData("MaintenanceList", "Driver", false)]
+    [InlineData("MaintenanceList", "CustomerService", false)]
+    [InlineData("MaintenanceList", "Maintenance", true)]
+    [InlineData("MaintenanceList", "Manager", true)]
+    [InlineData("AddMaintenance", "Driver", false)]
+    [InlineData("AddMaintenance", "CustomerService", false)]
+    [InlineData("AddMaintenance", "Maintenance", false)]
+    [InlineData("AddMaintenance", "Manager", true)]
+    [InlineData("EditMaintenance", "Driver", false)]
+    [InlineData("EditMaintenance", "Maintenance", true)]
+    [InlineData("EditMaintenance", "Manager", true)]
+    public async Task Maintenance_endpoints_enforce_the_policies_they_moved_with(string action, string role, bool allowed) =>
+        Assert.Equal(allowed, await AuthorizeEndpoint<MaintenanceController>(action, Principal(role, 7)));
 
     [Theory]
     [InlineData("CreateShift", "Manager", true)]

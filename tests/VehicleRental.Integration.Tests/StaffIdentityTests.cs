@@ -9,8 +9,10 @@ using Car_Rental_System_BE.Application.DTOs.Organization;
 using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.Application.Maintenances;
 using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Application.Validators;
+using Car_Rental_System_BE.Infrastructure.Maintenances;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Car_Rental_System_BE.WebApi.Controllers;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
@@ -171,7 +173,7 @@ public sealed class StaffIdentityTests(PostgresFixture db) : IClassFixture<Postg
         var technician=await Service.CreateFromUserAsync(Command(id),default);
         var vehicle=await Seed.VehicleAsync(db.DataSource);
         var facility=(int)(await Seed.ScalarAsync(db.DataSource,"INSERT INTO facilities(name) VALUES('Workshop South') RETURNING id"))!;
-        var entry=await new NpgsqlOperationsRepository(db.DataSource).SaveMaintenanceAsync(null,
+        var entry=await new NpgsqlMaintenanceRepository(db.DataSource).SaveMaintenanceAsync(null,
             new(0,vehicle,facility,technician.Id,"scheduled","scheduled",DateOnly.FromDateTime(DateTime.UtcNow),false,null,null),default);
         Assert.Equal(email,entry.AssignedStaffEmail);
         Assert.Equal("Workshop South",entry.FacilityName);
@@ -193,6 +195,7 @@ public sealed class StaffIdentityTests(PostgresFixture db) : IClassFixture<Postg
         builder.Services.AddSingleton<IAccountService>(new AccountService(new NpgsqlAccountRepository(db.DataSource)));
         builder.Services.AddSingleton<IOperationsService>(new OperationsService(new NpgsqlOperationsRepository(db.DataSource)));
         builder.Services.AddSingleton<IOperationsCompletionService>(new OperationsCompletionService(new NpgsqlOperationsCompletionRepository(db.DataSource)));
+        builder.Services.AddSingleton<IMaintenanceService>(new MaintenanceService(new NpgsqlMaintenanceRepository(db.DataSource)));
         builder.Services.AddSingleton(DispatchProxy.Create<IRegistrationWorkflow,Unused>());
         builder.Services.AddSingleton(DispatchProxy.Create<IPasswordResetWorkflow,Unused>());
         builder.Services.AddSingleton(DispatchProxy.Create<IPasswordChangeWorkflow,Unused>());

@@ -6,6 +6,7 @@ using System.Text.Json;
 using Car_Rental_System_BE.Application.Assignments;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.Application.Maintenances;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Controllers;
 using Car_Rental_System_BE.WebApi.Controllers;
@@ -148,7 +149,7 @@ public sealed class RentalAssignmentsApiContractTests
     {
         var assignments = new StubAssignmentService();
         var operations = DispatchProxy.Create<IOperationsService, UnusedOperationsService>();
-        var controller = new DispatchController(operations, assignments)
+        var controller = new DispatchController(operations, assignments, DispatchProxy.Create<IMaintenanceService, UnusedOperationsService>())
         {
             ControllerContext = new ControllerContext
             {

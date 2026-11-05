@@ -22,16 +22,6 @@ public sealed class OperationsService(IOperationsRepository repository, IDriverA
     public Task<IReadOnlyList<IncidentReport>> ListReportsAsync(int? staffId, int? rentalId, CancellationToken ct) =>
         repository.ListReportsAsync(staffId, rentalId, ct);
 
-    public async Task<Maintenance> AssignReportMaintenanceAsync(int reportId, int technicianId, int? facilityId, DateOnly scheduledDate, CancellationToken ct, string? maintenanceType = null, string? description = null, string? actor = null)
-    {
-        if (reportId < 1 || technicianId < 1 || facilityId is < 1) throw new ArgumentException("Report, technician and facility IDs must be positive.");
-        if (maintenanceType is not null && (string.IsNullOrWhiteSpace(maintenanceType) || maintenanceType.Length > 255)) throw new ArgumentException("Maintenance type must contain 1 to 255 characters.");
-        if (description is not null && (string.IsNullOrWhiteSpace(description) || description.Length > 4000)) throw new ArgumentException("Description must contain 1 to 4000 characters.");
-        var maintenance = await repository.AssignReportMaintenanceAsync(reportId, technicianId, facilityId, scheduledDate, ct, maintenanceType, description, actor);
-        if (notifications is not null) await notifications.ReportChangedAsync(reportId, "assigned");
-        return maintenance;
-    }
-
     public async Task ResolveReportAsync(int reportId, string actor, CancellationToken ct)
     {
         await repository.ResolveReportAsync(reportId, actor, ct);
@@ -242,12 +232,6 @@ public sealed class OperationsService(IOperationsRepository repository, IDriverA
 
     public Task MarkSubscriptionRemindedAsync(int subscriptionId, CancellationToken ct) =>
         repository.MarkSubscriptionRemindedAsync(subscriptionId, ct);
-
-    public Task<Maintenance> SaveMaintenanceAsync(int? id, Maintenance maintenance, CancellationToken ct, int? actingTechnicianId = null) =>
-        repository.SaveMaintenanceAsync(id, maintenance, ct, actingTechnicianId);
-
-    public Task<IReadOnlyList<Maintenance>> ListMaintenanceAsync(int? vehicleId, string? status, CancellationToken ct) =>
-        repository.ListMaintenanceAsync(vehicleId, status, ct);
 
     public Task<object> DashboardAsync(DateTime? from, DateTime? to, CancellationToken ct) =>
         repository.DashboardAsync(from, to, ct);

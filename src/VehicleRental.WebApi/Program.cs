@@ -28,6 +28,7 @@ using Car_Rental_System_BE.Application.Lifecycle;
 using Car_Rental_System_BE.Application.Handovers;
 using Car_Rental_System_BE.Application.Inspections;
 using Car_Rental_System_BE.Application.Loyalty;
+using Car_Rental_System_BE.Application.Maintenances;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 
@@ -126,6 +127,7 @@ builder.Services.AddScoped<IOperationsService, OperationsService>();
 builder.Services.AddScoped<IUserAdministrationService, UserAdministrationService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IOperationsCompletionService, OperationsCompletionService>();
+builder.Services.AddScoped<IMaintenanceService, MaintenanceService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IMediaService, MediaService>();
 builder.Services.AddScoped<IRentalContractDocumentService, RentalContractDocumentService>();

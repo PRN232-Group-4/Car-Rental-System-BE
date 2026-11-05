@@ -6,6 +6,7 @@ using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Lifecycle;
+using Car_Rental_System_BE.Application.Maintenances;
 using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Infrastructure.Lifecycle;
 using Car_Rental_System_BE.Infrastructure.Services;
@@ -72,7 +73,6 @@ public sealed class OperationalNotificationTests
             return method.Name switch
             {
                 "CreateReportAsync" => Task.FromResult(report),
-                "AssignReportMaintenanceAsync" => Task.FromResult(new Maintenance(5, 1, null, 2, "scheduled", "incident", null, false, null, null)),
                 "ResolveReportAsync" => Task.CompletedTask,
                 "ReplaceVehicleAsync" => Task.FromResult(rental),
                 _ => throw new NotSupportedException(method.Name)
@@ -90,7 +90,15 @@ public sealed class OperationalNotificationTests
                 new(action == "review" ? "in_progress" : "rejected", "internal reason"), "manager@test.local", default);
         }
         else if (action == "create") await operations.CreateReportAsync(72, 2, false, "damage", report.Description, null, default);
-        else if (action == "assign") await operations.AssignReportMaintenanceAsync(41, 2, null, DateOnly.FromDateTime(DateTime.UtcNow), default);
+        else if (action == "assign") await new MaintenanceService(Proxy<IMaintenanceRepository>((method, _) =>
+        {
+            committed = true;
+            return method.Name switch
+            {
+                "AssignReportMaintenanceAsync" => Task.FromResult(new Maintenance(5, 1, null, 2, "scheduled", "incident", null, false, null, null)),
+                _ => throw new NotSupportedException(method.Name)
+            };
+        }), notifications).AssignReportMaintenanceAsync(41, 2, null, DateOnly.FromDateTime(DateTime.UtcNow), default);
         else if (action == "resolve") await operations.ResolveReportAsync(41, "manager@test.local", default);
         else await operations.ReplaceVehicleAsync(72, 1, 2, 41, "manager@test.local", default);
         var reportEmails = email.Messages.Where(m => m.Subject.Contains("báo cáo")).ToArray();

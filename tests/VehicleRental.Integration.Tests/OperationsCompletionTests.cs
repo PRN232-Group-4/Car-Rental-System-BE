@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Infrastructure.Assignments;
+using Car_Rental_System_BE.Infrastructure.Maintenances;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
@@ -34,6 +35,7 @@ public sealed class OperationsCompletionIntegrationTests(PostgresFixture db) : I
 {
     private readonly NpgsqlOperationsRepository store=new(db.DataSource);
     private readonly NpgsqlAssignmentRepository assignments=new(db.DataSource);
+    private readonly NpgsqlMaintenanceRepository maintenanceStore=new(db.DataSource);
     private readonly OperationsCompletionService service=new(new NpgsqlOperationsCompletionRepository(db.DataSource));
 
     private async Task<int> Staff(bool technician=false,bool driver=false)
@@ -77,7 +79,7 @@ public sealed class OperationsCompletionIntegrationTests(PostgresFixture db) : I
         Assert.Equal(scenario.RentalId,accepted.Rental!.Id);
         Assert.Equal(2,accepted.History!.Count);
         Assert.Equal("Review started",Assert.Single(accepted.Notes!).Text);
-        var maintenance=await store.AssignReportMaintenanceAsync(report.Id,staff,null,DateOnly.FromDateTime(DateTime.Today),default,"bodywork","Repair bumper");
+        var maintenance=await maintenanceStore.AssignReportMaintenanceAsync(report.Id,staff,null,DateOnly.FromDateTime(DateTime.Today),default,"bodywork","Repair bumper");
         Assert.Equal("bodywork",maintenance.MaintenanceType);
         Assert.Equal("Repair bumper",maintenance.Description);
         Assert.Equal(scenario.RentalId,maintenance.RentalId);

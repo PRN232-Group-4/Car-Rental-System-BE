@@ -3,6 +3,7 @@ using Car_Rental_System_BE.Application.Assignments;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.DTOs.Organization;
 using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.Application.Maintenances;
 using Car_Rental_System_BE.Domain.Entities;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
@@ -16,7 +17,7 @@ namespace Car_Rental_System_BE.WebApi.Controllers;
 [ProducesResponseType(StatusCodes.Status400BadRequest)]
 [ProducesResponseType(StatusCodes.Status403Forbidden)]
 [ProducesResponseType(StatusCodes.Status404NotFound)]
-public sealed class DispatchController(IOperationsService store, IAssignmentService assignments, IOperationsCompletionService? completion = null) : ControllerBase
+public sealed class DispatchController(IOperationsService store, IAssignmentService assignments, IMaintenanceService maintenanceService, IOperationsCompletionService? completion = null) : ControllerBase
 {
     /// <summary>Manager/Admin creates a driver's duty shift.</summary>
     [Authorize(Policy=AuthorizationPolicies.Management)]
@@ -90,7 +91,7 @@ public sealed class DispatchController(IOperationsService store, IAssignmentServ
     [ProducesResponseType<Maintenance>(StatusCodes.Status201Created)]
     public async Task<IActionResult> AssignMaintenance(int id, ReportMaintenanceRequest request, CancellationToken ct)
     {
-        var maintenance=await store.AssignReportMaintenanceAsync(id,request.AssignedStaffId,request.FacilityId,request.ScheduledDate,ct,request.MaintenanceType,request.Description,Email());
+        var maintenance=await maintenanceService.AssignReportMaintenanceAsync(id,request.AssignedStaffId,request.FacilityId,request.ScheduledDate,ct,request.MaintenanceType,request.Description,Email());
         return Created($"/api/maintenance/{maintenance.Id}",maintenance);
     }
 

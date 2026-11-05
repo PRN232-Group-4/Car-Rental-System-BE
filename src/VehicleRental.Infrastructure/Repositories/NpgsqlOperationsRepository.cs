@@ -333,15 +333,6 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
         return await RentalQuery(db, rentals).FirstOrDefaultAsync(ct);
     }
 
-    public async Task<IReadOnlyList<Maintenance>> ListMaintenanceAsync(int? vehicleId, string? status, CancellationToken ct)
-    {
-        await using var db = VehicleRentalDbContext.Create(dataSource);
-        return await db.Set<VehicleMaintenanceRow>().AsNoTracking()
-            .Where(x => (vehicleId == null || x.VehicleId == vehicleId) && (status == null || x.Status == status))
-            .OrderByDescending(x => x.Id).Select(x => new Maintenance(x.Id, x.VehicleId, x.FacilityId,
-                x.AssignedStaffId, x.Status, x.MaintenanceType, x.ScheduledDate, x.IsSafe, x.Description, x.Cost,
-                null, null, null, null)).ToListAsync(ct);
-    }
     public async Task<object> DashboardAsync(DateTime? from, DateTime? to, CancellationToken ct)
     {
         from = from is { } fromValue ? NpgsqlVehicleSearchRepository.Timestamp(fromValue) : null;

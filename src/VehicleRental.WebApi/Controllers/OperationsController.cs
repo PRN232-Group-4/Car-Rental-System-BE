@@ -185,19 +185,6 @@ public sealed class OperationsController(
     [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPut("subscription-plan/{id:int}")] public Task<SubscriptionPlan> EditPlan(int id,PlanRequest x,CancellationToken ct)=>store.SavePlanAsync(id,x.ToModel(),ct);
     [Authorize(Policy=AuthorizationPolicies.Management)] [HttpDelete("subscription-plan/{id:int}")] public async Task<IActionResult> DeletePlan(int id,CancellationToken ct){await store.DeletePlanAsync(id,ct);return NoContent();}
     [Authorize(Policy=AuthorizationPolicies.Customer)] [HttpGet("customer-subscriptions")] public Task<IReadOnlyList<CustomerSubscription>> CustomerSubscriptions(CancellationToken ct)=>store.ListCustomerSubscriptionsAsync(Email(),ct);
-    /// <summary>List maintenance with optional createdAt range [from,to); page=1/pageSize=20, maximum 100.</summary>
-    [Authorize(Policy=AuthorizationPolicies.Maintenance)] [HttpGet("maintenance")]
-    [ProducesResponseType<OperationsPage<Maintenance>>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public Task<OperationsPage<Maintenance>> MaintenanceList([FromQuery]int? vehicleId,[FromQuery]string? status,[FromQuery]DateTime? from,[FromQuery]DateTime? to,[FromQuery]OperationsPagination pagination,CancellationToken ct)
-        => Completion.MaintenanceAsync(vehicleId,status,from,to,pagination,ct);
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPost("maintenance")] public async Task<IActionResult> AddMaintenance(MaintenanceRequest x,CancellationToken ct){var m=await store.SaveMaintenanceAsync(null,x.ToModel(),ct);return Created($"/api/maintenance/{m.Id}",m);}
-    [Authorize(Policy=AuthorizationPolicies.Maintenance)] [HttpPut("maintenance/{id:int}")] public async Task<IActionResult> EditMaintenance(int id,MaintenanceRequest x,CancellationToken ct)
-    {
-        var technician=AuthorizationPolicies.CanManage(User)?null:AuthorizationPolicies.StaffId(User);
-        if (!AuthorizationPolicies.CanManage(User) && technician is null) return Forbid();
-        return Ok(await store.SaveMaintenanceAsync(id,x.ToModel(),ct,technician));
-    }
     private async Task<IActionResult> Inspect(int id, InspectionRequest request, string type, CancellationToken ct)
     {
         var staffId = AuthorizationPolicies.StaffId(User);
