@@ -356,3 +356,9 @@ app.MapGet("/health", async (NpgsqlDataSource? dataSource, CancellationToken can
 app.MapControllers();
 
 app.Run();
+
+/// <summary>
+/// Exposes the implicit entry-point type to <c>WebApplicationFactory&lt;Program&gt;</c> so the composition
+/// smoke test can boot this exact host. The type carries no members.
+/// </summary>
+public partial class Program { }
