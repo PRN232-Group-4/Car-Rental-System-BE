@@ -39,7 +39,6 @@ Controller mới `RentalAssignmentsController`. Quyền: **Admin, Manager, Staff
 | GET | `/api/rentals/{id}/assignable-drivers` | Tài xế hợp lệ cho đơn, kèm lý do loại |
 | GET | `/api/rentals/{id}/assignable-vehicles` | Xe thay thế hợp lệ (cùng loại, trống phần còn lại) |
 | GET | `/api/drivers/schedule?from&to&driverStaffId` | Giữ nguyên; thêm `rentalId`, `vehicleId`, `status` vào mỗi dòng nếu thiếu |
-| POST | `/api/rentals/{id}/assignments` | **Deprecated**: ủy quyền sang `/driver`; trả header `Deprecation: true` |
 
 ### 3.1 `POST …/assignments/driver`
 

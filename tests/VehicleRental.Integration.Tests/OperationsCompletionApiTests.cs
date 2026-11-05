@@ -34,6 +34,8 @@ public sealed class OperationsCompletionApiTests : IAsyncLifetime
         builder.Services.AddAuthentication("operations").AddScheme<AuthenticationSchemeOptions,TestAuthentication>("operations",_=>{});
         builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
         builder.Services.AddSingleton(DispatchProxy.Create<IOperationsService,UnusedProxy>());
+        // DispatchController now takes the assignments slice too; these endpoints never touch it.
+        builder.Services.AddSingleton(DispatchProxy.Create<Car_Rental_System_BE.Application.Assignments.IAssignmentService,UnusedProxy>());
         builder.Services.AddSingleton(DispatchProxy.Create<IMediaService,UnusedProxy>());
         builder.Services.AddSingleton(DispatchProxy.Create<IOperationsCompletionRepository,Repository>());
         builder.Services.AddSingleton<IOperationsCompletionService,OperationsCompletionService>();

@@ -1,5 +1,7 @@
+using Car_Rental_System_BE.Application.Assignments;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Infrastructure.Assignments;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
@@ -8,6 +10,7 @@ namespace VehicleRental.Tests;
 public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
     private readonly NpgsqlOperationsRepository store = new(db.DataSource);
+    private readonly NpgsqlAssignmentRepository assignments = new(db.DataSource);
     private const string Manager = "manager@test.local";
 
     private async Task<int> StaffAsync(bool driver = false, bool technician = false)
@@ -27,7 +30,19 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
     }
 
     private Task<DriverShift> ShiftAsync(int driver, Rental rental)
-        => store.SaveDriverShiftAsync(null,driver,rental.StartTime!.Value,rental.EndTime!.Value,false,Manager,default);
+        => assignments.SaveDriverShiftAsync(null,driver,rental.StartTime!.Value,rental.EndTime!.Value,false,Manager,default);
+
+    /// <summary>
+    /// Seeds exactly the one row the deleted lax <c>IOperationsService.AssignAsync</c> wrote (it took the
+    /// dispatcher lock, replaced any active assignment and inserted this row, nothing else). The surviving
+    /// assignment API additionally demands licence evidence and a progressed rental, which these recovery tests
+    /// deliberately do not seed because assignment is only their precondition.
+    /// </summary>
+    private async Task AssignAsync(int rentalId, int? driver)
+    {
+        await Seed.ScalarAsync(db.DataSource,"UPDATE vehicle_assignments SET status='reassigned' WHERE rental_id=$1 AND status='assigned'",rentalId);
+        await Seed.ScalarAsync(db.DataSource,"INSERT INTO vehicle_assignments(rental_id,vehicle_id,driver_staff_id,status,assigned_by) SELECT id,vehicle_id,$2,'assigned',$3 FROM rentals WHERE id=$1",rentalId,driver,Manager);
+    }
 
     [Fact]
     public async Task License_plate_roundtrips_through_create_edit_search_and_detail()
@@ -69,21 +84,19 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
     }
 
     [Fact]
-    public async Task Shifts_reject_overlap_outside_duty_and_cancellation_of_assigned_trip()
+    public async Task Shifts_reject_overlap_and_cancellation_of_a_stranded_assignment()
     {
         var scenario=await Scenarios.CreateDirectRentalAsync(db.DataSource);
         var rental=(await store.GetRentalAsync(scenario.RentalId,default))!;
         var driver=await StaffAsync(driver:true);
         await store.AddInspectionAsync(rental.Id,driver,"pre_rental",true,null,null,null,null,default);
-        await Assert.ThrowsAsync<InvalidOperationException>(()=>store.AssignAsync(rental.Id,driver,Manager,default));
         var shift=await ShiftAsync(driver,rental);
-        await Assert.ThrowsAsync<InvalidOperationException>(()=>ShiftAsync(driver,rental));
-        await store.AssignAsync(rental.Id,driver,Manager,default);
-        await Assert.ThrowsAsync<InvalidOperationException>(()=>store.SaveDriverShiftAsync(shift.Id,driver,shift.StartTime,shift.EndTime,true,Manager,default));
-        Assert.Equal("scheduled",(await store.ListDriverShiftsAsync(driver,shift.StartTime,shift.EndTime,default)).Single().Status);
-        var second=await Scenarios.CreateDirectRentalAsync(db.DataSource);
-        await store.AddInspectionAsync(second.RentalId,driver,"pre_rental",true,null,null,null,null,default);
-        await Assert.ThrowsAsync<InvalidOperationException>(()=>store.AssignAsync(second.RentalId,driver,Manager,default));
+        var overlap=await Assert.ThrowsAsync<InvalidOperationException>(()=>ShiftAsync(driver,rental));
+        Assert.Equal("Driver shifts cannot overlap.",overlap.Message);
+        await AssignAsync(rental.Id,driver);
+        var stranded=await Assert.ThrowsAsync<InvalidOperationException>(()=>assignments.SaveDriverShiftAsync(shift.Id,driver,shift.StartTime,shift.EndTime,true,Manager,default));
+        Assert.Equal("Reassign affected rentals before changing this shift.",stranded.Message);
+        Assert.Equal("scheduled",(await assignments.ListDriverShiftsAsync(driver,shift.StartTime,shift.EndTime,default)).Single().Status);
     }
 
     [Fact]
@@ -98,7 +111,7 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         await ShiftAsync(newDriver,rental);
         await store.ChangeRentalStatusAsync(rental.Id,"pre_inspection",default);
         await store.AddInspectionAsync(rental.Id,inspector,"pre_rental",true,null,null,null,null,default);
-        await store.AssignAsync(rental.Id,oldDriver,Manager,default);
+        await AssignAsync(rental.Id,oldDriver);
         var unpaid=await Assert.ThrowsAsync<ConflictException>(()=>store.ChangeRentalStatusAsync(rental.Id,"renting",default));
         Assert.Equal("PAYMENT_REQUIRED",unpaid.Code);
         await Scenarios.CompleteInvoiceAsync(db.DataSource,scenario.InvoiceId,scenario.InvoiceAmount);

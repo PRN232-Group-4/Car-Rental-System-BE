@@ -15,7 +15,6 @@ public sealed record PolicyStatusRequest
     public bool? IsActive { get; init; }
 }
 public sealed record RentalRequest([param:Range(1,int.MaxValue)]int VehicleId,int? PolicyId,DateTime StartTime,DateTime EndTime,int? SubscriptionId,bool HasDriver=false,[param:RegularExpression("^(payos|cash)$")]string PaymentMethod="payos");
-public sealed record AssignmentRequest([param:Range(1,int.MaxValue)]int? DriverStaffId);
 public sealed record RentalContractRequest([param:Required,Url,StringLength(255)]string ContractLink, DateTime SignedAt);
 public sealed record InspectionRequest([param:Range(1,int.MaxValue)]int? StaffId,bool IsOk,[param:Range(0,double.MaxValue)]decimal? OdometerKm,[param:Range(0,100)]decimal? FuelBatteryLevel,[param:StringLength(500)]string? DamageNotes,string? ImageUrls);
 public sealed record PlanRequest([param: Required] string Name,string? Description,[param: Range(0.01,double.MaxValue)]decimal Price,[param: Range(1,3650)]int DurationDays,[param: Range(0,double.MaxValue)]decimal? IncludedHours,bool IsActive=true){public SubscriptionPlan ToModel()=>new(0,Name,Description,Price,DurationDays,IncludedHours,IsActive);}

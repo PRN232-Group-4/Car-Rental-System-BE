@@ -190,4 +190,10 @@ public sealed class AssignmentService(
             rental.VehicleId,
             ct);
     }
+
+    public Task<DriverShift> SaveDriverShiftAsync(int? id, int driverId, DateTime start, DateTime end, bool cancelled, string actor, CancellationToken ct) =>
+        repo.SaveDriverShiftAsync(id, driverId, start, end, cancelled, actor, ct);
+
+    public Task<IReadOnlyList<DriverShift>> ListDriverShiftsAsync(int? driverId, DateTime from, DateTime to, CancellationToken ct) =>
+        repo.ListDriverShiftsAsync(driverId, from, to, ct);
 }

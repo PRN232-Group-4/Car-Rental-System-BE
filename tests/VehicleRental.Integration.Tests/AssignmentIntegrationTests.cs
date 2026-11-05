@@ -214,4 +214,63 @@ public sealed class AssignmentIntegrationTests(PostgresFixture db) : IClassFixtu
         Assert.DoesNotContain(list, v => v.VehicleId == v1Id);
         Assert.Contains(list, v => v.VehicleId == v2Id);
     }
+
+    /// <summary>
+    /// Shifts moved into this slice: saving, listing and every rejection the operations repository used to apply
+    /// must behave exactly as before, now through <see cref="NpgsqlAssignmentRepository"/>.
+    /// </summary>
+    [Fact]
+    public async Task SaveDriverShiftAsync_persists_lists_and_rejects_overlap_unqualified_driver_and_missing_shift()
+    {
+        var (_, _, driverId, _) = await SeedRentalWithDriverAsync(T0, T0.AddHours(4));
+        await Seed.ScalarAsync(db.DataSource, "UPDATE staffs SET license_expiry_date='2099-01-01' WHERE id=$1", driverId);
+
+        var shift = await _repo.SaveDriverShiftAsync(null, driverId, T0, T0.AddHours(4), false, "manager@test.local", CancellationToken.None);
+        Assert.Equal(driverId, shift.DriverStaffId);
+        Assert.Equal("scheduled", shift.Status);
+        var stored = Assert.Single(await _repo.ListDriverShiftsAsync(driverId, T0, T0.AddHours(4), CancellationToken.None));
+        Assert.Equal(shift, stored);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _repo.SaveDriverShiftAsync(null, driverId, T0.AddHours(4), T0.AddHours(4), false, "manager@test.local", CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _repo.ListDriverShiftsAsync(driverId, T0.AddHours(4), T0, CancellationToken.None));
+
+        var overlap = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _repo.SaveDriverShiftAsync(null, driverId, T0.AddHours(2), T0.AddHours(6), false, "manager@test.local", CancellationToken.None));
+        Assert.Equal("Driver shifts cannot overlap.", overlap.Message);
+
+        var userId = (int)(await Seed.ScalarAsync(db.DataSource, "INSERT INTO users(email) VALUES($1) RETURNING id", $"staff-{Guid.NewGuid():N}@test.local"))!;
+        var notDriver = (int)(await Seed.ScalarAsync(db.DataSource, "INSERT INTO staffs(user_id,is_driver,license_expiry_date) VALUES($1,false,CURRENT_DATE+365) RETURNING id", userId))!;
+        var unqualified = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _repo.SaveDriverShiftAsync(null, notDriver, T0, T0.AddHours(4), false, "manager@test.local", CancellationToken.None));
+        Assert.Equal("An active qualified driver with a valid license is required.", unqualified.Message);
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            _repo.SaveDriverShiftAsync(int.MaxValue, driverId, T0.AddHours(8), T0.AddHours(9), true, "manager@test.local", CancellationToken.None));
+
+        var cancelled = await _repo.SaveDriverShiftAsync(shift.Id, driverId, T0, T0.AddHours(4), true, "manager@test.local", CancellationToken.None);
+        Assert.Equal("cancelled", cancelled.Status);
+        Assert.Equal("cancelled", Assert.Single(await _repo.ListDriverShiftsAsync(driverId, T0, T0.AddHours(4), CancellationToken.None)).Status);
+    }
+
+    /// <summary>Cancelling a shift may never strand the trips it covers.</summary>
+    [Fact]
+    public async Task SaveDriverShiftAsync_refuses_to_cancel_a_shift_that_would_strand_an_assignment()
+    {
+        var (_, _, driverId, rentalId) = await SeedRentalWithDriverAsync(T0, T0.AddHours(3));
+        await Seed.ScalarAsync(db.DataSource, "UPDATE staffs SET license_expiry_date='2099-01-01' WHERE id=$1", driverId);
+        var shift = await _repo.SaveDriverShiftAsync(null, driverId, T0, T0.AddHours(3), false, "manager@test.local", CancellationToken.None);
+        var rental = (await _repo.GetRentalScheduleAsync(rentalId, CancellationToken.None))!;
+        await _repo.AssignDriverAsync(rental, driverId, AssignmentReason.Initial, null, "manager@test.local", T0, T0.AddHours(3), 60, CancellationToken.None);
+
+        // The scheduled shift still covers the trip, so re-saving it unchanged is allowed.
+        var resaved = await _repo.SaveDriverShiftAsync(shift.Id, driverId, T0, T0.AddHours(3), false, "manager@test.local", CancellationToken.None);
+        Assert.Equal("scheduled", resaved.Status);
+
+        var stranded = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _repo.SaveDriverShiftAsync(shift.Id, driverId, T0, T0.AddHours(3), true, "manager@test.local", CancellationToken.None));
+        Assert.Equal("Reassign affected rentals before changing this shift.", stranded.Message);
+        Assert.Equal("scheduled", Assert.Single(await _repo.ListDriverShiftsAsync(driverId, T0, T0.AddHours(3), CancellationToken.None)).Status);
+    }
 }

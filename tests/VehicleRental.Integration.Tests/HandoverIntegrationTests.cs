@@ -46,7 +46,8 @@ public sealed class HandoverIntegrationTests(PostgresFixture db) : IClassFixture
         var inspector = await InspectorAsync();
         var inspection = await Operations.AddInspectionAsync(rental.Id, inspector, "pre_rental", true, 1000, 80, null, null, default);
         Assert.Equal("pre_inspection", (await Operations.GetRentalAsync(rental.Id, default))!.Status);
-        if (assign) await Operations.AssignAsync(rental.Id, null, Actor.Email, default);
+        // Same row the deleted lax AssignAsync wrote: handover has to reuse an existing assignment.
+        if (assign) await Seed.ScalarAsync(db.DataSource, "INSERT INTO vehicle_assignments(rental_id,vehicle_id,driver_staff_id,status,assigned_by) SELECT id,vehicle_id,NULL,'assigned',$2 FROM rentals WHERE id=$1", rental.Id, Actor.Email);
         return (rental.Id, inspection.VehicleId!.Value, inspector);
     }
 

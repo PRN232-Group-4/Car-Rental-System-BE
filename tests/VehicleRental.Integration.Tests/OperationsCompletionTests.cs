@@ -1,5 +1,6 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Services;
+using Car_Rental_System_BE.Infrastructure.Assignments;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
@@ -32,6 +33,7 @@ public sealed class OperationsCompletionValidationTests
 public sealed class OperationsCompletionIntegrationTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
     private readonly NpgsqlOperationsRepository store=new(db.DataSource);
+    private readonly NpgsqlAssignmentRepository assignments=new(db.DataSource);
     private readonly OperationsCompletionService service=new(new NpgsqlOperationsCompletionRepository(db.DataSource));
 
     private async Task<int> Staff(bool technician=false,bool driver=false)
@@ -48,9 +50,10 @@ public sealed class OperationsCompletionIntegrationTests(PostgresFixture db) : I
         var scenario=await Scenarios.CreateDirectRentalAsync(db.DataSource);
         var rental=(await store.GetRentalAsync(scenario.RentalId,default))!;
         var driver=await Staff(driver:true);
-        await store.SaveDriverShiftAsync(null,driver,rental.StartTime!.Value,rental.EndTime!.Value,false,"manager@test.local",default);
+        await assignments.SaveDriverShiftAsync(null,driver,rental.StartTime!.Value,rental.EndTime!.Value,false,"manager@test.local",default);
         await store.AddInspectionAsync(rental.Id,driver,"pre_rental",true,null,null,null,null,default);
-        await store.AssignAsync(rental.Id,driver,"manager@test.local",default);
+        // Same row the deleted lax AssignAsync wrote; the assignment is only this schedule read's precondition.
+        await Seed.ScalarAsync(db.DataSource,"INSERT INTO vehicle_assignments(rental_id,vehicle_id,driver_staff_id,status,assigned_by) SELECT id,vehicle_id,$2,'assigned',$3 FROM rentals WHERE id=$1",rental.Id,driver,"manager@test.local");
         var page=await service.DriverScheduleAsync(driver,rental.StartTime.Value,rental.EndTime.Value,new(){PageSize=1},default);
         var item=Assert.Single(page.Items);
         Assert.Equal(1,page.TotalCount);

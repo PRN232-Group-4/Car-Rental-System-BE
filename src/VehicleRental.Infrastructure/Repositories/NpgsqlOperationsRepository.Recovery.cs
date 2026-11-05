@@ -92,66 +92,6 @@ public sealed partial class NpgsqlOperationsRepository
         await ValueAsync(cn, tx, "INSERT INTO vehicle_assignments(rental_id,vehicle_id,driver_staff_id,status,assigned_by) VALUES($1,$2,$3,'assigned',$4)", ct, rental, vehicle, driver, actor);
     }
 
-    public async Task AssignAsync(int rentalId, int? driver, string actor, CancellationToken ct)
-    {
-        await using var cn = await dataSource.OpenConnectionAsync(ct);
-        await using var tx = await cn.BeginTransactionAsync(ct);
-        await LockOperationsAsync(cn, tx, ct);
-        var rental = await ReadRentalAsync(cn, tx, rentalId, ct);
-        if (rental.Status is not ("pre_inspection" or "renting")) throw new InvalidOperationException("Rental must have passed pre-inspection.");
-        await RequirePassedPreAsync(cn, tx, rentalId, rental.VehicleId, ct);
-        var (start, end) = AssignmentPeriod(rental);
-        if (driver is not null) await RequireDriverAsync(cn, tx, driver.Value, start, end, rentalId, ct);
-        else if (await ValueAsync(cn, tx, "SELECT has_driver FROM hour_rental_detail WHERE rental_id=$1", ct, rentalId) is true)
-            throw new InvalidOperationException("This rental requires a driver.");
-        await WriteAssignmentAsync(cn, tx, rentalId, rental.VehicleId, driver, actor, ct);
-        await tx.CommitAsync(ct);
-    }
-
-    public async Task<DriverShift> SaveDriverShiftAsync(int? id, int driver, DateTime start, DateTime end,
-        bool cancelled, string actor, CancellationToken ct)
-    {
-        if (end <= start) throw new ArgumentException("Shift end must be after start.");
-        await using var cn = await dataSource.OpenConnectionAsync(ct);
-        await using var tx = await cn.BeginTransactionAsync(ct);
-        await LockOperationsAsync(cn, tx, ct);
-        if (await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM staffs s JOIN users u ON u.id=s.user_id WHERE s.id=$1 AND s.is_driver AND u.is_active AND s.license_expiry_date>=GREATEST(CURRENT_DATE,$2::timestamp::date))", ct, driver, end) is not true)
-            throw new InvalidOperationException("An active qualified driver with a valid license is required.");
-        var previousDriver = id is null ? null : await ValueAsync(cn, tx, "SELECT driver_staff_id FROM driver_shifts WHERE id=$1 FOR UPDATE", ct, id);
-        if (id is not null && previousDriver is not int) throw new KeyNotFoundException("Shift was not found.");
-        if (!cancelled && await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM driver_shifts WHERE driver_staff_id=$1 AND status='scheduled' AND start_time<$3 AND end_time>$2 AND ($4::int IS NULL OR id<>$4))", ct, driver, start, end, id) is true)
-            throw new InvalidOperationException("Driver shifts cannot overlap.");
-        var status = cancelled ? "cancelled" : "scheduled";
-        var shiftId = id is null
-            ? (int)(await ValueAsync(cn, tx, "INSERT INTO driver_shifts(driver_staff_id,start_time,end_time,status,created_by,modified_by) VALUES($1,$2,$3,$4,$5,$5) RETURNING id", ct, driver, start, end, status, actor))!
-            : (int)(await ValueAsync(cn, tx, "UPDATE driver_shifts SET driver_staff_id=$1,start_time=$2,end_time=$3,status=$4,modified_by=$5 WHERE id=$6 RETURNING id", ct, driver, start, end, status, actor, id))!;
-        // Editing/cancelling a shift must not strand an existing future or active assignment.
-        if (await ValueAsync(cn, tx, """
-            SELECT EXISTS(SELECT 1 FROM vehicle_assignments a JOIN rentals r ON r.id=a.rental_id
-                LEFT JOIN hour_rental_detail h ON h.rental_id=r.id LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id
-                WHERE (a.driver_staff_id=$1 OR a.driver_staff_id=$2::int) AND a.status='assigned'
-                AND r.status NOT IN ('completed','cancelled','expired') AND COALESCE(h.end_time,l.end_time)>now() AT TIME ZONE 'UTC'
-                AND NOT EXISTS(SELECT 1 FROM driver_shifts ds WHERE ds.driver_staff_id=a.driver_staff_id
-                    AND ds.status='scheduled' AND ds.start_time<=GREATEST(COALESCE(h.start_time,l.start_time),now() AT TIME ZONE 'UTC')
-                    AND ds.end_time>=COALESCE(h.end_time,l.end_time)))
-            """, ct, driver, previousDriver) is true)
-            throw new InvalidOperationException("Reassign affected rentals before changing this shift.");
-        await tx.CommitAsync(ct);
-        return new(shiftId, driver, start, end, status);
-    }
-
-    public async Task<IReadOnlyList<DriverShift>> ListDriverShiftsAsync(int? driver, DateTime from, DateTime to, CancellationToken ct)
-    {
-        from = Car_Rental_System_BE.Infrastructure.Availability.NpgsqlVehicleSearchRepository.Timestamp(from);
-        to = Car_Rental_System_BE.Infrastructure.Availability.NpgsqlVehicleSearchRepository.Timestamp(to);
-        if (to <= from) throw new ArgumentException("End must be after start.");
-        await using var db = VehicleRentalDbContext.Create(dataSource);
-        return await db.Set<DriverShiftsRow>().AsNoTracking()
-            .Where(x => (driver == null || x.DriverStaffId == driver) && x.StartTime < to && x.EndTime > from)
-            .OrderBy(x => x.StartTime).ThenBy(x => x.Id)
-            .Select(x => new DriverShift(x.Id, x.DriverStaffId, x.StartTime, x.EndTime, x.Status)).ToListAsync(ct);
-    }
-
     private static async Task RequirePassedPreAsync(NpgsqlConnection cn, NpgsqlTransaction tx, int rental, int vehicle, CancellationToken ct)
     {
         if (await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM inspections WHERE rental_id=$1 AND vehicle_id=$2 AND inspection_type='pre_rental' AND is_ok=true)", ct, rental, vehicle) is not true)

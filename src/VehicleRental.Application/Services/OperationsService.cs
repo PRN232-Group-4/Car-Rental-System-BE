@@ -12,12 +12,6 @@ namespace Car_Rental_System_BE.Application.Services;
 
 public sealed class OperationsService(IOperationsRepository repository, IDriverAvailability? drivers = null, TimeProvider? timeProvider = null, IOperationalNotifications? notifications = null, RentalExpiryOptions? expiryOptions = null) : IOperationsService
 {
-    public Task<DriverShift> SaveDriverShiftAsync(int? id, int driverId, DateTime start, DateTime end, bool cancelled, string actor, CancellationToken ct) =>
-        repository.SaveDriverShiftAsync(id, driverId, start, end, cancelled, actor, ct);
-
-    public Task<IReadOnlyList<DriverShift>> ListDriverShiftsAsync(int? driverId, DateTime from, DateTime to, CancellationToken ct) =>
-        repository.ListDriverShiftsAsync(driverId, from, to, ct);
-
     public async Task<IncidentReport> CreateReportAsync(int rentalId, int staffId, bool driverOnly, string type, string description, string? images, CancellationToken ct)
     {
         var report = await repository.CreateReportAsync(rentalId, staffId, driverOnly, type, description, images, ct);
@@ -211,9 +205,6 @@ public sealed class OperationsService(IOperationsRepository repository, IDriverA
         if (notifications is not null) await notifications.RentalStatusChangedAsync(id, rental.Status);
         return rental;
     }
-
-    public Task AssignAsync(int rentalId, int? driverStaffId, string assignedByEmail, CancellationToken ct) =>
-        repository.AssignAsync(rentalId, driverStaffId, assignedByEmail, ct);
 
     public Task<IReadOnlyList<DriverScheduleEntry>> ListDriverScheduleAsync(int? driverStaffId, DateTime from, DateTime to, CancellationToken ct) =>
         repository.ListDriverScheduleAsync(driverStaffId, from, to, ct);

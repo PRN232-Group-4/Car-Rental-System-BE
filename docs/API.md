@@ -522,7 +522,6 @@ Ví dụ `/api/vehicles/search?facilityId=5&hasDriver=true&rentalType=hourly&fro
 | GET | `/api/handover/{rentalId}` | CustomerService | Không | 200 / `HandoverDetail` |
 | POST | `/api/handover/{rentalId}/confirm` | CustomerService | Không | 200 / `HandoverConfirmation` |
 | PUT | `/api/rental/{id}/contract` | CustomerService | `RentalContractRequest` | 200 / `Rental` |
-| POST | `/api/rental/{id}/assignments` | Management | `AssignmentRequest` | 200 / null |
 | POST | `/api/rental/{id}/inspections/pre` | Inspection | `InspectionRequest` | 200 / `Inspection` |
 | POST | `/api/rental/{id}/inspections/post` | Inspection | `InspectionRequest` | 200 / `Inspection` |
 | POST | `/api/rental/{id}/status/{status}` | CustomerService | Không | 200 / `Rental` |

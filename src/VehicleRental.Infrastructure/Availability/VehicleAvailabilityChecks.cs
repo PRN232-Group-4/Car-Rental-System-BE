@@ -10,7 +10,7 @@ namespace Car_Rental_System_BE.Infrastructure.Availability;
 
 /// <summary>
 /// Per-vehicle advisory lock, transaction scoped. Uses the two-int form <c>(1001, vehicleId)</c>, a key space disjoint from the
-/// single-bigint locks taken by <c>AssignAsync</c>. Class 1002 is reserved for drivers (FR-014). When several vehicles must be
+/// single-bigint locks taken by <c>IAssignmentRepository.AssignDriverAsync</c>. Class 1002 is reserved for drivers (FR-014). When several vehicles must be
 /// locked (vehicle swap) acquire them in ascending <c>vehicle_id</c> order to avoid deadlocks.
 /// </summary>
 public static class VehicleLock

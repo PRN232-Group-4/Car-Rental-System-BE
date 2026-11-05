@@ -156,6 +156,10 @@ public sealed class RoleApiTests : IAsyncLifetime
             "/api/rental/mine/{id}", "/api/rental/{id}/inspection-assignment", "/api/rental/{id}/assignments",
             "/api/rental/{id}/assignable-vehicles", "/api/user/{id}/roles", "/api/tracking/vehicle/{vehicleId}/history" })
             Assert.True(paths.TryGetProperty(path, out _), path);
+        // The deprecated POST that shared this template is deleted; the role matrix below is about the GET only.
+        var assignmentsPath = paths.GetProperty("/api/rental/{id}/assignments");
+        Assert.True(assignmentsPath.TryGetProperty("get", out _));
+        Assert.False(assignmentsPath.TryGetProperty("post", out _));
         var plurals = new HashSet<string> {
             "customers", "vehicles", "rentals", "users", "roles", "devices", "handovers", "departments", "facilities",
             "reports", "shifts", "invoices", "payments", "refunds", "checkouts", "purchases", "alerts", "vehicle-types",

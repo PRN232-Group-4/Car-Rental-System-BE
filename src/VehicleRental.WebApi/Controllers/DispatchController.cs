@@ -1,4 +1,5 @@
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.Application.Assignments;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.DTOs.Organization;
 using Car_Rental_System_BE.Application.Interfaces.Services;
@@ -15,7 +16,7 @@ namespace Car_Rental_System_BE.WebApi.Controllers;
 [ProducesResponseType(StatusCodes.Status400BadRequest)]
 [ProducesResponseType(StatusCodes.Status403Forbidden)]
 [ProducesResponseType(StatusCodes.Status404NotFound)]
-public sealed class DispatchController(IOperationsService store, IOperationsCompletionService? completion = null) : ControllerBase
+public sealed class DispatchController(IOperationsService store, IAssignmentService assignments, IOperationsCompletionService? completion = null) : ControllerBase
 {
     /// <summary>Manager/Admin creates a driver's duty shift.</summary>
     [Authorize(Policy=AuthorizationPolicies.Management)]
@@ -23,7 +24,7 @@ public sealed class DispatchController(IOperationsService store, IOperationsComp
     [ProducesResponseType<DriverShift>(StatusCodes.Status201Created)]
     public async Task<IActionResult> CreateShift(DriverShiftRequest request, CancellationToken ct)
     {
-        var shift = await store.SaveDriverShiftAsync(null,request.DriverStaffId,request.StartTime,request.EndTime,false,Email(),ct);
+        var shift = await assignments.SaveDriverShiftAsync(null,request.DriverStaffId,request.StartTime,request.EndTime,false,Email(),ct);
         return Created($"/api/drivers/shift/{shift.Id}",shift);
     }
 
@@ -32,7 +33,7 @@ public sealed class DispatchController(IOperationsService store, IOperationsComp
     [HttpPut("drivers/shift/{id:int}")]
     [ProducesResponseType<DriverShift>(StatusCodes.Status200OK)]
     public Task<DriverShift> UpdateShift(int id, DriverShiftRequest request, CancellationToken ct)
-        => store.SaveDriverShiftAsync(id,request.DriverStaffId,request.StartTime,request.EndTime,request.Cancelled,Email(),ct);
+        => assignments.SaveDriverShiftAsync(id,request.DriverStaffId,request.StartTime,request.EndTime,request.Cancelled,Email(),ct);
 
     /// <summary>Manager/Admin sees all duty shifts; Driver sees only their own.</summary>
     [Authorize(Policy=AuthorizationPolicies.DriverSchedule)]
@@ -46,7 +47,7 @@ public sealed class DispatchController(IOperationsService store, IOperationsComp
             if (own is null || driverStaffId is not null && driverStaffId != own) return Forbid();
             driverStaffId=own;
         }
-        return Ok(await store.ListDriverShiftsAsync(driverStaffId,from,to,ct));
+        return Ok(await assignments.ListDriverShiftsAsync(driverStaffId,from,to,ct));
     }
 
     /// <summary>Staff reports damage separately from inspection; Driver reports only their assigned trip; Customer reports their own rental.</summary>

@@ -228,7 +228,6 @@ public sealed class ApiSuccessResponseFilter : IAsyncAlwaysRunResultFilter
         ["RentalAssignments.ListAssignments"] = "Rental assignments retrieved successfully.",
         ["RentalAssignments.ListAssignableDrivers"] = "Assignable drivers retrieved successfully.",
         ["RentalAssignments.ListAssignableVehicles"] = "Assignable vehicles retrieved successfully.",
-        ["Operations.Assign"] = "Driver assignment updated successfully.",
         ["Operations.DriverSchedule"] = "Driver schedule retrieved successfully.",
         ["Operations.Pre"] = "Pre-rental inspection recorded successfully.",
         ["Operations.Post"] = "Post-rental inspection recorded successfully.",
