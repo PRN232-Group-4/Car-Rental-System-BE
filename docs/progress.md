@@ -1,8 +1,10 @@
 # Tiến độ
 
-## Billing 3.1, Handovers 3.2 và Inspections 3.3, 2026-11-05
+## Tách slice Billing, xác minh Handovers và Inspections, tách Dispatch và Maintenance, 2026-11-05
 
-Billing đã tách tại `c031bb1`, giữ API và logic tài chính. Lead kiểm build 0 warning/error và 81 test contract đạt; worker báo toàn suite Neon 1.380 test đạt. Handovers và Inspections đã có slice riêng từ trước nên 3.2 và 3.3 chỉ xác minh, không thêm production code. Lead chạy 175 test cho Handovers và 87 test cho Inspections trên Neon, tất cả đạt. Reviewer độc lập chấp nhận ba bước; lượt Inspections dùng GLM vì GPT-6 Astra hết hạn mức. Chưa push/deploy; 3.4 Dispatch chưa bắt đầu. Giới hạn coverage và việc D2/FE còn lại được ghi trong [thay đổi](../changes/2026-11-05-slice-extraction.md).
+Billing đã tách tại `c031bb1`, giữ API và logic tài chính. Lead kiểm build 0 warning/error và 81 test contract đạt; worker báo toàn suite Neon 1.380 test đạt. Handovers và Inspections đã có slice riêng từ trước nên 3.2 và 3.3 chỉ xác minh; Lead chạy 175 và 87 test trên Neon, tất cả đạt. Dispatch tại `44a1f93`: ca làm tài xế chuyển sang slice Assignments với SQL giữ nguyên từng byte, và route lỗi thời `POST /api/rental/{id}/assignments` bị xóa theo yêu cầu, nên đây là thay đổi API không tương thích ngược; cổng kiểm tra ca trực chỉ route cũ có nay mất và được ghi thành nợ kỹ thuật. Maintenance tại `3a4e730`: slice riêng, ba route giữ nguyên, 77 dòng SQL giữ nguyên từng byte.
+
+Reviewer độc lập chấp nhận cả năm bước; lượt 3.3, 3.4 và 3.5 dùng `river/zai-org/GLM-5.3-Flash` vì GPT-6 Astra hết hạn mức, nên đa dạng model bị giảm. Toàn bộ test DB chạy trên database dùng một lần. Chưa push/deploy; Phase 3 không còn hạng mục code. Giới hạn coverage và việc D2/FE còn lại được ghi trong [thay đổi](../changes/2026-11-05-slice-extraction.md).
 
 ## Cookie SameSite cho web cross-site — 2026-10-29
 
