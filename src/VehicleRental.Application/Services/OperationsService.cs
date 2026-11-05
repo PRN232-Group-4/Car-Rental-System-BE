@@ -197,6 +197,14 @@ public sealed class OperationsService(IOperationsRepository repository, IDriverA
     public Task<Rental?> GetRentalForUserAsync(int id, string email, bool readAll, bool customer, bool driver, CancellationToken ct) =>
         repository.GetRentalForUserAsync(id, email, readAll, customer, driver, ct);
 
+    /// <summary>
+    /// Legacy second implementation of the rental state machine (delegates to
+    /// <see cref="IOperationsRepository.ChangeRentalStatusAsync"/>). It is no longer reachable over HTTP: the
+    /// deprecated <c>POST /api/rental/{id}/status/{status}</c> endpoint delegates to
+    /// <see cref="Car_Rental_System_BE.Application.Lifecycle.IRentalLifecycleService"/> instead, which is the single
+    /// implementation, writes rental_status_history and runs the completion settlement. Kept because several
+    /// integration tests still call it directly; scheduled for removal.
+    /// </summary>
     public async Task<Rental> ChangeRentalStatusAsync(int id, string status, CancellationToken ct)
     {
         var rental = await repository.ChangeRentalStatusAsync(id, status, ct);

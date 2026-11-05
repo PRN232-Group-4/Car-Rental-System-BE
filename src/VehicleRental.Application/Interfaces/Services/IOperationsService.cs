@@ -37,6 +37,13 @@ public interface IOperationsService
     Task<Rental> SaveRentalContractAsync(int id, string contractLink, DateTime signedAt, CancellationToken ct);
     Task<Rental?> GetRentalAsync(int id, CancellationToken ct);
     Task<Rental?> GetRentalForUserAsync(int id, string email, bool readAll, bool customer, bool driver, CancellationToken ct);
+    /// <summary>
+    /// Legacy second implementation of the rental state machine. It is no longer reachable over HTTP:
+    /// <c>POST /api/rental/{id}/status/{status}</c> delegates to
+    /// <see cref="Car_Rental_System_BE.Application.Lifecycle.IRentalLifecycleService"/> instead, which is the single
+    /// implementation and the only one that writes rental_status_history and runs the completion settlement.
+    /// Kept only because several integration tests still call it directly; scheduled for removal.
+    /// </summary>
     Task<Rental> ChangeRentalStatusAsync(int id, string status, CancellationToken ct);
     Task AssignAsync(int rentalId, int? driverStaffId, string assignedByEmail, CancellationToken ct);
     Task<IReadOnlyList<DriverScheduleEntry>> ListDriverScheduleAsync(int? driverStaffId, DateTime from, DateTime to, CancellationToken ct);

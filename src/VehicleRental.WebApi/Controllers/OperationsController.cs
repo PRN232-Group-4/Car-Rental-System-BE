@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.Application.Lifecycle;
 using Car_Rental_System_BE.WebApi.Middlewares.Requests;
 using Car_Rental_System_BE.Domain.Entities;
 using System.ComponentModel.DataAnnotations;
@@ -12,7 +13,15 @@ namespace Car_Rental_System_BE.WebApi.Controllers;
 
 [ApiController]
 [Route("api")]
-public sealed class OperationsController(IOperationsService store, IMediaService media, IOperationsCompletionService? completion = null) : ControllerBase
+public sealed class OperationsController(
+    IOperationsService store,
+    IMediaService media,
+    IOperationsCompletionService? completion = null,
+    // Only the deprecated POST /api/rental/{id}/status/{status} needs these two; the runtime always registers
+    // them (Program.cs/Infrastructure) and they stay optional so hosts and tests that only exercise the other
+    // endpoints of this controller keep working unchanged.
+    IRentalLifecycleService? lifecycle = null,
+    ICurrentCustomer? currentCustomer = null) : ControllerBase
 {
     /// <summary>Admin, Manager or CustomerService records signed long-term contract evidence.</summary>
     [Authorize(Policy=AuthorizationPolicies.CustomerService)]
@@ -131,13 +140,45 @@ public sealed class OperationsController(IOperationsService store, IMediaService
     [Authorize(Policy=AuthorizationPolicies.DriverSchedule)] [HttpGet("drivers/schedule")] [ProducesResponseType<OperationsPage<DriverScheduleEntry>>(StatusCodes.Status200OK)] [ProducesResponseType(StatusCodes.Status400BadRequest)] public async Task<IActionResult> DriverSchedule([FromQuery]int? driverStaffId,[FromQuery]DateTime from,[FromQuery]DateTime to,[FromQuery]OperationsPagination pagination,CancellationToken ct){if(to<=from)return Problem("End time must be after start time.",statusCode:StatusCodes.Status400BadRequest);if(!AuthorizationPolicies.CanManage(User)){var own=AuthorizationPolicies.StaffId(User);if(own is null || (driverStaffId is not null && driverStaffId!=own))return Forbid();driverStaffId=own;}return Ok(await Completion.DriverScheduleAsync(driverStaffId,from,to,pagination,ct));}
     [Authorize(Policy=AuthorizationPolicies.Inspection)] [HttpPost("rental/{id:int}/inspections/pre")] public Task<IActionResult> Pre(int id,InspectionRequest x,CancellationToken ct)=>Inspect(id,x,"pre_rental",ct);
     [Authorize(Policy=AuthorizationPolicies.Inspection)] [HttpPost("rental/{id:int}/inspections/post")] public Task<IActionResult> Post(int id,InspectionRequest x,CancellationToken ct)=>Inspect(id,x,"post_rental",ct);
+    /// <summary>
+    /// Deprecated. Kept at its original route, verb, policy and response shape, but it no longer runs a second
+    /// state machine: every accepted status is delegated to the single lifecycle implementation
+    /// (<see cref="IRentalLifecycleService"/>), which writes rental_status_history, runs the completion settlement
+    /// and applies the cancellation fee/refund policy. Because of that, <c>completed</c> now settles the rental,
+    /// <c>cancelled</c> now charges the fee, and <c>renting</c> now requires a valid customer licence (self-drive).
+    /// Business-rule failures surface as the usual 409 conflict envelope.
+    /// </summary>
     [Obsolete("Use dedicated lifecycle endpoints: POST /api/rental/{id}/confirm, start, return, complete, cancel instead.")]
     [Authorize(Policy=AuthorizationPolicies.CustomerService)]
     [HttpPost("rental/{id:int}/status/{status}")]
-    public async Task<Rental> Status(int id,string status,CancellationToken ct)
+    [ProducesResponseType<Rental>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Status(int id, string status, CancellationToken ct)
     {
         Response.Headers.Append("Deprecation","true");
-        return await store.ChangeRentalStatusAsync(id,status,ct);
+        var actor = await ResolveActorAsync(ct);
+        switch (status?.Trim().ToLowerInvariant())
+        {
+            case "pre_inspection": await Lifecycle.ConfirmAsync(id, actor, ct); break;
+            case "renting": await Lifecycle.StartAsync(id, actor, ct); break;
+            case "post_inspection": await Lifecycle.ReturnAsync(id, null, actor, ct); break;
+            case "completed": await Lifecycle.CompleteAsync(id, actor, ct); break;
+            case "cancelled":
+                await Lifecycle.CancelAsync(id,
+                    new CancelRentalCommand(StaffCancellationReason, Initiator: "staff", WaiveFee: false), actor, ct);
+                break;
+            default:
+                return Problem(
+                    $"Unknown rental status '{status}'. This endpoint accepts: pre_inspection, renting, post_inspection, completed, cancelled.",
+                    statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        // The caller gets the same flat Rental contract as before, reloaded through the operations read path.
+        return await store.GetRentalAsync(id, ct) is { } rental
+            ? Ok(rental)
+            : Problem("Rental was not found.", statusCode: StatusCodes.Status404NotFound);
     }
 
     [HttpGet("subscription-plans")] public Task<IReadOnlyList<SubscriptionPlan>> Plans([FromQuery]bool all,CancellationToken ct)=>store.ListPlansAsync(!(all && AuthorizationPolicies.CanManage(User)),ct);
@@ -206,6 +247,34 @@ public sealed class OperationsController(IOperationsService store, IMediaService
         => Completion.ReplyRatingAsync(id,request,Email(),ct);
 
     private IOperationsCompletionService Completion => completion ?? throw new InvalidOperationException("Operations completion service is not configured.");
+
+    private IRentalLifecycleService Lifecycle => lifecycle ?? throw new InvalidOperationException("Rental lifecycle service is not configured.");
+
+    private ICurrentCustomer CurrentCustomer => currentCustomer ?? throw new InvalidOperationException("Current customer resolver is not configured.");
+
+    private const string StaffCancellationReason = "Staff set the rental to cancelled through the deprecated status endpoint.";
+
+    /// <summary>
+    /// Same mapping as <c>RentalLifecycleController.ResolveActorAsync</c> on purpose: the actor email/role and user
+    /// id land in rental_status_history and in the payment audit columns, so the two entry points must not drift.
+    /// </summary>
+    private async Task<ActorContext> ResolveActorAsync(CancellationToken ct)
+    {
+        var email = User.FindFirstValue(ClaimTypes.Email) ?? "";
+        var role = User.FindFirstValue(ClaimTypes.Role) ?? "Customer";
+
+        int? userId = null;
+        if (role == "Customer")
+        {
+            userId = await CurrentCustomer.GetCustomerIdByEmailAsync(email, ct);
+        }
+        else if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var uid))
+        {
+            userId = uid;
+        }
+
+        return new ActorContext(userId, email, role);
+    }
 
     private string Email()=>User.FindFirstValue(ClaimTypes.Email)??throw new UnauthorizedAccessException();
 }
