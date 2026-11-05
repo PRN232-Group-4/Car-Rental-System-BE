@@ -89,7 +89,9 @@ public sealed class UnitTests
     [Fact]
     public void Rental_policy_management_allows_manager_role()
     {
-        var endpoints = new[] { "Policies", "AddPolicy", "Assign", "DriverSchedule" };
+        // "Assign" was the deprecated POST /api/rental/{id}/assignments action. It no longer exists: driver
+        // assignment is owned by RentalAssignmentsController, which this Operations-only matrix does not cover.
+        var endpoints = new[] { "Policies", "AddPolicy", "DriverSchedule" };
 
         foreach (var endpoint in endpoints)
         {
