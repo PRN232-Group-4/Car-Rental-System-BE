@@ -1,5 +1,9 @@
 # Câu hỏi mở và giả định
 
+## Cổng ca trực khi phân công tài xế — 2026-11-05, đã chốt hướng xử lý
+
+Route cũ `POST /api/rental/{id}/assignments` từng bắt buộc tài xế phải nằm trong ca trực bao phủ toàn bộ chuyến. Route chuẩn `POST /api/rental/{id}/assignments/driver` chưa từng kiểm tra điều này; nó chỉ chặn tài xế trùng lịch. Khi xóa route cũ, cổng đó mất vĩnh viễn. Người dùng quyết định giữ nguyên hành vi hiện tại của route chuẩn và ghi đây là nợ kỹ thuật, không bổ sung kiểm tra trong giai đoạn này. Hệ quả đã biết: một phân công có thể được ghi cho tài xế ngoài ca, và chỉ bị chặn khi bắt đầu thuê hoặc khi thay xe, nơi `RequireDriverAsync` vẫn kiểm tra ca trực. Nếu sau này muốn siết lại, thêm điều kiện ca trực vào slice Assignments và cân nhắc ảnh hưởng tới các phân công đang thành công.
+
 ## Mốc hết hạn của yêu cầu đặt xe — 2026-10-23, cần xác nhận
 
 FR-042 được hiểu là **hạn duyệt + thanh toán tính từ thời điểm đặt**: `expire_at = created_at + ApprovalWindowMinutes` (mặc định 60 phút). Cách hiểu thay thế ("đơn hết hạn tại `start_time - 1 giờ`") chỉ cần đổi cách tính/backfill `rentals.expire_at` và `RentalExpiryOptions`, không cần đổi schema hay state machine. Đã chọn cách hiểu đầu vì đơn đặt xa ngày nhận vẫn phải được xử lý sớm để giải phóng lịch xe; nếu chủ sản phẩm chọn cách sau thì phải sửa cả thông báo UI và test. Backfill cho đơn đang mở trước khi triển khai dùng `GREATEST(created_at + 1 giờ, deploy + 1 giờ)` để không hết hạn hàng loạt đơn đang chờ; cần xác nhận có đồng ý cách xử lý này không.
