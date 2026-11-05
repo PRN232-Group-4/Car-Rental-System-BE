@@ -14,13 +14,7 @@ public interface IPaymentRepository
     Task<PaymentResult> RequestRefundAsync(int paymentId, decimal amount, CancellationToken ct);
     Task<PaymentSummary> ReviewRefundAsync(int refundId, bool approve, string reviewer, CancellationToken ct);
 
-    // ---------------------------------------------------------------------------------------------
-    // SUBSCRIPTIONS (intended future module). These three members are the subscription-plan purchase
-    // flow, not invoicing. They stay on this single interface for now on purpose: splitting
-    // IPaymentRepository would break the reflection-proxy tests that assert repository method names.
-    // The next phase lifts them out together with PaymentService.HandleWebhookAsync, which
-    // deliberately dispatches across both halves (invoice vs subscription order code).
-    // ---------------------------------------------------------------------------------------------
+    // Subscription-plan purchase, not invoicing. Stays here until the Subscriptions module is extracted.
     Task<PlanCheckout> CreatePlanCheckoutAsync(int planId, string email, CancellationToken ct);
     Task<PlanPurchaseStatus> CompletePlanPurchaseAsync(long orderCode, decimal amount, string providerReference, CancellationToken ct);
     Task<PlanPurchaseStatus?> GetPlanPurchaseAsync(long orderCode, string email, CancellationToken ct);
