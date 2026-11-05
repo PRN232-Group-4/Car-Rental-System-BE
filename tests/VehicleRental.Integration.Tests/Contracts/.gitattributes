@@ -1,0 +1,4 @@
+# SwaggerContractTests compares this file byte for byte with the document the host serves, so git must
+# never rewrite its line endings on checkout (core.autocrlf=true would turn every LF into CRLF and fail
+# the test on a fresh worktree). -text disables the conversion and keeps the file diffable as text.
+swagger.v1.json -text
