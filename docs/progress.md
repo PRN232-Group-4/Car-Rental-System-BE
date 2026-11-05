@@ -1,8 +1,8 @@
 # Tiến độ
 
-## Billing 3.1 và Handovers 3.2, 2026-11-05
+## Billing 3.1, Handovers 3.2 và Inspections 3.3, 2026-11-05
 
-Billing đã tách tại `c031bb1`, giữ API và logic tài chính. Lead kiểm build 0 warning/error và 81 test contract đạt; worker báo toàn suite Neon 1.380 test đạt. Handovers đã có slice phù hợp ADR-007 nên 3.2 chỉ xác minh, không thêm production code. Lead chạy 175 test liên quan trên Neon, tất cả đạt. Reviewer độc lập GPT-6 Astra chấp nhận cả hai bước. Chưa push/deploy; 3.3 Inspections chưa bắt đầu. Giới hạn coverage và việc D2/FE còn lại được ghi trong [thay đổi](../changes/2026-11-05-billing-handover-slices.md).
+Billing đã tách tại `c031bb1`, giữ API và logic tài chính. Lead kiểm build 0 warning/error và 81 test contract đạt; worker báo toàn suite Neon 1.380 test đạt. Handovers và Inspections đã có slice riêng từ trước nên 3.2 và 3.3 chỉ xác minh, không thêm production code. Lead chạy 175 test cho Handovers và 87 test cho Inspections trên Neon, tất cả đạt. Reviewer độc lập chấp nhận ba bước; lượt Inspections dùng GLM vì GPT-6 Astra hết hạn mức. Chưa push/deploy; 3.4 Dispatch chưa bắt đầu. Giới hạn coverage và việc D2/FE còn lại được ghi trong [thay đổi](../changes/2026-11-05-slice-extraction.md).
 
 ## Cookie SameSite cho web cross-site — 2026-10-29
 
