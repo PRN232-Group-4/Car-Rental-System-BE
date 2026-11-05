@@ -135,7 +135,9 @@ public sealed class VehicleSearchApiContractTests
         var actionDescriptor = new ControllerActionDescriptor
         {
             ControllerName = controllerName,
-            ActionName = actionName
+            ActionName = actionName,
+            // The wording lives on the action method now, so the descriptor must name the real one.
+            MethodInfo = typeof(VehicleSearchController).GetMethod(actionName)!
         };
 
         var actionContext = new ActionContext(httpContext, new(), actionDescriptor);

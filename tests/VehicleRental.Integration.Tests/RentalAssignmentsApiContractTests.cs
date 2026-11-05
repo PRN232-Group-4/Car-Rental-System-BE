@@ -235,7 +235,9 @@ public sealed class RentalAssignmentsApiContractTests
         var actionDescriptor = new ControllerActionDescriptor
         {
             ControllerName = "RentalAssignments",
-            ActionName = actionName
+            ActionName = actionName,
+            // The wording lives on the action method now, so the descriptor must name the real one.
+            MethodInfo = typeof(RentalAssignmentsController).GetMethod(actionName)!
         };
 
         var actionContext = new ActionContext(httpContext, new Microsoft.AspNetCore.Routing.RouteData(), actionDescriptor);

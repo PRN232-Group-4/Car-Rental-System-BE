@@ -36,10 +36,10 @@ namespace VehicleRental.Tests;
 ///
 /// 1. A route template or an [Authorize] attribute copied wrongly. Both are strings/attributes, so nothing
 ///    in the compiler notices; the endpoint just becomes reachable by the wrong roles or not at all.
-/// 2. ApiSuccessResponseFilter computes the envelope message from ControllerName.ActionName and falls back to
-///    a generated sentence when the key is missing. Renaming a controller therefore changes the response body
-///    without changing any route or DTO. Every message asserted here is read from the explicit map and compared
-///    with the generated fallback it would otherwise have produced.
+/// 2. ApiSuccessResponseFilter falls back to a generated sentence when an action declares no wording, so a
+///    controller rename used to change the response body without changing any route or DTO. The wording now
+///    travels with the action as [SuccessMessage]; every message asserted here is read back from the actions
+///    and compared with the generated fallback they would otherwise have produced.
 /// </summary>
 public sealed class BillingEndpointContractTests : IAsyncLifetime
 {
@@ -239,7 +239,7 @@ public sealed class BillingEndpointContractTests : IAsyncLifetime
     }
 
     // ---------------------------------------------------------------------------------------------------------
-    // 5. Every role the policy allows still succeeds, and the envelope message comes from the explicit map.
+    // 5. Every role the policy allows still succeeds, and the envelope message is the one the action declares.
     // ---------------------------------------------------------------------------------------------------------
     [Theory]
     [MemberData(nameof(AllowedRoles))]
@@ -261,8 +261,8 @@ public sealed class BillingEndpointContractTests : IAsyncLifetime
         }
         else
         {
-            // CancelCheckout has no map entry today (pre-existing, deliberately untouched by this change).
-            // Its text is action-derived, so the controller rename cannot have changed it: assert it stayed.
+            // CancelCheckout declares no [SuccessMessage] today (pre-existing, deliberately untouched by this
+            // change). Its text is action-derived, so the controller rename cannot have changed it: assert it stayed.
             Assert.Equal(fallback, message);
         }
     }
@@ -278,8 +278,8 @@ public sealed class BillingEndpointContractTests : IAsyncLifetime
     }
 
     // ---------------------------------------------------------------------------------------------------------
-    // 6. The message map was re-keyed, not duplicated: exactly the expected keys exist and no stale
-    //    Payments.* key survives for an action that changed controller.
+    // 6. The wording was re-keyed, not duplicated: exactly the expected actions declare it and no stale
+    //    Payments.* declaration survives for an action that changed controller.
     // ---------------------------------------------------------------------------------------------------------
     [Fact]
     public void Success_message_map_carries_exactly_the_re_keyed_controller_prefixes()
@@ -350,11 +350,26 @@ public sealed class BillingEndpointContractTests : IAsyncLifetime
         };
     }
 
-    /// <summary>The filter's private, explicit success-message table - the thing the key must hit.</summary>
-    private static IReadOnlyDictionary<string, string> MessageMap() =>
-        (IReadOnlyDictionary<string, string>)typeof(ApiSuccessResponseFilter)
-            .GetField("Messages", BindingFlags.NonPublic | BindingFlags.Static)!
-            .GetValue(null)!;
+    /// <summary>
+    /// The success wording each controller action declares for itself through [SuccessMessage], keyed
+    /// Controller.Action: the wording that used to sit in the filter's private table, read from what ships.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> MessageMap()
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var method in typeof(InvoicesController).Assembly.GetTypes()
+                     .Where(type => typeof(ControllerBase).IsAssignableFrom(type) && !type.IsAbstract)
+                     .SelectMany(type => type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)))
+        {
+            var message = method.GetCustomAttributes<SuccessMessageAttribute>(inherit: true)
+                .Select(attribute => attribute.Message)
+                .FirstOrDefault();
+            if (message is not null)
+                map[$"{method.DeclaringType!.Name.Replace("Controller", "", StringComparison.Ordinal)}.{method.Name}"] = message;
+        }
+
+        return map;
+    }
 
     private IReadOnlyList<ControllerActionDescriptor> ActionDescriptors() =>
         _app.Services.GetRequiredService<IActionDescriptorCollectionProvider>()

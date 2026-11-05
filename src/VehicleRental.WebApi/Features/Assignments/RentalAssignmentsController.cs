@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Car_Rental_System_BE.Application.Features.Assignments;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,6 +15,7 @@ public sealed class RentalAssignmentsController(IAssignmentService assignmentSer
     /// <summary>
     /// Assigns or replaces the driver for a rental.
     /// </summary>
+    [SuccessMessage("Driver assigned successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
     [HttpPost("rental/{id:int}/assignments/driver")]
     [ProducesResponseType(typeof(AssignmentResponse), StatusCodes.Status200OK)]
@@ -38,6 +40,7 @@ public sealed class RentalAssignmentsController(IAssignmentService assignmentSer
     /// <summary>
     /// Swaps the vehicle assigned to an active rental (e.g. breakdown, accident, customer request).
     /// </summary>
+    [SuccessMessage("Vehicle replaced successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
     [HttpPost("rental/{id:int}/assignments/vehicle")]
     [ProducesResponseType(typeof(VehicleReplacementResult), StatusCodes.Status200OK)]
@@ -63,6 +66,7 @@ public sealed class RentalAssignmentsController(IAssignmentService assignmentSer
     /// <summary>
     /// Gets the assignment history for a rental.
     /// </summary>
+    [SuccessMessage("Rental assignments retrieved successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
     [HttpGet("rental/{id:int}/assignments")]
     [ProducesResponseType(typeof(IReadOnlyList<AssignmentResponse>), StatusCodes.Status200OK)]
@@ -77,6 +81,7 @@ public sealed class RentalAssignmentsController(IAssignmentService assignmentSer
     /// <summary>
     /// Gets eligible and ineligible driver candidates for a rental with reasons.
     /// </summary>
+    [SuccessMessage("Assignable drivers retrieved successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
     [HttpGet("rental/{id:int}/assignable-drivers")]
     [ProducesResponseType(typeof(IReadOnlyList<AssignableDriverItem>), StatusCodes.Status200OK)]
@@ -92,6 +97,7 @@ public sealed class RentalAssignmentsController(IAssignmentService assignmentSer
     /// <summary>
     /// Gets eligible replacement vehicles of the same vehicle type that are available for the remaining rental period.
     /// </summary>
+    [SuccessMessage("Assignable vehicles retrieved successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
     [HttpGet("rental/{id:int}/assignable-vehicles")]
     [ProducesResponseType(typeof(IReadOnlyList<AssignableVehicleItem>), StatusCodes.Status200OK)]

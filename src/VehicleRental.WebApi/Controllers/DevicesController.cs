@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.DTOs.Map;
 using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,6 +19,7 @@ public sealed class DevicesController(ITrackingService trackingService) : Contro
     /// <summary>
     /// Lists registered GPS tracking devices with pagination and optional filters.
     /// </summary>
+    [SuccessMessage("Tracking devices retrieved successfully.")]
     [HttpGet]
     [ProducesResponseType<DevicePage>(StatusCodes.Status200OK)]
     public async Task<IActionResult> List(
@@ -34,6 +36,7 @@ public sealed class DevicesController(ITrackingService trackingService) : Contro
     /// <summary>
     /// Registers a new GPS tracking device and returns its generated secret API key.
     /// </summary>
+    [SuccessMessage("Tracking device registered successfully.")]
     [HttpPost]
     [ProducesResponseType<RegisterDeviceResult>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Register([FromBody] RegisterDeviceRequest request, CancellationToken ct)
@@ -45,6 +48,7 @@ public sealed class DevicesController(ITrackingService trackingService) : Contro
     /// <summary>
     /// Retrieves details of a specific tracking device.
     /// </summary>
+    [SuccessMessage("Tracking device retrieved successfully.")]
     [HttpGet("~/api/device/{id}")]
     [ProducesResponseType<TrackingDeviceDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Get(string id, CancellationToken ct)
@@ -58,6 +62,7 @@ public sealed class DevicesController(ITrackingService trackingService) : Contro
     /// <summary>
     /// Updates status or assigned vehicle for a tracking device.
     /// </summary>
+    [SuccessMessage("Tracking device updated successfully.")]
     [HttpPut("~/api/device/{id}")]
     [ProducesResponseType<TrackingDeviceDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Update(string id, [FromBody] UpdateDeviceRequest request, CancellationToken ct)

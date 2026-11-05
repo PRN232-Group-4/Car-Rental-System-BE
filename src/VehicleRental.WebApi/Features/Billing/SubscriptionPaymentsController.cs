@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.Features.Billing;
 using Car_Rental_System_BE.Application.Services.Exceptions;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,6 +17,7 @@ namespace Car_Rental_System_BE.WebApi.Features.Billing;
 [Route("api")]
 public sealed class SubscriptionPaymentsController(IPaymentService payments) : ControllerBase
 {
+    [SuccessMessage("Subscription plan checkout created successfully.")]
     [Authorize(Policy = AuthorizationPolicies.Customer)]
     [HttpPost("subscription-plan/{planId:int}/purchase")]
     [ProducesResponseType<CheckoutResult>(StatusCodes.Status200OK)]
@@ -27,6 +29,7 @@ public sealed class SubscriptionPaymentsController(IPaymentService payments) : C
     }
 
     // Polled by the FE after PayOS returns, to know when the webhook has activated the subscription.
+    [SuccessMessage("Subscription purchase retrieved successfully.")]
     [Authorize(Policy = AuthorizationPolicies.Customer)]
     [HttpGet("subscription-plans/purchase/{orderCode:long}")]
     [ProducesResponseType<PlanPurchaseStatus>(StatusCodes.Status200OK)]

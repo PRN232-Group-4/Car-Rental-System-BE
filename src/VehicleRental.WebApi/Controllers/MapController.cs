@@ -1,5 +1,6 @@
 using Car_Rental_System_BE.Application.DTOs.Map;
 using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
@@ -18,6 +19,8 @@ public sealed class MapController(IMapService mapService) : ControllerBase
     /// <summary>
     /// Forward Geocoding: converts a text address to geographical coordinates.
     /// </summary>
+    [OperationDescription("Mapbox provider. Missing configuration returns 503, upstream failures 502/503, no route 404. No simulated coordinates or ETA. Provider IDs are Mapbox IDs.")]
+    [SuccessMessage("Address geocoded successfully.")]
     [HttpGet("geocode")]
     [ProducesResponseType<GeocodeResult>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -32,6 +35,8 @@ public sealed class MapController(IMapService mapService) : ControllerBase
     /// <summary>
     /// Reverse Geocoding: converts geographical coordinates into a human-readable address.
     /// </summary>
+    [OperationDescription("Mapbox provider. Missing configuration returns 503, upstream failures 502/503, no route 404. No simulated coordinates or ETA. Provider IDs are Mapbox IDs.")]
+    [SuccessMessage("Coordinates reverse-geocoded successfully.")]
     [HttpGet("reverse-geocode")]
     [ProducesResponseType<GeocodeResult>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -46,6 +51,9 @@ public sealed class MapController(IMapService mapService) : ControllerBase
     /// <summary>
     /// Searches Vietnamese addresses using Mapbox Geocoding v6 (up to 10 provider matches; no POI guarantee).
     /// </summary>
+    [OperationDescription("Mapbox provider. Missing configuration returns 503, upstream failures 502/503, no route 404. No simulated coordinates or ETA. Provider IDs are Mapbox IDs.")]
+    [OperationDescription(" Vietnam address search via Geocoding v6, not POI search. Provider returns at most 10 matches; items/page/pageSize/totalCount paginate that match set, not the global catalog. Defaults page=1/pageSize=20; page>=1, pageSize 1..100. lat/lng must be supplied together; radius requires both and filters by meters.", DocumentsPaginationParameters = true)]
+    [SuccessMessage("Places retrieved successfully.")]
     [HttpGet("places")]
     [ProducesResponseType<PlaceSearchPage>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Places(
@@ -64,6 +72,8 @@ public sealed class MapController(IMapService mapService) : ControllerBase
     /// <summary>
     /// Calculates road distance and estimated duration using Mapbox Matrix API.
     /// </summary>
+    [OperationDescription("Mapbox provider. Missing configuration returns 503, upstream failures 502/503, no route 404. No simulated coordinates or ETA. Provider IDs are Mapbox IDs.")]
+    [SuccessMessage("Distance and ETA calculated successfully.")]
     [HttpGet("distance-matrix")]
     [ProducesResponseType<DistanceMatrixResult>(StatusCodes.Status200OK)]
     public async Task<IActionResult> DistanceMatrix(
@@ -80,6 +90,8 @@ public sealed class MapController(IMapService mapService) : ControllerBase
     /// <summary>
     /// Computes driving route geometry and duration using Mapbox Directions API (precision-5 polyline).
     /// </summary>
+    [OperationDescription("Mapbox provider. Missing configuration returns 503, upstream failures 502/503, no route 404. No simulated coordinates or ETA. Provider IDs are Mapbox IDs.")]
+    [SuccessMessage("Directions calculated successfully.")]
     [HttpGet("directions")]
     [ProducesResponseType<DirectionsResult>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Directions(

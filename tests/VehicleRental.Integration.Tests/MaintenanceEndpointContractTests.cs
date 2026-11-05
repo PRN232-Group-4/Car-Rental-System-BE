@@ -33,9 +33,9 @@ namespace VehicleRental.Tests;
 /// <summary>
 /// The maintenance slice contract. The three maintenance endpoints moved from OperationsController to
 /// MaintenanceController; the routes, verbs, policies, status codes, Location header and envelope had to stay
-/// byte-identical, and ApiSuccessResponseFilter derives the envelope message from ControllerName.ActionName, so a
-/// controller move silently changes the response body unless the map is re-keyed. Everything below is asserted
-/// against the running pipeline and against the filter's explicit map, never against the generated fallback.
+/// byte-identical, and the envelope wording now travels with each action as [SuccessMessage]. Everything below
+/// is asserted against the running pipeline and against the wording the actions declare, never against the
+/// generated fallback.
 /// </summary>
 public sealed class MaintenanceEndpointContractTests : IAsyncLifetime
 {
@@ -267,7 +267,7 @@ public sealed class MaintenanceEndpointContractTests : IAsyncLifetime
     }
 
     // ---------------------------------------------------------------------------------------------------------
-    // 6. The message map was re-keyed, not duplicated, and the text is unchanged.
+    // 6. The wording was re-keyed, not duplicated, and the text is unchanged.
     // ---------------------------------------------------------------------------------------------------------
     [Fact]
     public void Success_message_map_carries_exactly_the_re_keyed_maintenance_keys()
@@ -306,7 +306,7 @@ public sealed class MaintenanceEndpointContractTests : IAsyncLifetime
         return _client.SendAsync(request);
     }
 
-    /// <summary>The exact fallback ApiSuccessResponseFilter generates when the map has no entry.</summary>
+    /// <summary>The exact fallback ApiSuccessResponseFilter generates when an action declares no wording.</summary>
     private static string GeneratedFallback(string action, string verb, int statusCode)
     {
         var operation = Regex.Replace(action, "([a-z])([A-Z])", "$1 $2").ToLowerInvariant();
@@ -319,11 +319,26 @@ public sealed class MaintenanceEndpointContractTests : IAsyncLifetime
         };
     }
 
-    /// <summary>The filter's private, explicit success-message table - the thing the key must hit.</summary>
-    private static IReadOnlyDictionary<string, string> MessageMap() =>
-        (IReadOnlyDictionary<string, string>)typeof(ApiSuccessResponseFilter)
-            .GetField("Messages", BindingFlags.NonPublic | BindingFlags.Static)!
-            .GetValue(null)!;
+    /// <summary>
+    /// The success wording each controller action declares for itself through [SuccessMessage], keyed
+    /// Controller.Action: the wording that used to sit in the filter's private table, read from what ships.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> MessageMap()
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var method in typeof(MaintenanceController).Assembly.GetTypes()
+                     .Where(type => typeof(ControllerBase).IsAssignableFrom(type) && !type.IsAbstract)
+                     .SelectMany(type => type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)))
+        {
+            var message = method.GetCustomAttributes<SuccessMessageAttribute>(inherit: true)
+                .Select(attribute => attribute.Message)
+                .FirstOrDefault();
+            if (message is not null)
+                map[$"{method.DeclaringType!.Name.Replace("Controller", "", StringComparison.Ordinal)}.{method.Name}"] = message;
+        }
+
+        return map;
+    }
 
     private IReadOnlyList<ControllerActionDescriptor> ActionDescriptors() =>
         _app.Services.GetRequiredService<IActionDescriptorCollectionProvider>()

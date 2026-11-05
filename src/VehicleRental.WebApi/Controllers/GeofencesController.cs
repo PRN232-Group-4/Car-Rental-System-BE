@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.DTOs.Map;
 using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -17,6 +18,7 @@ public sealed class GeofencesController(ITrackingService trackingService) : Cont
     /// <summary>
     /// Lists all defined geofence operational areas.
     /// </summary>
+    [SuccessMessage("Geofences retrieved successfully.")]
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<GeofenceDto>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> List(CancellationToken ct)
@@ -28,6 +30,7 @@ public sealed class GeofencesController(ITrackingService trackingService) : Cont
     /// <summary>
     /// Creates a new geofence zone (allowed operating zone, prohibited area, or facility boundary).
     /// </summary>
+    [SuccessMessage("Geofence created successfully.")]
     [HttpPost]
     [ProducesResponseType<GeofenceDto>(StatusCodes.Status201Created)]
     public async Task<IActionResult> Create([FromBody] CreateGeofenceRequest request, CancellationToken ct)
@@ -39,6 +42,7 @@ public sealed class GeofencesController(ITrackingService trackingService) : Cont
     /// <summary>
     /// Lists paginated geofence enter and exit events.
     /// </summary>
+    [SuccessMessage("Geofence events retrieved successfully.")]
     [HttpGet("events")]
     [ProducesResponseType<GeofenceEventPage>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Events(

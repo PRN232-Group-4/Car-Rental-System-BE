@@ -5,6 +5,7 @@ using Car_Rental_System_BE.Application.DTOs.Organization;
 using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Application.Features.Maintenances;
 using Car_Rental_System_BE.Domain.Entities;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
@@ -20,6 +21,7 @@ namespace Car_Rental_System_BE.WebApi.Controllers;
 public sealed class DispatchController(IOperationsService store, IAssignmentService assignments, IMaintenanceService maintenanceService, IOperationsCompletionService? completion = null) : ControllerBase
 {
     /// <summary>Manager/Admin creates a driver's duty shift.</summary>
+    [SuccessMessage("Driver duty shift created successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Management)]
     [HttpPost("drivers/shifts")]
     [ProducesResponseType<DriverShift>(StatusCodes.Status201Created)]
@@ -30,6 +32,7 @@ public sealed class DispatchController(IOperationsService store, IAssignmentServ
     }
 
     /// <summary>Manager/Admin edits or cancels a shift; assigned trips must remain covered.</summary>
+    [SuccessMessage("Driver duty shift updated successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Management)]
     [HttpPut("drivers/shift/{id:int}")]
     [ProducesResponseType<DriverShift>(StatusCodes.Status200OK)]
@@ -37,6 +40,7 @@ public sealed class DispatchController(IOperationsService store, IAssignmentServ
         => assignments.SaveDriverShiftAsync(id,request.DriverStaffId,request.StartTime,request.EndTime,request.Cancelled,Email(),ct);
 
     /// <summary>Manager/Admin sees all duty shifts; Driver sees only their own.</summary>
+    [SuccessMessage("Driver duty shifts retrieved successfully.")]
     [Authorize(Policy=AuthorizationPolicies.DriverSchedule)]
     [HttpGet("drivers/shifts")]
     [ProducesResponseType<IReadOnlyList<DriverShift>>(StatusCodes.Status200OK)]
@@ -52,6 +56,7 @@ public sealed class DispatchController(IOperationsService store, IAssignmentServ
     }
 
     /// <summary>Staff reports damage separately from inspection; Driver reports only their assigned trip; Customer reports their own rental.</summary>
+    [SuccessMessage("Incident report submitted for manager review.")]
     [Authorize(Roles="Admin,Manager,Staff,Maintenance,CustomerService,Driver,Customer")]
     [HttpPost("rental/{id:int}/reports")]
     [ProducesResponseType<IncidentReport>(StatusCodes.Status201Created)]
@@ -75,6 +80,8 @@ public sealed class DispatchController(IOperationsService store, IAssignmentServ
     }
 
     /// <summary>Manager/Admin reviews incident reports; other staff see their own reports.</summary>
+    [OperationDescription(" Pagination for list operations defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Invalid values return 400 at HTTP and Application boundaries. data contains items/page/pageSize/totalCount, totalCount is after filters; out-of-range pages retain the count with empty items.", DocumentsPaginationParameters = true)]
+    [SuccessMessage("Incident reports retrieved successfully.")]
     [Authorize(Roles="Admin,Manager,Staff,Maintenance,CustomerService,Driver")]
     [HttpGet("reports")]
     [ProducesResponseType<OperationsPage<IncidentReport>>(StatusCodes.Status200OK)]
@@ -86,6 +93,7 @@ public sealed class DispatchController(IOperationsService store, IAssignmentServ
     }
 
     /// <summary>Manager/Admin assigns a report to an active Maintenance technician.</summary>
+    [SuccessMessage("Maintenance technician assigned to the report successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Management)]
     [HttpPost("report/{id:int}/maintenance")]
     [ProducesResponseType<Maintenance>(StatusCodes.Status201Created)]
@@ -96,6 +104,7 @@ public sealed class DispatchController(IOperationsService store, IAssignmentServ
     }
 
     /// <summary>Manager/Admin closes reviewed damage reports; breakdowns close through replacement.</summary>
+    [SuccessMessage("Damage report resolved successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Management)]
     [HttpPost("report/{id:int}/resolve")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -106,6 +115,7 @@ public sealed class DispatchController(IOperationsService store, IAssignmentServ
     }
 
     /// <summary>Admin/Manager accepts an open report or rejects an unassigned report with a reason.</summary>
+    [SuccessMessage("Incident report status updated successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPatch("report/{id:int}/status")]
     [ProducesResponseType<IncidentReport>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -113,6 +123,7 @@ public sealed class DispatchController(IOperationsService store, IAssignmentServ
         => Completion.SetReportStatusAsync(id,request,Email(),ct);
 
     /// <summary>Inspection staff checks a candidate replacement before Manager dispatches it.</summary>
+    [SuccessMessage("Replacement vehicle inspection recorded successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Inspection)]
     [HttpPost("rental/{id:int}/replacement-inspection/{vehicleId:int}")]
     [ProducesResponseType<Inspection>(StatusCodes.Status200OK)]
@@ -124,6 +135,7 @@ public sealed class DispatchController(IOperationsService store, IAssignmentServ
     }
 
     /// <summary>Manager/Admin replaces with the same seat count, preserving prices; ongoing trips require a breakdown report and a new driver.</summary>
+    [SuccessMessage("Replacement vehicle dispatched with original rental pricing preserved.")]
     [Authorize(Policy=AuthorizationPolicies.Management)]
     [HttpPost("rental/{id:int}/replacements")]
     [ProducesResponseType<Rental>(StatusCodes.Status200OK)]

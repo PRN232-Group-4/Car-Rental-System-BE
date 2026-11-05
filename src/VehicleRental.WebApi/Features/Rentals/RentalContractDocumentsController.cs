@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Application.Validators;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -20,6 +21,8 @@ public sealed class SignedContractUploadForm
 public sealed class RentalContractDocumentsController(IRentalContractDocumentService documents) : ControllerBase
 {
     /// <summary>Rental owner or operations uploads the signed long-term contract before handover.</summary>
+    [OperationDescription("Rental owner or Admin/Manager/CustomerService only. Upload multipart file and signedAt UTC for pending/pre_inspection long-term rental; PDF/JPEG/PNG/WebP, matching MIME/extension/signature, non-empty and <=10 MiB. Non-future signing date required. Replacement is atomic until rental starts; other customer gets 404 and other role gets 403. Evidence is private PostgreSQL storage; legacy URLs do not satisfy handover. Download returns binary attachment with no-store and nosniff; errors retain the JSON six-field envelope.")]
+    [SuccessMessage("Signed rental contract uploaded successfully.")]
     [HttpPost("upload")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(ContractUploadValidator.MaxBytes + 1024 * 1024)]
@@ -39,6 +42,8 @@ public sealed class RentalContractDocumentsController(IRentalContractDocumentSer
     }
 
     /// <summary>Download private signed contract; ownership or operations role required.</summary>
+    [OperationDescription("Rental owner or Admin/Manager/CustomerService only. Upload multipart file and signedAt UTC for pending/pre_inspection long-term rental; PDF/JPEG/PNG/WebP, matching MIME/extension/signature, non-empty and <=10 MiB. Non-future signing date required. Replacement is atomic until rental starts; other customer gets 404 and other role gets 403. Evidence is private PostgreSQL storage; legacy URLs do not satisfy handover. Download returns binary attachment with no-store and nosniff; errors retain the JSON six-field envelope.")]
+    [BinaryAttachmentResponse("Private signed contract binary attachment (no JSON envelope).", "application/pdf", "image/jpeg", "image/png", "image/webp")]
     [HttpGet("document")]
     [Produces("application/pdf", "image/jpeg", "image/png", "image/webp")]
     [ProducesResponseType<FileContentResult>(StatusCodes.Status200OK)]

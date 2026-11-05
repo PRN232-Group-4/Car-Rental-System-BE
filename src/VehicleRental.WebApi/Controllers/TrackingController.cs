@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.DTOs.Map;
 using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -17,6 +18,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     /// GPS device telemetry ingestion API (supports offline batching).
     /// Authenticates via X-Device-Id and X-Device-Key headers.
     /// </summary>
+    [SuccessMessage("GPS telemetry coordinates ingested successfully.")]
     [HttpPost("ingest")]
     [AllowAnonymous]
     [ProducesResponseType<IngestPositionsResult>(StatusCodes.Status200OK)]
@@ -44,6 +46,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     /// <summary>
     /// Retrieves the latest known position of a vehicle.
     /// </summary>
+    [SuccessMessage("Vehicle last position retrieved successfully.")]
     [Authorize]
     [HttpGet("vehicle/{vehicleId:int}/last-position")]
     [ProducesResponseType<VehicleLocationDto>(StatusCodes.Status200OK)]
@@ -59,6 +62,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     /// <summary>
     /// Retrieves paginated historical GPS positions for a vehicle within an optional time range.
     /// </summary>
+    [SuccessMessage("Vehicle location history retrieved successfully.")]
     [Authorize]
     [HttpGet("vehicle/{vehicleId:int}/history")]
     [ProducesResponseType<LocationHistoryPage>(StatusCodes.Status200OK)]
@@ -77,6 +81,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     /// <summary>
     /// Searches for vehicles within a geographic radius, optionally computing Mapbox road distance and ETA.
     /// </summary>
+    [SuccessMessage("Nearby vehicles retrieved successfully.")]
     [Authorize]
     [HttpGet("vehicles/nearby")]
     [ProducesResponseType<NearbyVehiclePage>(StatusCodes.Status200OK)]
@@ -96,6 +101,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     /// <summary>
     /// Reconstructs the traveled route, metrics, and GPS breadcrumbs for a rental.
     /// </summary>
+    [SuccessMessage("Rental route retrieved successfully.")]
     [Authorize]
     [HttpGet("rental/{rentalId:int}/route")]
     [ProducesResponseType<RentalRouteSummaryDto>(StatusCodes.Status200OK)]
@@ -115,6 +121,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     /// <summary>
     /// Verifies if a vehicle is returned at the designated facility and generates an alert if deviated.
     /// </summary>
+    [SuccessMessage("Drop-off location verification completed successfully.")]
     [Authorize]
     [HttpPost("rental/{rentalId:int}/verify-dropoff")]
     [ProducesResponseType<DropoffVerificationResult>(StatusCodes.Status200OK)]
@@ -141,6 +148,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     /// <summary>
     /// Manually triggers retention purge of GPS telemetry older than the specified retention days.
     /// </summary>
+    [SuccessMessage("Expired GPS telemetry purged successfully.")]
     [Authorize(Policy = AuthorizationPolicies.Admin)]
     [HttpPost("retention/purge")]
     [ProducesResponseType<PurgeRetentionResult>(StatusCodes.Status200OK)]
@@ -153,6 +161,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     /// <summary>
     /// Retrieves paginated tracking alerts (e.g., route deviation, wrong return point, geofence violations).
     /// </summary>
+    [SuccessMessage("Tracking alerts retrieved successfully.")]
     [Authorize(Policy = AuthorizationPolicies.Management)]
     [HttpGet("alerts")]
     [ProducesResponseType<TrackingAlertPage>(StatusCodes.Status200OK)]
@@ -171,6 +180,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     /// <summary>
     /// Marks a tracking alert as resolved by staff.
     /// </summary>
+    [SuccessMessage("Tracking alert resolved successfully.")]
     [Authorize(Policy = AuthorizationPolicies.Management)]
     [HttpPost("alert/{alertId:long}/resolve")]
     [ProducesResponseType<TrackingAlertDto>(StatusCodes.Status200OK)]

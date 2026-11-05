@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Car_Rental_System_BE.Application.Features.Handovers;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -17,6 +18,9 @@ namespace Car_Rental_System_BE.WebApi.Features.Handovers;
 public sealed class HandoversController(IHandoverService service) : ControllerBase
 {
     /// <summary>Lists pending, completed or all handovers, retaining completed handovers after rental return and completion.</summary>
+    [OperationDescription("Pagination defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Invalid pagination returns 400. data contains items/page/pageSize/totalCount with the count after filtering and before pagination. Results are ordered by rental ID descending; out-of-range pages return empty items.", DocumentsPaginationParameters = true)]
+    [OperationDescription(" Admin/Manager/CustomerService only. status=pending (default), completed or all. Completed handovers include rentals that have since been returned/completed.")]
+    [SuccessMessage("Vehicle handovers retrieved successfully.")]
     [HttpGet]
     [ProducesResponseType<PagedResult<HandoverSummary>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> List(
@@ -31,6 +35,7 @@ public sealed class HandoversController(IHandoverService service) : ControllerBa
         Ok(await service.ListAsync(new HandoverFilter(status, customerId, vehicleId, from, to, page, pageSize), ct));
 
     /// <summary>Retrieves inspection evidence, vehicle, customer and audit details for an active handover.</summary>
+    [SuccessMessage("Vehicle handover retrieved successfully.")]
     [HttpGet("~/api/handover/{rentalId:int}")]
     [ProducesResponseType<HandoverDetail>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -38,6 +43,8 @@ public sealed class HandoversController(IHandoverService service) : ControllerBa
         Ok(await service.GetAsync(rentalId, ct));
 
     /// <summary>Confirms successful handover and starts the rental after inspection and assignment checks.</summary>
+    [OperationDescription("Admin/Manager/CustomerService only. Confirms successful delivery using the rental ID, with no body. Requires pre_inspection, a passing inspection for the current vehicle, valid assignment, and an approved non-expired license for self-drive. Atomically starts the rental (renting) and records history; repeated confirmation returns 409.")]
+    [SuccessMessage("Vehicle handover confirmed successfully.")]
     [HttpPost("~/api/handover/{rentalId:int}/confirm")]
     [ProducesResponseType<HandoverConfirmation>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]

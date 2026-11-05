@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,6 +19,9 @@ public sealed class RentalQueriesController(
     /// <summary>
     /// Lists rentals placed by the currently authenticated customer, filterable by tab (upcoming, ongoing, completed, cancelled).
     /// </summary>
+    [OperationDescription("Pagination defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Invalid pagination returns 400. data contains items/page/pageSize/totalCount with the count after filtering and before pagination. Results are ordered by rental ID descending; out-of-range pages return empty items.", DocumentsPaginationParameters = true)]
+    [OperationDescription(" Each item includes nullable orderId for the official paid rental order; id remains the booking request ID. Omit status (and tab for mine) to include all lifecycle states, including completed and cancelled.")]
+    [SuccessMessage("Your rentals retrieved successfully.")]
     [Authorize(Policy = AuthorizationPolicies.Customer)]
     [HttpGet("mine")]
     [ProducesResponseType(typeof(PagedResult<CustomerRentalSummary>), StatusCodes.Status200OK)]
@@ -44,6 +48,8 @@ public sealed class RentalQueriesController(
     /// <summary>
     /// Retrieves full customer-facing rental detail including vehicle, driver, pricing, inspections and timeline.
     /// </summary>
+    [OperationDescription("Rental detail includes status, audit timeline/history and nullable top-level orderId. id (or rental.id) remains the booking request ID; only a persisted official order supplies orderId. A cancelled rental remains cancelled even if a historical paid order exists.")]
+    [SuccessMessage("Your rental details retrieved successfully.")]
     [Authorize(Policy = AuthorizationPolicies.Customer)]
     [HttpGet("~/api/rental/mine/{id:int}")]
     [ProducesResponseType(typeof(CustomerRentalDetail), StatusCodes.Status200OK)]
@@ -70,6 +76,10 @@ public sealed class RentalQueriesController(
     /// <summary>
     /// Lists operational rentals with search and status filters for staff/management.
     /// </summary>
+    [OperationDescription("Pagination defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Invalid pagination returns 400. data contains items/page/pageSize/totalCount with the count after filtering and before pagination. Results are ordered by rental ID descending; out-of-range pages return empty items.", DocumentsPaginationParameters = true)]
+    [OperationDescription(" Each item includes nullable orderId for the official paid rental order; id remains the booking request ID. Omit status (and tab for mine) to include all lifecycle states, including completed and cancelled.")]
+    [OperationDescription(" status=overdue filters renting rentals with no returned_at and end time before the server clock, before count/pagination. status=expired is a valid lifecycle filter (FR-042). Summaries expose isOverdue; lifecycle status remains renting so return remains valid. Newest id first, defaults page=1/pageSize=20, maximum 100.")]
+    [SuccessMessage("Rentals retrieved successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
     [HttpGet("")]
     [ProducesResponseType(typeof(PagedResult<OperationalRentalSummary>), StatusCodes.Status200OK)]
@@ -94,6 +104,8 @@ public sealed class RentalQueriesController(
     /// <summary>
     /// Retrieves comprehensive operational details for a rental, including settlement and history audit ledger.
     /// </summary>
+    [OperationDescription("Rental detail includes status, audit timeline/history and nullable top-level orderId. id (or rental.id) remains the booking request ID; only a persisted official order supplies orderId. A cancelled rental remains cancelled even if a historical paid order exists.")]
+    [SuccessMessage("Rental details retrieved successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
     [HttpGet("~/api/rental/{id:int}/detail")]
     [ProducesResponseType(typeof(OperationalRentalDetail), StatusCodes.Status200OK)]
@@ -114,6 +126,7 @@ public sealed class RentalQueriesController(
     /// <summary>
     /// Lists active rentals currently overdue (past scheduled end time) and any next conflicting bookings.
     /// </summary>
+    [SuccessMessage("Overdue rentals retrieved successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
     [HttpGet("overdue")]
     [ProducesResponseType(typeof(IReadOnlyList<OverdueRentalItem>), StatusCodes.Status200OK)]

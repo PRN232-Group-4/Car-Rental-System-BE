@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.Features.Billing;
 using Car_Rental_System_BE.Application.Services.Exceptions;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
@@ -34,6 +35,7 @@ public sealed class PaymentsController(IPaymentService payments) : ControllerBas
     }
 
     // PayOS calls this endpoint directly; it is intentionally anonymous but signature-verified.
+    [SuccessMessage("Payment webhook processed successfully.")]
     [AllowAnonymous]
     [HttpPost("payments/webhooks/payos")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -52,6 +54,7 @@ public sealed class PaymentsController(IPaymentService payments) : ControllerBas
         return NoContent();
     }
 
+    [SuccessMessage("Refund request submitted successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
     [HttpPost("payment/{paymentId:int}/refunds")]
     [ProducesResponseType<PaymentResult>(StatusCodes.Status202Accepted)]
@@ -62,11 +65,13 @@ public sealed class PaymentsController(IPaymentService payments) : ControllerBas
         return Accepted(result);
     }
 
+    [SuccessMessage("Payments retrieved successfully.")]
     [Authorize(Policy = AuthorizationPolicies.FinancialRead)]
     [HttpGet("payments")]
     [ProducesResponseType<IReadOnlyList<PaymentSummary>>(StatusCodes.Status200OK)]
     public Task<IReadOnlyList<PaymentSummary>> Payments([FromQuery] int? invoiceId, CancellationToken ct) => payments.ListPaymentsAsync(Scope(), invoiceId, ct);
 
+    [SuccessMessage("Refund approved successfully.")]
     [Authorize(Roles = "Admin")]
     [HttpPost("payments/refund/{refundId:int}/approve")]
     [ProducesResponseType<PaymentSummary>(StatusCodes.Status200OK)]
@@ -74,6 +79,7 @@ public sealed class PaymentsController(IPaymentService payments) : ControllerBas
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ApproveRefund(int refundId, CancellationToken ct) => Ok(await payments.ReviewRefundAsync(refundId, true, Email(), ct));
 
+    [SuccessMessage("Refund rejected successfully.")]
     [Authorize(Roles = "Admin")]
     [HttpPost("payments/refund/{refundId:int}/reject")]
     [ProducesResponseType<PaymentSummary>(StatusCodes.Status200OK)]

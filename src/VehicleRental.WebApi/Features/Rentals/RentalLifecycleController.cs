@@ -6,6 +6,7 @@ using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Car_Rental_System_BE.Domain.Features.Rentals;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 
 namespace Car_Rental_System_BE.WebApi.Features.Rentals;
 
@@ -27,6 +28,8 @@ public sealed class RentalLifecycleController(
     /// Confirms a pending rental and advances it to pre_inspection.
     /// Staff approval opens checkout; payment is required later before handover for direct rentals.
     /// </summary>
+    [OperationDescription("Admin/Manager/CustomerService confirms a pending rental before payment, writes confirmed_at and advances to pre_inspection. An unpaid direct rental can be confirmed. Legacy pre_inspection without confirmed_at may be explicitly approved here; repeating an existing approval returns 409. Direct rental payment remains mandatory before handover. FR-042: an expired request cannot be confirmed and returns 409 ILLEGAL_TRANSITION; every other lifecycle action (start, return, complete, cancel) is refused on expired the same way.")]
+    [SuccessMessage("Rental confirmed successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
     [HttpPost("~/api/rental/{id:int}/confirm")]
     [ProducesResponseType(typeof(RentalLifecycleResult), StatusCodes.Status200OK)]
@@ -46,6 +49,7 @@ public sealed class RentalLifecycleController(
     /// Starts a rental and advances it to renting.
     /// Requires passing pre-rental inspection, valid assignment, and valid driver license for self-drive.
     /// </summary>
+    [SuccessMessage("Rental started successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
     [HttpPost("~/api/rental/{id:int}/start")]
     [ProducesResponseType(typeof(RentalLifecycleResult), StatusCodes.Status200OK)]
@@ -65,6 +69,7 @@ public sealed class RentalLifecycleController(
     /// Returns the vehicle and advances the rental to post_inspection.
     /// Records the effective returned_at timestamp.
     /// </summary>
+    [SuccessMessage("Vehicle return recorded successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
     [HttpPost("~/api/rental/{id:int}/return")]
     [ProducesResponseType(typeof(RentalLifecycleResult), StatusCodes.Status200OK)]
@@ -84,6 +89,7 @@ public sealed class RentalLifecycleController(
     /// Completes the rental, calculates overtime and reconciles deposit/shortfall/refund in a single transaction.
     /// Requires post-rental inspection recorded.
     /// </summary>
+    [SuccessMessage("Rental completed successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
     [HttpPost("~/api/rental/{id:int}/complete")]
     [ProducesResponseType(typeof(RentalLifecycleResult), StatusCodes.Status200OK)]
@@ -102,6 +108,8 @@ public sealed class RentalLifecycleController(
     /// <summary>
     /// Cancels a rental according to cancellation policies (customer self-cancel or staff cancellation).
     /// </summary>
+    [OperationDescription("Authenticated rental owner or authorized operations staff. Customer and staff may cancel only pending/pre_inspection rentals, before renting; a delayed scheduled pickup does not by itself prohibit cancellation. Customer ownership is checked. Existing free-hours and late-fee policy determines fees/refunds; customer cannot waive fees. Preview and mutation use the same policy; current state is checked under a row lock before cancellation. Cancel requires reason. Errors use the shared six-field envelope.")]
+    [SuccessMessage("Rental cancelled successfully.")]
     [Authorize]
     [HttpPost("~/api/rental/{id:int}/cancel")]
     [ProducesResponseType(typeof(RentalLifecycleResult), StatusCodes.Status200OK)]
@@ -121,6 +129,8 @@ public sealed class RentalLifecycleController(
     /// <summary>
     /// Previews cancellation eligibility, fees and refund amount for the rental.
     /// </summary>
+    [OperationDescription("Authenticated rental owner or authorized operations staff. Customer and staff may cancel only pending/pre_inspection rentals, before renting; a delayed scheduled pickup does not by itself prohibit cancellation. Customer ownership is checked. Existing free-hours and late-fee policy determines fees/refunds; customer cannot waive fees. Preview and mutation use the same policy; current state is checked under a row lock before cancellation. Cancel requires reason. Errors use the shared six-field envelope.")]
+    [SuccessMessage("Rental cancellation preview retrieved successfully.")]
     [Authorize]
     [HttpGet("~/api/rental/{id:int}/cancellation-preview")]
     [ProducesResponseType(typeof(CancellationPreview), StatusCodes.Status200OK)]
