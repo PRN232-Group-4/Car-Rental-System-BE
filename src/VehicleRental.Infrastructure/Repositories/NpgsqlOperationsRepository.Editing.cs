@@ -1,8 +1,8 @@
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.DTOs.Operations;
-using Car_Rental_System_BE.Application.Lifecycle;
-using Car_Rental_System_BE.Domain.Availability;
-using Car_Rental_System_BE.Infrastructure.Availability;
+using Car_Rental_System_BE.Application.Features.Rentals;
+using Car_Rental_System_BE.Domain.Features.Availability;
+using Car_Rental_System_BE.Infrastructure.Features.Availability;
 using Npgsql;
 
 namespace Car_Rental_System_BE.Infrastructure.Repositories;

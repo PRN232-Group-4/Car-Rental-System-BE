@@ -1,7 +1,7 @@
 using System.Data;
 using Car_Rental_System_BE.Application.DTOs.Dashboard;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
-using Car_Rental_System_BE.Application.Lifecycle;
+using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;

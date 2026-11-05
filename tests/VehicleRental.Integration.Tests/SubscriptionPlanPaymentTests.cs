@@ -1,5 +1,5 @@
-using Car_Rental_System_BE.Application.Billing;
-using Car_Rental_System_BE.Infrastructure.Billing;
+using Car_Rental_System_BE.Application.Features.Billing;
+using Car_Rental_System_BE.Infrastructure.Features.Billing;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 

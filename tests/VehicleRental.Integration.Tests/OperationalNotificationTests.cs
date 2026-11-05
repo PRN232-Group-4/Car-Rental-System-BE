@@ -1,20 +1,20 @@
 using System.Net;
 using System.Reflection;
 using System.Text.Json;
-using Car_Rental_System_BE.Application.Billing;
+using Car_Rental_System_BE.Application.Features.Billing;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
-using Car_Rental_System_BE.Application.Lifecycle;
-using Car_Rental_System_BE.Application.Maintenances;
+using Car_Rental_System_BE.Application.Features.Rentals;
+using Car_Rental_System_BE.Application.Features.Maintenances;
 using Car_Rental_System_BE.Application.Services;
-using Car_Rental_System_BE.Infrastructure.Lifecycle;
+using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Services;
 using Car_Rental_System_BE.Infrastructure.Services.Registration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Car_Rental_System_BE.Domain.Lifecycle;
+using Car_Rental_System_BE.Domain.Features.Rentals;
 using Xunit;
 
 namespace VehicleRental.Tests;

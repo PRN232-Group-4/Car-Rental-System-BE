@@ -1,5 +1,5 @@
 using Car_Rental_System_BE.Application.DTOs.Accounts;
-using Car_Rental_System_BE.Application.Billing;
+using Car_Rental_System_BE.Application.Features.Billing;
 using Car_Rental_System_BE.Application.DTOs.Options;
 using Car_Rental_System_BE.Application.DTOs.Organization;
 using Car_Rental_System_BE.Application.Interfaces.External;

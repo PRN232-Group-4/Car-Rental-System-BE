@@ -1,7 +1,7 @@
-using Car_Rental_System_BE.Application.Lifecycle;
-using Car_Rental_System_BE.Application.Loyalty;
-using Car_Rental_System_BE.Infrastructure.Lifecycle;
-using Car_Rental_System_BE.Infrastructure.Loyalty;
+using Car_Rental_System_BE.Application.Features.Rentals;
+using Car_Rental_System_BE.Application.Features.Loyalty;
+using Car_Rental_System_BE.Infrastructure.Features.Rentals;
+using Car_Rental_System_BE.Infrastructure.Features.Loyalty;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using VehicleRental.Tests.Phase0;
@@ -23,7 +23,7 @@ namespace VehicleRental.Tests;
 /// at exactly N simultaneous settlements.</item>
 /// </list>
 /// Nothing here asserts a new points rule: the expected values are exactly what
-/// <see cref="Car_Rental_System_BE.Domain.Loyalty.LoyaltyDomainRules.CalculateEarn"/> already computes.
+/// <see cref="Car_Rental_System_BE.Domain.Features.Loyalty.LoyaltyDomainRules.CalculateEarn"/> already computes.
 /// </summary>
 public sealed class LoyaltySettlementConnectionTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {

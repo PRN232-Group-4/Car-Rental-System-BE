@@ -1,10 +1,10 @@
 using Car_Rental_System_BE.Application.Common.Errors;
-using Car_Rental_System_BE.Application.Billing;
+using Car_Rental_System_BE.Application.Features.Billing;
 using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Application.Services.Exceptions;
-using Car_Rental_System_BE.Infrastructure.Billing;
-using Car_Rental_System_BE.Infrastructure.Lifecycle;
+using Car_Rental_System_BE.Infrastructure.Features.Billing;
+using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
@@ -122,7 +122,7 @@ public sealed class PaidOrderIntegrationTests(PostgresFixture db) : IClassFixtur
         var operational = (await queries.GetOperationalDetailAsync(rentalId, default))!;
         Assert.Equal(expected, operational.OrderId);
         Assert.Equal(expected, (await queries.GetMyRentalDetailAsync(rentalId, operational.Rental.CustomerId, default))!.OrderId);
-        var filter = new Car_Rental_System_BE.Application.Lifecycle.OperationalFilter(null, operational.Rental.CustomerId, null, null, null);
+        var filter = new Car_Rental_System_BE.Application.Features.Rentals.OperationalFilter(null, operational.Rental.CustomerId, null, null, null);
         Assert.Equal(expected, Assert.Single((await queries.ListOperationalRentalsAsync(filter, default)).Items).OrderId);
         Assert.Equal(expected, Assert.Single((await queries.ListMyRentalsAsync(operational.Rental.CustomerId, null, 1, 20, default)).Items).OrderId);
     }

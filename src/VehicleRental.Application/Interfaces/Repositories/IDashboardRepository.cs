@@ -1,5 +1,5 @@
 using Car_Rental_System_BE.Application.DTOs.Dashboard;
-using Car_Rental_System_BE.Application.Lifecycle;
+using Car_Rental_System_BE.Application.Features.Rentals;
 
 namespace Car_Rental_System_BE.Application.Interfaces.Repositories;
 

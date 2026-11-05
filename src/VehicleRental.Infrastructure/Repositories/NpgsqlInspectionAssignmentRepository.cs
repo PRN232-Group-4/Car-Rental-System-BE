@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Car_Rental_System_BE.Infrastructure.Persistence;
 using Car_Rental_System_BE.Application.Common.Errors;
-using Car_Rental_System_BE.Application.Inspections;
-using Car_Rental_System_BE.Application.Lifecycle;
+using Car_Rental_System_BE.Application.Features.Inspections;
+using Car_Rental_System_BE.Application.Features.Rentals;
 using Npgsql;
 
 namespace Car_Rental_System_BE.Infrastructure.Repositories;

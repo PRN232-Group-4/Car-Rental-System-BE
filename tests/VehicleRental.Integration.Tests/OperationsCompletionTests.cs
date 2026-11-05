@@ -1,7 +1,7 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Services;
-using Car_Rental_System_BE.Infrastructure.Assignments;
-using Car_Rental_System_BE.Infrastructure.Maintenances;
+using Car_Rental_System_BE.Infrastructure.Features.Assignments;
+using Car_Rental_System_BE.Infrastructure.Features.Maintenances;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 

@@ -1,8 +1,8 @@
 using System.Data.Common;
 using System.Text.Json;
-using Car_Rental_System_BE.Application.Availability;
-using Car_Rental_System_BE.Controllers;
-using Car_Rental_System_BE.Domain.Availability;
+using Car_Rental_System_BE.Application.Features.Availability;
+using Car_Rental_System_BE.WebApi.Features.Availability;
+using Car_Rental_System_BE.Domain.Features.Availability;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;

@@ -1,7 +1,7 @@
 using Car_Rental_System_BE.Application.Common.Errors;
-using Car_Rental_System_BE.Application.Inspections;
-using Car_Rental_System_BE.Infrastructure.Availability;
-using Car_Rental_System_BE.Infrastructure.Lifecycle;
+using Car_Rental_System_BE.Application.Features.Inspections;
+using Car_Rental_System_BE.Infrastructure.Features.Availability;
+using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
@@ -26,7 +26,7 @@ public sealed class RentalInspectionModesTests(PostgresFixture db) : IClassFixtu
         Assert.Equal(0,await Seed.CountAsync(db.DataSource,"SELECT count(*) FROM rentals WHERE id=$1 AND confirmed_at IS NOT NULL",rental.Id));
         Assert.Equal(driver,(await new NpgsqlRentalQueries(db.DataSource,TimeProvider.System).GetOperationalDetailAsync(rental.Id,default))!.HasPassingPreInspection);
         Assert.Equal(driver,await new NpgsqlRentalLifecycleRepository(db.DataSource).HasPassingPreInspectionAsync(rental.Id,default));
-        Assert.Equal(driver,(await new Car_Rental_System_BE.Infrastructure.Assignments.NpgsqlAssignmentRepository(db.DataSource).GetRentalScheduleAsync(rental.Id,default))!.HasDriver);
+        Assert.Equal(driver,(await new Car_Rental_System_BE.Infrastructure.Features.Assignments.NpgsqlAssignmentRepository(db.DataSource).GetRentalScheduleAsync(rental.Id,default))!.HasDriver);
         Assert.False(await new NpgsqlRentalLifecycleRepository(db.DataSource).HasValidAssignmentAsync(rental.Id,driver,default));
         Assert.Equal(driver ? 1 : 0,await Seed.CountAsync(db.DataSource,"SELECT COUNT(*) FROM inspections WHERE rental_id=$1 AND confirmation_source='driver_default' AND confirmed_by='system' AND staff_id IS NULL AND odometer_km IS NULL AND fuel_battery_level IS NULL AND img_urls IS NULL",rental.Id));
         var replacement = await Seed.VehicleAsync(db.DataSource);
@@ -158,7 +158,7 @@ public sealed class RentalInspectionModesTests(PostgresFixture db) : IClassFixtu
         await Seed.PolicyAsync(db.DataSource);
         var store=new NpgsqlOperationsRepository(db.DataSource);
         var rental=await store.CreateRentalAsync(email,vehicle,null,type,DateTime.UtcNow.AddDays(2),DateTime.UtcNow.AddDays(3),false,null,false,default);
-        var command=new Car_Rental_System_BE.Application.Lifecycle.UpdateRentalCommand(vehicle,rental.StartTime!.Value,rental.EndTime!.Value,true);
+        var command=new Car_Rental_System_BE.Application.Features.Rentals.UpdateRentalCommand(vehicle,rental.StartTime!.Value,rental.EndTime!.Value,true);
         var driver=await store.UpdateBeforePickupAsync(rental.Id,command,default);
         Assert.True(driver.HasDriver);
         Assert.True(driver.HasPassingPreInspection);

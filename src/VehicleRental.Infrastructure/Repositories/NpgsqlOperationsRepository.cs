@@ -2,8 +2,8 @@ using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.DTOs.Organization;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
-using Car_Rental_System_BE.Domain.Availability;
-using Car_Rental_System_BE.Infrastructure.Availability;
+using Car_Rental_System_BE.Domain.Features.Availability;
+using Car_Rental_System_BE.Infrastructure.Features.Availability;
 using Npgsql;
 using Microsoft.EntityFrameworkCore;
 using Car_Rental_System_BE.Infrastructure.Persistence;
@@ -18,7 +18,7 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
     public Task DeleteDepartmentAsync(int id,CancellationToken ct)=>DeleteAsync("departments",id,ct);
     public async Task<OperationsPage<OrganizationUnit>> ListFacilitiesAsync(int page, int pageSize, CancellationToken ct)
     {
-        Car_Rental_System_BE.Application.Lifecycle.RentalQueryValidation.Pagination(page, pageSize);
+        Car_Rental_System_BE.Application.Features.Rentals.RentalQueryValidation.Pagination(page, pageSize);
         await using var db = VehicleRentalDbContext.Create(dataSource);
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, ct);
         var query = db.Set<FacilitiesRow>().AsNoTracking();

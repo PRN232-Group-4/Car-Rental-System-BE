@@ -6,10 +6,10 @@ namespace Car_Rental_System_BE.Infrastructure.Persistence;
 /// Phase 2 / D-5: an ambient, infrastructure-internal transaction.
 ///
 /// The settlement is one transaction owned by <c>NpgsqlRentalLifecycleRepository.SettleCompletionAsync</c>,
-/// but the steps that move money live behind ports (<see cref="Car_Rental_System_BE.Application.Lifecycle.IRentalPaymentGate"/>,
-/// <see cref="Car_Rental_System_BE.Application.Lifecycle.IInvoiceGateway"/>,
-/// <see cref="Car_Rental_System_BE.Application.Lifecycle.ISubscriptionUsage"/>,
-/// <see cref="Car_Rental_System_BE.Application.Lifecycle.ILoyaltyAward"/>) whose implementations used to open
+/// but the steps that move money live behind ports (<see cref="Car_Rental_System_BE.Application.Features.Rentals.IRentalPaymentGate"/>,
+/// <see cref="Car_Rental_System_BE.Application.Features.Rentals.IInvoiceGateway"/>,
+/// <see cref="Car_Rental_System_BE.Application.Features.Rentals.ISubscriptionUsage"/>,
+/// <see cref="Car_Rental_System_BE.Application.Features.Rentals.ILoyaltyAward"/>) whose implementations used to open
 /// their own connection and commit on their own. A refund committed that way survives a later failure - the
 /// exact bug Phase 0 scenario 0.3 records.
 ///

@@ -1,4 +1,4 @@
-using Car_Rental_System_BE.Application.Availability;
+using Car_Rental_System_BE.Application.Features.Availability;
 using Car_Rental_System_BE.Application.DTOs.Options;
 using Car_Rental_System_BE.Infrastructure.Services.Authentication;
 using Car_Rental_System_BE.Infrastructure.Services.Media;

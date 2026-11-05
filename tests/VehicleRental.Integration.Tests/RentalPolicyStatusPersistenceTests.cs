@@ -1,6 +1,6 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Services;
-using Car_Rental_System_BE.Infrastructure.Availability;
+using Car_Rental_System_BE.Infrastructure.Features.Availability;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 

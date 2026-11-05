@@ -1,11 +1,11 @@
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.DTOs.Operations;
-using Car_Rental_System_BE.Application.Lifecycle;
+using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
-using Car_Rental_System_BE.Infrastructure.Assignments;
-using Car_Rental_System_BE.Infrastructure.Lifecycle;
-using Car_Rental_System_BE.Domain.Assignments;
-using Car_Rental_System_BE.Domain.Lifecycle;
+using Car_Rental_System_BE.Infrastructure.Features.Assignments;
+using Car_Rental_System_BE.Infrastructure.Features.Rentals;
+using Car_Rental_System_BE.Domain.Features.Assignments;
+using Car_Rental_System_BE.Domain.Features.Rentals;
 using Xunit;
 
 namespace VehicleRental.Tests;

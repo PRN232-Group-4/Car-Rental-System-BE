@@ -1,8 +1,8 @@
-using Car_Rental_System_BE.Application.Assignments;
-using Car_Rental_System_BE.Application.Availability;
+using Car_Rental_System_BE.Application.Features.Assignments;
+using Car_Rental_System_BE.Application.Features.Availability;
 using Car_Rental_System_BE.Application.Common.Errors;
-using Car_Rental_System_BE.Domain.Assignments;
-using Car_Rental_System_BE.Domain.Availability;
+using Car_Rental_System_BE.Domain.Features.Assignments;
+using Car_Rental_System_BE.Domain.Features.Availability;
 using Xunit;
 
 namespace VehicleRental.Tests;

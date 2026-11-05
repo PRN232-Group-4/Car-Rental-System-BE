@@ -1,6 +1,6 @@
-using Car_Rental_System_BE.Application.Availability;
-using Car_Rental_System_BE.Domain.Availability;
-using Car_Rental_System_BE.Infrastructure.Availability;
+using Car_Rental_System_BE.Application.Features.Availability;
+using Car_Rental_System_BE.Domain.Features.Availability;
+using Car_Rental_System_BE.Infrastructure.Features.Availability;
 using Npgsql;
 using Xunit;
 
@@ -213,7 +213,7 @@ public sealed class VehicleSearchIntegrationTests(PostgresFixture db) : IClassFi
         var later = await VehicleBookingSchemaTests.RentalAsync(db.DataSource, customer, vehicle, T0.AddHours(2).AddMinutes(30), T0.AddHours(4));
         await Seed.ScalarAsync(db.DataSource, "INSERT INTO vehicle_assignments(rental_id,vehicle_id,driver_staff_id,status) VALUES($1,$2,$3,'assigned')", later, vehicle, driver);
         Assert.False(await _drivers.AnyAvailableAsync(window, T0, default, facility));
-        var noBuffer = new NpgsqlDriverAvailability(db.DataSource, Microsoft.Extensions.Options.Options.Create(new Car_Rental_System_BE.Application.Assignments.AssignmentOptions { DriverBufferMinutes = 0 }));
+        var noBuffer = new NpgsqlDriverAvailability(db.DataSource, Microsoft.Extensions.Options.Options.Create(new Car_Rental_System_BE.Application.Features.Assignments.AssignmentOptions { DriverBufferMinutes = 0 }));
         Assert.True(await noBuffer.AnyAvailableAsync(window, T0, default, facility));
     }
 

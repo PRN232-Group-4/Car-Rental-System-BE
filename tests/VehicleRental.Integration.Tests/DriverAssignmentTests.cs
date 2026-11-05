@@ -1,8 +1,8 @@
-using Car_Rental_System_BE.Application.Assignments;
-using Car_Rental_System_BE.Application.Availability;
+using Car_Rental_System_BE.Application.Features.Assignments;
+using Car_Rental_System_BE.Application.Features.Availability;
 using Car_Rental_System_BE.Application.Common.Errors;
-using Car_Rental_System_BE.Infrastructure.Assignments;
-using Car_Rental_System_BE.Infrastructure.Availability;
+using Car_Rental_System_BE.Infrastructure.Features.Assignments;
+using Car_Rental_System_BE.Infrastructure.Features.Availability;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 

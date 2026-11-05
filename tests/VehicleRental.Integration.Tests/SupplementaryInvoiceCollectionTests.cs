@@ -1,7 +1,7 @@
 using Car_Rental_System_BE.Application.Common.Errors;
-using Car_Rental_System_BE.Application.Billing;
-using Car_Rental_System_BE.Application.Lifecycle;
-using Car_Rental_System_BE.Infrastructure.Billing;
+using Car_Rental_System_BE.Application.Features.Billing;
+using Car_Rental_System_BE.Application.Features.Rentals;
+using Car_Rental_System_BE.Infrastructure.Features.Billing;
 using Npgsql;
 using VehicleRental.Tests.Phase0;
 using Xunit;

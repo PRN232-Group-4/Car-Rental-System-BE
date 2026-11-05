@@ -1,8 +1,8 @@
 using System.Security.Claims;
 using Car_Rental_System_BE.Application.Common.Errors;
-using Car_Rental_System_BE.Application.Lifecycle;
-using Car_Rental_System_BE.Application.Loyalty;
-using Car_Rental_System_BE.Controllers;
+using Car_Rental_System_BE.Application.Features.Rentals;
+using Car_Rental_System_BE.Application.Features.Loyalty;
+using Car_Rental_System_BE.WebApi.Features.Loyalty;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Xunit;

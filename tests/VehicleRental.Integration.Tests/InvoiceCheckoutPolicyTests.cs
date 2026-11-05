@@ -1,7 +1,7 @@
-using Car_Rental_System_BE.Domain.Billing;
+using Car_Rental_System_BE.Domain.Features.Billing;
 using Xunit;
 using System.Text.Json;
-using Car_Rental_System_BE.Application.Billing;
+using Car_Rental_System_BE.Application.Features.Billing;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 
 namespace VehicleRental.Tests;

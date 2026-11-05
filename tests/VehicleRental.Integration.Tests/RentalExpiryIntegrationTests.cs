@@ -1,8 +1,8 @@
 using Car_Rental_System_BE.Application.Common.Errors;
-using Car_Rental_System_BE.Application.Lifecycle;
+using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Application.Services;
-using Car_Rental_System_BE.Infrastructure.Billing;
-using Car_Rental_System_BE.Infrastructure.Lifecycle;
+using Car_Rental_System_BE.Infrastructure.Features.Billing;
+using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;

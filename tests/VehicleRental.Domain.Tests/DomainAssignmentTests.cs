@@ -1,4 +1,4 @@
-using Car_Rental_System_BE.Domain.Assignments;
+using Car_Rental_System_BE.Domain.Features.Assignments;
 using Xunit;
 
 namespace VehicleRental.Tests;

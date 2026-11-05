@@ -1,4 +1,4 @@
-using Car_Rental_System_BE.Application.Lifecycle;
+using Car_Rental_System_BE.Application.Features.Rentals;
 using Npgsql;
 using NpgsqlTypes;
 

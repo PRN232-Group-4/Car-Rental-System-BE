@@ -4,9 +4,9 @@ using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Application.Validators;
-using Car_Rental_System_BE.Application.Availability;
-using Car_Rental_System_BE.Application.Lifecycle;
-using Car_Rental_System_BE.Domain.Availability;
+using Car_Rental_System_BE.Application.Features.Availability;
+using Car_Rental_System_BE.Application.Features.Rentals;
+using Car_Rental_System_BE.Domain.Features.Availability;
 
 namespace Car_Rental_System_BE.Application.Services;
 
@@ -185,7 +185,7 @@ public sealed class OperationsService(IOperationsRepository repository, IDriverA
     /// Legacy second implementation of the rental state machine (delegates to
     /// <see cref="IOperationsRepository.ChangeRentalStatusAsync"/>). It is no longer reachable over HTTP: the
     /// deprecated <c>POST /api/rental/{id}/status/{status}</c> endpoint delegates to
-    /// <see cref="Car_Rental_System_BE.Application.Lifecycle.IRentalLifecycleService"/> instead, which is the single
+    /// <see cref="Car_Rental_System_BE.Application.Features.Rentals.IRentalLifecycleService"/> instead, which is the single
     /// implementation, writes rental_status_history and runs the completion settlement. Kept because several
     /// integration tests still call it directly; scheduled for removal.
     /// </summary>
