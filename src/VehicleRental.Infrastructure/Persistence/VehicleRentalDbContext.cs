@@ -29,7 +29,7 @@ public sealed class VehicleRentalDbContext(DbContextOptions<VehicleRentalDbConte
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Rows are grouped in one file and explicitly mapped, with no navigation/FK conventions.
+        // Rows live in one file per module and are explicitly mapped, with no navigation/FK conventions.
         foreach (var type in typeof(VehicleRentalDbContext).Assembly.GetTypes()
                      .Where(t => t.Namespace == typeof(VehicleRentalDbContext).Namespace &&
                                  t.GetCustomAttribute<TableAttribute>() is not null))
