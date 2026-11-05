@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 
-namespace Car_Rental_System_BE.Application.DTOs.Payments;
+namespace Car_Rental_System_BE.Application.Billing;
 
 public sealed record InvoicePayment(int InvoiceId, int RentalId, int CustomerId, string InvoiceNumber, decimal Amount, string Status);
 public sealed record InvoiceSummary(int Id, int RentalId, string InvoiceNumber, decimal Amount, decimal VatAmount, string Status, DateTime IssuedAt, DateTime? DueAt);

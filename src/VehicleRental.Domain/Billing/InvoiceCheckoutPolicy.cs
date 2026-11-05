@@ -1,4 +1,4 @@
-namespace Car_Rental_System_BE.Domain.Lifecycle;
+namespace Car_Rental_System_BE.Domain.Billing;
 
 /// <summary>
 /// The invoice kinds the settlement can raise. <c>rental</c> is the direct-rental invoice, <c>overtime</c>

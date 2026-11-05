@@ -1,3 +1,4 @@
+using Car_Rental_System_BE.Domain.Billing;
 using Car_Rental_System_BE.Domain.Lifecycle;
 using Xunit;
 

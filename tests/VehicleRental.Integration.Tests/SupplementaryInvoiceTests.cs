@@ -1,5 +1,5 @@
 using Car_Rental_System_BE.Application.Lifecycle;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Billing;
 using VehicleRental.Tests.Phase0;
 using Xunit;
 

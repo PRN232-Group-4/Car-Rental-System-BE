@@ -1,6 +1,4 @@
-using Car_Rental_System_BE.Application.DTOs.Payments;
-
-namespace Car_Rental_System_BE.Application.Interfaces.Repositories;
+namespace Car_Rental_System_BE.Application.Billing;
 
 public interface IPaymentRepository
 {
@@ -15,6 +13,14 @@ public interface IPaymentRepository
     Task<IReadOnlyList<PaymentSummary>> ListPaymentsAsync(string? email, int? invoiceId, CancellationToken ct);
     Task<PaymentResult> RequestRefundAsync(int paymentId, decimal amount, CancellationToken ct);
     Task<PaymentSummary> ReviewRefundAsync(int refundId, bool approve, string reviewer, CancellationToken ct);
+
+    // ---------------------------------------------------------------------------------------------
+    // SUBSCRIPTIONS (intended future module). These three members are the subscription-plan purchase
+    // flow, not invoicing. They stay on this single interface for now on purpose: splitting
+    // IPaymentRepository would break the reflection-proxy tests that assert repository method names.
+    // The next phase lifts them out together with PaymentService.HandleWebhookAsync, which
+    // deliberately dispatches across both halves (invoice vs subscription order code).
+    // ---------------------------------------------------------------------------------------------
     Task<PlanCheckout> CreatePlanCheckoutAsync(int planId, string email, CancellationToken ct);
     Task<PlanPurchaseStatus> CompletePlanPurchaseAsync(long orderCode, decimal amount, string providerReference, CancellationToken ct);
     Task<PlanPurchaseStatus?> GetPlanPurchaseAsync(long orderCode, string email, CancellationToken ct);

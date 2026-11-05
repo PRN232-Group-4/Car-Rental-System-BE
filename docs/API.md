@@ -970,7 +970,7 @@ Nguồn chính:
 
 - [Controllers](../src/VehicleRental.WebApi/Controllers/), [Program.cs](../src/VehicleRental.WebApi/Program.cs), [AuthorizationPolicies.cs](../src/VehicleRental.WebApi/Middlewares/Authentication/AuthorizationPolicies.cs).
 - [Success response filter](../src/VehicleRental.WebApi/Middlewares/Responses/ApiSuccessResponseFilter.cs), [Swagger response filter](../src/VehicleRental.WebApi/Middlewares/Responses/ApiSuccessResponseOperationFilter.cs).
-- [Operations schemas](../src/VehicleRental.Application/DTOs/Operations/OperationsDtos.cs), [recovery schemas](../src/VehicleRental.Application/DTOs/Operations/RecoveryDtos.cs), [payment schemas](../src/VehicleRental.Application/DTOs/Payments/PaymentDtos.cs), [staff schemas](../src/VehicleRental.Application/DTOs/Organization/StaffDtos.cs).
+- [Operations schemas](../src/VehicleRental.Application/DTOs/Operations/OperationsDtos.cs), [recovery schemas](../src/VehicleRental.Application/DTOs/Operations/RecoveryDtos.cs), [payment schemas](../src/VehicleRental.Application/Billing/BillingContracts.cs), [staff schemas](../src/VehicleRental.Application/DTOs/Organization/StaffDtos.cs).
 - [Vehicle CRUD](vehicle-crud.md), [rental contract](rental-contract-api.md), [staff authorization](staff-authorization.md), [operational recovery](operational-recovery.md), [specs](../specs/README.md).
 
 Khi tài liệu cũ khác mã nguồn (ví dụ callback Google `/signin-google` hoặc DELETE ghi 204), ưu tiên mã nguồn và tài liệu API này ở snapshot hiện tại. Cập nhật tài liệu cùng thay đổi endpoint/DTO/policy tiếp theo.

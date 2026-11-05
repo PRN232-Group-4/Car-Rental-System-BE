@@ -1,6 +1,6 @@
 using Npgsql;
 
-namespace Car_Rental_System_BE.Infrastructure.Repositories;
+namespace Car_Rental_System_BE.Infrastructure.Billing;
 
 /// <summary>
 /// Phase 2 / D-6: THE anti-duplicate mechanism for the automatic refunds a rental can generate

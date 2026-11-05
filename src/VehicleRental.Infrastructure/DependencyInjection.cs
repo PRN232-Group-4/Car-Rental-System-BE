@@ -1,5 +1,6 @@
 using Car_Rental_System_BE.Application.Assignments;
 using Car_Rental_System_BE.Application.Availability;
+using Car_Rental_System_BE.Application.Billing;
 using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Inspections;
@@ -8,6 +9,7 @@ using Car_Rental_System_BE.Application.Loyalty;
 using Car_Rental_System_BE.Domain.Interfaces;
 using Car_Rental_System_BE.Infrastructure.Assignments;
 using Car_Rental_System_BE.Infrastructure.Availability;
+using Car_Rental_System_BE.Infrastructure.Billing;
 using Car_Rental_System_BE.Infrastructure.Lifecycle;
 using Car_Rental_System_BE.Infrastructure.Loyalty;
 using Car_Rental_System_BE.Infrastructure.Persistence;

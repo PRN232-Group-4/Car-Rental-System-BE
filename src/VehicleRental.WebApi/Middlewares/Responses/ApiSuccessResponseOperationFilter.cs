@@ -86,13 +86,13 @@ public sealed class ApiSuccessResponseOperationFilter : IOperationFilter
                 }
             }
         }
-        if (controller == "PaymentsController" && action == "ConfirmCash")
+        if (controller == "InvoicesController" && action == "ConfirmCash")
             operation.Description = "Admin/Manager/CustomerService confirms actual full cash receipt. Rental invoices require selected cash method and approval. FR-042: an expired rental is refused with 409 INVOICE_NOT_PAYABLE. Settled overtime invoices may use cash only before checkout_started_at; atomically records overtime ledger with reviewer audit and marks invoice paid without issuing a new order. No client amount or paid flag. Idempotent; conflicting online checkout returns 409.";
-        if (controller == "PaymentsController" && action == "StaffCheckout")
+        if (controller == "InvoicesController" && action == "StaffCheckout")
             operation.Description = "Admin/Manager/CustomerService creates PayOS link only for an unpaid overtime invoice linked to a completed rental settlement. Rental and invoice locks serialize against cash receipt; reservation blocks cash even on provider failure. Provider signature and amount verification is required before paid. Does not accept customer identity, amount or paid status from client.";
-        if (controller == "PaymentsController" && action == "Checkout")
+        if (controller == "InvoicesController" && action == "Checkout")
             operation.Description = "Customer, own invoice only. Rental invoices require prior staff confirmation (confirmed_at present, rental not pending/cancelled/expired); otherwise 409 RENTAL_CONFIRMATION_REQUIRED, without reserving checkout or calling PayOS. FR-042: an expired request returns 409 RENTAL_EXPIRED before any provider call. Unpaid overtime invoices remain payable after settlement. Payment must complete before handover.";
-        if (controller == "PaymentsController" && action == "Invoice")
+        if (controller == "InvoicesController" && action == "Invoice")
             operation.Description = "Invoice detail includes canPay, paymentBlockedReason, kind, canConfirmCash and canCreateStaffCheckout (booleans). Overtime collection requires a completed rental and linked settlement. Cash is disallowed after online reservation. FR-042: a rental in expired state reports canPay=false with paymentBlockedReason INVOICE_NOT_PAYABLE. Policies are rechecked under locks; online paid status only follows verified provider receipt.";
         if (controller == "RentalLifecycleController" && action == "Confirm")
             operation.Description = "Admin/Manager/CustomerService confirms a pending rental before payment, writes confirmed_at and advances to pre_inspection. An unpaid direct rental can be confirmed. Legacy pre_inspection without confirmed_at may be explicitly approved here; repeating an existing approval returns 409. Direct rental payment remains mandatory before handover. FR-042: an expired request cannot be confirmed and returns 409 ILLEGAL_TRANSITION; every other lifecycle action (start, return, complete, cancel) is refused on expired the same way.";

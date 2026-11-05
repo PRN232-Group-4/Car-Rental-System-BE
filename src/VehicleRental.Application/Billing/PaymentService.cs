@@ -1,13 +1,11 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.DTOs.Options;
-using Car_Rental_System_BE.Application.DTOs.Payments;
 using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Application.Services.Exceptions;
-using Car_Rental_System_BE.Application.Services.Payments;
 
-namespace Car_Rental_System_BE.Application.Services;
+namespace Car_Rental_System_BE.Application.Billing;
 
 public sealed class PaymentService(IPaymentRepository repository, IPaymentGateway gateway, PaymentCheckoutOptions options, IOperationalNotifications? notifications = null) : IPaymentService
 {
@@ -40,8 +38,13 @@ public sealed class PaymentService(IPaymentRepository repository, IPaymentGatewa
         return refund;
     }
 
+    #region Subscriptions (intended future module)
+    // Not invoicing: the plan-purchase read side. It stays in Billing only until the Subscriptions module
+    // is extracted, which will also take PurchasePlanAsync below and the webhook dispatcher in
+    // HandleWebhookAsync (a single entry point that must branch across both halves).
     public Task<PlanPurchaseStatus?> GetPlanPurchaseAsync(long orderCode, string email, CancellationToken ct) =>
         repository.GetPlanPurchaseAsync(orderCode, email, ct);
+    #endregion
 
     public async Task<CheckoutResult> CheckoutAsync(int invoiceId, string email, CancellationToken ct)
         => await CreateInvoiceCheckoutAsync(invoiceId, email, ct);
@@ -60,6 +63,9 @@ public sealed class PaymentService(IPaymentRepository repository, IPaymentGatewa
         return await gateway.CreateCheckoutAsync(new(invoice.InvoiceId, invoice.Amount, description[..Math.Min(25, description.Length)], options.ReturnUrl, options.CancelUrl), ct);
     }
 
+    #region Subscriptions (intended future module)
+    // Not invoicing: buying a subscription plan. Lifted out with GetPlanPurchaseAsync above and the
+    // webhook dispatcher below in the next phase.
     public async Task<CheckoutResult> PurchasePlanAsync(int planId, string email, CancellationToken ct)
     {
         RequireGateway();
@@ -68,7 +74,10 @@ public sealed class PaymentService(IPaymentRepository repository, IPaymentGatewa
         var returnUrl = $"{options.ReturnUrl}{(options.ReturnUrl.Contains('?') ? '&' : '?')}type=subscription";
         return await gateway.CreateCheckoutAsync(new(checkout.OrderCode, checkout.Amount, description[..Math.Min(25, description.Length)], returnUrl, options.CancelUrl), ct);
     }
+    #endregion
 
+    // CROSS-HALF: cancellation serves BOTH an invoice order code and a subscription order code, so it
+    // cannot move to either slice alone. It travels with the subscription extraction.
     public async Task<CheckoutCancellation> CancelCheckoutAsync(long orderCode, string email, CancellationToken ct)
     {
         // Verify the provider state before accepting the browser's cancellation request.
@@ -84,6 +93,9 @@ public sealed class PaymentService(IPaymentRepository repository, IPaymentGatewa
         return new(orderCode, "cancelled");
     }
 
+    // CROSS-HALF: the provider webhook is one endpoint that dispatches across the invoice and subscription
+    // halves by order code. That is why it stays with the Payments controller today and why the subscription
+    // extraction must take it as a whole instead of splitting it.
     public async Task HandleWebhookAsync(PayOsWebhook webhook, string code, bool success, CancellationToken ct)
     {
         if (!gateway.VerifyWebhook(webhook)) throw new PaymentWorkflowException("Invalid PayOS signature.", 400);

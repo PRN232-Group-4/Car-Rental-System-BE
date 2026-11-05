@@ -1,9 +1,10 @@
 using Car_Rental_System_BE.Application.Common.Errors;
-using Car_Rental_System_BE.Application.DTOs.Payments;
+using Car_Rental_System_BE.Application.Billing;
 using Npgsql;
-using Car_Rental_System_BE.Domain.Lifecycle;
+using Car_Rental_System_BE.Domain.Billing;
+using Car_Rental_System_BE.Infrastructure.Repositories;
 
-namespace Car_Rental_System_BE.Infrastructure.Repositories;
+namespace Car_Rental_System_BE.Infrastructure.Billing;
 
 public sealed partial class NpgsqlPaymentRepository
 {

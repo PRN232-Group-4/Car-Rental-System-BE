@@ -1,4 +1,4 @@
-using Car_Rental_System_BE.Application.DTOs.Payments;
+using Car_Rental_System_BE.Application.Billing;
 
 namespace Car_Rental_System_BE.Application.Interfaces.External;
 

@@ -99,9 +99,14 @@ public sealed class AuthorizationTests
     [InlineData("Admin", true)]
     public async Task Financial_endpoints_enforce_specialty(string role, bool allowed)
     {
+        // The invoice actions now live in InvoicesController; Refund and Payments stayed in PaymentsController.
+        // Each action is looked up on the controller that actually owns it, so a misplaced [Authorize] on
+        // either side of the split still fails this matrix.
         foreach (var method in new[] { "Refund", "CreateInvoice", "Invoices", "Invoice", "Payments" })
             Assert.Equal(allowed || (role == "Customer" && method is "Invoices" or "Invoice" or "Payments"),
-                await AuthorizeEndpoint<PaymentsController>(method, Principal(role)));
+                await (method is "CreateInvoice" or "Invoices" or "Invoice"
+                    ? AuthorizeEndpoint<InvoicesController>(method, Principal(role))
+                    : AuthorizeEndpoint<PaymentsController>(method, Principal(role))));
     }
 
     [Theory]

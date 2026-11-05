@@ -1,5 +1,5 @@
 using Car_Rental_System_BE.Infrastructure.Persistence;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Billing;
 using Microsoft.EntityFrameworkCore;
 using Car_Rental_System_BE.Application.Lifecycle;
 using Car_Rental_System_BE.Application.Interfaces.External;
@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Npgsql;
 using Car_Rental_System_BE.Domain.Loyalty;
 using Car_Rental_System_BE.Domain.Lifecycle;
+using Car_Rental_System_BE.Domain.Billing;
 
 namespace Car_Rental_System_BE.Infrastructure.Lifecycle;
 

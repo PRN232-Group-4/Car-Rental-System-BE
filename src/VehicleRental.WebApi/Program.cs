@@ -23,6 +23,7 @@ using System.Security.Claims;
 using System.Text;
 using Car_Rental_System_BE.Application.Availability;
 using Car_Rental_System_BE.Application.Assignments;
+using Car_Rental_System_BE.Application.Billing;
 using Car_Rental_System_BE.Application.Lifecycle;
 using Car_Rental_System_BE.Application.Handovers;
 using Car_Rental_System_BE.Application.Inspections;
