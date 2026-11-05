@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-11-05 — [Tách Billing và xác minh Handovers](2026-11-05-billing-handover-slices.md)
+
 - 2026-10-29 — [Cookie SameSite=None cho web cross-site](2026-10-29-cookie-samesite-cross-site.md)
 
 - 2026-10-28 — [CORS cho frontend deploy và localhost 3000/5000](2026-10-28-frontend-cors.md)

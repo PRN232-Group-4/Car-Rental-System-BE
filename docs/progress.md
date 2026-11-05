@@ -1,5 +1,9 @@
 # Tiến độ
 
+## Billing 3.1 và Handovers 3.2, 2026-11-05
+
+Billing đã tách tại `c031bb1`, giữ API và logic tài chính. Lead kiểm build 0 warning/error và 81 test contract đạt; worker báo toàn suite Neon 1.380 test đạt. Handovers đã có slice phù hợp ADR-007 nên 3.2 chỉ xác minh, không thêm production code. Lead chạy 175 test liên quan trên Neon, tất cả đạt. Reviewer độc lập GPT-6 Astra chấp nhận cả hai bước. Chưa push/deploy; 3.3 Inspections chưa bắt đầu. Giới hạn coverage và việc D2/FE còn lại được ghi trong [thay đổi](../changes/2026-11-05-billing-handover-slices.md).
+
 ## Cookie SameSite cho web cross-site — 2026-10-29
 
 `AuthCookies.Write`/`Clear` chọn `SameSite=None` khi request có header `Origin` (browser gọi API khác domain: Flutter web `http://localhost:5000` → Railway, FE Cloudflare Workers → API) và giữ `SameSite=Lax` cho native/server-to-server; `HttpOnly`/`Secure` không đổi, `Clear` dùng cùng `SameSite` với `Write`. Sửa lỗi login trả 200 nhưng `GET /api/account/profile` trả 401 vì trình duyệt chặn `Set-Cookie` `SameSite=Lax` từ response cross-site. Chưa build/chạy test trong phiên này; chưa deploy. Xem [thay đổi](../changes/2026-10-29-cookie-samesite-cross-site.md).
