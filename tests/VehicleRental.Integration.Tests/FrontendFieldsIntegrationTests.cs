@@ -3,6 +3,7 @@ using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Features.Organization;
 using Xunit;
 
 namespace VehicleRental.Tests;
@@ -13,7 +14,8 @@ public sealed class FrontendFieldsIntegrationTests(PostgresFixture db) : IClassF
     public async Task Catalog_metadata_and_facility_contact_round_trip_without_fabricated_defaults()
     {
         var repo = new NpgsqlOperationsRepository(db.DataSource);
-        var facility = await repo.SaveFacilityAsync(null,"Contact branch","Address",default,"0901234567");
+        var organization = new NpgsqlOrganizationRepository(db.DataSource);
+        var facility = await organization.SaveFacilityAsync(null,"Contact branch","Address",default,"0901234567");
         var type = await repo.SaveVehicleTypeAsync(null,"Electric car","electric",default,"car");
         var vehicle = await repo.SaveVehicleAsync(null,new Vehicle(0,type.Id,"",facility.Id,null,"available","Brand","Model",null,2025,100,1000,null,null,null,
             new VehicleDetail(SeatCount:5,Transmission:"automatic",BatteryCapacity:"60 kWh"),"51A-12345") { Features=["GPS","Camera"] },default);
@@ -27,12 +29,12 @@ public sealed class FrontendFieldsIntegrationTests(PostgresFixture db) : IClassF
         Assert.True(listed.SupportsSubscription);
         Assert.Null(listed.DriverAvailable);
         Assert.Equal("0901234567",facility.Phone);
-        var facilities=await repo.ListFacilitiesAsync(1,100,default);
+        var facilities=await organization.ListFacilitiesAsync(1,100,default);
         Assert.Equal("0901234567",Assert.Single(facilities.Items,x=>x.Id==facility.Id).Phone);
-        var empty=await repo.ListFacilitiesAsync(int.MaxValue,100,default);
+        var empty=await organization.ListFacilitiesAsync(int.MaxValue,100,default);
         Assert.Empty(empty.Items);
         Assert.Equal(facilities.TotalCount,empty.TotalCount);
-        await Assert.ThrowsAsync<BusinessRuleException>(()=>repo.ListFacilitiesAsync(0,20,default));
+        await Assert.ThrowsAsync<BusinessRuleException>(()=>organization.ListFacilitiesAsync(0,20,default));
         var catalogEmpty=await repo.SearchVehiclesAsync(type.Id,facility.Id,null,null,null,int.MaxValue,100,default);
         Assert.Empty(catalogEmpty.Items);
         Assert.Equal(1,catalogEmpty.TotalCount);
@@ -42,8 +44,9 @@ public sealed class FrontendFieldsIntegrationTests(PostgresFixture db) : IClassF
     public async Task My_rental_list_and_detail_share_actions_contact_and_subscription_usage()
     {
         var repo=new NpgsqlOperationsRepository(db.DataSource);
+        var organization=new NpgsqlOrganizationRepository(db.DataSource);
         var (customer,email)=await Seed.CustomerAsync(db.DataSource);
-        var facility=await repo.SaveFacilityAsync(null,"Rental branch",null,default,"0281234567");
+        var facility=await organization.SaveFacilityAsync(null,"Rental branch",null,default,"0281234567");
         var vehicle=await Seed.VehicleAsync(db.DataSource);
         await Seed.ScalarAsync(db.DataSource,"UPDATE vehicles SET facility_id=$2,license_plate='51A-99999' WHERE id=$1",vehicle,facility.Id);
         var plan=await Seed.PlanAsync(db.DataSource);
@@ -75,6 +78,7 @@ public sealed class FrontendFieldsIntegrationTests(PostgresFixture db) : IClassF
     public async Task Policy_metadata_survives_status_update_and_returns_real_creation_timestamp()
     {
         var repo=new NpgsqlOperationsRepository(db.DataSource);
+        var organization=new NpgsqlOrganizationRepository(db.DataSource);
         var type=await repo.SaveVehicleTypeAsync(null,"Policy car","gasoline",default,"car");
         var user=await Seed.ScalarAsync(db.DataSource,"INSERT INTO users(email) VALUES($1) RETURNING id",$"manager-{Guid.NewGuid():N}@test.local");
         var staff=(int)(await Seed.ScalarAsync(db.DataSource,"INSERT INTO staffs(user_id) VALUES($1) RETURNING id",user))!;

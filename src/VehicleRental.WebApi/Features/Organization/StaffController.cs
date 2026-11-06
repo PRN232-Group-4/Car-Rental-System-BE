@@ -1,13 +1,11 @@
-using Car_Rental_System_BE.Application.DTOs.Organization;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
-using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.Application.Features.Organization;
 using Car_Rental_System_BE.Application.Validators;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Car_Rental_System_BE.WebApi.Controllers;
+namespace Car_Rental_System_BE.WebApi.Features.Organization;
 
 [ApiController]
 [Route("api/staff")]

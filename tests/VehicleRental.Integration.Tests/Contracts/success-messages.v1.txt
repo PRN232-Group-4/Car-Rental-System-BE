@@ -86,14 +86,14 @@
 /api/dashboard/top-vehicles | Dashboard.TopVehicles | GET | 200 | inspectionType=post_rental | Vehicle performance ranking retrieved successfully.
 /api/department/{departmentId:int}/member/{userId:int} | DepartmentMembers.Assign | PUT | 200 | - | Employee assigned to department successfully.
 /api/department/{departmentId:int}/member/{userId:int} | DepartmentMembers.Assign | PUT | 200 | inspectionType=post_rental | Employee assigned to department successfully.
-/api/department/{id:int} | Operations.DeleteDepartment | DELETE | 200 | - | Department deleted successfully.
-/api/department/{id:int} | Operations.DeleteDepartment | DELETE | 200 | inspectionType=post_rental | Department deleted successfully.
-/api/department/{id:int} | Operations.EditDepartment | PUT | 200 | - | Department updated successfully.
-/api/department/{id:int} | Operations.EditDepartment | PUT | 200 | inspectionType=post_rental | Department updated successfully.
-/api/departments | Operations.AddDepartment | POST | 200 | - | Department created successfully.
-/api/departments | Operations.AddDepartment | POST | 200 | inspectionType=post_rental | Department created successfully.
-/api/departments | Operations.Departments | GET | 200 | - | Departments retrieved successfully.
-/api/departments | Operations.Departments | GET | 200 | inspectionType=post_rental | Departments retrieved successfully.
+/api/department/{id:int} | Departments.DeleteDepartment | DELETE | 200 | - | Department deleted successfully.
+/api/department/{id:int} | Departments.DeleteDepartment | DELETE | 200 | inspectionType=post_rental | Department deleted successfully.
+/api/department/{id:int} | Departments.EditDepartment | PUT | 200 | - | Department updated successfully.
+/api/department/{id:int} | Departments.EditDepartment | PUT | 200 | inspectionType=post_rental | Department updated successfully.
+/api/departments | Departments.AddDepartment | POST | 200 | - | Department created successfully.
+/api/departments | Departments.AddDepartment | POST | 200 | inspectionType=post_rental | Department created successfully.
+/api/departments | Departments.Departments | GET | 200 | - | Departments retrieved successfully.
+/api/departments | Departments.Departments | GET | 200 | inspectionType=post_rental | Departments retrieved successfully.
 /api/device/{id} | Devices.Get | GET | 200 | - | Tracking device retrieved successfully.
 /api/device/{id} | Devices.Get | GET | 200 | inspectionType=post_rental | Tracking device retrieved successfully.
 /api/device/{id} | Devices.Update | PUT | 200 | - | Tracking device updated successfully.
@@ -114,16 +114,16 @@
 /api/drivers/shifts | Dispatch.CreateShift | POST | 201 | inspectionType=post_rental | Driver duty shift created successfully.
 /api/drivers/shifts | Dispatch.Shifts | GET | 200 | - | Driver duty shifts retrieved successfully.
 /api/drivers/shifts | Dispatch.Shifts | GET | 200 | inspectionType=post_rental | Driver duty shifts retrieved successfully.
-/api/facilities | Operations.AddFacility | POST | 200 | - | Facility created successfully.
-/api/facilities | Operations.AddFacility | POST | 200 | inspectionType=post_rental | Facility created successfully.
-/api/facilities | Operations.Facilities | GET | 200 | - | Facilities retrieved successfully.
-/api/facilities | Operations.Facilities | GET | 200 | inspectionType=post_rental | Facilities retrieved successfully.
+/api/facilities | Facilities.AddFacility | POST | 200 | - | Facility created successfully.
+/api/facilities | Facilities.AddFacility | POST | 200 | inspectionType=post_rental | Facility created successfully.
+/api/facilities | Facilities.Facilities | GET | 200 | - | Facilities retrieved successfully.
+/api/facilities | Facilities.Facilities | GET | 200 | inspectionType=post_rental | Facilities retrieved successfully.
 /api/facility/{facilityId:int}/member/{userId:int} | FacilityMembers.Assign | PUT | 200 | - | Employee assigned to facility successfully.
 /api/facility/{facilityId:int}/member/{userId:int} | FacilityMembers.Assign | PUT | 200 | inspectionType=post_rental | Employee assigned to facility successfully.
-/api/facility/{id:int} | Operations.DeleteFacility | DELETE | 200 | - | Facility deleted successfully.
-/api/facility/{id:int} | Operations.DeleteFacility | DELETE | 200 | inspectionType=post_rental | Facility deleted successfully.
-/api/facility/{id:int} | Operations.EditFacility | PUT | 200 | - | Facility updated successfully.
-/api/facility/{id:int} | Operations.EditFacility | PUT | 200 | inspectionType=post_rental | Facility updated successfully.
+/api/facility/{id:int} | Facilities.DeleteFacility | DELETE | 200 | - | Facility deleted successfully.
+/api/facility/{id:int} | Facilities.DeleteFacility | DELETE | 200 | inspectionType=post_rental | Facility deleted successfully.
+/api/facility/{id:int} | Facilities.EditFacility | PUT | 200 | - | Facility updated successfully.
+/api/facility/{id:int} | Facilities.EditFacility | PUT | 200 | inspectionType=post_rental | Facility updated successfully.
 /api/geofences | Geofences.Create | POST | 200 | - | Geofence created successfully.
 /api/geofences | Geofences.Create | POST | 200 | inspectionType=post_rental | Geofence created successfully.
 /api/geofences | Geofences.Create | POST | 201 | - | Geofence created successfully.

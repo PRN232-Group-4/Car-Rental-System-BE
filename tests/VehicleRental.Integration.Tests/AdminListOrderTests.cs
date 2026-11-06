@@ -1,5 +1,6 @@
 using Car_Rental_System_BE.Application.DTOs.Accounts;
 using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Features.Organization;
 using Xunit;
 
 namespace VehicleRental.Tests;
@@ -28,7 +29,7 @@ public sealed class AdminListOrderTests(PostgresFixture db) : IClassFixture<Post
     [Fact]
     public async Task Facilities_use_newest_ids_rather_than_alphabetical_names()
     {
-        var repo = new NpgsqlOperationsRepository(db.DataSource);
+        var repo = new NpgsqlOrganizationRepository(db.DataSource);
         var old = await repo.SaveFacilityAsync(null, "AAA old", null, default);
         var recent = await repo.SaveFacilityAsync(null, "ZZZ new", null, default);
         var first = await repo.ListFacilitiesAsync(1, 1, default);

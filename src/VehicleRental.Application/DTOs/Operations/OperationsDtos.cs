@@ -1,6 +1,5 @@
 namespace Car_Rental_System_BE.Application.DTOs.Operations;
 
-public sealed record OrganizationUnit(int Id, string Name, string? Address = null, string? Phone = null);
 public sealed record VehicleType(int Id, string Name, string? FuelType, string? Type = null);
 public sealed record VehicleDetail(
     int? SeatCount = null, string? Transmission = null, decimal? TrunkCapacity = null,

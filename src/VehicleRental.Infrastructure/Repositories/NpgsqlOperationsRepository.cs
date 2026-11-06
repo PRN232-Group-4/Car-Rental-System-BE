@@ -1,6 +1,5 @@
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.DTOs.Operations;
-using Car_Rental_System_BE.Application.DTOs.Organization;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Domain.Features.Availability;
 using Car_Rental_System_BE.Infrastructure.Features.Availability;
@@ -13,33 +12,6 @@ namespace Car_Rental_System_BE.Infrastructure.Repositories;
 public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSource, TimeProvider? timeProvider = null) : IOperationsRepository
 {
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
-    public Task<IReadOnlyList<OrganizationUnit>> ListDepartmentsAsync(CancellationToken ct)=>UnitsAsync("departments",false,ct);
-    public Task<OrganizationUnit> SaveDepartmentAsync(int? id,string name,CancellationToken ct)=>SaveUnitAsync("departments",id,name,null,ct);
-    public Task DeleteDepartmentAsync(int id,CancellationToken ct)=>DeleteAsync("departments",id,ct);
-    public async Task<OperationsPage<OrganizationUnit>> ListFacilitiesAsync(int page, int pageSize, CancellationToken ct)
-    {
-        Car_Rental_System_BE.Application.Features.Rentals.RentalQueryValidation.Pagination(page, pageSize);
-        await using var db = VehicleRentalDbContext.Create(dataSource);
-        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, ct);
-        var query = db.Set<FacilitiesRow>().AsNoTracking();
-        var total = await query.CountAsync(ct);
-        var offset = ((long)page - 1) * pageSize;
-        var items = offset > int.MaxValue ? new List<OrganizationUnit>() : await query.OrderByDescending(x => x.Id)
-            .Skip((int)offset).Take(pageSize).Select(x => new OrganizationUnit(x.Id, x.Name, x.Address, x.Phone)).ToListAsync(ct);
-        await tx.CommitAsync(ct);
-        return new(items, page, pageSize, total);
-    }
-    public async Task<OrganizationUnit> SaveFacilityAsync(int? id,string name,string? address,CancellationToken ct,string? phone=null)
-    {
-        var sql=id is null?"INSERT INTO facilities(name,address,phone) VALUES($1,$2,$3) RETURNING id,name,address,phone":"UPDATE facilities SET name=$1,address=$2,phone=COALESCE($3,phone) WHERE id=$4 RETURNING id,name,address,phone";
-        await using var command=dataSource.CreateCommand(sql);
-        Add(command,name,address,phone);
-        if(id is not null) Add(command,id);
-        await using var reader=await command.ExecuteReaderAsync(ct);
-        if(!await reader.ReadAsync(ct)) throw new KeyNotFoundException("Facility was not found.");
-        return new(reader.GetInt32(0),reader.GetString(1),S(reader,2),S(reader,3));
-    }
-    public Task DeleteFacilityAsync(int id,CancellationToken ct)=>DeleteAsync("facilities",id,ct);
     public async Task<IReadOnlyList<VehicleType>> ListVehicleTypesAsync(CancellationToken ct)
     {
         await using var db = VehicleRentalDbContext.Create(dataSource);
@@ -345,17 +317,6 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
         var activeSubscriptions = await db.Set<CustomerSubscriptionsRow>().LongCountAsync(s => s.Status == "active" && s.EndDate >= DateOnly.FromDateTime(DateTime.Today), ct);
         return new { revenue, renting, maintenance, activeSubscriptions };
     }
-    private async Task<IReadOnlyList<OrganizationUnit>> UnitsAsync(string table, bool address, CancellationToken ct)
-    {
-        await using var db = VehicleRentalDbContext.Create(dataSource);
-        if (table == "departments") return await db.Set<DepartmentsRow>().AsNoTracking().OrderBy(x => x.Name)
-            .Select(x => new OrganizationUnit(x.Id, x.Name, null, null)).ToListAsync(ct);
-        return await db.Set<FacilitiesRow>().AsNoTracking().OrderBy(x => x.Name)
-            .Select(x => new OrganizationUnit(x.Id, x.Name, address ? x.Address : null, null)).ToListAsync(ct);
-    }
-
-    private async Task<OrganizationUnit> SaveUnitAsync(string table,int? id,string name,string? address,CancellationToken ct){var q=id is null?(table=="facilities"?"INSERT INTO facilities(name,address)VALUES($1,$2) RETURNING id,name,address":"INSERT INTO departments(name)VALUES($1) RETURNING id,name"):(table=="facilities"?"UPDATE facilities SET name=$1,address=$2 WHERE id=$3 RETURNING id,name,address":"UPDATE departments SET name=$1 WHERE id=$2 RETURNING id,name");await using var c=dataSource.CreateCommand(q);Add(c,name);if(table=="facilities")c.Parameters.AddWithValue((object?)address??DBNull.Value);if(id is not null)c.Parameters.AddWithValue(id.Value);await using var r=await c.ExecuteReaderAsync(ct);if(!await r.ReadAsync(ct))throw new KeyNotFoundException();return new(r.GetInt32(0),r.GetString(1),r.FieldCount>2?S(r,2):null);}
-    private async Task DeleteAsync(string table,int id,CancellationToken ct){await using var c=dataSource.CreateCommand($"DELETE FROM {table} WHERE id=$1");c.Parameters.AddWithValue(id);if(await c.ExecuteNonQueryAsync(ct)!=1)throw new KeyNotFoundException();}
     private static RentalPolicy ReadPolicy(NpgsqlDataReader r)=>new(r.GetInt32(0),r.IsDBNull(1)?null:r.GetInt32(1),r.GetString(2),r.GetDecimal(3),r.GetDecimal(4),r.GetDecimal(5),r.GetBoolean(6));
     private static Rental ReadRental(NpgsqlDataReader r)=>new(r.GetInt32(0),r.GetInt32(1),r.GetInt32(2),r.GetString(3),r.GetString(4),r.GetBoolean(5),r.GetDecimal(6),r.GetDecimal(7),r.GetDecimal(8),r.GetDecimal(9),r.IsDBNull(10)?null:r.GetDateTime(10),r.IsDBNull(11)?null:r.GetDateTime(11),r.IsDBNull(12)?null:r.GetDecimal(12),r.IsDBNull(13)?null:r.GetDecimal(13),r.IsDBNull(14)?null:r.GetBoolean(14),(r.IsDBNull(15)?null:r.GetString(15)) == $"/api/rentals/{r.GetInt32(0)}/contract/document" ? $"/api/rental/{r.GetInt32(0)}/contract/document" : (r.IsDBNull(15)?null:r.GetString(15)),r.IsDBNull(16)?null:r.GetDateTime(16),r.FieldCount>17&&!r.IsDBNull(17)?r.GetInt32(17):null,r.FieldCount>18&&r.GetBoolean(18),r.FieldCount>19&&r.GetBoolean(19));
     private async Task SaveVehicleDetailAsync(NpgsqlConnection cn, NpgsqlTransaction tx, int vehicleId, string type, string fuel, VehicleDetail d, CancellationToken ct)

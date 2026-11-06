@@ -4,6 +4,7 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Application.Features.Organization;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Application.Services;
@@ -34,6 +35,9 @@ public sealed class OperationsCompletionApiTests : IAsyncLifetime
         builder.Services.AddAuthentication("operations").AddScheme<AuthenticationSchemeOptions,TestAuthentication>("operations",_=>{});
         builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
         builder.Services.AddSingleton(DispatchProxy.Create<IOperationsService,UnusedProxy>());
+        // The departments and facilities endpoints moved to the Organization slice, so they resolve
+        // IOrganizationService: the paged facility list is stubbed there now.
+        builder.Services.AddSingleton(DispatchProxy.Create<IOrganizationService,OrganizationProxy>());
         // DispatchController now takes the assignments slice too; these endpoints never touch it.
         builder.Services.AddSingleton(DispatchProxy.Create<Car_Rental_System_BE.Application.Features.Assignments.IAssignmentService,UnusedProxy>());
         builder.Services.AddSingleton(DispatchProxy.Create<Car_Rental_System_BE.Application.Features.Maintenances.IMaintenanceService,UnusedProxy>());
@@ -155,6 +159,13 @@ public sealed class OperationsCompletionApiTests : IAsyncLifetime
         protected override object? Invoke(MethodInfo? method,object?[]? args)=>method?.Name switch
         {
             "SearchVehiclesAsync"=>Task.FromResult(new VehiclePage([new Vehicle(1,1,"Car",1,"Branch","available","Brand","Model",null,2025,100,1000,null,null,null,new VehicleDetail(SeatCount:5)) { Features=["Camera"] }],1,20,1)),
+            _=>throw new NotSupportedException(method?.Name)
+        };
+    }
+    public class OrganizationProxy:DispatchProxy
+    {
+        protected override object? Invoke(MethodInfo? method,object?[]? args)=>method?.Name switch
+        {
             "ListFacilitiesAsync"=>Task.FromResult(new OperationsPage<OrganizationUnit>([new(1,"Branch",null,"0901234567")],(int)args![0]!, (int)args[1]!,1)),
             _=>throw new NotSupportedException(method?.Name)
         };

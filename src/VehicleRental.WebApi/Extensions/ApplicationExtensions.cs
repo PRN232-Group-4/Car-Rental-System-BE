@@ -9,6 +9,7 @@ using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Application.Features.Loyalty;
 using Car_Rental_System_BE.Application.Features.Maintenances;
+using Car_Rental_System_BE.Application.Features.Organization;
 using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Infrastructure.Services.Payments;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
@@ -43,6 +44,7 @@ public static class ApplicationExtensions
         services.AddScoped<ICustomerService, CustomerService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IStaffService, StaffService>();
+        services.AddScoped<IOrganizationService, OrganizationService>();
         services.AddScoped<IOperationsService, OperationsService>();
         services.AddScoped<IUserAdministrationService, UserAdministrationService>();
         services.AddScoped<IDashboardService, DashboardService>();

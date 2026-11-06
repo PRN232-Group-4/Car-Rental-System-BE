@@ -99,25 +99,6 @@ public sealed class OperationsController(
     [SuccessMessage("Vehicle updated successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPut("vehicle/{id:int}")] public Task<Vehicle> EditVehicle(int id,VehicleRequest x,CancellationToken ct)=>store.SaveVehicleAsync(id,x.ToModel(),ct);
 
-    [SuccessMessage("Departments retrieved successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpGet("departments")] public Task<IReadOnlyList<OrganizationUnit>> Departments(CancellationToken ct)=>store.ListDepartmentsAsync(ct);
-    [SuccessMessage("Department created successfully.")]
-    [Authorize(Roles="Admin")] [HttpPost("departments")] public async Task<IActionResult> AddDepartment(NameRequest x,CancellationToken ct){var d=await store.SaveDepartmentAsync(null,x.Name,ct);return Created($"/api/department/{d.Id}",d);}
-    [SuccessMessage("Department updated successfully.")]
-    [Authorize(Roles="Admin")] [HttpPut("department/{id:int}")] public Task<OrganizationUnit> EditDepartment(int id,NameRequest x,CancellationToken ct)=>store.SaveDepartmentAsync(id,x.Name,ct);
-    [SuccessMessage("Department deleted successfully.")]
-    [Authorize(Roles="Admin")] [HttpDelete("department/{id:int}")] public async Task<IActionResult> DeleteDepartment(int id,CancellationToken ct){await store.DeleteDepartmentAsync(id,ct);return NoContent();}
-    [OperationDescription(" Pagination for list operations defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Invalid values return 400 at HTTP and Application boundaries. data contains items/page/pageSize/totalCount, totalCount is after filters; out-of-range pages retain the count with empty items.", DocumentsPaginationParameters = true)]
-    [OperationDescription(" Default order is ID descending (newest profile/record first), applied before pagination.")]
-    [SuccessMessage("Facilities retrieved successfully.")]
-    [HttpGet("facilities")] [ProducesResponseType<OperationsPage<OrganizationUnit>>(StatusCodes.Status200OK)] public Task<OperationsPage<OrganizationUnit>> Facilities([FromQuery,Range(1,int.MaxValue)]int page=1,[FromQuery,Range(1,100)]int pageSize=20,CancellationToken ct=default)=>store.ListFacilitiesAsync(page,pageSize,ct);
-    [SuccessMessage("Facility created successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPost("facilities")] public async Task<IActionResult> AddFacility(FacilityRequest x,CancellationToken ct){var f=await store.SaveFacilityAsync(null,x.Name,x.Address,ct,x.Phone);return Created($"/api/facility/{f.Id}",f);}
-    [SuccessMessage("Facility updated successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPut("facility/{id:int}")] public Task<OrganizationUnit> EditFacility(int id,FacilityRequest x,CancellationToken ct)=>store.SaveFacilityAsync(id,x.Name,x.Address,ct,x.Phone);
-    [SuccessMessage("Facility deleted successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpDelete("facility/{id:int}")] public async Task<IActionResult> DeleteFacility(int id,CancellationToken ct){await store.DeleteFacilityAsync(id,ct);return NoContent();}
-
     [OperationSummary("List rental policy versions with rental usage counts (Admin/Manager).")]
     [OperationDescription("Pagination defaults to page=1/pageSize=20 (page>=1, pageSize 1..100); data contains items/page/pageSize/totalCount. rentalCount counts all rentals referencing that exact policy, including cancelled rentals; results are ordered by ID descending.")]
     [SuccessMessage("Rental policies retrieved successfully.")]
