@@ -41,6 +41,8 @@ public sealed class RentalPolicyStatusApiTests : IAsyncLifetime
         _repository = (PolicyRepository)(object)repository;
         builder.Services.AddSingleton(repository);
         builder.Services.AddSingleton<IOperationsService, OperationsService>();
+        // The vehicle endpoints moved to the Fleet slice; this suite never calls them.
+        builder.Services.AddSingleton(DispatchProxy.Create<Car_Rental_System_BE.Application.Features.Fleet.IFleetService, UnusedMedia>());
         builder.Services.AddSingleton(DispatchProxy.Create<IMediaService, UnusedMedia>());
         builder.Services.AddControllers(options => options.Filters.Add<ApiSuccessResponseFilter>())
             .ConfigureApplicationPartManager(parts =>

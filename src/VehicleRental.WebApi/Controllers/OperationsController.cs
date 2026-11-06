@@ -70,35 +70,6 @@ public sealed class OperationsController(
     [SuccessMessage("Driver license review completed successfully.")]
     [Authorize(Policy=AuthorizationPolicies.CustomerService)] [HttpPut("customer/{customerId:int}/license-status")] public Task<CustomerLicense> ReviewLicense(int customerId,LicenseReviewRequest x,CancellationToken ct) => store.ReviewLicenseAsync(customerId,x.Status.ToLowerInvariant(),ct,x.LicenseId);
 
-    [SuccessMessage("Vehicle types retrieved successfully.")]
-    [HttpGet("vehicle-types")] public Task<IReadOnlyList<VehicleType>> VehicleTypes(CancellationToken ct)=>store.ListVehicleTypesAsync(ct);
-    [SuccessMessage("Vehicle type created successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPost("vehicle-types")] public async Task<IActionResult> AddType(VehicleTypeRequest x,CancellationToken ct){var t=await store.SaveVehicleTypeAsync(null,x.Name,x.FuelType,ct,x.Type);return Created($"/api/vehicle-type/{t.Id}",t);}
-    [SuccessMessage("Vehicle type updated successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPut("vehicle-type/{id:int}")] public Task<VehicleType> EditType(int id,VehicleTypeRequest x,CancellationToken ct)=>store.SaveVehicleTypeAsync(id,x.Name,x.FuelType,ct,x.Type);
-    [SuccessMessage("Vehicle type deleted successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpDelete("vehicle-type/{id:int}")] public async Task<IActionResult> DeleteType(int id,CancellationToken ct){await store.DeleteVehicleTypeAsync(id,ct);return NoContent();}
-    [OperationDescription(" maintenanceTechnicianEmails is a deduplicated sorted array of active Maintenance emails assigned to current non-cancelled open/scheduled/in_progress or unsafe maintenance; completed-safe historical work is excluded. Employee emails are returned only to Admin/Manager/Maintenance; other callers receive an empty array.")]
-    [OperationDescription(" Pagination for list operations defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Invalid values return 400 at HTTP and Application boundaries. data contains items/page/pageSize/totalCount, totalCount is after filters; out-of-range pages retain the count with empty items.", DocumentsPaginationParameters = true)]
-    [OperationDescription(" Default order is created_at DESC, id DESC, applied before pagination; modification time does not change order.")]
-    [SuccessMessage("Vehicles retrieved successfully.")]
-    [HttpGet("vehicles")] public async Task<VehiclePage> Vehicles([FromQuery]int? vehicleTypeId,[FromQuery]int? facilityId,[FromQuery]string? status,[FromQuery]DateTime? from,[FromQuery]DateTime? to,[FromQuery,Range(1,int.MaxValue)]int page=1,[FromQuery,Range(1,100)]int pageSize=20,CancellationToken ct=default)
-    {
-        var result=await store.SearchVehiclesAsync(vehicleTypeId,facilityId,status,from,to,page,pageSize,ct);
-        return result with {Items=result.Items.Select(VehicleForCaller).ToArray()};
-    }
-    [OperationDescription(" maintenanceTechnicianEmails is a deduplicated sorted array of active Maintenance emails assigned to current non-cancelled open/scheduled/in_progress or unsafe maintenance; completed-safe historical work is excluded. Employee emails are returned only to Admin/Manager/Maintenance; other callers receive an empty array.")]
-    [SuccessMessage("Vehicle retrieved successfully.")]
-    [ProducesResponseType<Vehicle>(StatusCodes.Status200OK)]
-    [HttpGet("vehicle/{id:int}")] public async Task<IActionResult> Vehicle(int id,CancellationToken ct)=>await store.GetVehicleAsync(id,ct) is { } x?Ok(VehicleForCaller(x)):Problem("Vehicle was not found.", statusCode: StatusCodes.Status404NotFound);
-    private Vehicle VehicleForCaller(Vehicle vehicle)=>User.Identity?.IsAuthenticated==true && (AuthorizationPolicies.CanManage(User)||User.IsInRole("Maintenance"))
-        ?vehicle:vehicle with {MaintenanceTechnicianEmails=[]};
-    [SuccessMessage("Vehicle created successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPost("vehicles")] public async Task<IActionResult> AddVehicle(VehicleRequest x,CancellationToken ct){var v=await store.SaveVehicleAsync(null,x.ToModel(),ct);return Created($"/api/vehicle/{v.Id}",v);}
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpDelete("vehicle/{id:int}")] public async Task<IActionResult> DeleteVehicle(int id,CancellationToken ct){await store.DeleteVehicleAsync(id,ct);return NoContent();}
-    [SuccessMessage("Vehicle updated successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPut("vehicle/{id:int}")] public Task<Vehicle> EditVehicle(int id,VehicleRequest x,CancellationToken ct)=>store.SaveVehicleAsync(id,x.ToModel(),ct);
-
     [OperationSummary("List rental policy versions with rental usage counts (Admin/Manager).")]
     [OperationDescription("Pagination defaults to page=1/pageSize=20 (page>=1, pageSize 1..100); data contains items/page/pageSize/totalCount. rentalCount counts all rentals referencing that exact policy, including cancelled rentals; results are ordered by ID descending.")]
     [SuccessMessage("Rental policies retrieved successfully.")]

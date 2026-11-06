@@ -374,31 +374,31 @@
 /api/user/{id:int}/status | Users.SetStatus | PATCH | 200 | inspectionType=post_rental | User account status updated successfully.
 /api/users | Users.List | GET | 200 | - | Users retrieved successfully.
 /api/users | Users.List | GET | 200 | inspectionType=post_rental | Users retrieved successfully.
-/api/vehicle-type/{id:int} | Operations.DeleteType | DELETE | 200 | - | Vehicle type deleted successfully.
-/api/vehicle-type/{id:int} | Operations.DeleteType | DELETE | 200 | inspectionType=post_rental | Vehicle type deleted successfully.
-/api/vehicle-type/{id:int} | Operations.EditType | PUT | 200 | - | Vehicle type updated successfully.
-/api/vehicle-type/{id:int} | Operations.EditType | PUT | 200 | inspectionType=post_rental | Vehicle type updated successfully.
+/api/vehicle-type/{id:int} | VehicleTypes.DeleteType | DELETE | 200 | - | Vehicle type deleted successfully.
+/api/vehicle-type/{id:int} | VehicleTypes.DeleteType | DELETE | 200 | inspectionType=post_rental | Vehicle type deleted successfully.
+/api/vehicle-type/{id:int} | VehicleTypes.EditType | PUT | 200 | - | Vehicle type updated successfully.
+/api/vehicle-type/{id:int} | VehicleTypes.EditType | PUT | 200 | inspectionType=post_rental | Vehicle type updated successfully.
 /api/vehicle-type/{id:int}/active-policy | VehicleSearch.ActivePolicy | GET | 200 | - | Active rental policy retrieved successfully.
 /api/vehicle-type/{id:int}/active-policy | VehicleSearch.ActivePolicy | GET | 200 | inspectionType=post_rental | Active rental policy retrieved successfully.
-/api/vehicle-types | Operations.AddType | POST | 200 | - | Vehicle type created successfully.
-/api/vehicle-types | Operations.AddType | POST | 200 | inspectionType=post_rental | Vehicle type created successfully.
-/api/vehicle-types | Operations.VehicleTypes | GET | 200 | - | Vehicle types retrieved successfully.
-/api/vehicle-types | Operations.VehicleTypes | GET | 200 | inspectionType=post_rental | Vehicle types retrieved successfully.
-/api/vehicle/{id:int} | Operations.DeleteVehicle | DELETE | 200 | - | delete vehicle deleted successfully.
-/api/vehicle/{id:int} | Operations.DeleteVehicle | DELETE | 200 | inspectionType=post_rental | delete vehicle deleted successfully.
-/api/vehicle/{id:int} | Operations.EditVehicle | PUT | 200 | - | Vehicle updated successfully.
-/api/vehicle/{id:int} | Operations.EditVehicle | PUT | 200 | inspectionType=post_rental | Vehicle updated successfully.
-/api/vehicle/{id:int} | Operations.Vehicle | GET | 200 | - | Vehicle retrieved successfully.
-/api/vehicle/{id:int} | Operations.Vehicle | GET | 200 | inspectionType=post_rental | Vehicle retrieved successfully.
+/api/vehicle-types | VehicleTypes.AddType | POST | 200 | - | Vehicle type created successfully.
+/api/vehicle-types | VehicleTypes.AddType | POST | 200 | inspectionType=post_rental | Vehicle type created successfully.
+/api/vehicle-types | VehicleTypes.VehicleTypes | GET | 200 | - | Vehicle types retrieved successfully.
+/api/vehicle-types | VehicleTypes.VehicleTypes | GET | 200 | inspectionType=post_rental | Vehicle types retrieved successfully.
+/api/vehicle/{id:int} | Vehicles.DeleteVehicle | DELETE | 200 | - | delete vehicle deleted successfully.
+/api/vehicle/{id:int} | Vehicles.DeleteVehicle | DELETE | 200 | inspectionType=post_rental | delete vehicle deleted successfully.
+/api/vehicle/{id:int} | Vehicles.EditVehicle | PUT | 200 | - | Vehicle updated successfully.
+/api/vehicle/{id:int} | Vehicles.EditVehicle | PUT | 200 | inspectionType=post_rental | Vehicle updated successfully.
+/api/vehicle/{id:int} | Vehicles.Vehicle | GET | 200 | - | Vehicle retrieved successfully.
+/api/vehicle/{id:int} | Vehicles.Vehicle | GET | 200 | inspectionType=post_rental | Vehicle retrieved successfully.
 /api/vehicle/{id:int}/affected-rentals | VehicleSearch.AffectedRentals | GET | 200 | - | Affected rentals retrieved successfully.
 /api/vehicle/{id:int}/affected-rentals | VehicleSearch.AffectedRentals | GET | 200 | inspectionType=post_rental | Affected rentals retrieved successfully.
 /api/vehicle/{id:int}/availability | VehicleSearch.Availability | GET | 200 | - | Vehicle availability retrieved successfully.
 /api/vehicle/{id:int}/availability | VehicleSearch.Availability | GET | 200 | inspectionType=post_rental | Vehicle availability retrieved successfully.
 /api/vehicle/{id:int}/busy-slots | VehicleSearch.BusySlots | GET | 200 | - | Vehicle busy slots retrieved successfully.
 /api/vehicle/{id:int}/busy-slots | VehicleSearch.BusySlots | GET | 200 | inspectionType=post_rental | Vehicle busy slots retrieved successfully.
-/api/vehicles | Operations.AddVehicle | POST | 200 | - | Vehicle created successfully.
-/api/vehicles | Operations.AddVehicle | POST | 200 | inspectionType=post_rental | Vehicle created successfully.
-/api/vehicles | Operations.Vehicles | GET | 200 | - | Vehicles retrieved successfully.
-/api/vehicles | Operations.Vehicles | GET | 200 | inspectionType=post_rental | Vehicles retrieved successfully.
+/api/vehicles | Vehicles.AddVehicle | POST | 200 | - | Vehicle created successfully.
+/api/vehicles | Vehicles.AddVehicle | POST | 200 | inspectionType=post_rental | Vehicle created successfully.
+/api/vehicles | Vehicles.Vehicles | GET | 200 | - | Vehicles retrieved successfully.
+/api/vehicles | Vehicles.Vehicles | GET | 200 | inspectionType=post_rental | Vehicles retrieved successfully.
 /api/vehicles/search | VehicleSearch.Search | GET | 200 | - | Vehicles retrieved successfully.
 /api/vehicles/search | VehicleSearch.Search | GET | 200 | inspectionType=post_rental | Vehicles retrieved successfully.

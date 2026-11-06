@@ -14,13 +14,6 @@ public interface IOperationsService
     Task<CustomerLicense> ReviewLicenseAsync(int customerId, string status, CancellationToken ct);
     Task<CustomerLicense> ReviewLicenseAsync(int customerId, string status, CancellationToken ct, int? licenseId) =>
         licenseId is null ? ReviewLicenseAsync(customerId, status, ct) : throw new NotSupportedException();
-    Task<IReadOnlyList<VehicleType>> ListVehicleTypesAsync(CancellationToken ct);
-    Task<VehicleType> SaveVehicleTypeAsync(int? id, string name, string? fuelType, CancellationToken ct, string? type = null);
-    Task DeleteVehicleTypeAsync(int id, CancellationToken ct);
-    Task<VehiclePage> SearchVehiclesAsync(int? typeId, int? facilityId, string? status, DateTime? from, DateTime? to, int page, int pageSize, CancellationToken ct);
-    Task<Vehicle?> GetVehicleAsync(int id, CancellationToken ct);
-    Task<Vehicle> SaveVehicleAsync(int? id, Vehicle vehicle, CancellationToken ct);
-    Task DeleteVehicleAsync(int id, CancellationToken ct);
     Task<RentalPolicy> CreatePolicyAsync(RentalPolicy policy, CancellationToken ct);
     Task<RentalPolicy> SetPolicyStatusAsync(int id, bool isActive, CancellationToken ct);
     Task<RentalPolicyPage> ListPoliciesAsync(int page, int pageSize, CancellationToken ct);

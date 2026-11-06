@@ -2,6 +2,7 @@ using System.Text;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Features.Handovers;
 using Car_Rental_System_BE.Application.Features.Rentals;
+using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Car_Rental_System_BE.Domain.Features.Rentals;
@@ -14,6 +15,7 @@ public sealed class HandoverIntegrationTests(PostgresFixture db) : IClassFixture
     private static readonly ActorContext Actor = new(1, "manager@test.local", "Manager");
     private NpgsqlRentalLifecycleRepository Repository => new(db.DataSource);
     private NpgsqlOperationsRepository Operations => new(db.DataSource);
+    private NpgsqlFleetRepository Fleet => new(db.DataSource);
     private HandoverService Service => new(new RentalQueryService(new NpgsqlRentalQueries(db.DataSource, TimeProvider.System)),
         new RentalLifecycleService(Repository, new RentalPaymentGateAdapter(db.DataSource), null!, null!, null!, new Events(),
             new RentalOptions(), new RentalCancellationOptions(), TimeProvider.System));
@@ -198,7 +200,7 @@ public sealed class HandoverIntegrationTests(PostgresFixture db) : IClassFixture
         await Seed.ScalarAsync(db.DataSource, "UPDATE vehicles SET status='maintenance' WHERE id=$1", ready.Vehicle);
         var error = await Assert.ThrowsAsync<ConflictException>(() => Service.ConfirmAsync(ready.Rental, Actor, default));
         Assert.Equal("VEHICLE_UNAVAILABLE", error.Code);
-        Assert.Equal("maintenance", (await Operations.GetVehicleAsync(ready.Vehicle, default))!.Status);
+        Assert.Equal("maintenance", (await Fleet.GetVehicleAsync(ready.Vehicle, default))!.Status);
         Assert.Equal("pre_inspection", (await Operations.GetRentalAsync(ready.Rental, default))!.Status);
     }
 

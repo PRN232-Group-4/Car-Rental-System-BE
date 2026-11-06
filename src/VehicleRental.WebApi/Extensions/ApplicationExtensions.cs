@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.Application.Features.Assignments;
 using Car_Rental_System_BE.Application.Features.Availability;
 using Car_Rental_System_BE.Application.Features.Billing;
+using Car_Rental_System_BE.Application.Features.Fleet;
 using Car_Rental_System_BE.Application.DTOs.Options;
 using Car_Rental_System_BE.Application.Features.Handovers;
 using Car_Rental_System_BE.Application.Features.Inspections;
@@ -45,6 +46,7 @@ public static class ApplicationExtensions
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IStaffService, StaffService>();
         services.AddScoped<IOrganizationService, OrganizationService>();
+        services.AddScoped<IFleetService, FleetService>();
         services.AddScoped<IOperationsService, OperationsService>();
         services.AddScoped<IUserAdministrationService, UserAdministrationService>();
         services.AddScoped<IDashboardService, DashboardService>();

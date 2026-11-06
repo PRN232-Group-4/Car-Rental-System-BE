@@ -1,23 +1,5 @@
 namespace Car_Rental_System_BE.Application.DTOs.Operations;
 
-public sealed record VehicleType(int Id, string Name, string? FuelType, string? Type = null);
-public sealed record VehicleDetail(
-    int? SeatCount = null, string? Transmission = null, decimal? TrunkCapacity = null,
-    string? BikeType = null, bool? HasStorageBox = null,
-    string? BatteryCapacity = null, string? ChargingType = null, string? ChargingTimeHours = null, decimal? MaxRangeKm = null, string? BatteryType = null,
-    IReadOnlyList<string>? GalleryImages = null);
-public sealed record Vehicle(int Id, int VehicleTypeId, string VehicleType, int? FacilityId, string? Facility, string Status, string? Brand, string? Model, string? Color, int? YearOfManufacture, decimal? HourlyPrice, decimal? LongtermPrice, string? Description, string? MainImageUrl, string? Location, VehicleDetail? Detail = null, string? LicensePlate = null)
-{
-    public bool? DriverAvailable { get; init; }
-    public bool SupportsSubscription => HourlyPrice.HasValue;
-    public IReadOnlyList<string> Features { get; init; } = [];
-    public IReadOnlyList<string> AllowedLicenseTypes { get; init; } = [];
-    public IReadOnlyList<string> MaintenanceTechnicianEmails { get; init; } = [];
-    public int? SeatCount => Detail?.SeatCount;
-    public string? Transmission => Detail?.Transmission;
-    public string? BatteryCapacity => Detail?.BatteryCapacity;
-}
-public sealed record VehiclePage(IReadOnlyList<Vehicle> Items, int Page, int PageSize, int TotalCount);
 public sealed record RentalPolicy(int Id, int? VehicleTypeId, string Name, decimal VatRate, decimal OvertimeFeeRate, decimal DepositPercentage, bool IsActive, long RentalCount = 0, string? VehicleTypeName = null, int? ManagedBy = null, DateTime? CreatedAt = null);
 public sealed record RentalPolicyPage(IReadOnlyList<RentalPolicy> Items, int Page, int PageSize, int TotalCount);
 public sealed record Rental(int Id, int CustomerId, int VehicleId, string RentalType, string Status, bool IsSubscription, decimal VatPrice, decimal DepositPrice, decimal OvertimePrice, decimal TotalPrice, DateTime? StartTime, DateTime? EndTime, decimal? HourlyPriceSnapshot = null, decimal? MonthlyPriceSnapshot = null, bool? HasDriver = null, string? ContractLink = null, DateTime? SignedAt = null, int? OrderId = null, bool HasPassingPreInspection = false, bool HasPostInspection = false)

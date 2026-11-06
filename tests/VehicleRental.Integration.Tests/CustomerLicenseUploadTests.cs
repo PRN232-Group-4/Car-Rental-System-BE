@@ -61,6 +61,8 @@ public sealed class CustomerLicenseUploadTests : IAsyncLifetime
         builder.Services.AddSingleton<IImageStorage>(_images);
         builder.Services.AddSingleton(DispatchProxy.Create<IUserRepository, UnusedUserRepository>());
         builder.Services.AddSingleton<IOperationsService, OperationsService>();
+        // The vehicle endpoints moved to the Fleet slice; this suite never calls them.
+        builder.Services.AddSingleton(DispatchProxy.Create<Car_Rental_System_BE.Application.Features.Fleet.IFleetService, UnusedUserRepository>());
         builder.Services.AddSingleton<IMediaService, MediaService>();
         _app = builder.Build();
         _app.UseApiResponseErrors();

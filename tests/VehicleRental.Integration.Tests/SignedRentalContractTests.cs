@@ -8,6 +8,7 @@ using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Application.Services;
+using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Car_Rental_System_BE.WebApi.Features.Rentals;
@@ -50,6 +51,8 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(o => o.OperationFilter<ApiSuccessResponseOperationFilter>());
         builder.Services.AddSingleton<IOperationsService>(new OperationsService(Operations));
+        // The vehicle endpoints moved to the Fleet slice; these tests never call them.
+        builder.Services.AddSingleton<Car_Rental_System_BE.Application.Features.Fleet.IFleetService>(new Car_Rental_System_BE.Application.Features.Fleet.FleetService(new NpgsqlFleetRepository(db.DataSource)));
         builder.Services.AddSingleton<IRentalContractDocumentRepository>(Documents);
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<IRentalContractDocumentService, RentalContractDocumentService>();

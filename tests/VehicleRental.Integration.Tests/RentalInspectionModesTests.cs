@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Features.Inspections;
 using Car_Rental_System_BE.Infrastructure.Features.Availability;
+using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
@@ -125,7 +126,7 @@ public sealed class RentalInspectionModesTests(PostgresFixture db) : IClassFixtu
         var error=await Assert.ThrowsAsync<ConflictException>(()=>new NpgsqlOperationsRepository(db.DataSource).CreateRentalAsync(email,vehicle,null,"hourly",DateTime.UtcNow.AddDays(5),DateTime.UtcNow.AddDays(6),false,null,false,default));
         Assert.Equal("VEHICLE_UNAVAILABLE",error.Code);
         // Admin catalogue still contains this vehicle.
-        Assert.NotNull(await new NpgsqlOperationsRepository(db.DataSource).GetVehicleAsync(vehicle,default));
+        Assert.NotNull(await new NpgsqlFleetRepository(db.DataSource).GetVehicleAsync(vehicle,default));
     }
 
     [Fact]

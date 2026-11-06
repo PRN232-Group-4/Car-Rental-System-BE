@@ -34,7 +34,7 @@ public sealed class RentalExpiryIntegrationTests(PostgresFixture db) : IClassFix
         var (_, email) = await Seed.CustomerAsync(db.DataSource);
         var vehicle = await Seed.VehicleAsync(db.DataSource);
         var time = new SettableTimeProvider(new DateTime(2030, 5, 1, 8, 0, 0, DateTimeKind.Utc));
-        var service = new OperationsService(new NpgsqlOperationsRepository(db.DataSource), null, time, null, Options());
+        var service = new OperationsService(new NpgsqlOperationsRepository(db.DataSource), time, null, Options());
 
         var rejected = await Assert.ThrowsAsync<BusinessRuleException>(() => service.CreateRentalAsync(
             email, vehicle, null, "hourly", time.UtcNow.AddMinutes(59), time.UtcNow.AddHours(3), false, null, false, default));
@@ -197,10 +197,10 @@ public sealed class RentalExpiryIntegrationTests(PostgresFixture db) : IClassFix
         var operations = new NpgsqlOperationsRepository(db.DataSource);
         var time = new SettableTimeProvider(new DateTime(2030, 5, 1, 8, 0, 0, DateTimeKind.Utc));
 
-        var shortWindow = await new OperationsService(operations, null, time, null, Options(approvalWindowMinutes: 15))
+        var shortWindow = await new OperationsService(operations, time, null, Options(approvalWindowMinutes: 15))
             .CreateRentalAsync(email, await Seed.VehicleAsync(db.DataSource), null, "hourly",
                 time.UtcNow.AddHours(2), time.UtcNow.AddHours(4), false, null, false, default);
-        var longWindow = await new OperationsService(operations, null, time, null, Options(approvalWindowMinutes: 120))
+        var longWindow = await new OperationsService(operations, time, null, Options(approvalWindowMinutes: 120))
             .CreateRentalAsync(email, await Seed.VehicleAsync(db.DataSource), null, "hourly",
                 time.UtcNow.AddHours(2), time.UtcNow.AddHours(4), false, null, false, default);
 

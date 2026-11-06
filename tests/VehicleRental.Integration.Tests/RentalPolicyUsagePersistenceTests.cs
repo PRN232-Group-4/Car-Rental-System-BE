@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Services;
+using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
@@ -8,13 +9,15 @@ namespace VehicleRental.Tests;
 
 public sealed class RentalPolicyUsagePersistenceTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
+    private NpgsqlFleetRepository Fleet => new(db.DataSource);
+
     [Fact]
     public async Task Counts_follow_exact_policy_references_and_survive_status_updates()
     {
         var repository = new NpgsqlOperationsRepository(db.DataSource);
         var (customerId, _) = await Seed.CustomerAsync(db.DataSource);
         var vehicleId = await Seed.VehicleAsync(db.DataSource);
-        var typeId = (await repository.GetVehicleAsync(vehicleId, default))!.VehicleTypeId;
+        var typeId = (await Fleet.GetVehicleAsync(vehicleId, default))!.VehicleTypeId;
         var old = await repository.CreatePolicyAsync(new RentalPolicy(0, typeId, "Old", 10, 20, 30, false), default);
         var current = await repository.CreatePolicyAsync(new RentalPolicy(0, typeId, "Current", 10, 20, 30, true), default);
         foreach (var status in new[] { "pending", "completed", "cancelled" })
@@ -37,7 +40,7 @@ public sealed class RentalPolicyUsagePersistenceTests(PostgresFixture db) : ICla
         var service = new OperationsService(repository);
         await Assert.ThrowsAsync<ValidationException>(() => repository.CreatePolicyAsync(new RentalPolicy(0, int.MaxValue, "Missing", 10, 20, 30, true), default));
         var vehicleId = await Seed.VehicleAsync(db.DataSource);
-        var typeId = (await repository.GetVehicleAsync(vehicleId, default))!.VehicleTypeId;
+        var typeId = (await Fleet.GetVehicleAsync(vehicleId, default))!.VehicleTypeId;
         var policy = new RentalPolicy(0, typeId, "Concurrent", 10, 20, 30, true);
         async Task<bool> Create()
         {
@@ -55,7 +58,7 @@ public sealed class RentalPolicyUsagePersistenceTests(PostgresFixture db) : ICla
     {
         var repository = new NpgsqlOperationsRepository(db.DataSource);
         var vehicleId = await Seed.VehicleAsync(db.DataSource);
-        var typeId = (await repository.GetVehicleAsync(vehicleId, default))!.VehicleTypeId;
+        var typeId = (await Fleet.GetVehicleAsync(vehicleId, default))!.VehicleTypeId;
         var first = await repository.CreatePolicyAsync(new RentalPolicy(0, typeId, "First", 10, 20, 30, false), default);
         var second = await repository.CreatePolicyAsync(first with { Id = 0, Name = "Second" }, default);
         async Task<bool> Activate(int id)

@@ -3,6 +3,7 @@ using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Car_Rental_System_BE.Infrastructure.Features.Assignments;
+using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Domain.Features.Assignments;
 using Car_Rental_System_BE.Domain.Features.Rentals;
@@ -13,6 +14,7 @@ namespace VehicleRental.Tests;
 public sealed class MultiLicenseIntegrationTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
     private NpgsqlOperationsRepository Store => new(db.DataSource);
+    private NpgsqlFleetRepository Fleet => new(db.DataSource);
     private static CustomerLicense License(string number, string type) =>
         new(number, type, new DateOnly(2024, 1, 1), new DateOnly(2099, 1, 1), "https://example.test/license.png", "pending");
 
@@ -51,12 +53,12 @@ public sealed class MultiLicenseIntegrationTests(PostgresFixture db) : IClassFix
     public async Task Vehicle_license_configuration_roundtrips_and_can_be_cleared()
     {
         var id = await Seed.VehicleAsync(db.DataSource);
-        var vehicle = (await Store.GetVehicleAsync(id, default))!;
-        var saved = await Store.SaveVehicleAsync(id, vehicle with { AllowedLicenseTypes = [" b ", "B2", "B"] }, default);
+        var vehicle = (await Fleet.GetVehicleAsync(id, default))!;
+        var saved = await Fleet.SaveVehicleAsync(id, vehicle with { AllowedLicenseTypes = [" b ", "B2", "B"] }, default);
         Assert.Equal(new[] { "B", "B2" }, saved.AllowedLicenseTypes);
-        Assert.Equal(saved.AllowedLicenseTypes, (await Store.GetVehicleAsync(id, default))!.AllowedLicenseTypes);
-        await Store.SaveVehicleAsync(id, saved with { AllowedLicenseTypes = [] }, default);
-        Assert.Empty((await Store.GetVehicleAsync(id, default))!.AllowedLicenseTypes);
+        Assert.Equal(saved.AllowedLicenseTypes, (await Fleet.GetVehicleAsync(id, default))!.AllowedLicenseTypes);
+        await Fleet.SaveVehicleAsync(id, saved with { AllowedLicenseTypes = [] }, default);
+        Assert.Empty((await Fleet.GetVehicleAsync(id, default))!.AllowedLicenseTypes);
     }
 
     [Fact]

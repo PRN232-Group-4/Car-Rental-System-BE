@@ -4,6 +4,7 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Application.Features.Fleet;
 using Car_Rental_System_BE.Application.Features.Organization;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Interfaces.Services;
@@ -35,6 +36,8 @@ public sealed class OperationsCompletionApiTests : IAsyncLifetime
         builder.Services.AddAuthentication("operations").AddScheme<AuthenticationSchemeOptions,TestAuthentication>("operations",_=>{});
         builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
         builder.Services.AddSingleton(DispatchProxy.Create<IOperationsService,UnusedProxy>());
+        // The vehicle endpoints moved to the Fleet slice: UnusedProxy already answers SearchVehiclesAsync.
+        builder.Services.AddSingleton(DispatchProxy.Create<IFleetService,UnusedProxy>());
         // The departments and facilities endpoints moved to the Organization slice, so they resolve
         // IOrganizationService: the paged facility list is stubbed there now.
         builder.Services.AddSingleton(DispatchProxy.Create<IOrganizationService,OrganizationProxy>());

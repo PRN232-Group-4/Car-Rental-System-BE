@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Infrastructure.Features.Availability;
+using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
@@ -8,6 +9,8 @@ namespace VehicleRental.Tests;
 
 public sealed class RentalPolicyStatusPersistenceTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
+    private NpgsqlFleetRepository Fleet => new(db.DataSource);
+
     [Fact]
     public async Task Status_only_update_preserves_terms_existing_rental_snapshots_and_other_versions()
     {
@@ -15,7 +18,7 @@ public sealed class RentalPolicyStatusPersistenceTests(PostgresFixture db) : ICl
         var service = new OperationsService(repository);
         var (_, email) = await Seed.CustomerAsync(db.DataSource);
         var vehicleId = await Seed.VehicleAsync(db.DataSource);
-        var vehicle = (await repository.GetVehicleAsync(vehicleId, default))!;
+        var vehicle = (await Fleet.GetVehicleAsync(vehicleId, default))!;
         var previous = await repository.CreatePolicyAsync(new RentalPolicy(0, vehicle.VehicleTypeId, "Previous", 8m, 15m, 25m, false), default);
         var policy = await repository.CreatePolicyAsync(new RentalPolicy(0, vehicle.VehicleTypeId, "Current", 10m, 20m, 30m, true), default);
         var from = DateTime.UtcNow.AddDays(2);

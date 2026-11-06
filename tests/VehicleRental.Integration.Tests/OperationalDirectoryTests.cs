@@ -7,6 +7,8 @@ using Car_Rental_System_BE.Application.DTOs.Accounts;
 using Car_Rental_System_BE.Application.Features.Inspections;
 using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Application.Services;
+using Car_Rental_System_BE.Application.Features.Fleet;
+using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Car_Rental_System_BE.WebApi.Features.Inspections;
 using Car_Rental_System_BE.WebApi.Controllers;
@@ -53,7 +55,7 @@ public sealed class OperationalDirectoryTests(PostgresFixture db):IClassFixture<
         await Maintenance(historical.Id,"completed",true);await Maintenance(historical.Id,"cancelled",false);
         await Maintenance(inactive.Id,"scheduled",false);await Maintenance(wrongRole.Id,"scheduled",false);
         var expected=new[]{current.Email,unsafeTech.Email}.Order(StringComparer.Ordinal).ToArray();
-        var repository=new NpgsqlOperationsRepository(db.DataSource);
+        var repository=new NpgsqlFleetRepository(db.DataSource);
         Assert.Equal(expected,(await repository.GetVehicleAsync(vehicle,default))!.MaintenanceTechnicianEmails);
         var all=await repository.SearchVehiclesAsync(null,null,null,null,null,1,100,default);
         Assert.Equal(expected,all.Items.Single(x=>x.Id==vehicle).MaintenanceTechnicianEmails);
@@ -169,6 +171,9 @@ public sealed class OperationalDirectoryTests(PostgresFixture db):IClassFixture<
         builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
         builder.Services.AddSingleton<IInspectionDirectoryService>(new InspectionDirectoryService(new NpgsqlInspectionDirectoryRepository(db.DataSource)));
         builder.Services.AddSingleton<IOperationsService>(new OperationsService(new NpgsqlOperationsRepository(db.DataSource)));
+        // The vehicle endpoints moved to the Fleet slice, so they resolve IFleetService: the directory test
+        // reads /api/vehicle/{id} and /api/vehicles through it.
+        builder.Services.AddSingleton<IFleetService>(new FleetService(new NpgsqlFleetRepository(db.DataSource)));
         builder.Services.AddSingleton(DispatchProxy.Create<IMediaService,Unused>());
         builder.Services.AddControllers(options=>options.Filters.Add<ApiSuccessResponseFilter>()).AddApplicationPart(typeof(InspectionsController).Assembly);
         builder.Services.AddEndpointsApiExplorer();builder.Services.AddSwaggerGen(options=>options.OperationFilter<ApiSuccessResponseOperationFilter>());

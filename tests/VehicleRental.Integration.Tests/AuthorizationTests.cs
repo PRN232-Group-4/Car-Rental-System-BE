@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.WebApi.Features.Billing;
 using Car_Rental_System_BE.WebApi.Features.Maintenances;
 using Car_Rental_System_BE.WebApi.Controllers;
+using Car_Rental_System_BE.WebApi.Features.Fleet;
 using Car_Rental_System_BE.WebApi.Features.Organization;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.DTOs.Accounts;
@@ -42,10 +43,6 @@ public sealed class AuthorizationTests
     }
 
     [Theory]
-    [InlineData("AddVehicle", "Driver", false)]
-    [InlineData("AddVehicle", "Staff", false)]
-    [InlineData("AddVehicle", "CustomerService", false)]
-    [InlineData("AddVehicle", "Manager", true)]
     [InlineData("ReviewLicense", "Driver", false)]
     [InlineData("ReviewLicense", "CustomerService", true)]
     [InlineData("Hourly", "Staff", false)]
@@ -60,12 +57,32 @@ public sealed class AuthorizationTests
     [InlineData("DriverSchedule", "Driver", true)]
     [InlineData("Policies", "CustomerService", false)]
     [InlineData("Policies", "Manager", true)]
-    [InlineData("DeleteType", "CustomerService", false)]
-    [InlineData("DeleteType", "Manager", true)]
     [InlineData("DeletePlan", "CustomerService", false)]
     [InlineData("DeletePlan", "Manager", true)]
     public async Task Operations_enforce_capability_matrix(string action, string role, bool allowed) =>
         Assert.Equal(allowed, await AuthorizeEndpoint<OperationsController>(action, Principal(role, 7)));
+
+    /// <summary>
+    /// The vehicle actions moved to VehiclesController. They are looked up on the controller that actually owns
+    /// them now, so a policy left behind on OperationsController cannot pass this matrix.
+    /// </summary>
+    [Theory]
+    [InlineData("AddVehicle", "Driver", false)]
+    [InlineData("AddVehicle", "Staff", false)]
+    [InlineData("AddVehicle", "CustomerService", false)]
+    [InlineData("AddVehicle", "Manager", true)]
+    public async Task Vehicles_enforce_capability_matrix(string action, string role, bool allowed) =>
+        Assert.Equal(allowed, await AuthorizeEndpoint<VehiclesController>(action, Principal(role, 7)));
+
+    /// <summary>
+    /// The vehicle-type actions moved to VehicleTypesController. Same rule: the policy is asserted on the
+    /// controller that owns the action.
+    /// </summary>
+    [Theory]
+    [InlineData("DeleteType", "CustomerService", false)]
+    [InlineData("DeleteType", "Manager", true)]
+    public async Task Vehicle_types_enforce_capability_matrix(string action, string role, bool allowed) =>
+        Assert.Equal(allowed, await AuthorizeEndpoint<VehicleTypesController>(action, Principal(role, 7)));
 
     /// <summary>
     /// The facility actions moved to FacilitiesController. They are looked up on the controller that actually

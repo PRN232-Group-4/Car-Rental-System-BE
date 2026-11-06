@@ -1,5 +1,6 @@
 using Car_Rental_System_BE.Application.Features.Availability;
 using Car_Rental_System_BE.Infrastructure.Features.Availability;
+using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
@@ -56,21 +57,23 @@ public sealed class VehicleLicenseCatalogIntegrationTests(PostgresFixture db) : 
 
         // Management must retain unconfigured vehicles so they can be fixed.
         var operations = new NpgsqlOperationsRepository(db.DataSource);
-        var management = await operations.SearchVehiclesAsync(vehicleType, facility, null, null, null, 1, 20, default);
+        var fleet = new NpgsqlFleetRepository(db.DataSource);
+        var management = await fleet.SearchVehiclesAsync(vehicleType, facility, null, null, null, 1, 20, default);
         Assert.Equal(5, management.TotalCount);
         Assert.Contains(management.Items, x => x.Id == empty);
         Assert.Contains(management.Items, x => x.Id == whitespace);
         Assert.Contains(management.Items, x => x.Id == nullEntry);
-        Assert.NotNull(await operations.GetVehicleAsync(empty, default));
+        Assert.NotNull(await fleet.GetVehicleAsync(empty, default));
     }
 
     [Fact]
     public async Task Hidden_vehicle_retains_rental_history_and_reappears_after_configuration()
     {
         var operations = new NpgsqlOperationsRepository(db.DataSource);
+        var fleet = new NpgsqlFleetRepository(db.DataSource);
         var (customer, _) = await Seed.CustomerAsync(db.DataSource);
         var vehicle = await Seed.VehicleAsync(db.DataSource);
-        var type = (await operations.GetVehicleAsync(vehicle, default))!.VehicleTypeId;
+        var type = (await fleet.GetVehicleAsync(vehicle, default))!.VehicleTypeId;
         var rental = await VehicleBookingSchemaTests.RentalAsync(db.DataSource, customer, vehicle,
             new DateTime(2030, 1, 1), new DateTime(2030, 1, 2), status: "completed");
         var search = new NpgsqlVehicleSearchRepository(db.DataSource);
@@ -80,7 +83,7 @@ public sealed class VehicleLicenseCatalogIntegrationTests(PostgresFixture db) : 
         Assert.Empty(hidden.Items);
         Assert.Equal(0, hidden.TotalCount);
         Assert.Equal(vehicle, (await operations.GetRentalAsync(rental, default))!.VehicleId);
-        Assert.NotNull(await operations.GetVehicleAsync(vehicle, default));
+        Assert.NotNull(await fleet.GetVehicleAsync(vehicle, default));
 
         await Seed.ScalarAsync(db.DataSource, "UPDATE vehicles SET allowed_license_types=ARRAY['B'] WHERE id=$1", vehicle);
         var visible = await search.SearchAsync(query, 60, null, default);

@@ -196,6 +196,8 @@ public sealed class StaffIdentityTests(PostgresFixture db) : IClassFixture<Postg
         builder.Services.AddSingleton<IStaffService>(Service);
         builder.Services.AddSingleton<IAccountService>(new AccountService(new NpgsqlAccountRepository(db.DataSource)));
         builder.Services.AddSingleton<IOperationsService>(new OperationsService(new NpgsqlOperationsRepository(db.DataSource)));
+        // The vehicle endpoints moved to the Fleet slice; these tests never call them.
+        builder.Services.AddSingleton(DispatchProxy.Create<Car_Rental_System_BE.Application.Features.Fleet.IFleetService,Unused>());
         builder.Services.AddSingleton<IOperationsCompletionService>(new OperationsCompletionService(new NpgsqlOperationsCompletionRepository(db.DataSource)));
         builder.Services.AddSingleton<IMaintenanceService>(new MaintenanceService(new NpgsqlMaintenanceRepository(db.DataSource)));
         builder.Services.AddSingleton(DispatchProxy.Create<IRegistrationWorkflow,Unused>());

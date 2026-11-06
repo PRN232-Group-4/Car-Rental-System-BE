@@ -215,6 +215,8 @@ public sealed class InspectionAssignmentTests(PostgresFixture db) : IClassFixtur
         builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
         builder.Services.AddSingleton<IInspectionAssignmentService>(Service);
         builder.Services.AddSingleton<IOperationsService>(new OperationsService(new NpgsqlOperationsRepository(db.DataSource)));
+        // The vehicle endpoints moved to the Fleet slice; these tests never call them.
+        builder.Services.AddSingleton(System.Reflection.DispatchProxy.Create<Car_Rental_System_BE.Application.Features.Fleet.IFleetService, UnusedMedia>());
         builder.Services.AddSingleton(System.Reflection.DispatchProxy.Create<IMediaService, UnusedMedia>());
         builder.Services.AddSingleton<IStaffService>(new StaffService(new NpgsqlStaffRepository(db.DataSource),
             System.Reflection.DispatchProxy.Create<Car_Rental_System_BE.Application.Interfaces.External.IRefreshTokenStore, UnusedMedia>()));

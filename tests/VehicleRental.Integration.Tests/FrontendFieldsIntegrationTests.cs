@@ -1,8 +1,10 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Features.Rentals;
+using Car_Rental_System_BE.Application.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Features.Organization;
 using Xunit;
 
@@ -14,12 +16,13 @@ public sealed class FrontendFieldsIntegrationTests(PostgresFixture db) : IClassF
     public async Task Catalog_metadata_and_facility_contact_round_trip_without_fabricated_defaults()
     {
         var repo = new NpgsqlOperationsRepository(db.DataSource);
+        var fleet = new NpgsqlFleetRepository(db.DataSource);
         var organization = new NpgsqlOrganizationRepository(db.DataSource);
         var facility = await organization.SaveFacilityAsync(null,"Contact branch","Address",default,"0901234567");
-        var type = await repo.SaveVehicleTypeAsync(null,"Electric car","electric",default,"car");
-        var vehicle = await repo.SaveVehicleAsync(null,new Vehicle(0,type.Id,"",facility.Id,null,"available","Brand","Model",null,2025,100,1000,null,null,null,
+        var type = await fleet.SaveVehicleTypeAsync(null,"Electric car","electric",default,"car");
+        var vehicle = await fleet.SaveVehicleAsync(null,new Vehicle(0,type.Id,"",facility.Id,null,"available","Brand","Model",null,2025,100,1000,null,null,null,
             new VehicleDetail(SeatCount:5,Transmission:"automatic",BatteryCapacity:"60 kWh"),"51A-12345") { Features=["GPS","Camera"] },default);
-        var page = await repo.SearchVehiclesAsync(type.Id,facility.Id,null,null,null,1,1,default);
+        var page = await fleet.SearchVehiclesAsync(type.Id,facility.Id,null,null,null,1,1,default);
         var listed = Assert.Single(page.Items);
         Assert.Equal(vehicle.Id,listed.Id);
         Assert.Equal(5,listed.SeatCount);
@@ -35,7 +38,7 @@ public sealed class FrontendFieldsIntegrationTests(PostgresFixture db) : IClassF
         Assert.Empty(empty.Items);
         Assert.Equal(facilities.TotalCount,empty.TotalCount);
         await Assert.ThrowsAsync<BusinessRuleException>(()=>organization.ListFacilitiesAsync(0,20,default));
-        var catalogEmpty=await repo.SearchVehiclesAsync(type.Id,facility.Id,null,null,null,int.MaxValue,100,default);
+        var catalogEmpty=await fleet.SearchVehiclesAsync(type.Id,facility.Id,null,null,null,int.MaxValue,100,default);
         Assert.Empty(catalogEmpty.Items);
         Assert.Equal(1,catalogEmpty.TotalCount);
     }
@@ -78,8 +81,9 @@ public sealed class FrontendFieldsIntegrationTests(PostgresFixture db) : IClassF
     public async Task Policy_metadata_survives_status_update_and_returns_real_creation_timestamp()
     {
         var repo=new NpgsqlOperationsRepository(db.DataSource);
+        var fleet=new NpgsqlFleetRepository(db.DataSource);
         var organization=new NpgsqlOrganizationRepository(db.DataSource);
-        var type=await repo.SaveVehicleTypeAsync(null,"Policy car","gasoline",default,"car");
+        var type=await fleet.SaveVehicleTypeAsync(null,"Policy car","gasoline",default,"car");
         var user=await Seed.ScalarAsync(db.DataSource,"INSERT INTO users(email) VALUES($1) RETURNING id",$"manager-{Guid.NewGuid():N}@test.local");
         var staff=(int)(await Seed.ScalarAsync(db.DataSource,"INSERT INTO staffs(user_id) VALUES($1) RETURNING id",user))!;
         var policy=await repo.CreatePolicyAsync(new RentalPolicy(0,type.Id,"Policy",10,20,30,true,ManagedBy:staff),default);

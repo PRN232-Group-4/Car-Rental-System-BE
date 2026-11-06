@@ -1,11 +1,11 @@
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Xunit;
 
 namespace VehicleRental.Tests;
 
 public sealed class VehicleSearchTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
-    private readonly NpgsqlOperationsRepository _operations = new(db.DataSource);
+    private readonly NpgsqlFleetRepository _operations = new(db.DataSource);
 
     [Fact]
     public async Task Search_without_filters_returns_available_vehicles()

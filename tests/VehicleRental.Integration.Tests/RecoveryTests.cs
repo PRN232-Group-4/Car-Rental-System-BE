@@ -2,6 +2,7 @@ using Car_Rental_System_BE.Application.Features.Assignments;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Infrastructure.Features.Assignments;
+using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Features.Maintenances;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
@@ -11,6 +12,7 @@ namespace VehicleRental.Tests;
 public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
     private readonly NpgsqlOperationsRepository store = new(db.DataSource);
+    private readonly NpgsqlFleetRepository fleet = new(db.DataSource);
     private readonly NpgsqlAssignmentRepository assignments = new(db.DataSource);
     private readonly NpgsqlMaintenanceRepository maintenanceStore = new(db.DataSource);
     private const string Manager = "manager@test.local";
@@ -50,12 +52,12 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
     public async Task License_plate_roundtrips_through_create_edit_search_and_detail()
     {
         var seed = await Seed.VehicleAsync(db.DataSource);
-        var template = (await store.GetVehicleAsync(seed,default))!;
-        var created = await store.SaveVehicleAsync(null,template with { LicensePlate="30A-55555" },default);
+        var template = (await fleet.GetVehicleAsync(seed,default))!;
+        var created = await fleet.SaveVehicleAsync(null,template with { LicensePlate="30A-55555" },default);
         Assert.Equal("30A-55555",created.LicensePlate);
-        await store.SaveVehicleAsync(created.Id,created with { LicensePlate="51A-99999" },default);
-        Assert.Equal("51A-99999",(await store.GetVehicleAsync(created.Id,default))!.LicensePlate);
-        var list = await store.SearchVehiclesAsync(template.VehicleTypeId,null,null,null,null,1,100,default);
+        await fleet.SaveVehicleAsync(created.Id,created with { LicensePlate="51A-99999" },default);
+        Assert.Equal("51A-99999",(await fleet.GetVehicleAsync(created.Id,default))!.LicensePlate);
+        var list = await fleet.SearchVehiclesAsync(template.VehicleTypeId,null,null,null,null,1,100,default);
         Assert.Contains(list.Items,v=>v.Id==created.Id && v.LicensePlate=="51A-99999");
     }
 
@@ -68,7 +70,7 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         Assert.Equal(inspector,inspection.StaffId);
         var rental = (await store.GetRentalAsync(scenario.RentalId,default))!;
         Assert.Equal("pending",rental.Status);
-        Assert.Equal("maintenance",(await store.GetVehicleAsync(rental.VehicleId,default))!.Status);
+        Assert.Equal("maintenance",(await fleet.GetVehicleAsync(rental.VehicleId,default))!.Status);
         Assert.Empty(await maintenanceStore.ListMaintenanceAsync(rental.VehicleId,null,default));
         Assert.Equal(0,await Seed.CountAsync(db.DataSource,"SELECT COUNT(*) FROM payments WHERE rental_id=$1",rental.Id));
         // FR-036 permits approval before payment/inspection; approval must not bypass unsafe handover.
@@ -77,7 +79,7 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         Assert.IsType<DateTime>(await Seed.ScalarAsync(db.DataSource,"SELECT confirmed_at FROM rentals WHERE id=$1",rental.Id));
         Assert.Equal(0,await Seed.CountAsync(db.DataSource,"SELECT COUNT(*) FROM rental_orders WHERE rental_id=$1",rental.Id));
         await Assert.ThrowsAsync<InvalidOperationException>(()=>store.ChangeRentalStatusAsync(rental.Id,"renting",default));
-        Assert.Equal("maintenance",(await store.GetVehicleAsync(rental.VehicleId,default))!.Status);
+        Assert.Equal("maintenance",(await fleet.GetVehicleAsync(rental.VehicleId,default))!.Status);
         var candidate=await ReplacementAsync(rental.VehicleId);
         await store.InspectReplacementAsync(rental.Id,candidate,inspector,true,null,null,null,null,default);
         var recovered=await store.ReplaceVehicleAsync(rental.Id,candidate,null,null,Manager,default);
@@ -139,9 +141,9 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         Assert.Equal(100m,await Seed.ScalarAsync(db.DataSource,"SELECT hourly_price_snapshot FROM hour_rental_detail WHERE rental_id=$1",rental.Id));
         Assert.Equal(newDriver,await Seed.ScalarAsync(db.DataSource,"SELECT driver_staff_id FROM vehicle_assignments WHERE rental_id=$1 AND status='assigned'",rental.Id));
         Assert.Equal("resolved",(await store.ListReportsAsync(null,rental.Id,default)).Single().Status);
-        Assert.Equal("maintenance",(await store.GetVehicleAsync(rental.VehicleId,default))!.Status);
+        Assert.Equal("maintenance",(await fleet.GetVehicleAsync(rental.VehicleId,default))!.Status);
         await maintenanceStore.SaveMaintenanceAsync(maintenance.Id,maintenance with { Status="completed",IsSafe=true },default);
-        Assert.Equal("available",(await store.GetVehicleAsync(rental.VehicleId,default))!.Status);
+        Assert.Equal("available",(await fleet.GetVehicleAsync(rental.VehicleId,default))!.Status);
         await Assert.ThrowsAsync<InvalidOperationException>(()=>store.ChangeRentalStatusAsync(rental.Id,"post_inspection",default));
         await store.AddInspectionAsync(rental.Id,inspector,"post_rental",false,null,null,"New damage",null,default);
         Assert.Single(await maintenanceStore.ListMaintenanceAsync(rental.VehicleId,null,default));
@@ -161,13 +163,13 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         var (_,customer)=await Seed.CustomerAsync(db.DataSource);
         var start=DateTime.UtcNow.AddHours(1);
         await Assert.ThrowsAsync<ConflictException>(()=>store.CreateRentalAsync(customer,vehicle,null,"hourly",start,start.AddHours(1),false,null,false,default));
-        var catalog=await store.SearchVehiclesAsync(null,null,null,start,start.AddHours(1),1,100,default);
+        var catalog=await fleet.SearchVehiclesAsync(null,null,null,start,start.AddHours(1),1,100,default);
         Assert.DoesNotContain(catalog.Items,x=>x.Id==vehicle);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>maintenanceStore.SaveMaintenanceAsync(maintenance.Id,maintenance with { Status="completed",IsSafe=true },default,other));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>maintenanceStore.SaveMaintenanceAsync(maintenance.Id,maintenance with { AssignedStaffId=other },default,technician));
         await Assert.ThrowsAsync<InvalidOperationException>(()=>maintenanceStore.SaveMaintenanceAsync(maintenance.Id,maintenance with { Status="completed" },default,technician));
         await maintenanceStore.SaveMaintenanceAsync(maintenance.Id,maintenance with { Status="completed",IsSafe=true },default,technician);
-        Assert.Equal("available",(await store.GetVehicleAsync(vehicle,default))!.Status);
+        Assert.Equal("available",(await fleet.GetVehicleAsync(vehicle,default))!.Status);
         await store.CreateRentalAsync(customer,vehicle,null,"hourly",start,start.AddHours(1),false,null,false,default);
     }
 

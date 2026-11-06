@@ -1,5 +1,5 @@
-using Car_Rental_System_BE.Application.DTOs.Operations;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Application.Features.Fleet;
+using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Npgsql;
 using Xunit;
 
@@ -7,7 +7,7 @@ namespace VehicleRental.Tests;
 
 public sealed class VehicleCrudTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
-    private readonly NpgsqlOperationsRepository repository = new(db.DataSource);
+    private readonly NpgsqlFleetRepository repository = new(db.DataSource);
     private async Task<int> Category(string type, string fuel) =>
         (await repository.SaveVehicleTypeAsync(null, "Test", fuel, default, type)).Id;
     private static Vehicle Input(int type, VehicleDetail? detail = null) =>

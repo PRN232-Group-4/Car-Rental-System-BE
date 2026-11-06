@@ -1,4 +1,5 @@
 using Car_Rental_System_BE.Application.DTOs.Accounts;
+using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Car_Rental_System_BE.Infrastructure.Features.Organization;
 using Xunit;
@@ -16,7 +17,7 @@ public sealed class AdminListOrderTests(PostgresFixture db) : IClassFixture<Post
         var third = await Seed.VehicleAsync(db.DataSource);
         foreach (var id in new[] { first, second, third })
             await Seed.ScalarAsync(db.DataSource, "UPDATE vehicles SET facility_id=$1,created_at=$2::timestamp WHERE id=$3", facility, id == first ? "2030-02-01" : "2030-01-01", id);
-        var repo = new NpgsqlOperationsRepository(db.DataSource);
+        var repo = new NpgsqlFleetRepository(db.DataSource);
         var page = await repo.SearchVehiclesAsync(null, facility, null, null, null, 1, 2, default);
         Assert.Equal(3, page.TotalCount);
         Assert.Equal(new[] { first, third }, page.Items.Select(x => x.Id));
