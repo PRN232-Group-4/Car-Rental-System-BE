@@ -1,7 +1,9 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Application.Features.Reports;
 using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Infrastructure.Features.Assignments;
 using Car_Rental_System_BE.Infrastructure.Features.Maintenances;
+using Car_Rental_System_BE.Infrastructure.Features.Reports;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
@@ -14,7 +16,8 @@ public sealed class OperationsCompletionValidationTests
     public void Rejects_invalid_pagination_before_io(int page,int size)
     {
         var service=new OperationsCompletionService(null!);
-        Assert.Throws<ArgumentException>(()=>{ _=service.ReportsAsync(null,null,null,new(){Page=page,PageSize=size},default); });
+        var reports=new ReportService(null!);
+        Assert.Throws<ArgumentException>(()=>{ _=reports.ReportsAsync(null,null,null,new(){Page=page,PageSize=size},default); });
         Assert.Throws<ArgumentException>(()=>{ _=service.RatingsAsync(1,new(){Page=page,PageSize=size},default); });
         Assert.Throws<ArgumentException>(()=>{ _=service.MaintenanceAsync(null,null,null,null,new(){Page=page,PageSize=size},default); });
         Assert.Throws<ArgumentException>(()=>{ _=service.DriverScheduleAsync(null,DateTime.UtcNow,DateTime.UtcNow.AddHours(1),new(){Page=page,PageSize=size},default); });
@@ -23,10 +26,11 @@ public sealed class OperationsCompletionValidationTests
     public async Task Rejects_blank_reason_and_invalid_transitions_before_io()
     {
         var service=new OperationsCompletionService(null!);
+        var reports=new ReportService(null!);
         Assert.Throws<ArgumentException>(()=>{ _=service.ModerateRatingAsync(1,new("hidden"," "),"admin",default); });
         Assert.Throws<ArgumentException>(()=>{ _=service.ModerateRatingAsync(1,new("deleted","reason"),"admin",default); });
         Assert.Throws<ArgumentException>(()=>{ _=service.ReplyRatingAsync(1,new(" "),"admin",default); });
-        await Assert.ThrowsAsync<ArgumentException>(()=>service.SetReportStatusAsync(1,new("resolved","reason"),"admin",default));
+        await Assert.ThrowsAsync<ArgumentException>(()=>reports.SetReportStatusAsync(1,new("resolved","reason"),"admin",default));
         Assert.Throws<ArgumentException>(()=>{ _=service.MaintenanceAsync(null,null,DateTime.Today,DateTime.Today,new(),default); });
     }
 }
@@ -36,6 +40,8 @@ public sealed class OperationsCompletionIntegrationTests(PostgresFixture db) : I
     private readonly NpgsqlOperationsRepository store=new(db.DataSource);
     private readonly NpgsqlAssignmentRepository assignments=new(db.DataSource);
     private readonly NpgsqlMaintenanceRepository maintenanceStore=new(db.DataSource);
+    private readonly NpgsqlReportRepository reportsStore=new(db.DataSource);
+    private readonly ReportService reportsService=new(new NpgsqlReportRepository(db.DataSource));
     private readonly OperationsCompletionService service=new(new NpgsqlOperationsCompletionRepository(db.DataSource));
 
     private async Task<int> Staff(bool technician=false,bool driver=false)
@@ -71,8 +77,8 @@ public sealed class OperationsCompletionIntegrationTests(PostgresFixture db) : I
     {
         var scenario=await Scenarios.CreateDirectRentalAsync(db.DataSource);
         var staff=await Staff(true);
-        var report=await store.CreateReportAsync(scenario.RentalId,staff,false,"damage","Damaged bumper",null,default);
-        var accepted=await service.SetReportStatusAsync(report.Id,new("in_progress","Review started"),"manager@test.local",default);
+        var report=await reportsStore.CreateReportAsync(scenario.RentalId,staff,false,"damage","Damaged bumper",null,default);
+        var accepted=await reportsService.SetReportStatusAsync(report.Id,new("in_progress","Review started"),"manager@test.local",default);
         Assert.NotNull(accepted.CreatedAt);
         Assert.Equal(scenario.CustomerId,accepted.Customer!.Id);
         Assert.Equal(scenario.Email,accepted.Customer.Email);
@@ -84,14 +90,14 @@ public sealed class OperationsCompletionIntegrationTests(PostgresFixture db) : I
         Assert.Equal("Repair bumper",maintenance.Description);
         Assert.Equal(scenario.RentalId,maintenance.RentalId);
         Assert.NotNull(maintenance.CreatedAt);
-        var page=await service.ReportsAsync(staff,scenario.RentalId,"assigned",new(),default);
+        var page=await reportsService.ReportsAsync(staff,scenario.RentalId,"assigned",new(),default);
         var result=Assert.Single(page.Items);
         Assert.Equal(1,page.TotalCount);
         Assert.Equal("bodywork",result.Maintenance!.Type);
         Assert.Equal(3,result.History!.Count);
-        await Assert.ThrowsAsync<InvalidOperationException>(()=>service.SetReportStatusAsync(report.Id,new("rejected","Skip repair"),"manager@test.local",default));
-        Assert.Equal("assigned",Assert.Single((await service.ReportsAsync(staff,scenario.RentalId,null,new(),default)).Items).Status);
-        var empty=await service.ReportsAsync(staff,scenario.RentalId,null,new(){Page=int.MaxValue,PageSize=100},default);
+        await Assert.ThrowsAsync<InvalidOperationException>(()=>reportsService.SetReportStatusAsync(report.Id,new("rejected","Skip repair"),"manager@test.local",default));
+        Assert.Equal("assigned",Assert.Single((await reportsService.ReportsAsync(staff,scenario.RentalId,null,new(),default)).Items).Status);
+        var empty=await reportsService.ReportsAsync(staff,scenario.RentalId,null,new(){Page=int.MaxValue,PageSize=100},default);
         Assert.Empty(empty.Items); Assert.Equal(1,empty.TotalCount);
         var jobs=await service.MaintenanceAsync(maintenance.VehicleId,"scheduled",maintenance.CreatedAt!.Value.AddMinutes(-1),maintenance.CreatedAt.Value.AddMinutes(1),new(){PageSize=1},default);
         Assert.Equal(maintenance.Id,Assert.Single(jobs.Items).Id); Assert.Equal(1,jobs.TotalCount);

@@ -4,6 +4,7 @@ using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Infrastructure.Features.Assignments;
 using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Features.Maintenances;
+using Car_Rental_System_BE.Infrastructure.Features.Reports;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
@@ -12,6 +13,7 @@ namespace VehicleRental.Tests;
 public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
     private readonly NpgsqlOperationsRepository store = new(db.DataSource);
+    private readonly NpgsqlReportRepository reports = new(db.DataSource);
     private readonly NpgsqlFleetRepository fleet = new(db.DataSource);
     private readonly NpgsqlAssignmentRepository assignments = new(db.DataSource);
     private readonly NpgsqlMaintenanceRepository maintenanceStore = new(db.DataSource);
@@ -120,8 +122,8 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         Assert.Equal("PAYMENT_REQUIRED",unpaid.Code);
         await Scenarios.CompleteInvoiceAsync(db.DataSource,scenario.InvoiceId,scenario.InvoiceAmount);
         await store.ChangeRentalStatusAsync(rental.Id,"renting",default);
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>store.CreateReportAsync(rental.Id,newDriver,true,"breakdown","Engine stopped",null,default));
-        var report=await store.CreateReportAsync(rental.Id,oldDriver,true,"breakdown","Engine stopped",null,default);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>reports.CreateReportAsync(rental.Id,newDriver,true,"breakdown","Engine stopped",null,default));
+        var report=await reports.CreateReportAsync(rental.Id,oldDriver,true,"breakdown","Engine stopped",null,default);
         var wrong=await ReplacementAsync(rental.VehicleId,7);
         await Assert.ThrowsAsync<InvalidOperationException>(()=>store.InspectReplacementAsync(rental.Id,wrong,inspector,true,null,null,null,null,default));
         var candidate=await ReplacementAsync(rental.VehicleId);
@@ -140,7 +142,7 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         Assert.Equal(scenario.InvoiceAmount,await Seed.ScalarAsync(db.DataSource,"SELECT amount FROM invoices WHERE id=$1",scenario.InvoiceId));
         Assert.Equal(100m,await Seed.ScalarAsync(db.DataSource,"SELECT hourly_price_snapshot FROM hour_rental_detail WHERE rental_id=$1",rental.Id));
         Assert.Equal(newDriver,await Seed.ScalarAsync(db.DataSource,"SELECT driver_staff_id FROM vehicle_assignments WHERE rental_id=$1 AND status='assigned'",rental.Id));
-        Assert.Equal("resolved",(await store.ListReportsAsync(null,rental.Id,default)).Single().Status);
+        Assert.Equal("resolved",(await reports.ListReportsAsync(null,rental.Id,default)).Single().Status);
         Assert.Equal("maintenance",(await fleet.GetVehicleAsync(rental.VehicleId,default))!.Status);
         await maintenanceStore.SaveMaintenanceAsync(maintenance.Id,maintenance with { Status="completed",IsSafe=true },default);
         Assert.Equal("available",(await fleet.GetVehicleAsync(rental.VehicleId,default))!.Status);
@@ -148,7 +150,7 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         await store.AddInspectionAsync(rental.Id,inspector,"post_rental",false,null,null,"New damage",null,default);
         Assert.Single(await maintenanceStore.ListMaintenanceAsync(rental.VehicleId,null,default));
         Assert.Empty(await maintenanceStore.ListMaintenanceAsync(candidate,null,default));
-        var damage=await store.CreateReportAsync(rental.Id,inspector,false,"damage","New damage",null,default);
+        var damage=await reports.CreateReportAsync(rental.Id,inspector,false,"damage","New damage",null,default);
         Assert.Equal(candidate,damage.VehicleId);
         Assert.Equal("open",damage.Status);
     }

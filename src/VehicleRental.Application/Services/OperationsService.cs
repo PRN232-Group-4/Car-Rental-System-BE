@@ -12,22 +12,6 @@ namespace Car_Rental_System_BE.Application.Services;
 
 public sealed class OperationsService(IOperationsRepository repository, TimeProvider? timeProvider = null, IOperationalNotifications? notifications = null, RentalExpiryOptions? expiryOptions = null) : IOperationsService
 {
-    public async Task<IncidentReport> CreateReportAsync(int rentalId, int staffId, bool driverOnly, string type, string description, string? images, CancellationToken ct)
-    {
-        var report = await repository.CreateReportAsync(rentalId, staffId, driverOnly, type, description, images, ct);
-        if (notifications is not null) await notifications.ReportChangedAsync(report.Id, report.Status);
-        return report;
-    }
-
-    public Task<IReadOnlyList<IncidentReport>> ListReportsAsync(int? staffId, int? rentalId, CancellationToken ct) =>
-        repository.ListReportsAsync(staffId, rentalId, ct);
-
-    public async Task ResolveReportAsync(int reportId, string actor, CancellationToken ct)
-    {
-        await repository.ResolveReportAsync(reportId, actor, ct);
-        if (notifications is not null) await notifications.ReportChangedAsync(reportId, "resolved");
-    }
-
     public Task<Inspection> InspectReplacementAsync(int rentalId, int vehicleId, int staffId, bool isOk, decimal? odometer, decimal? fuel, string? notes, string? images, CancellationToken ct) =>
         repository.InspectReplacementAsync(rentalId, vehicleId, staffId, isOk, odometer, fuel, notes, images, ct);
 

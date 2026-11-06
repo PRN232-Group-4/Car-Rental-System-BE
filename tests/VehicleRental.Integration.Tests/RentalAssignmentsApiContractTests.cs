@@ -149,7 +149,7 @@ public sealed class RentalAssignmentsApiContractTests
     {
         var assignments = new StubAssignmentService();
         var operations = DispatchProxy.Create<IOperationsService, UnusedOperationsService>();
-        var controller = new DispatchController(operations, assignments, DispatchProxy.Create<IMaintenanceService, UnusedOperationsService>())
+        var controller = new DispatchController(operations, assignments)
         {
             ControllerContext = new ControllerContext
             {

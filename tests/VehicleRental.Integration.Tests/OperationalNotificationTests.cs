@@ -8,6 +8,7 @@ using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Application.Features.Maintenances;
+using Car_Rental_System_BE.Application.Features.Reports;
 using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Services;
@@ -68,13 +69,22 @@ public sealed class OperationalNotificationTests
         var notifications = Notifications(email);
         var report = new IncidentReport(41, 72, 1, 2, "damage", "private report description", "open", null, "private image");
         var rental = Rental();
-        var repository = Proxy<IOperationsRepository>((method, _) =>
+        var reportRepository = Proxy<IReportRepository>((method, _) =>
         {
             committed = true;
             return method.Name switch
             {
                 "CreateReportAsync" => Task.FromResult(report),
                 "ResolveReportAsync" => Task.CompletedTask,
+                _ => throw new NotSupportedException(method.Name)
+            };
+        });
+        var reportService = new ReportService(reportRepository, notifications);
+        var repository = Proxy<IOperationsRepository>((method, _) =>
+        {
+            committed = true;
+            return method.Name switch
+            {
                 "ReplaceVehicleAsync" => Task.FromResult(rental),
                 _ => throw new NotSupportedException(method.Name)
             };
@@ -82,15 +92,15 @@ public sealed class OperationalNotificationTests
         var operations = new OperationsService(repository, notifications: notifications);
         if (action is "review" or "reject")
         {
-            var completion = Proxy<IOperationsCompletionRepository>((_, _) =>
+            var completion = Proxy<IReportRepository>((_, _) =>
             {
                 committed = true;
                 return Task.FromResult(report with { Status = action == "review" ? "in_progress" : "rejected" });
             });
-            await new OperationsCompletionService(completion, notifications).SetReportStatusAsync(41,
+            await new ReportService(completion, notifications).SetReportStatusAsync(41,
                 new(action == "review" ? "in_progress" : "rejected", "internal reason"), "manager@test.local", default);
         }
-        else if (action == "create") await operations.CreateReportAsync(72, 2, false, "damage", report.Description, null, default);
+        else if (action == "create") await reportService.CreateReportAsync(72, 2, false, "damage", report.Description, null, default);
         else if (action == "assign") await new MaintenanceService(Proxy<IMaintenanceRepository>((method, _) =>
         {
             committed = true;
@@ -100,7 +110,7 @@ public sealed class OperationalNotificationTests
                 _ => throw new NotSupportedException(method.Name)
             };
         }), notifications).AssignReportMaintenanceAsync(41, 2, null, DateOnly.FromDateTime(DateTime.UtcNow), default);
-        else if (action == "resolve") await operations.ResolveReportAsync(41, "manager@test.local", default);
+        else if (action == "resolve") await reportService.ResolveReportAsync(41, "manager@test.local", default);
         else await operations.ReplaceVehicleAsync(72, 1, 2, 41, "manager@test.local", default);
         var reportEmails = email.Messages.Where(m => m.Subject.Contains("báo cáo")).ToArray();
         Assert.Equal(2, reportEmails.Length);
@@ -258,12 +268,13 @@ public sealed class OperationalNotificationTests
         var notifications = Notifications(sender);
         var error = new InvalidOperationException("Business rule failed");
         var operations = new OperationsService(Proxy<IOperationsRepository>((_, _) => throw error), notifications: notifications);
+        var reports = new ReportService(Proxy<IReportRepository>((_, _) => throw error), notifications);
         var licenses = new CustomerLicenseService(Proxy<ICustomerLicenseRepository>((_, _) => throw error), notifications: notifications);
         var payment = new PaymentService(Proxy<IPaymentRepository>((_, _) => throw error), null!, new("https://test.local", "https://test.local"), notifications);
         var actual = await Assert.ThrowsAsync<InvalidOperationException>(() => kind switch
         {
             "license" => licenses.ReviewLicenseAsync(12, "approved", default),
-            "report" => operations.CreateReportAsync(72, 2, false, "damage", "description", null, default),
+            "report" => reports.CreateReportAsync(72, 2, false, "damage", "description", null, default),
             _ => (Task)payment.ReviewRefundAsync(4, true, "manager@test.local", default)
         });
         Assert.Same(error, actual);

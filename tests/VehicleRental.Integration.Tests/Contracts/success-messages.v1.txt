@@ -256,10 +256,10 @@
 /api/rental/{id:int}/replacement-inspection/{vehicleId:int} | Dispatch.InspectReplacement | POST | 200 | inspectionType=post_rental | Replacement vehicle inspection recorded successfully.
 /api/rental/{id:int}/replacements | Dispatch.ReplaceVehicle | POST | 200 | - | Replacement vehicle dispatched with original rental pricing preserved.
 /api/rental/{id:int}/replacements | Dispatch.ReplaceVehicle | POST | 200 | inspectionType=post_rental | Replacement vehicle dispatched with original rental pricing preserved.
-/api/rental/{id:int}/reports | Dispatch.CreateReport | POST | 200 | - | Incident report submitted for manager review.
-/api/rental/{id:int}/reports | Dispatch.CreateReport | POST | 200 | inspectionType=post_rental | Incident report submitted for manager review.
-/api/rental/{id:int}/reports | Dispatch.CreateReport | POST | 201 | - | Incident report submitted for manager review.
-/api/rental/{id:int}/reports | Dispatch.CreateReport | POST | 201 | inspectionType=post_rental | Incident report submitted for manager review.
+/api/rental/{id:int}/reports | Reports.CreateReport | POST | 200 | - | Incident report submitted for manager review.
+/api/rental/{id:int}/reports | Reports.CreateReport | POST | 200 | inspectionType=post_rental | Incident report submitted for manager review.
+/api/rental/{id:int}/reports | Reports.CreateReport | POST | 201 | - | Incident report submitted for manager review.
+/api/rental/{id:int}/reports | Reports.CreateReport | POST | 201 | inspectionType=post_rental | Incident report submitted for manager review.
 /api/rental/{id:int}/return | RentalLifecycle.Return | POST | 200 | - | Vehicle return recorded successfully.
 /api/rental/{id:int}/return | RentalLifecycle.Return | POST | 200 | inspectionType=post_rental | Vehicle return recorded successfully.
 /api/rental/{id:int}/start | RentalLifecycle.Start | POST | 200 | - | Rental started successfully.
@@ -284,18 +284,18 @@
 /api/rentals/mine | RentalQueries.Mine | GET | 200 | inspectionType=post_rental | Your rentals retrieved successfully.
 /api/rentals/overdue | RentalQueries.Overdue | GET | 200 | - | Overdue rentals retrieved successfully.
 /api/rentals/overdue | RentalQueries.Overdue | GET | 200 | inspectionType=post_rental | Overdue rentals retrieved successfully.
-/api/report/{id:int}/maintenance | Dispatch.AssignMaintenance | POST | 200 | - | Maintenance technician assigned to the report successfully.
-/api/report/{id:int}/maintenance | Dispatch.AssignMaintenance | POST | 200 | inspectionType=post_rental | Maintenance technician assigned to the report successfully.
-/api/report/{id:int}/maintenance | Dispatch.AssignMaintenance | POST | 201 | - | Maintenance technician assigned to the report successfully.
-/api/report/{id:int}/maintenance | Dispatch.AssignMaintenance | POST | 201 | inspectionType=post_rental | Maintenance technician assigned to the report successfully.
-/api/report/{id:int}/resolve | Dispatch.ResolveReport | POST | 200 | - | Damage report resolved successfully.
-/api/report/{id:int}/resolve | Dispatch.ResolveReport | POST | 200 | inspectionType=post_rental | Damage report resolved successfully.
-/api/report/{id:int}/resolve | Dispatch.ResolveReport | POST | 204 | - | Damage report resolved successfully.
-/api/report/{id:int}/resolve | Dispatch.ResolveReport | POST | 204 | inspectionType=post_rental | Damage report resolved successfully.
-/api/report/{id:int}/status | Dispatch.SetReportStatus | PATCH | 200 | - | Incident report status updated successfully.
-/api/report/{id:int}/status | Dispatch.SetReportStatus | PATCH | 200 | inspectionType=post_rental | Incident report status updated successfully.
-/api/reports | Dispatch.Reports | GET | 200 | - | Incident reports retrieved successfully.
-/api/reports | Dispatch.Reports | GET | 200 | inspectionType=post_rental | Incident reports retrieved successfully.
+/api/report/{id:int}/maintenance | Reports.AssignMaintenance | POST | 200 | - | Maintenance technician assigned to the report successfully.
+/api/report/{id:int}/maintenance | Reports.AssignMaintenance | POST | 200 | inspectionType=post_rental | Maintenance technician assigned to the report successfully.
+/api/report/{id:int}/maintenance | Reports.AssignMaintenance | POST | 201 | - | Maintenance technician assigned to the report successfully.
+/api/report/{id:int}/maintenance | Reports.AssignMaintenance | POST | 201 | inspectionType=post_rental | Maintenance technician assigned to the report successfully.
+/api/report/{id:int}/resolve | Reports.ResolveReport | POST | 200 | - | Damage report resolved successfully.
+/api/report/{id:int}/resolve | Reports.ResolveReport | POST | 200 | inspectionType=post_rental | Damage report resolved successfully.
+/api/report/{id:int}/resolve | Reports.ResolveReport | POST | 204 | - | Damage report resolved successfully.
+/api/report/{id:int}/resolve | Reports.ResolveReport | POST | 204 | inspectionType=post_rental | Damage report resolved successfully.
+/api/report/{id:int}/status | Reports.SetReportStatus | PATCH | 200 | - | Incident report status updated successfully.
+/api/report/{id:int}/status | Reports.SetReportStatus | PATCH | 200 | inspectionType=post_rental | Incident report status updated successfully.
+/api/reports | Reports.Reports | GET | 200 | - | Incident reports retrieved successfully.
+/api/reports | Reports.Reports | GET | 200 | inspectionType=post_rental | Incident reports retrieved successfully.
 /api/role/{id:int} | Roles.Delete | DELETE | 200 | - | Role deleted successfully.
 /api/role/{id:int} | Roles.Delete | DELETE | 200 | inspectionType=post_rental | Role deleted successfully.
 /api/role/{id:int} | Roles.Get | GET | 200 | - | Role retrieved successfully.

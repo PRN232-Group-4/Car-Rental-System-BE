@@ -4,6 +4,7 @@ using Car_Rental_System_BE.WebApi.Features.Maintenances;
 using Car_Rental_System_BE.WebApi.Controllers;
 using Car_Rental_System_BE.WebApi.Features.Fleet;
 using Car_Rental_System_BE.WebApi.Features.Organization;
+using Car_Rental_System_BE.WebApi.Features.Reports;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.DTOs.Accounts;
 using Car_Rental_System_BE.Application.DTOs.Operations;
@@ -128,15 +129,28 @@ public sealed class AuthorizationTests
     [InlineData("CreateShift", "Manager", true)]
     [InlineData("UpdateShift", "Driver", false)]
     [InlineData("CreateShift", "CustomerService", false)]
-    [InlineData("CreateReport", "Driver", true)]
-    [InlineData("CreateReport", "Customer", true)]
-    [InlineData("AssignMaintenance", "Manager", true)]
-    [InlineData("AssignMaintenance", "Maintenance", false)]
     [InlineData("ReplaceVehicle", "Manager", true)]
     [InlineData("ReplaceVehicle", "Driver", false)]
     [InlineData("InspectReplacement", "Maintenance", true)]
     public async Task Dispatch_endpoints_enforce_roles(string action, string role, bool allowed) =>
         Assert.Equal(allowed, await AuthorizeEndpoint<DispatchController>(action, Principal(role, 7)));
+
+    /// <summary>
+    /// The five incident-report actions moved to ReportsController and keep the attributes they had: two role
+    /// lists for filing and reading, the Management policy for assigning, resolving and status. A policy left
+    /// behind on DispatchController cannot pass this matrix because the action is looked up where it lives.
+    /// </summary>
+    [Theory]
+    [InlineData("CreateReport", "Driver", true)]
+    [InlineData("CreateReport", "Customer", true)]
+    [InlineData("Reports", "Driver", true)]
+    [InlineData("Reports", "Customer", false)]
+    [InlineData("AssignMaintenance", "Manager", true)]
+    [InlineData("AssignMaintenance", "Maintenance", false)]
+    [InlineData("ResolveReport", "Manager", true)]
+    [InlineData("SetReportStatus", "Manager", true)]
+    public async Task Report_endpoints_enforce_the_attributes_they_moved_with(string action, string role, bool allowed) =>
+        Assert.Equal(allowed, await AuthorizeEndpoint<ReportsController>(action, Principal(role, 7)));
 
     [Theory]
     [InlineData("Staff", false)]

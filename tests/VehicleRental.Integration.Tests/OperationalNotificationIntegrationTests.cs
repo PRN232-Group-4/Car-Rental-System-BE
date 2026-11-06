@@ -1,7 +1,9 @@
 using Car_Rental_System_BE.Application.Features.Customers;
+using Car_Rental_System_BE.Application.Features.Reports;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Infrastructure.Features.Customers;
+using Car_Rental_System_BE.Infrastructure.Features.Reports;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -44,16 +46,16 @@ public sealed class OperationalNotificationIntegrationTests(PostgresFixture db) 
         });
         var recipients = new NpgsqlOperationalNotificationRecipients(db.DataSource);
         var notifications = OperationalNotificationTests.Notifications(sender, recipients);
-        var operations = new OperationsService(repository, notifications: notifications);
+        var reports = new ReportService(new NpgsqlReportRepository(db.DataSource), notifications);
         var licenses = new CustomerLicenseService(new NpgsqlCustomerLicenseRepository(db.DataSource), notifications: notifications);
         Assert.Equal("approved", (await licenses.ReviewLicenseAsync(customerId, "approved", default)).Status);
         var lifecycle = new RentalLifecycleService(new NpgsqlRentalLifecycleRepository(db.DataSource), null!, null!, null!, null!,
             new RentalEventSink(NullLogger<RentalEventSink>.Instance, notifications), new(), new(), TimeProvider.System);
         Assert.Equal("pre_inspection", (await lifecycle.ConfirmAsync(rental.Id, new(1, "manager@test.local", "Manager"), default)).ToStatus);
-        var report = await operations.CreateReportAsync(rental.Id, reporter, false, "damage", "private evidence description", "private images", default);
+        var report = await reports.CreateReportAsync(rental.Id, reporter, false, "damage", "private evidence description", "private images", default);
         reportId = report.Id;
         expectedReportStatus = "in_progress";
-        var completion = new OperationsCompletionService(new NpgsqlOperationsCompletionRepository(db.DataSource), notifications);
+        var completion = new ReportService(new NpgsqlReportRepository(db.DataSource), notifications);
         Assert.Equal("in_progress", (await completion.SetReportStatusAsync(reportId, new("in_progress", "Internal review"), "manager@test.local", default)).Status);
         Assert.Equal(6, sender.Messages.Count);
         Assert.Equal(6, commitVisible.Count);
@@ -75,7 +77,7 @@ public sealed class OperationalNotificationIntegrationTests(PostgresFixture db) 
         var start = DateTime.SpecifyKind(DateTime.UtcNow.AddDays(7), DateTimeKind.Unspecified);
         var rental = await repository.CreateRentalAsync(email, vehicle, null, "hourly", start, start.AddHours(1), false, null, false, default);
         var staff = (int)(await Seed.ScalarAsync(db.DataSource, "INSERT INTO staffs(user_id) SELECT user_id FROM customers WHERE id=$1 RETURNING id", customer))!;
-        var report = await repository.CreateReportAsync(rental.Id, staff, false, "damage", "Description", null, default);
+        var report = await new NpgsqlReportRepository(db.DataSource).CreateReportAsync(rental.Id, staff, false, "damage", "Description", null, default);
         var recipients = new NpgsqlOperationalNotificationRecipients(db.DataSource);
         Assert.Equal(email, Assert.Single((await recipients.ReportAsync(report.Id, default))!.Recipients).Email);
         await Seed.ScalarAsync(db.DataSource, "UPDATE users SET is_active=false WHERE email=$1", email);

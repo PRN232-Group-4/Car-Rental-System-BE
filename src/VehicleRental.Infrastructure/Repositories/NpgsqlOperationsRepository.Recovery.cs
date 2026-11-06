@@ -172,49 +172,6 @@ public sealed partial class NpgsqlOperationsRepository
         return rental with { Status = status };
     }
 
-    public async Task<IncidentReport> CreateReportAsync(int rentalId, int staffId, bool driverOnly, string type, string description, string? images, CancellationToken ct)
-    {
-        if (type is not ("damage" or "breakdown") || string.IsNullOrWhiteSpace(description)) throw new ArgumentException("Report type and description are required.");
-        await using var cn = await dataSource.OpenConnectionAsync(ct);
-        await using var tx = await cn.BeginTransactionAsync(ct);
-        await LockOperationsAsync(cn, tx, ct);
-        var rental = await ReadRentalAsync(cn, tx, rentalId, ct);
-        if (staffId > 0 && await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM staffs s JOIN users u ON u.id=s.user_id WHERE s.id=$1 AND u.is_active)", ct, staffId) is not true)
-            throw new InvalidOperationException("Reporter is not active.");
-        if (driverOnly && await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM vehicle_assignments WHERE rental_id=$1 AND driver_staff_id=$2 AND status='assigned')", ct, rentalId, staffId) is not true)
-            throw new UnauthorizedAccessException("Only the assigned driver can report this trip.");
-        if (type == "breakdown" && rental.Status != "renting") throw new InvalidOperationException("Breakdown reports require an ongoing rental.");
-        if (rental.Status == "cancelled") throw new InvalidOperationException("Cannot report a cancelled rental.");
-        if (type == "breakdown" && await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM reports WHERE rental_id=$1 AND vehicle_id=$2 AND type='breakdown' AND status IN ('open','in_progress','assigned'))", ct, rentalId, rental.VehicleId) is true)
-            throw new InvalidOperationException("An unresolved breakdown already exists for this vehicle.");
-        var id = (int)(await ValueAsync(cn, tx, "INSERT INTO reports(rental_id,vehicle_id,reporter_staff_id,customer_id,type,description,image_urls,status) VALUES($1,$2,$3,$4,$5,$6,$7,'open') RETURNING id", ct,
-            rentalId, rental.VehicleId, staffId > 0 ? staffId : (object?)DBNull.Value, rental.CustomerId, type, description, images))!;
-        if (type == "breakdown") await ValueAsync(cn, tx, "UPDATE vehicles SET status='maintenance' WHERE id=$1", ct, rental.VehicleId);
-        await tx.CommitAsync(ct);
-        return new(id, rentalId, rental.VehicleId, staffId, type, description, "open", null, images);
-    }
-
-    public async Task<IReadOnlyList<IncidentReport>> ListReportsAsync(int? staff, int? rental, CancellationToken ct)
-    {
-        await using var db = VehicleRentalDbContext.Create(dataSource);
-        return await db.Set<ReportsRow>().AsNoTracking().Where(x => x.ReporterStaffId != null &&
-            (staff == null || x.ReporterStaffId == staff) && (rental == null || x.RentalId == rental))
-            .OrderByDescending(x => x.Id).Select(x => new IncidentReport(x.Id, x.RentalId!.Value, x.VehicleId!.Value,
-                x.ReporterStaffId!.Value, x.Type!, x.Description!, x.Status!, x.MaintenanceId, x.ImageUrls,
-                null, null, null, null, null, null, null)).ToListAsync(ct);
-    }
-
-    public async Task ResolveReportAsync(int id, string actor, CancellationToken ct)
-    {
-        await using var cn = await dataSource.OpenConnectionAsync(ct);
-        await using var tx = await cn.BeginTransactionAsync(ct);
-        await LockOperationsAsync(cn, tx, ct);
-        // Breakdown reports are resolved by vehicle/driver recovery, never by bypassing it here.
-        if (await ValueAsync(cn, tx, "UPDATE reports SET status='resolved',resolved_by=$2,resolved_at=now(),status_reason=NULL,status_actor=$2 WHERE id=$1 AND type='damage' AND status IN ('open','in_progress','assigned') AND (maintenance_id IS NULL OR EXISTS(SELECT 1 FROM vehicle_maintenance m WHERE m.id=maintenance_id AND m.status='completed' AND m.is_safe=true)) RETURNING id", ct,id,actor) is not int)
-            throw new InvalidOperationException("Damage report is not ready to resolve; breakdowns require vehicle recovery.");
-        await tx.CommitAsync(ct);
-    }
-
     private static async Task RequireMatchingVehicleAsync(NpgsqlConnection cn, NpgsqlTransaction tx, int oldVehicle, int newVehicle, CancellationToken ct)
     {
         if (oldVehicle == newVehicle || await ValueAsync(cn, tx, """

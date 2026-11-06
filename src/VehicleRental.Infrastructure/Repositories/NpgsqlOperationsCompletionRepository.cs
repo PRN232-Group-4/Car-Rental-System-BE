@@ -40,73 +40,6 @@ public sealed class NpgsqlOperationsCompletionRepository(NpgsqlDataSource dataSo
         await tx.CommitAsync(ct);
         return new(items, pagination.Page, pagination.PageSize, total);
     }
-    public async Task<OperationsPage<IncidentReport>> ReportsAsync(int? staffId, int? rentalId, string? status, OperationsPagination pagination, CancellationToken ct)
-    {
-        await using var cn = await dataSource.OpenConnectionAsync(ct);
-        await using var tx = await cn.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, ct);
-        await using var db = VehicleRentalDbContext.Create(cn, tx);
-        var total = await db.Set<ReportsRow>().CountAsync(p => p.ReporterStaffId != null &&
-            (staffId == null || p.ReporterStaffId == staffId) && (rentalId == null || p.RentalId == rentalId) &&
-            (status == null || p.Status == status), ct);
-        var offset = ((long)pagination.Page - 1) * pagination.PageSize;
-        var rows = offset >= total ? [] : await ReportRows(db, null, staffId, rentalId, status)
-            .Skip((int)offset).Take(pagination.PageSize).ToListAsync(ct);
-        for (var i = 0; i < rows.Count; i++) rows[i] = await AddHistory(cn, tx, rows[i], ct);
-        await tx.CommitAsync(ct);
-        return new(rows, pagination.Page, pagination.PageSize, total);
-    }
-
-    private static IQueryable<IncidentReport> ReportRows(VehicleRentalDbContext db, int? id = null,
-        int? staffId = null, int? rentalId = null, string? status = null) =>
-        from report in db.Set<ReportsRow>()
-        from rental in db.Set<RentalsRow>().Where(r => r.Id == report.RentalId).DefaultIfEmpty()
-        from customer in db.Set<CustomersRow>().Where(c => c.Id == (report.CustomerId ?? (int?)rental.CustomerId)).DefaultIfEmpty()
-        from user in db.Set<UsersRow>().Where(u => u.Id == customer.UserId).DefaultIfEmpty()
-        from vehicle in db.Set<VehiclesRow>().Where(v => v.Id == report.VehicleId).DefaultIfEmpty()
-        from hourly in db.Set<HourRentalDetailRow>().Where(h => h.RentalId == rental.Id).DefaultIfEmpty()
-        from contract in db.Set<LongtermRentalContractRow>().Where(c => c.RentalId == rental.Id).DefaultIfEmpty()
-        from maintenance in db.Set<VehicleMaintenanceRow>().Where(m => m.Id == report.MaintenanceId).DefaultIfEmpty()
-        where report.ReporterStaffId != null && (id == null || report.Id == id) &&
-            (staffId == null || report.ReporterStaffId == staffId) && (rentalId == null || report.RentalId == rentalId) &&
-            (status == null || report.Status == status)
-        orderby report.Id descending
-        select new IncidentReport(report.Id, report.RentalId!.Value, report.VehicleId!.Value, report.ReporterStaffId!.Value,
-            report.Type!, report.Description!, report.Status!, report.MaintenanceId, report.ImageUrls, Utc(report.CreatedAt),
-            report.ResolvedAt == null ? null : Utc(report.ResolvedAt!.Value),
-            user.Email == null ? null : new ReportCustomer(customer.Id, user.Fullname, user.Phone, user.Email),
-            rental.Status == null ? null : new ReportRental(report.RentalId!.Value,
-                (vehicle.Brand ?? "") + (vehicle.Brand != null && vehicle.Model != null ? " " : "") + (vehicle.Model ?? ""),
-                vehicle.LicensePlate, AsUtc(hourly.StartTime ?? contract.StartTime), AsUtc(hourly.EndTime ?? contract.EndTime), rental.Status,
-                (from assignment in db.Set<VehicleAssignmentsRow>()
-                    join driver in db.Set<StaffsRow>() on assignment.DriverStaffId equals driver.Id
-                    join driverUser in db.Set<UsersRow>() on driver.UserId equals driverUser.Id
-                    where assignment.RentalId == rental.Id && assignment.Status == "assigned"
-                    orderby assignment.Id descending select driverUser.Fullname).FirstOrDefault()),
-            report.MaintenanceId == null ? null : new ReportMaintenance(maintenance.MaintenanceType, maintenance.Status,
-                maintenance.Cost, maintenance.ScheduledDate), new List<ReportHistory>(), new List<ReportNote>());
-
-    private static DateTime? AsUtc(DateTime? stamp) => stamp is null ? null : Utc(stamp.Value);
-    public async Task<IncidentReport> SetReportStatusAsync(int id, string status, string reason, string actor, CancellationToken ct)
-    {
-        await using var cn=await dataSource.OpenConnectionAsync(ct);
-        await using var tx=await cn.BeginTransactionAsync(ct);
-        // Same global lock as recovery/maintenance preserves their status checks.
-        await Scalar(cn,tx,"SELECT pg_advisory_xact_lock(724232001::bigint)",ct);
-        string current;
-        await using (var command=new NpgsqlCommand("SELECT status FROM reports WHERE id=$1 AND reporter_staff_id IS NOT NULL FOR UPDATE",cn,tx))
-        {
-            Add(command,id);
-            current=await command.ExecuteScalarAsync(ct) as string ?? throw new KeyNotFoundException("Report was not found.");
-        }
-        if ((current,status) is not (("open","in_progress") or ("rejected","in_progress") or ("open","rejected") or ("in_progress","rejected")))
-            throw new InvalidOperationException("Report status transition is not allowed.");
-        await Scalar(cn,tx,"UPDATE reports SET status=$2,status_reason=$3,status_actor=$4 WHERE id=$1",ct,id,status,reason,actor);
-        await using var db = VehicleRentalDbContext.Create(cn, tx);
-        var row = await ReportRows(db, id).FirstAsync(ct);
-        row=await AddHistory(cn,tx,row,ct);
-        await tx.CommitAsync(ct);
-        return row;
-    }
     public async Task<OperationsPage<StaffRating>> RatingsAsync(int staffId, OperationsPagination pagination, CancellationToken ct)
     {
         await using var cn = await dataSource.OpenConnectionAsync(ct);
@@ -166,14 +99,6 @@ public sealed class NpgsqlOperationsCompletionRepository(NpgsqlDataSource dataSo
     }
 
     private static DateTime Utc(DateTime stamp) => DateTime.SpecifyKind(stamp, DateTimeKind.Utc);
-    private static async Task<IncidentReport> AddHistory(NpgsqlConnection cn, NpgsqlTransaction tx, IncidentReport row, CancellationToken ct)
-    {
-        await using var db = VehicleRentalDbContext.Create(cn, tx);
-        var rows = await db.Set<ReportHistoryRow>().Where(h => h.ReportId == row.Id).OrderBy(h => h.Id).ToListAsync(ct);
-        var history = rows.Select(h => new ReportHistory(h.Id, h.FromStatus, h.ToStatus, h.Reason, h.Actor, Utc(h.CreatedAt))).ToList();
-        return row with { History = history, Notes = history.Where(h => !string.IsNullOrWhiteSpace(h.Reason))
-            .Select(h => new ReportNote(h.Id, h.Reason!, h.By, h.At)).ToArray() };
-    }
     private static async Task<StaffRating> ReadRating(NpgsqlConnection cn, NpgsqlTransaction tx, int id, CancellationToken ct)
     {
         await using var db = VehicleRentalDbContext.Create(cn, tx);
