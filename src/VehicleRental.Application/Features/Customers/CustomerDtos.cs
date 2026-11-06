@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Car_Rental_System_BE.Application.DTOs.Customers;
+namespace Car_Rental_System_BE.Application.Features.Customers;
 
 public sealed class CustomerListQuery
 {
@@ -27,7 +27,16 @@ public sealed record CustomerDetail(int Id, int UserId, string Email, string? Fu
 public sealed record CustomerLicenseDetail(string? Number, string? Type, DateOnly? IssueDate,
     DateOnly? ExpiryDate, string? ImageUrl, string Status)
 {
-    public IReadOnlyList<Car_Rental_System_BE.Application.DTOs.Operations.CustomerLicense> Licenses { get; init; } = [];
+    public IReadOnlyList<CustomerLicense> Licenses { get; init; } = [];
 }
 
 public sealed record CustomerLoyaltyDetail(int Points);
+
+public sealed record CustomerLicense(string? Number, string? Type, DateOnly? IssueDate, DateOnly? ExpiryDate, string? ImageUrl, string Status)
+{
+    public int? Id { get; init; }
+    public IReadOnlyList<CustomerLicense> Licenses { get; init; } = [];
+}
+
+public sealed record LicenseRequest([param:Required,StringLength(255)]string Number,[param:Required,StringLength(255)]string Type,[param:Required(ErrorMessage="Vui lòng chọn ngày cấp GPLX.")]DateOnly? IssueDate,[param:Required]DateOnly? ExpiryDate,[param:Required(ErrorMessage="Vui lòng tải lên ảnh GPLX."),Url] string? ImageUrl, [param:Range(1,int.MaxValue)] int? LicenseId = null);
+public sealed record LicenseReviewRequest([param:RegularExpression("^(approved|rejected)$",ErrorMessage="Status must be approved or rejected.")]string Status, [param:Range(1,int.MaxValue)] int? LicenseId = null);

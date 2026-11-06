@@ -1,10 +1,9 @@
-using Car_Rental_System_BE.Application.DTOs.Customers;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Application.Features.Customers;
 using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
-namespace Car_Rental_System_BE.Infrastructure.Repositories;
+namespace Car_Rental_System_BE.Infrastructure.Features.Customers;
 
 public sealed class NpgsqlCustomerRepository(NpgsqlDataSource dataSource) : ICustomerRepository
 {
@@ -47,7 +46,7 @@ public sealed class NpgsqlCustomerRepository(NpgsqlDataSource dataSource) : ICus
         if (result is null) return null;
         return result with { License = result.License with
         {
-            Licenses = await NpgsqlOperationsRepository.ReadLicensesAsync(dataSource, customerId, ct)
+            Licenses = await NpgsqlCustomerLicenseRepository.ReadLicensesAsync(dataSource, customerId, ct)
         } };
     }
 }

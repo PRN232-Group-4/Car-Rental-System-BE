@@ -9,11 +9,6 @@ public interface IOperationsService
     Task ResolveReportAsync(int reportId, string actor, CancellationToken ct);
     Task<Inspection> InspectReplacementAsync(int rentalId, int vehicleId, int staffId, bool isOk, decimal? odometer, decimal? fuel, string? notes, string? images, CancellationToken ct);
     Task<Rental> ReplaceVehicleAsync(int rentalId, int vehicleId, int? driverId, int? reportId, string actor, CancellationToken ct);
-    Task<CustomerLicense?> GetLicenseAsync(string email, CancellationToken ct);
-    Task<CustomerLicense> SaveLicenseAsync(string email, CustomerLicense license, CancellationToken ct);
-    Task<CustomerLicense> ReviewLicenseAsync(int customerId, string status, CancellationToken ct);
-    Task<CustomerLicense> ReviewLicenseAsync(int customerId, string status, CancellationToken ct, int? licenseId) =>
-        licenseId is null ? ReviewLicenseAsync(customerId, status, ct) : throw new NotSupportedException();
     Task<RentalPolicy> CreatePolicyAsync(RentalPolicy policy, CancellationToken ct);
     Task<RentalPolicy> SetPolicyStatusAsync(int id, bool isActive, CancellationToken ct);
     Task<RentalPolicyPage> ListPoliciesAsync(int page, int pageSize, CancellationToken ct);

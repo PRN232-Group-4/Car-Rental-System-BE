@@ -1,5 +1,7 @@
+using Car_Rental_System_BE.Application.Features.Customers;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Application.Services;
+using Car_Rental_System_BE.Infrastructure.Features.Customers;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -43,7 +45,8 @@ public sealed class OperationalNotificationIntegrationTests(PostgresFixture db) 
         var recipients = new NpgsqlOperationalNotificationRecipients(db.DataSource);
         var notifications = OperationalNotificationTests.Notifications(sender, recipients);
         var operations = new OperationsService(repository, notifications: notifications);
-        Assert.Equal("approved", (await operations.ReviewLicenseAsync(customerId, "approved", default)).Status);
+        var licenses = new CustomerLicenseService(new NpgsqlCustomerLicenseRepository(db.DataSource), notifications: notifications);
+        Assert.Equal("approved", (await licenses.ReviewLicenseAsync(customerId, "approved", default)).Status);
         var lifecycle = new RentalLifecycleService(new NpgsqlRentalLifecycleRepository(db.DataSource), null!, null!, null!, null!,
             new RentalEventSink(NullLogger<RentalEventSink>.Instance, notifications), new(), new(), TimeProvider.System);
         Assert.Equal("pre_inspection", (await lifecycle.ConfirmAsync(rental.Id, new(1, "manager@test.local", "Manager"), default)).ToStatus);

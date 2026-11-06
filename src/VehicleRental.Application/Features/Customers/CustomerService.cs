@@ -1,8 +1,4 @@
-using Car_Rental_System_BE.Application.DTOs.Customers;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
-using Car_Rental_System_BE.Application.Interfaces.Services;
-
-namespace Car_Rental_System_BE.Application.Services;
+namespace Car_Rental_System_BE.Application.Features.Customers;
 
 public sealed class CustomerService(ICustomerRepository repository) : ICustomerService
 {

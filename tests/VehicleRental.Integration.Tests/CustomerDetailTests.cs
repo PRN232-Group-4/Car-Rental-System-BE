@@ -1,4 +1,4 @@
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Features.Customers;
 using Xunit;
 
 namespace VehicleRental.Tests;

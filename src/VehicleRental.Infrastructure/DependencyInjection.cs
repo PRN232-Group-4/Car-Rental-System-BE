@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.Application.Features.Assignments;
 using Car_Rental_System_BE.Application.Features.Availability;
 using Car_Rental_System_BE.Application.Features.Billing;
+using Car_Rental_System_BE.Application.Features.Customers;
 using Car_Rental_System_BE.Application.Features.Fleet;
 using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
@@ -13,6 +14,7 @@ using Car_Rental_System_BE.Domain.Interfaces;
 using Car_Rental_System_BE.Infrastructure.Features.Assignments;
 using Car_Rental_System_BE.Infrastructure.Features.Availability;
 using Car_Rental_System_BE.Infrastructure.Features.Billing;
+using Car_Rental_System_BE.Infrastructure.Features.Customers;
 using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Features.Loyalty;
@@ -87,6 +89,7 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository, NpgsqlUserRepository>();
         services.AddScoped<IAccountRepository, NpgsqlAccountRepository>();
         services.AddScoped<ICustomerRepository, NpgsqlCustomerRepository>();
+        services.AddScoped<ICustomerLicenseRepository, NpgsqlCustomerLicenseRepository>();
         services.AddScoped<IStaffRepository, NpgsqlStaffRepository>();
         services.AddScoped<IOrganizationRepository, NpgsqlOrganizationRepository>();
         services.AddScoped<IInspectionAssignmentRepository, NpgsqlInspectionAssignmentRepository>();

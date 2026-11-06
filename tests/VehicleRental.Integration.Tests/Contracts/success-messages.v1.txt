@@ -58,16 +58,16 @@
 /api/auth/refresh | Session.Refresh | POST | 204 | inspectionType=post_rental | refresh completed successfully.
 /api/customer-subscriptions | Operations.CustomerSubscriptions | GET | 200 | - | Customer subscriptions retrieved successfully.
 /api/customer-subscriptions | Operations.CustomerSubscriptions | GET | 200 | inspectionType=post_rental | Customer subscriptions retrieved successfully.
-/api/customer/license | Operations.License | GET | 200 | - | Driver license retrieved successfully.
-/api/customer/license | Operations.License | GET | 200 | inspectionType=post_rental | Driver license retrieved successfully.
-/api/customer/license | Operations.SaveLicense | PUT | 200 | - | Driver license saved successfully.
-/api/customer/license | Operations.SaveLicense | PUT | 200 | inspectionType=post_rental | Driver license saved successfully.
-/api/customer/license/url | Operations.SaveLicenseUrl | PUT | 200 | - | Driver license saved successfully.
-/api/customer/license/url | Operations.SaveLicenseUrl | PUT | 200 | inspectionType=post_rental | Driver license saved successfully.
+/api/customer/license | CustomerLicenses.License | GET | 200 | - | Driver license retrieved successfully.
+/api/customer/license | CustomerLicenses.License | GET | 200 | inspectionType=post_rental | Driver license retrieved successfully.
+/api/customer/license | CustomerLicenses.SaveLicense | PUT | 200 | - | Driver license saved successfully.
+/api/customer/license | CustomerLicenses.SaveLicense | PUT | 200 | inspectionType=post_rental | Driver license saved successfully.
+/api/customer/license/url | CustomerLicenses.SaveLicenseUrl | PUT | 200 | - | Driver license saved successfully.
+/api/customer/license/url | CustomerLicenses.SaveLicenseUrl | PUT | 200 | inspectionType=post_rental | Driver license saved successfully.
 /api/customer/{customerId:int} | Customers.Get | GET | 200 | - | Customer retrieved successfully.
 /api/customer/{customerId:int} | Customers.Get | GET | 200 | inspectionType=post_rental | Customer retrieved successfully.
-/api/customer/{customerId:int}/license-status | Operations.ReviewLicense | PUT | 200 | - | Driver license review completed successfully.
-/api/customer/{customerId:int}/license-status | Operations.ReviewLicense | PUT | 200 | inspectionType=post_rental | Driver license review completed successfully.
+/api/customer/{customerId:int}/license-status | CustomerLicenses.ReviewLicense | PUT | 200 | - | Driver license review completed successfully.
+/api/customer/{customerId:int}/license-status | CustomerLicenses.ReviewLicense | PUT | 200 | inspectionType=post_rental | Driver license review completed successfully.
 /api/customer/{id:int}/loyalty | Loyalty.GetCustomerSummary | GET | 200 | - | get customer summary retrieved successfully.
 /api/customer/{id:int}/loyalty | Loyalty.GetCustomerSummary | GET | 200 | inspectionType=post_rental | get customer summary retrieved successfully.
 /api/customer/{id:int}/loyalty/adjustments | Loyalty.AdjustCustomerPoints | POST | 200 | - | adjust customer points completed successfully.

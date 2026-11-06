@@ -2,8 +2,6 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Car_Rental_System_BE.Application.DTOs.Operations;
 
-public sealed record LicenseRequest([param:Required,StringLength(255)]string Number,[param:Required,StringLength(255)]string Type,[param:Required(ErrorMessage="Vui lòng chọn ngày cấp GPLX.")]DateOnly? IssueDate,[param:Required]DateOnly? ExpiryDate,[param:Required(ErrorMessage="Vui lòng tải lên ảnh GPLX."),Url] string? ImageUrl, [param:Range(1,int.MaxValue)] int? LicenseId = null);
-public sealed record LicenseReviewRequest([param:RegularExpression("^(approved|rejected)$",ErrorMessage="Status must be approved or rejected.")]string Status, [param:Range(1,int.MaxValue)] int? LicenseId = null);
 public sealed record PolicyRequest([param:Range(1,int.MaxValue)]int? VehicleTypeId,[param:Required] string Name,[param:Range(0,100)]decimal VatRate,[param:Range(0,100)]decimal OvertimeFeeRate,[param:Range(0,100)]decimal DepositPercentage,bool IsActive=true){public RentalPolicy ToModel()=>new(0,VehicleTypeId,Name,VatRate,OvertimeFeeRate,DepositPercentage,IsActive);}
 public sealed record PolicyStatusRequest
 {

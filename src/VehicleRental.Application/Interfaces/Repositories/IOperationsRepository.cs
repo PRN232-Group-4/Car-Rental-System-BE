@@ -9,11 +9,6 @@ public interface IOperationsRepository
     Task ResolveReportAsync(int reportId, string actor, CancellationToken ct);
     Task<Inspection> InspectReplacementAsync(int rentalId, int vehicleId, int staffId, bool isOk, decimal? odometer, decimal? fuel, string? notes, string? images, CancellationToken ct);
     Task<Rental> ReplaceVehicleAsync(int rentalId, int vehicleId, int? driverId, int? reportId, string actor, CancellationToken ct);
-    Task<CustomerLicense?> GetLicenseAsync(string email, CancellationToken ct);
-    Task<CustomerLicense> SaveLicenseAsync(string email, CustomerLicense license, CancellationToken ct);
-    Task<CustomerLicense> ReviewLicenseAsync(int customerId, string status, CancellationToken ct);
-    Task<CustomerLicense> ReviewLicenseAsync(int customerId, string status, CancellationToken ct, int? licenseId) =>
-        licenseId is null ? ReviewLicenseAsync(customerId, status, ct) : throw new NotSupportedException();
     Task<RentalPolicy> CreatePolicyAsync(RentalPolicy policy, CancellationToken ct);
     Task<bool> VehicleTypeExistsAsync(int id, CancellationToken ct);
     Task<bool> HasActivePolicyAsync(int? vehicleTypeId, CancellationToken ct);

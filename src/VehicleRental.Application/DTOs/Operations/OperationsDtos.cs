@@ -14,10 +14,5 @@ public sealed record SubscriptionPlan(int Id, string Name, string? Description, 
 public sealed record ExpiringSubscription(int Id, string Email, string Name, DateOnly EndDate, decimal? RemainingHours);
 public sealed record CustomerSubscription(int Id, int CustomerId, int PlanId, string PlanName, DateOnly StartDate, DateOnly EndDate, decimal? TotalHours, decimal? RemainingHours, string Status);
 public sealed record Maintenance(int Id, int VehicleId, int? FacilityId, int? AssignedStaffId, string? Status, string? MaintenanceType, DateOnly? ScheduledDate, bool? IsSafe, string? Description, decimal? Cost, DateTime? CreatedAt = null, int? RentalId = null, string? AssignedStaffEmail = null, string? FacilityName = null);
-public sealed record CustomerLicense(string? Number, string? Type, DateOnly? IssueDate, DateOnly? ExpiryDate, string? ImageUrl, string Status)
-{
-    public int? Id { get; init; }
-    public IReadOnlyList<CustomerLicense> Licenses { get; init; } = [];
-}
 
 public sealed record StaffRating(int Id, int RentalId, int StaffId, decimal Rating, string? Comment, DateTime CreatedAt, string? CustomerName = null, string Status = "visible", RatingReply? Reply = null, string? VehicleName = null, string? LicensePlate = null);

@@ -1,11 +1,8 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using Car_Rental_System_BE.Application.DTOs.Customers;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
-using Car_Rental_System_BE.Application.Interfaces.Services;
-using Car_Rental_System_BE.Application.Services;
-using Car_Rental_System_BE.WebApi.Controllers;
+using Car_Rental_System_BE.Application.Features.Customers;
+using Car_Rental_System_BE.WebApi.Features.Customers;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authentication;

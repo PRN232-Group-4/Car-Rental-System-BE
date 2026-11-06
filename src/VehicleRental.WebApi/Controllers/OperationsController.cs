@@ -2,7 +2,6 @@ using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Application.Features.Rentals;
-using Car_Rental_System_BE.WebApi.Middlewares.Requests;
 using Car_Rental_System_BE.Domain.Entities;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using System.ComponentModel.DataAnnotations;
@@ -16,7 +15,6 @@ namespace Car_Rental_System_BE.WebApi.Controllers;
 [Route("api")]
 public sealed class OperationsController(
     IOperationsService store,
-    IMediaService media,
     IOperationsCompletionService? completion = null,
     // Only the deprecated POST /api/rental/{id}/status/{status} needs these two; the runtime always registers
     // them (Program.cs/Infrastructure) and they stay optional so hosts and tests that only exercise the other
@@ -35,40 +33,6 @@ public sealed class OperationsController(
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SaveContract(int id, RentalContractRequest request, CancellationToken ct) =>
         Ok(await store.SaveRentalContractAsync(id, request.ContractLink, request.SignedAt, ct));
-
-    [OperationDescription("Customer reads their own driver license with id and licenses containing all independently reviewed licenses. An existing customer with a null, empty or whitespace license number has status none, including legacy rows with a pending default. A submitted license retains pending, approved or rejected. Missing customer returns null; reading never changes stored data.")]
-    [SuccessMessage("Driver license retrieved successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Customer)] [HttpGet("customer/license")] public async Task<IActionResult> License(CancellationToken ct) => Ok(await store.GetLicenseAsync(Email(),ct));
-    /// <summary>Customer uploads and resubmits their driver license for review.</summary>
-    [OperationDescription("Customer submits their own driver license for review. Optional licenseId updates an owned record; omitted ID adds or upserts by number, preserving other licenses. Number, type, issueDate, expiryDate and image are all required. Multipart /customer/license requires a new file; JSON /customer/license/url requires a valid imageUrl. Missing values return 400 before upload or persistence. Issue date must not be after expiry and expiry must not be before today UTC. Successful submission resets status to pending.")]
-    [SuccessMessage("Driver license saved successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Customer)]
-    [HttpPut("customer/license")]
-    [Consumes("multipart/form-data")]
-    [ProducesResponseType<CustomerLicense>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> SaveLicense([FromForm] LicenseUploadForm request, CancellationToken ct)
-    {
-        if (!ImageFileRules.IsImage(request.File, 5 * 1024 * 1024))
-            return Problem("License must be an image no larger than 5 MB.", statusCode: StatusCodes.Status400BadRequest);
-        await using var content = request.File!.OpenReadStream();
-        return Ok(await media.SaveCustomerLicenseAsync(Email(), request.ToModel(), content, request.File.FileName, ct));
-    }
-
-    /// <summary>Customer submits an existing image URL using the previous JSON contract.</summary>
-    [OperationDescription("Customer submits their own driver license for review. Optional licenseId updates an owned record; omitted ID adds or upserts by number, preserving other licenses. Number, type, issueDate, expiryDate and image are all required. Multipart /customer/license requires a new file; JSON /customer/license/url requires a valid imageUrl. Missing values return 400 before upload or persistence. Issue date must not be after expiry and expiry must not be before today UTC. Successful submission resets status to pending.")]
-    [SuccessMessage("Driver license saved successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Customer)]
-    [HttpPut("customer/license/url")]
-    [Consumes("application/json")]
-    [ProducesResponseType<CustomerLicense>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> SaveLicenseUrl(LicenseRequest x, CancellationToken ct) =>
-        Ok(await store.SaveLicenseAsync(Email(), new(x.Number.Trim(), x.Type.Trim(), x.IssueDate, x.ExpiryDate, x.ImageUrl, "pending") { Id = x.LicenseId }, ct));
-    [SuccessMessage("Driver license review completed successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.CustomerService)] [HttpPut("customer/{customerId:int}/license-status")] public Task<CustomerLicense> ReviewLicense(int customerId,LicenseReviewRequest x,CancellationToken ct) => store.ReviewLicenseAsync(customerId,x.Status.ToLowerInvariant(),ct,x.LicenseId);
 
     [OperationSummary("List rental policy versions with rental usage counts (Admin/Manager).")]
     [OperationDescription("Pagination defaults to page=1/pageSize=20 (page>=1, pageSize 1..100); data contains items/page/pageSize/totalCount. rentalCount counts all rentals referencing that exact policy, including cancelled rentals; results are ordered by ID descending.")]

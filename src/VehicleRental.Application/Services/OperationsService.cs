@@ -42,32 +42,6 @@ public sealed class OperationsService(IOperationsRepository repository, TimeProv
         return rental;
     }
 
-    public async Task<CustomerLicense?> GetLicenseAsync(string email, CancellationToken ct)
-    {
-        var license = await repository.GetLicenseAsync(email, ct);
-        // Registration creates a customer with a legacy pending default before any license is submitted.
-        return license is not null && string.IsNullOrWhiteSpace(license.Number)
-            ? license with { Status = "none" }
-            : license;
-    }
-
-    public Task<CustomerLicense> SaveLicenseAsync(string email, CustomerLicense license, CancellationToken ct)
-    {
-        CustomerLicenseValidator.Validate(license);
-        return repository.SaveLicenseAsync(email, license with { Status = "pending" }, ct);
-    }
-
-    public Task<CustomerLicense> ReviewLicenseAsync(int customerId, string status, CancellationToken ct) => ReviewLicenseAsync(customerId, status, ct, null);
-
-    public async Task<CustomerLicense> ReviewLicenseAsync(int customerId, string status, CancellationToken ct, int? licenseId)
-    {
-        if (licenseId < 1) throw new ArgumentException("LicenseId must be positive.");
-        if (status is not ("approved" or "rejected")) throw new ArgumentException("License status must be approved or rejected.");
-        var license = await repository.ReviewLicenseAsync(customerId, status, ct, licenseId);
-        if (notifications is not null) await notifications.LicenseReviewedAsync(customerId, license.Status);
-        return license;
-    }
-
     public async Task<RentalPolicy> CreatePolicyAsync(RentalPolicy policy, CancellationToken ct)
     {
         RentalPolicyValidator.Validate(policy);

@@ -1,7 +1,5 @@
-using Car_Rental_System_BE.Application.DTOs.Customers;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
-using Car_Rental_System_BE.Application.Services;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Application.Features.Customers;
+using Car_Rental_System_BE.Infrastructure.Features.Customers;
 using Xunit;
 
 namespace VehicleRental.Tests;

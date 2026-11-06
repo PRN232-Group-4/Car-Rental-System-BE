@@ -1,12 +1,12 @@
-using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Application.Features.Customers;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Npgsql;
 using Microsoft.EntityFrameworkCore;
 using Car_Rental_System_BE.Infrastructure.Persistence;
 
-namespace Car_Rental_System_BE.Infrastructure.Repositories;
+namespace Car_Rental_System_BE.Infrastructure.Features.Customers;
 
-public sealed partial class NpgsqlOperationsRepository
+public sealed class NpgsqlCustomerLicenseRepository(NpgsqlDataSource dataSource) : ICustomerLicenseRepository
 {
     public async Task<CustomerLicense?> GetLicenseAsync(string email, CancellationToken ct)
     {
@@ -94,4 +94,12 @@ public sealed partial class NpgsqlOperationsRepository
         Add(cmd,x.Number,x.Type,x.IssueDate,x.ExpiryDate,x.ImageUrl,x.Status,customerId);
         await cmd.ExecuteNonQueryAsync(ct);
     }
+
+    // Customers keeps its own copy of the four one-line SQL helpers the legacy operations repository holds
+    // privately (read a nullable string/date, bind parameters, run a scalar). They were private there, so
+    // reusing them would mean widening the legacy repository's surface for one slice; a copy keeps the moved
+    // SQL byte-identical and creates no dependency on another feature. Same call the Fleet slice made.
+    private static string? S(NpgsqlDataReader r,int i)=>r.IsDBNull(i)?null:r.GetString(i); private static DateOnly? D(NpgsqlDataReader r,int i)=>r.IsDBNull(i)?null:r.GetFieldValue<DateOnly>(i);
+    private static void Add(NpgsqlCommand c,params object?[] v){foreach(var x in v)c.Parameters.AddWithValue(x??DBNull.Value);}
+    private static async Task<object?> ScalarAsync(NpgsqlConnection c,NpgsqlTransaction t,string sql,object? value,CancellationToken ct)=>await ScalarAsync(c,t,sql,new[]{value},ct);private static async Task<object?> ScalarAsync(NpgsqlConnection c,NpgsqlTransaction t,string sql,object?[] values,CancellationToken ct){await using var x=new NpgsqlCommand(sql,c,t);Add(x,values);return await x.ExecuteScalarAsync(ct);}
 }

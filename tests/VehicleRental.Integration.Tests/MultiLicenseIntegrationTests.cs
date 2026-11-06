@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.Application.Common.Errors;
-using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Application.Features.Customers;
 using Car_Rental_System_BE.Application.Features.Rentals;
+using Car_Rental_System_BE.Infrastructure.Features.Customers;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Car_Rental_System_BE.Infrastructure.Features.Assignments;
 using Car_Rental_System_BE.Infrastructure.Features.Fleet;
@@ -14,6 +15,7 @@ namespace VehicleRental.Tests;
 public sealed class MultiLicenseIntegrationTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
     private NpgsqlOperationsRepository Store => new(db.DataSource);
+    private NpgsqlCustomerLicenseRepository Licenses => new(db.DataSource);
     private NpgsqlFleetRepository Fleet => new(db.DataSource);
     private static CustomerLicense License(string number, string type) =>
         new(number, type, new DateOnly(2024, 1, 1), new DateOnly(2099, 1, 1), "https://example.test/license.png", "pending");
@@ -22,17 +24,17 @@ public sealed class MultiLicenseIntegrationTests(PostgresFixture db) : IClassFix
     public async Task Adding_and_editing_a_second_license_preserves_the_first_approval()
     {
         var (customer, email) = await Seed.CustomerAsync(db.DataSource, withLicense: false);
-        var first = await Store.SaveLicenseAsync(email, License("CAR123", "B"), default);
-        await Store.ReviewLicenseAsync(customer, "approved", default, first.Id);
-        var second = await Store.SaveLicenseAsync(email, License("BIKE456", "a1"), default);
+        var first = await Licenses.SaveLicenseAsync(email, License("CAR123", "B"), default);
+        await Licenses.ReviewLicenseAsync(customer, "approved", default, first.Id);
+        var second = await Licenses.SaveLicenseAsync(email, License("BIKE456", "a1"), default);
         Assert.Equal("A1", second.Type);
         Assert.Equal(2, second.Licenses.Count);
         Assert.Equal("approved", second.Licenses.Single(x => x.Id == first.Id).Status);
-        var edited = await Store.SaveLicenseAsync(email, second with { Number = "BIKE789" }, default);
+        var edited = await Licenses.SaveLicenseAsync(email, second with { Number = "BIKE789" }, default);
         Assert.Equal(second.Id, edited.Id);
         Assert.Equal(2, edited.Licenses.Count);
         Assert.DoesNotContain(edited.Licenses, x => x.Number == "BIKE456");
-        var loaded = await Store.GetLicenseAsync(email, default);
+        var loaded = await Licenses.GetLicenseAsync(email, default);
         Assert.Equal("approved", loaded!.Licenses.Single(x => x.Id == first.Id).Status);
         Assert.Equal("pending", loaded.Licenses.Single(x => x.Id == second.Id).Status);
     }
@@ -42,11 +44,11 @@ public sealed class MultiLicenseIntegrationTests(PostgresFixture db) : IClassFix
     {
         var (_, firstEmail) = await Seed.CustomerAsync(db.DataSource, withLicense: false);
         var (otherCustomer, otherEmail) = await Seed.CustomerAsync(db.DataSource, withLicense: false);
-        var first = await Store.SaveLicenseAsync(firstEmail, License("CAR123", "B"), default);
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => Store.SaveLicenseAsync(otherEmail, first with { Number = "STOLEN" }, default));
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => Store.ReviewLicenseAsync(otherCustomer, "approved", default, first.Id));
-        Assert.Equal("CAR123", (await Store.GetLicenseAsync(firstEmail, default))!.Number);
-        Assert.Empty((await Store.GetLicenseAsync(otherEmail, default))!.Licenses);
+        var first = await Licenses.SaveLicenseAsync(firstEmail, License("CAR123", "B"), default);
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => Licenses.SaveLicenseAsync(otherEmail, first with { Number = "STOLEN" }, default));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => Licenses.ReviewLicenseAsync(otherCustomer, "approved", default, first.Id));
+        Assert.Equal("CAR123", (await Licenses.GetLicenseAsync(firstEmail, default))!.Number);
+        Assert.Empty((await Licenses.GetLicenseAsync(otherEmail, default))!.Licenses);
     }
 
     [Fact]
@@ -65,9 +67,9 @@ public sealed class MultiLicenseIntegrationTests(PostgresFixture db) : IClassFix
     public async Task Booking_and_edit_use_matching_approved_license_even_when_latest_is_pending()
     {
         var (customer, email) = await Seed.CustomerAsync(db.DataSource, withLicense: false);
-        var carLicense = await Store.SaveLicenseAsync(email, License("CAR123", "B"), default);
-        await Store.ReviewLicenseAsync(customer, "approved", default, carLicense.Id);
-        await Store.SaveLicenseAsync(email, License("BIKE456", "A1"), default);
+        var carLicense = await Licenses.SaveLicenseAsync(email, License("CAR123", "B"), default);
+        await Licenses.ReviewLicenseAsync(customer, "approved", default, carLicense.Id);
+        await Licenses.SaveLicenseAsync(email, License("BIKE456", "A1"), default);
         var vehicle = await Seed.VehicleAsync(db.DataSource);
         var policy = await Seed.PolicyAsync(db.DataSource);
         await Seed.ScalarAsync(db.DataSource, "UPDATE vehicles SET allowed_license_types=ARRAY['B'] WHERE id=$1", vehicle);
@@ -87,9 +89,9 @@ public sealed class MultiLicenseIntegrationTests(PostgresFixture db) : IClassFix
     public async Task Assignment_and_handover_recheck_matching_license_when_latest_is_pending(bool matches)
     {
         var (customer, email) = await Seed.CustomerAsync(db.DataSource, withLicense: false);
-        var approved = await Store.SaveLicenseAsync(email, License("CAR123", "B"), default);
-        await Store.ReviewLicenseAsync(customer, "approved", default, approved.Id);
-        await Store.SaveLicenseAsync(email, License("BIKE456", "A1"), default);
+        var approved = await Licenses.SaveLicenseAsync(email, License("CAR123", "B"), default);
+        await Licenses.ReviewLicenseAsync(customer, "approved", default, approved.Id);
+        await Licenses.SaveLicenseAsync(email, License("BIKE456", "A1"), default);
         var vehicle = await Seed.VehicleAsync(db.DataSource);
         var policy = await Seed.PolicyAsync(db.DataSource);
         var start = DateTime.UtcNow.Date.AddDays(3).AddHours(8);
@@ -126,8 +128,8 @@ public sealed class MultiLicenseIntegrationTests(PostgresFixture db) : IClassFix
     public async Task Self_drive_rejects_wrong_class_unapproved_or_expiring_before_trip_end(string type, string status, int expiryDays)
     {
         var (customer, email) = await Seed.CustomerAsync(db.DataSource, withLicense: false);
-        var license = await Store.SaveLicenseAsync(email, License("CAR123", type) with { ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(expiryDays)) }, default);
-        await Store.ReviewLicenseAsync(customer, status, default, license.Id);
+        var license = await Licenses.SaveLicenseAsync(email, License("CAR123", type) with { ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(expiryDays)) }, default);
+        await Licenses.ReviewLicenseAsync(customer, status, default, license.Id);
         var vehicle = await Seed.VehicleAsync(db.DataSource);
         var policy = await Seed.PolicyAsync(db.DataSource);
         await Seed.ScalarAsync(db.DataSource, "UPDATE vehicles SET allowed_license_types=ARRAY['B'] WHERE id=$1", vehicle);

@@ -5,7 +5,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Application.Features.Customers;
 using Car_Rental_System_BE.Application.DTOs.Registration;
 using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
@@ -15,7 +15,7 @@ using Car_Rental_System_BE.Application.Services.Exceptions;
 using Car_Rental_System_BE.Application.Validators;
 using Car_Rental_System_BE.Infrastructure.Services.Media;
 using Car_Rental_System_BE.Domain.Interfaces;
-using Car_Rental_System_BE.WebApi.Controllers;
+using Car_Rental_System_BE.WebApi.Features.Customers;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authentication;
@@ -51,16 +51,16 @@ public sealed class CustomerLicenseUploadTests : IAsyncLifetime
             .ConfigureApplicationPartManager(parts =>
             {
                 parts.ApplicationParts.Clear();
-                parts.ApplicationParts.Add(new AssemblyPart(typeof(OperationsController).Assembly));
+                parts.ApplicationParts.Add(new AssemblyPart(typeof(CustomerLicensesController).Assembly));
             });
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(options => options.OperationFilter<ApiSuccessResponseOperationFilter>());
-        var repository = DispatchProxy.Create<IOperationsRepository, LicenseRepositorySpy>();
+        var repository = DispatchProxy.Create<ICustomerLicenseRepository, LicenseRepositorySpy>();
         _repository = (LicenseRepositorySpy)repository;
         builder.Services.AddSingleton(repository);
         builder.Services.AddSingleton<IImageStorage>(_images);
         builder.Services.AddSingleton(DispatchProxy.Create<IUserRepository, UnusedUserRepository>());
-        builder.Services.AddSingleton<IOperationsService, OperationsService>();
+        builder.Services.AddSingleton<ICustomerLicenseService, CustomerLicenseService>();
         // The vehicle endpoints moved to the Fleet slice; this suite never calls them.
         builder.Services.AddSingleton(DispatchProxy.Create<Car_Rental_System_BE.Application.Features.Fleet.IFleetService, UnusedUserRepository>());
         builder.Services.AddSingleton<IMediaService, MediaService>();

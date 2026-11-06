@@ -2,6 +2,7 @@ using System.Net;
 using System.Reflection;
 using System.Text.Json;
 using Car_Rental_System_BE.Application.Features.Billing;
+using Car_Rental_System_BE.Application.Features.Customers;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
@@ -31,13 +32,13 @@ public sealed class OperationalNotificationTests
         var committed = false;
         var sentAfterCommit = false;
         var email = new Sender((_, _, _, _) => { sentAfterCommit = committed; return fail ? Task.FromException(new HttpRequestException("secret")) : Task.CompletedTask; });
-        var repository = Proxy<IOperationsRepository>((method, _) =>
+        var repository = Proxy<ICustomerLicenseRepository>((method, _) =>
         {
             Assert.Equal("ReviewLicenseAsync", method.Name);
             committed = true;
             return Task.FromResult(new CustomerLicense("private", "B", null, null, "private", status));
         });
-        var service = new OperationsService(repository, notifications: Notifications(email));
+        var service = new CustomerLicenseService(repository, notifications: Notifications(email));
         Assert.Equal(status, (await service.ReviewLicenseAsync(12, status, default)).Status);
         Assert.Single(email.Messages);
         Assert.True(sentAfterCommit);
@@ -257,10 +258,11 @@ public sealed class OperationalNotificationTests
         var notifications = Notifications(sender);
         var error = new InvalidOperationException("Business rule failed");
         var operations = new OperationsService(Proxy<IOperationsRepository>((_, _) => throw error), notifications: notifications);
+        var licenses = new CustomerLicenseService(Proxy<ICustomerLicenseRepository>((_, _) => throw error), notifications: notifications);
         var payment = new PaymentService(Proxy<IPaymentRepository>((_, _) => throw error), null!, new("https://test.local", "https://test.local"), notifications);
         var actual = await Assert.ThrowsAsync<InvalidOperationException>(() => kind switch
         {
-            "license" => operations.ReviewLicenseAsync(12, "approved", default),
+            "license" => licenses.ReviewLicenseAsync(12, "approved", default),
             "report" => operations.CreateReportAsync(72, 2, false, "damage", "description", null, default),
             _ => (Task)payment.ReviewRefundAsync(4, true, "manager@test.local", default)
         });

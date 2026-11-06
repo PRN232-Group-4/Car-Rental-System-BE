@@ -1,4 +1,5 @@
 using Car_Rental_System_BE.WebApi.Features.Billing;
+using Car_Rental_System_BE.WebApi.Features.Customers;
 using Car_Rental_System_BE.WebApi.Features.Maintenances;
 using Car_Rental_System_BE.WebApi.Controllers;
 using Car_Rental_System_BE.WebApi.Features.Fleet;
@@ -43,8 +44,6 @@ public sealed class AuthorizationTests
     }
 
     [Theory]
-    [InlineData("ReviewLicense", "Driver", false)]
-    [InlineData("ReviewLicense", "CustomerService", true)]
     [InlineData("Hourly", "Staff", false)]
     [InlineData("Hourly", "Customer", true)]
     [InlineData("SaveContract", "Customer", false)]
@@ -61,6 +60,16 @@ public sealed class AuthorizationTests
     [InlineData("DeletePlan", "Manager", true)]
     public async Task Operations_enforce_capability_matrix(string action, string role, bool allowed) =>
         Assert.Equal(allowed, await AuthorizeEndpoint<OperationsController>(action, Principal(role, 7)));
+
+    /// <summary>
+    /// The driver-license review moved to CustomerLicensesController. It is looked up on the controller that
+    /// actually owns it now, so a policy left behind on OperationsController cannot pass this matrix.
+    /// </summary>
+    [Theory]
+    [InlineData("ReviewLicense", "Driver", false)]
+    [InlineData("ReviewLicense", "CustomerService", true)]
+    public async Task Customer_license_review_enforces_the_policy_it_moved_with(string action, string role, bool allowed) =>
+        Assert.Equal(allowed, await AuthorizeEndpoint<CustomerLicensesController>(action, Principal(role, 7)));
 
     /// <summary>
     /// The vehicle actions moved to VehiclesController. They are looked up on the controller that actually owns
@@ -242,7 +251,7 @@ public sealed class AuthorizationTests
         spy = (RepositorySpy)store;
         var completion = DispatchProxy.Create<IOperationsCompletionRepository, RepositorySpy>();
         ((RepositorySpy)completion).Calls = spy.Calls;
-        return new(new Car_Rental_System_BE.Application.Services.OperationsService(store), null!, new Car_Rental_System_BE.Application.Services.OperationsCompletionService(completion)) { ControllerContext = new() { HttpContext = new DefaultHttpContext { User = principal } } };
+        return new(new Car_Rental_System_BE.Application.Services.OperationsService(store), new Car_Rental_System_BE.Application.Services.OperationsCompletionService(completion)) { ControllerContext = new() { HttpContext = new DefaultHttpContext { User = principal } } };
     }
 
     public class RepositorySpy : DispatchProxy
