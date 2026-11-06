@@ -1,12 +1,16 @@
-using Car_Rental_System_BE.Application.DTOs.Dashboard;
-using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.Application.Features.Dashboard;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Car_Rental_System_BE.WebApi.Controllers;
+namespace Car_Rental_System_BE.WebApi.Features.Dashboard;
 
+/// <summary>
+/// The management dashboard: the KPI snapshot, the daily revenue series and the three ranked reports. The type
+/// keeps its name, its route and its controller-level Management policy, so the swagger tag and every success
+/// message stay exactly as they were; only its layer folder and namespace changed.
+/// </summary>
 [ApiController]
 [Route("api/dashboard")]
 [Authorize(Policy = AuthorizationPolicies.Management)]

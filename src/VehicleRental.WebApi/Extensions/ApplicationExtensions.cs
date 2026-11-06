@@ -11,6 +11,7 @@ using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Application.Features.Loyalty;
 using Car_Rental_System_BE.Application.Features.Maintenances;
+using Car_Rental_System_BE.Application.Features.Dashboard;
 using Car_Rental_System_BE.Application.Features.Organization;
 using Car_Rental_System_BE.Application.Features.Ratings;
 using Car_Rental_System_BE.Application.Features.Reports;

@@ -1,12 +1,11 @@
 using System.Data;
-using Car_Rental_System_BE.Application.DTOs.Dashboard;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Application.Features.Dashboard;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
-namespace Car_Rental_System_BE.Infrastructure.Repositories;
+namespace Car_Rental_System_BE.Infrastructure.Features.Dashboard;
 
 public sealed class NpgsqlDashboardRepository(NpgsqlDataSource dataSource) : IDashboardRepository
 {

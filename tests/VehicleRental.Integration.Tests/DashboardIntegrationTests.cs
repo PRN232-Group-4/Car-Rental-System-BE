@@ -1,5 +1,5 @@
-using Car_Rental_System_BE.Application.DTOs.Dashboard;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Application.Features.Dashboard;
+using Car_Rental_System_BE.Infrastructure.Features.Dashboard;
 using Npgsql;
 using Xunit;
 

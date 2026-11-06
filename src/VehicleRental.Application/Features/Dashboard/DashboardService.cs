@@ -1,10 +1,11 @@
 using Car_Rental_System_BE.Application.Common.Errors;
-using Car_Rental_System_BE.Application.DTOs.Dashboard;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
-using Car_Rental_System_BE.Application.Interfaces.Services;
 
-namespace Car_Rental_System_BE.Application.Services;
+namespace Car_Rental_System_BE.Application.Features.Dashboard;
 
+/// <summary>
+/// Turns the request filter into the validated query pair (period and adjacent previous period) the repository
+/// reads, and wraps every paged answer in <see cref="DashboardPage{T}"/> so each entry carries its period.
+/// </summary>
 public sealed class DashboardService(IDashboardRepository repository, TimeProvider? timeProvider = null) : IDashboardService
 {
     public Task<DashboardSnapshot> SnapshotAsync(DashboardFilter filter, CancellationToken ct) => repository.SnapshotAsync(Validate(filter), ct);
