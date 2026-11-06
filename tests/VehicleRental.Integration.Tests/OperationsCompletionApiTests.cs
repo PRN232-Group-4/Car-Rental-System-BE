@@ -6,6 +6,7 @@ using System.Text.Json;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Fleet;
 using Car_Rental_System_BE.Application.Features.Organization;
+using Car_Rental_System_BE.Application.Features.Ratings;
 using Car_Rental_System_BE.Application.Features.Reports;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Interfaces.Services;
@@ -52,6 +53,10 @@ public sealed class OperationsCompletionApiTests : IAsyncLifetime
         // and the same name-dispatching proxy answers the two report methods it shares with the completion port.
         builder.Services.AddSingleton(DispatchProxy.Create<IReportRepository,Repository>());
         builder.Services.AddSingleton<IReportService,ReportService>();
+        // The staff-rating endpoints moved to the Ratings slice for the same reason: RatingsController resolves
+        // IRatingService, whose five methods the shared proxy answers by name.
+        builder.Services.AddSingleton(DispatchProxy.Create<IRatingRepository,Repository>());
+        builder.Services.AddSingleton<IRatingService,RatingService>();
         builder.Services.AddControllers(options=>options.Filters.Add<ApiSuccessResponseFilter>()).AddApplicationPart(typeof(OperationsController).Assembly);
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(options=>options.OperationFilter<ApiSuccessResponseOperationFilter>());

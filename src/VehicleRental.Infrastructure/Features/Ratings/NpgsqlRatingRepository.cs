@@ -1,0 +1,115 @@
+using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Application.Features.Ratings;
+using Car_Rental_System_BE.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
+
+namespace Car_Rental_System_BE.Infrastructure.Features.Ratings;
+
+/// <summary>
+/// Staff rating storage: the customer's upsert, the flat per-staff list, the paged queue, moderation and the
+/// management reply, plus the moderation-history row that records each status change. The members came from
+/// <c>NpgsqlOperationsRepository</c> (rate, list) and <c>NpgsqlOperationsCompletionRepository</c> (queue,
+/// moderate, reply) with their SQL unchanged; the transactions travelled with them.
+/// </summary>
+public sealed class NpgsqlRatingRepository(NpgsqlDataSource dataSource) : IRatingRepository
+{
+    public async Task<StaffRating> RateStaffAsync(int rentalId, int staffId, decimal rating, string? comment, string customerEmail, CancellationToken ct)
+    {
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        if (!await (from rental in db.Set<RentalsRow>()
+            join c in db.Set<CustomersRow>() on rental.CustomerId equals c.Id
+            join u in db.Set<UsersRow>() on c.UserId equals u.Id
+            where rental.Id == rentalId && u.Email == customerEmail && rental.Status == "completed"
+            select rental.Id).AnyAsync(ct)) throw new KeyNotFoundException("Rental not found or not completed.");
+        if (!await db.Set<VehicleAssignmentsRow>().AnyAsync(x => x.RentalId == rentalId && x.DriverStaffId == staffId, ct) &&
+            !await db.Set<InspectionsRow>().AnyAsync(x => x.RentalId == rentalId && x.StaffId == staffId, ct))
+            throw new KeyNotFoundException("Staff was not involved in this rental.");
+
+        await using var cmd = dataSource.CreateCommand("""
+            INSERT INTO staff_ratings (rental_id, staff_id, rating, comment)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (rental_id, staff_id) DO UPDATE SET rating = EXCLUDED.rating, comment = EXCLUDED.comment
+            RETURNING id, rental_id, staff_id, rating, comment, created_at
+            """);
+        Add(cmd, rentalId, staffId, rating, (object?)comment ?? DBNull.Value);
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        if (!await r.ReadAsync(ct)) throw new InvalidOperationException();
+        return new(r.GetInt32(0), r.GetInt32(1), r.GetInt32(2), r.GetDecimal(3), S(r, 4), r.GetDateTime(5));
+    }
+
+    public async Task<IReadOnlyList<StaffRating>> ListStaffRatingsAsync(int staffId, CancellationToken ct)
+    {
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        return await db.Set<StaffRatingsRow>().AsNoTracking().Where(x => x.StaffId == staffId)
+            .OrderByDescending(x => x.CreatedAt).Select(x => new StaffRating(x.Id, x.RentalId,
+                x.StaffId, x.Rating, x.Comment, x.CreatedAt, null, "visible", null, null, null)).ToListAsync(ct);
+    }
+
+    public async Task<OperationsPage<StaffRating>> RatingsAsync(int staffId, OperationsPagination pagination, CancellationToken ct)
+    {
+        await using var cn = await dataSource.OpenConnectionAsync(ct);
+        await using var tx = await cn.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, ct);
+        await using var db = VehicleRentalDbContext.Create(cn, tx);
+        var source = RatingRows(db, staffId);
+        var total = await db.Set<StaffRatingsRow>().CountAsync(row => row.StaffId == staffId, ct);
+        var offset = ((long)pagination.Page - 1) * pagination.PageSize;
+        var rows = offset >= total ? [] : await source
+            .Skip((int)offset).Take(pagination.PageSize).ToListAsync(ct);
+        await tx.CommitAsync(ct);
+        return new(rows, pagination.Page, pagination.PageSize, total);
+    }
+
+    public async Task<StaffRating> ModerateRatingAsync(int id, string status, string reason, string actor, CancellationToken ct)
+    {
+        await using var cn=await dataSource.OpenConnectionAsync(ct);
+        await using var tx=await cn.BeginTransactionAsync(ct);
+        if(await Scalar(cn,tx,"UPDATE staff_ratings SET status=$2,moderation_reason=$3,moderated_by=$4,moderated_at=now() AT TIME ZONE 'utc' WHERE id=$1 RETURNING id",ct,id,status,reason,actor) is not int)
+            throw new KeyNotFoundException("Rating was not found.");
+        await Scalar(cn,tx,"INSERT INTO rating_moderation_history(rating_id,status,reason,actor) VALUES($1,$2,$3,$4)",ct,id,status,reason,actor);
+        var row=await ReadRating(cn,tx,id,ct);
+        await tx.CommitAsync(ct); return row;
+    }
+
+    public async Task<StaffRating> ReplyRatingAsync(int id, string text, string actor, CancellationToken ct)
+    {
+        await using var cn=await dataSource.OpenConnectionAsync(ct);
+        await using var tx=await cn.BeginTransactionAsync(ct);
+        if(await Scalar(cn,tx,"UPDATE staff_ratings SET reply_text=$2,reply_by=$3,reply_at=now() AT TIME ZONE 'utc' WHERE id=$1 RETURNING id",ct,id,text,actor) is not int)
+            throw new KeyNotFoundException("Rating was not found.");
+        var row=await ReadRating(cn,tx,id,ct);
+        await tx.CommitAsync(ct); return row;
+    }
+
+    private static DateTime Utc(DateTime stamp) => DateTime.SpecifyKind(stamp, DateTimeKind.Utc);
+
+    private static async Task<StaffRating> ReadRating(NpgsqlConnection cn, NpgsqlTransaction tx, int id, CancellationToken ct)
+    {
+        await using var db = VehicleRentalDbContext.Create(cn, tx);
+        return await RatingRows(db, id: id).FirstOrDefaultAsync(ct)
+            ?? throw new KeyNotFoundException("Rating was not found.");
+    }
+
+    private static IQueryable<StaffRating> RatingRows(VehicleRentalDbContext db, int? staffId = null, int? id = null) =>
+        from rating in db.Set<StaffRatingsRow>()
+        from rental in db.Set<RentalsRow>().Where(r => r.Id == rating.RentalId).DefaultIfEmpty()
+        from customer in db.Set<CustomersRow>().Where(c => c.Id == rental.CustomerId).DefaultIfEmpty()
+        from user in db.Set<UsersRow>().Where(u => u.Id == customer.UserId).DefaultIfEmpty()
+        from vehicle in db.Set<VehiclesRow>().Where(v => v.Id == rental.VehicleId).DefaultIfEmpty()
+        where (staffId == null || rating.StaffId == staffId) && (id == null || rating.Id == id)
+        orderby rating.CreatedAt descending, rating.Id descending
+        select new StaffRating(rating.Id, rating.RentalId, rating.StaffId, rating.Rating, rating.Comment,
+            Utc(rating.CreatedAt), user.Fullname, rating.Status,
+            rating.ReplyText == null ? null : new RatingReply(rating.ReplyText!, rating.ReplyBy!, Utc(rating.ReplyAt!.Value)),
+            (vehicle.Brand ?? "") + (vehicle.Brand != null && vehicle.Model != null ? " " : "") + (vehicle.Model ?? ""), vehicle.LicensePlate);
+
+    // Same private helpers the two legacy repositories hold: read a nullable string, bind parameters, run a
+    // scalar. They were private there, so reusing them would mean widening that surface for one slice; a copy
+    // keeps the moved SQL identical and creates no dependency on another feature.
+    private static string? S(NpgsqlDataReader r,int i)=>r.IsDBNull(i)?null:r.GetString(i);
+    private static void Add(NpgsqlCommand command,params object?[] values) { foreach(var value in values) command.Parameters.AddWithValue(value??DBNull.Value); }
+    private static async Task<object?> Scalar(NpgsqlConnection cn,NpgsqlTransaction tx,string sql,CancellationToken ct,params object?[] values)
+    {
+        await using var command=new NpgsqlCommand(sql,cn,tx); Add(command,values); return await command.ExecuteScalarAsync(ct);
+    }
+}

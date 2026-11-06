@@ -210,38 +210,5 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
     private static string? S(NpgsqlDataReader r,int i)=>r.IsDBNull(i)?null:r.GetString(i); private static DateOnly? D(NpgsqlDataReader r,int i)=>r.IsDBNull(i)?null:r.GetFieldValue<DateOnly>(i);
     private static void Add(NpgsqlCommand c,params object?[] v){foreach(var x in v)c.Parameters.AddWithValue(x??DBNull.Value);}
     private static async Task<object?> ScalarAsync(NpgsqlConnection c,NpgsqlTransaction t,string sql,object? value,CancellationToken ct)=>await ScalarAsync(c,t,sql,new[]{value},ct);private static async Task<object?> ScalarAsync(NpgsqlConnection c,NpgsqlTransaction t,string sql,object?[] values,CancellationToken ct){await using var x=new NpgsqlCommand(sql,c,t);Add(x,values);return await x.ExecuteScalarAsync(ct);}
-
-    public async Task<StaffRating> RateStaffAsync(int rentalId, int staffId, decimal rating, string? comment, string customerEmail, CancellationToken ct)
-    {
-        await using var db = VehicleRentalDbContext.Create(dataSource);
-        if (!await (from rental in db.Set<RentalsRow>()
-            join c in db.Set<CustomersRow>() on rental.CustomerId equals c.Id
-            join u in db.Set<UsersRow>() on c.UserId equals u.Id
-            where rental.Id == rentalId && u.Email == customerEmail && rental.Status == "completed"
-            select rental.Id).AnyAsync(ct)) throw new KeyNotFoundException("Rental not found or not completed.");
-        if (!await db.Set<VehicleAssignmentsRow>().AnyAsync(x => x.RentalId == rentalId && x.DriverStaffId == staffId, ct) &&
-            !await db.Set<InspectionsRow>().AnyAsync(x => x.RentalId == rentalId && x.StaffId == staffId, ct))
-            throw new KeyNotFoundException("Staff was not involved in this rental.");
-
-        await using var cmd = dataSource.CreateCommand("""
-            INSERT INTO staff_ratings (rental_id, staff_id, rating, comment)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (rental_id, staff_id) DO UPDATE SET rating = EXCLUDED.rating, comment = EXCLUDED.comment
-            RETURNING id, rental_id, staff_id, rating, comment, created_at
-            """);
-        Add(cmd, rentalId, staffId, rating, (object?)comment ?? DBNull.Value);
-        await using var r = await cmd.ExecuteReaderAsync(ct);
-        if (!await r.ReadAsync(ct)) throw new InvalidOperationException();
-        return new(r.GetInt32(0), r.GetInt32(1), r.GetInt32(2), r.GetDecimal(3), S(r, 4), r.GetDateTime(5));
-    }
-
-    public async Task<IReadOnlyList<StaffRating>> ListStaffRatingsAsync(int staffId, CancellationToken ct)
-    {
-        await using var db = VehicleRentalDbContext.Create(dataSource);
-        return await db.Set<StaffRatingsRow>().AsNoTracking().Where(x => x.StaffId == staffId)
-            .OrderByDescending(x => x.CreatedAt).Select(x => new StaffRating(x.Id, x.RentalId,
-                x.StaffId, x.Rating, x.Comment, x.CreatedAt, null, "visible", null, null, null)).ToListAsync(ct);
-    }
-
 }
 

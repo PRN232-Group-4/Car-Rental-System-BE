@@ -4,6 +4,7 @@ using Car_Rental_System_BE.WebApi.Features.Maintenances;
 using Car_Rental_System_BE.WebApi.Controllers;
 using Car_Rental_System_BE.WebApi.Features.Fleet;
 using Car_Rental_System_BE.WebApi.Features.Organization;
+using Car_Rental_System_BE.WebApi.Features.Ratings;
 using Car_Rental_System_BE.WebApi.Features.Reports;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.DTOs.Accounts;
@@ -151,6 +152,19 @@ public sealed class AuthorizationTests
     [InlineData("SetReportStatus", "Manager", true)]
     public async Task Report_endpoints_enforce_the_attributes_they_moved_with(string action, string role, bool allowed) =>
         Assert.Equal(allowed, await AuthorizeEndpoint<ReportsController>(action, Principal(role, 7)));
+
+    /// <summary>
+    /// The four staff-rating actions moved to RatingsController and keep the attributes they had: the customer
+    /// rates a completed rental, management reads the queue and moderates or replies. A policy left behind on
+    /// OperationsController cannot pass this matrix because each action is looked up where it lives.
+    /// </summary>
+    [Theory]
+    [InlineData("RateStaff", "Customer", true)]
+    [InlineData("StaffRatings", "Manager", true)]
+    [InlineData("ModerateRating", "Manager", true)]
+    [InlineData("ReplyRating", "Manager", true)]
+    public async Task Rating_endpoints_enforce_the_attributes_they_moved_with(string action, string role, bool allowed) =>
+        Assert.Equal(allowed, await AuthorizeEndpoint<RatingsController>(action, Principal(role, 7)));
 
     [Theory]
     [InlineData("Staff", false)]

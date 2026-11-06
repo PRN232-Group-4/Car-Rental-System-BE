@@ -129,10 +129,4 @@ public sealed class OperationsService(IOperationsRepository repository, TimeProv
 
     public Task<object> DashboardAsync(DateTime? from, DateTime? to, CancellationToken ct) =>
         repository.DashboardAsync(from, to, ct);
-
-    public Task<StaffRating> RateStaffAsync(int rentalId, int staffId, decimal rating, string? comment, string customerEmail, CancellationToken ct) =>
-        repository.RateStaffAsync(rentalId, staffId, rating, comment, customerEmail, ct);
-
-    public Task<IReadOnlyList<StaffRating>> ListStaffRatingsAsync(int staffId, CancellationToken ct) =>
-        repository.ListStaffRatingsAsync(staffId, ct);
 }

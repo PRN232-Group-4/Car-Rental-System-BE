@@ -28,6 +28,4 @@ public interface IOperationsRepository
     Task<IReadOnlyList<ExpiringSubscription>> ListSubscriptionsToRemindAsync(DateOnly today, int withinDays, CancellationToken ct);
     Task MarkSubscriptionRemindedAsync(int subscriptionId, CancellationToken ct);
     Task<object> DashboardAsync(DateTime? from, DateTime? to, CancellationToken ct);
-    Task<StaffRating> RateStaffAsync(int rentalId, int staffId, decimal rating, string? comment, string customerEmail, CancellationToken ct);
-    Task<IReadOnlyList<StaffRating>> ListStaffRatingsAsync(int staffId, CancellationToken ct);
 }

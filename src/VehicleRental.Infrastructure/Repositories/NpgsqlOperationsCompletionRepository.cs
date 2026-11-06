@@ -40,38 +40,6 @@ public sealed class NpgsqlOperationsCompletionRepository(NpgsqlDataSource dataSo
         await tx.CommitAsync(ct);
         return new(items, pagination.Page, pagination.PageSize, total);
     }
-    public async Task<OperationsPage<StaffRating>> RatingsAsync(int staffId, OperationsPagination pagination, CancellationToken ct)
-    {
-        await using var cn = await dataSource.OpenConnectionAsync(ct);
-        await using var tx = await cn.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, ct);
-        await using var db = VehicleRentalDbContext.Create(cn, tx);
-        var source = RatingRows(db, staffId);
-        var total = await db.Set<StaffRatingsRow>().CountAsync(row => row.StaffId == staffId, ct);
-        var offset = ((long)pagination.Page - 1) * pagination.PageSize;
-        var rows = offset >= total ? [] : await source
-            .Skip((int)offset).Take(pagination.PageSize).ToListAsync(ct);
-        await tx.CommitAsync(ct);
-        return new(rows, pagination.Page, pagination.PageSize, total);
-    }
-    public async Task<StaffRating> ModerateRatingAsync(int id, string status, string reason, string actor, CancellationToken ct)
-    {
-        await using var cn=await dataSource.OpenConnectionAsync(ct);
-        await using var tx=await cn.BeginTransactionAsync(ct);
-        if(await Scalar(cn,tx,"UPDATE staff_ratings SET status=$2,moderation_reason=$3,moderated_by=$4,moderated_at=now() AT TIME ZONE 'utc' WHERE id=$1 RETURNING id",ct,id,status,reason,actor) is not int)
-            throw new KeyNotFoundException("Rating was not found.");
-        await Scalar(cn,tx,"INSERT INTO rating_moderation_history(rating_id,status,reason,actor) VALUES($1,$2,$3,$4)",ct,id,status,reason,actor);
-        var row=await ReadRating(cn,tx,id,ct);
-        await tx.CommitAsync(ct); return row;
-    }
-    public async Task<StaffRating> ReplyRatingAsync(int id, string text, string actor, CancellationToken ct)
-    {
-        await using var cn=await dataSource.OpenConnectionAsync(ct);
-        await using var tx=await cn.BeginTransactionAsync(ct);
-        if(await Scalar(cn,tx,"UPDATE staff_ratings SET reply_text=$2,reply_by=$3,reply_at=now() AT TIME ZONE 'utc' WHERE id=$1 RETURNING id",ct,id,text,actor) is not int)
-            throw new KeyNotFoundException("Rating was not found.");
-        var row=await ReadRating(cn,tx,id,ct);
-        await tx.CommitAsync(ct); return row;
-    }
     public async Task<OperationsPage<Maintenance>> MaintenanceAsync(int? vehicleId, string? status, DateTime? from, DateTime? to, OperationsPagination pagination, CancellationToken ct)
     {
         await using var cn = await dataSource.OpenConnectionAsync(ct);
@@ -99,28 +67,4 @@ public sealed class NpgsqlOperationsCompletionRepository(NpgsqlDataSource dataSo
     }
 
     private static DateTime Utc(DateTime stamp) => DateTime.SpecifyKind(stamp, DateTimeKind.Utc);
-    private static async Task<StaffRating> ReadRating(NpgsqlConnection cn, NpgsqlTransaction tx, int id, CancellationToken ct)
-    {
-        await using var db = VehicleRentalDbContext.Create(cn, tx);
-        return await RatingRows(db, id: id).FirstOrDefaultAsync(ct)
-            ?? throw new KeyNotFoundException("Rating was not found.");
-    }
-
-    private static IQueryable<StaffRating> RatingRows(VehicleRentalDbContext db, int? staffId = null, int? id = null) =>
-        from rating in db.Set<StaffRatingsRow>()
-        from rental in db.Set<RentalsRow>().Where(r => r.Id == rating.RentalId).DefaultIfEmpty()
-        from customer in db.Set<CustomersRow>().Where(c => c.Id == rental.CustomerId).DefaultIfEmpty()
-        from user in db.Set<UsersRow>().Where(u => u.Id == customer.UserId).DefaultIfEmpty()
-        from vehicle in db.Set<VehiclesRow>().Where(v => v.Id == rental.VehicleId).DefaultIfEmpty()
-        where (staffId == null || rating.StaffId == staffId) && (id == null || rating.Id == id)
-        orderby rating.CreatedAt descending, rating.Id descending
-        select new StaffRating(rating.Id, rating.RentalId, rating.StaffId, rating.Rating, rating.Comment,
-            Utc(rating.CreatedAt), user.Fullname, rating.Status,
-            rating.ReplyText == null ? null : new RatingReply(rating.ReplyText!, rating.ReplyBy!, Utc(rating.ReplyAt!.Value)),
-            (vehicle.Brand ?? "") + (vehicle.Brand != null && vehicle.Model != null ? " " : "") + (vehicle.Model ?? ""), vehicle.LicensePlate);
-    private static void Add(NpgsqlCommand command,params object?[] values) { foreach(var value in values) command.Parameters.AddWithValue(value??DBNull.Value); }
-    private static async Task<object?> Scalar(NpgsqlConnection cn,NpgsqlTransaction tx,string sql,CancellationToken ct,params object?[] values)
-    {
-        await using var command=new NpgsqlCommand(sql,cn,tx); Add(command,values); return await command.ExecuteScalarAsync(ct);
-    }
 }

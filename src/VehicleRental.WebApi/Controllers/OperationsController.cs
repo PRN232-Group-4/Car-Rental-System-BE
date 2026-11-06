@@ -167,47 +167,6 @@ public sealed class OperationsController(
             request.OdometerKm, request.FuelBatteryLevel, request.DamageNotes, request.ImageUrls, ct));
     }
 
-    [Authorize(Policy=AuthorizationPolicies.Customer)]
-    [HttpPost("rental/{rentalId:int}/ratings")]
-    [ProducesResponseType<StaffRating>(StatusCodes.Status201Created)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> RateStaff(int rentalId, RateStaffRequest request, CancellationToken ct)
-    {
-        if (!ModelState.IsValid) return ValidationProblem(ModelState);
-        try
-        {
-            var result = await store.RateStaffAsync(rentalId, request.StaffId, request.Rating, request.Comment, Email(), ct);
-            return Created($"/api/rating/{result.Id}", result);
-        }
-        catch (KeyNotFoundException ex) { return Problem(ex.Message, statusCode: StatusCodes.Status404NotFound); }
-    }
-
-    [OperationDescription(" Pagination for list operations defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Invalid values return 400 at HTTP and Application boundaries. data contains items/page/pageSize/totalCount, totalCount is after filters; out-of-range pages retain the count with empty items.", DocumentsPaginationParameters = true)]
-    [Authorize(Policy=AuthorizationPolicies.Management)]
-    [HttpGet("staff/{staffId:int}/ratings")]
-    [ProducesResponseType<OperationsPage<StaffRating>>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public Task<OperationsPage<StaffRating>> StaffRatings([Range(1,int.MaxValue)] int staffId, [FromQuery] OperationsPagination pagination, CancellationToken ct) =>
-        Completion.RatingsAsync(staffId, pagination, ct);
-
-    /// <summary>Admin/Manager moderates a rating; reason and authenticated actor are retained.</summary>
-    [SuccessMessage("Staff rating moderation status updated successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPatch("rating/{id:int}")]
-    [ProducesResponseType<StaffRating>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)] [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)] [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public Task<StaffRating> ModerateRating([Range(1,int.MaxValue)] int id, RatingModerationRequest request, CancellationToken ct)
-        => Completion.ModerateRatingAsync(id,request,Email(),ct);
-
-    /// <summary>Admin/Manager publishes or replaces the management reply to a rating.</summary>
-    [SuccessMessage("Management reply to staff rating saved successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPost("rating/{id:int}/reply")]
-    [ProducesResponseType<StaffRating>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)] [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)] [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public Task<StaffRating> ReplyRating([Range(1,int.MaxValue)] int id, RatingReplyRequest request, CancellationToken ct)
-        => Completion.ReplyRatingAsync(id,request,Email(),ct);
-
     private IOperationsCompletionService Completion => completion ?? throw new InvalidOperationException("Operations completion service is not configured.");
 
     private IRentalLifecycleService Lifecycle => lifecycle ?? throw new InvalidOperationException("Rental lifecycle service is not configured.");

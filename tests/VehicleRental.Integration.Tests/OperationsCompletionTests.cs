@@ -1,8 +1,10 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Application.Features.Ratings;
 using Car_Rental_System_BE.Application.Features.Reports;
 using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Infrastructure.Features.Assignments;
 using Car_Rental_System_BE.Infrastructure.Features.Maintenances;
+using Car_Rental_System_BE.Infrastructure.Features.Ratings;
 using Car_Rental_System_BE.Infrastructure.Features.Reports;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
@@ -17,8 +19,9 @@ public sealed class OperationsCompletionValidationTests
     {
         var service=new OperationsCompletionService(null!);
         var reports=new ReportService(null!);
+        var ratings=new RatingService(null!);
         Assert.Throws<ArgumentException>(()=>{ _=reports.ReportsAsync(null,null,null,new(){Page=page,PageSize=size},default); });
-        Assert.Throws<ArgumentException>(()=>{ _=service.RatingsAsync(1,new(){Page=page,PageSize=size},default); });
+        Assert.Throws<ArgumentException>(()=>{ _=ratings.RatingsAsync(1,new(){Page=page,PageSize=size},default); });
         Assert.Throws<ArgumentException>(()=>{ _=service.MaintenanceAsync(null,null,null,null,new(){Page=page,PageSize=size},default); });
         Assert.Throws<ArgumentException>(()=>{ _=service.DriverScheduleAsync(null,DateTime.UtcNow,DateTime.UtcNow.AddHours(1),new(){Page=page,PageSize=size},default); });
     }
@@ -27,9 +30,10 @@ public sealed class OperationsCompletionValidationTests
     {
         var service=new OperationsCompletionService(null!);
         var reports=new ReportService(null!);
-        Assert.Throws<ArgumentException>(()=>{ _=service.ModerateRatingAsync(1,new("hidden"," "),"admin",default); });
-        Assert.Throws<ArgumentException>(()=>{ _=service.ModerateRatingAsync(1,new("deleted","reason"),"admin",default); });
-        Assert.Throws<ArgumentException>(()=>{ _=service.ReplyRatingAsync(1,new(" "),"admin",default); });
+        var ratings=new RatingService(null!);
+        Assert.Throws<ArgumentException>(()=>{ _=ratings.ModerateRatingAsync(1,new("hidden"," "),"admin",default); });
+        Assert.Throws<ArgumentException>(()=>{ _=ratings.ModerateRatingAsync(1,new("deleted","reason"),"admin",default); });
+        Assert.Throws<ArgumentException>(()=>{ _=ratings.ReplyRatingAsync(1,new(" "),"admin",default); });
         await Assert.ThrowsAsync<ArgumentException>(()=>reports.SetReportStatusAsync(1,new("resolved","reason"),"admin",default));
         Assert.Throws<ArgumentException>(()=>{ _=service.MaintenanceAsync(null,null,DateTime.Today,DateTime.Today,new(),default); });
     }
@@ -42,6 +46,7 @@ public sealed class OperationsCompletionIntegrationTests(PostgresFixture db) : I
     private readonly NpgsqlMaintenanceRepository maintenanceStore=new(db.DataSource);
     private readonly NpgsqlReportRepository reportsStore=new(db.DataSource);
     private readonly ReportService reportsService=new(new NpgsqlReportRepository(db.DataSource));
+    private readonly RatingService ratingService=new(new NpgsqlRatingRepository(db.DataSource));
     private readonly OperationsCompletionService service=new(new NpgsqlOperationsCompletionRepository(db.DataSource));
 
     private async Task<int> Staff(bool technician=false,bool driver=false)
@@ -109,18 +114,18 @@ public sealed class OperationsCompletionIntegrationTests(PostgresFixture db) : I
         var scenario=await Scenarios.CreateDirectRentalAsync(db.DataSource);
         var staff=await Staff();
         var id=(int)(await Seed.ScalarAsync(db.DataSource,"INSERT INTO staff_ratings(rental_id,staff_id,rating,comment) VALUES($1,$2,5,'Excellent') RETURNING id",scenario.RentalId,staff))!;
-        var hidden=await service.ModerateRatingAsync(id,new("hidden","Personal information"),"admin@test.local",default);
+        var hidden=await ratingService.ModerateRatingAsync(id,new("hidden","Personal information"),"admin@test.local",default);
         Assert.Equal("hidden",hidden.Status);
         Assert.IsType<DBNull>(await Seed.ScalarAsync(db.DataSource,"SELECT rating FROM staffs WHERE id=$1",staff));
         Assert.Equal(1,await Seed.CountAsync(db.DataSource,"SELECT COUNT(*) FROM rating_moderation_history WHERE rating_id=$1",id));
-        var reply=await service.ReplyRatingAsync(id,new("Thank you; your feedback was reviewed."),"manager@test.local",default);
+        var reply=await ratingService.ReplyRatingAsync(id,new("Thank you; your feedback was reviewed."),"manager@test.local",default);
         Assert.Equal("manager@test.local",reply.Reply!.By);
-        var page=await service.RatingsAsync(staff,new(){PageSize=1},default);
+        var page=await ratingService.RatingsAsync(staff,new(){PageSize=1},default);
         Assert.Equal(reply.Reply,Assert.Single(page.Items).Reply);
         Assert.Equal(1,page.TotalCount);
-        await service.ModerateRatingAsync(id,new("visible","Redacted and approved"),"admin@test.local",default);
+        await ratingService.ModerateRatingAsync(id,new("visible","Redacted and approved"),"admin@test.local",default);
         Assert.Equal(5m,await Seed.ScalarAsync(db.DataSource,"SELECT rating FROM staffs WHERE id=$1",staff));
-        var empty=await service.RatingsAsync(staff,new(){Page=2,PageSize=1},default);
+        var empty=await ratingService.RatingsAsync(staff,new(){Page=2,PageSize=1},default);
         Assert.Empty(empty.Items); Assert.Equal(1,empty.TotalCount);
     }
 }

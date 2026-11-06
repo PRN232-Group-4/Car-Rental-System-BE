@@ -198,10 +198,10 @@
 /api/payments/webhooks/payos | Payments.Webhook | POST | 200 | inspectionType=post_rental | Payment webhook processed successfully.
 /api/payments/webhooks/payos | Payments.Webhook | POST | 204 | - | Payment webhook processed successfully.
 /api/payments/webhooks/payos | Payments.Webhook | POST | 204 | inspectionType=post_rental | Payment webhook processed successfully.
-/api/rating/{id:int} | Operations.ModerateRating | PATCH | 200 | - | Staff rating moderation status updated successfully.
-/api/rating/{id:int} | Operations.ModerateRating | PATCH | 200 | inspectionType=post_rental | Staff rating moderation status updated successfully.
-/api/rating/{id:int}/reply | Operations.ReplyRating | POST | 200 | - | Management reply to staff rating saved successfully.
-/api/rating/{id:int}/reply | Operations.ReplyRating | POST | 200 | inspectionType=post_rental | Management reply to staff rating saved successfully.
+/api/rating/{id:int} | Ratings.ModerateRating | PATCH | 200 | - | Staff rating moderation status updated successfully.
+/api/rating/{id:int} | Ratings.ModerateRating | PATCH | 200 | inspectionType=post_rental | Staff rating moderation status updated successfully.
+/api/rating/{id:int}/reply | Ratings.ReplyRating | POST | 200 | - | Management reply to staff rating saved successfully.
+/api/rating/{id:int}/reply | Ratings.ReplyRating | POST | 200 | inspectionType=post_rental | Management reply to staff rating saved successfully.
 /api/rental-policies | Operations.AddPolicy | POST | 200 | - | Rental policy created successfully.
 /api/rental-policies | Operations.AddPolicy | POST | 200 | inspectionType=post_rental | Rental policy created successfully.
 /api/rental-policies | Operations.AddPolicy | POST | 201 | - | Rental policy created successfully.
@@ -270,10 +270,10 @@
 /api/rental/{rentalId:int}/invoice | Invoices.CreateInvoice | POST | 200 | inspectionType=post_rental | Invoice created successfully.
 /api/rental/{rentalId:int}/invoice | Invoices.CreateInvoice | POST | 201 | - | Invoice created successfully.
 /api/rental/{rentalId:int}/invoice | Invoices.CreateInvoice | POST | 201 | inspectionType=post_rental | Invoice created successfully.
-/api/rental/{rentalId:int}/ratings | Operations.RateStaff | POST | 200 | - | rate staff completed successfully.
-/api/rental/{rentalId:int}/ratings | Operations.RateStaff | POST | 200 | inspectionType=post_rental | rate staff completed successfully.
-/api/rental/{rentalId:int}/ratings | Operations.RateStaff | POST | 201 | - | rate staff created successfully.
-/api/rental/{rentalId:int}/ratings | Operations.RateStaff | POST | 201 | inspectionType=post_rental | rate staff created successfully.
+/api/rental/{rentalId:int}/ratings | Ratings.RateStaff | POST | 200 | - | rate staff completed successfully.
+/api/rental/{rentalId:int}/ratings | Ratings.RateStaff | POST | 200 | inspectionType=post_rental | rate staff completed successfully.
+/api/rental/{rentalId:int}/ratings | Ratings.RateStaff | POST | 201 | - | rate staff created successfully.
+/api/rental/{rentalId:int}/ratings | Ratings.RateStaff | POST | 201 | inspectionType=post_rental | rate staff created successfully.
 /api/rentals | RentalQueries.List | GET | 200 | - | Rentals retrieved successfully.
 /api/rentals | RentalQueries.List | GET | 200 | inspectionType=post_rental | Rentals retrieved successfully.
 /api/rentals/hourly | Operations.Hourly | POST | 200 | - | Hourly rental created successfully.
@@ -328,8 +328,8 @@
 /api/staff/{id:int} | Staff.Get | GET | 200 | inspectionType=post_rental | Staff member retrieved successfully.
 /api/staff/{id:int} | Staff.Update | PUT | 200 | - | Staff member updated successfully.
 /api/staff/{id:int} | Staff.Update | PUT | 200 | inspectionType=post_rental | Staff member updated successfully.
-/api/staff/{staffId:int}/ratings | Operations.StaffRatings | GET | 200 | - | staff ratings retrieved successfully.
-/api/staff/{staffId:int}/ratings | Operations.StaffRatings | GET | 200 | inspectionType=post_rental | staff ratings retrieved successfully.
+/api/staff/{staffId:int}/ratings | Ratings.StaffRatings | GET | 200 | - | staff ratings retrieved successfully.
+/api/staff/{staffId:int}/ratings | Ratings.StaffRatings | GET | 200 | inspectionType=post_rental | staff ratings retrieved successfully.
 /api/subscription-plan/{id:int} | Operations.DeletePlan | DELETE | 200 | - | Subscription plan deleted successfully.
 /api/subscription-plan/{id:int} | Operations.DeletePlan | DELETE | 200 | inspectionType=post_rental | Subscription plan deleted successfully.
 /api/subscription-plan/{id:int} | Operations.EditPlan | PUT | 200 | - | Subscription plan updated successfully.
