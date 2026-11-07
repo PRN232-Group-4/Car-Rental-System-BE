@@ -6,6 +6,7 @@ using Car_Rental_System_BE.WebApi.Controllers;
 using Car_Rental_System_BE.WebApi.Features.Fleet;
 using Car_Rental_System_BE.WebApi.Features.Organization;
 using Car_Rental_System_BE.WebApi.Features.Ratings;
+using Car_Rental_System_BE.WebApi.Features.Recovery;
 using Car_Rental_System_BE.WebApi.Features.Reports;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.DTOs.Accounts;
@@ -132,8 +133,6 @@ public sealed class AuthorizationTests
     [InlineData("CreateShift", "Manager", true)]
     [InlineData("UpdateShift", "Driver", false)]
     [InlineData("CreateShift", "CustomerService", false)]
-    [InlineData("ReplaceVehicle", "Manager", true)]
-    [InlineData("ReplaceVehicle", "Driver", false)]
     public async Task Dispatch_endpoints_enforce_roles(string action, string role, bool allowed) =>
         Assert.Equal(allowed, await AuthorizeEndpoint<DispatchController>(action, Principal(role, 7)));
 
@@ -148,6 +147,15 @@ public sealed class AuthorizationTests
     [InlineData("InspectReplacement", "Driver", false)]
     public async Task Inspection_endpoints_enforce_the_attributes_they_moved_with(string action, string role, bool allowed) =>
         Assert.Equal(allowed, await AuthorizeEndpoint<InspectionRecordsController>(action, Principal(role, 7)));
+
+    /// <summary>
+    /// Vehicle recovery moved to RecoveryController with the Management policy it had on DispatchController.
+    /// </summary>
+    [Theory]
+    [InlineData("ReplaceVehicle", "Manager", true)]
+    [InlineData("ReplaceVehicle", "Driver", false)]
+    public async Task Recovery_endpoints_enforce_the_attributes_they_moved_with(string action, string role, bool allowed) =>
+        Assert.Equal(allowed, await AuthorizeEndpoint<RecoveryController>(action, Principal(role, 7)));
 
     /// <summary>
     /// The five incident-report actions moved to ReportsController and keep the attributes they had: two role

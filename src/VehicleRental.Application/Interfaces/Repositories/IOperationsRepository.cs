@@ -4,7 +4,6 @@ namespace Car_Rental_System_BE.Application.Interfaces.Repositories;
 
 public interface IOperationsRepository
 {
-    Task<Rental> ReplaceVehicleAsync(int rentalId, int vehicleId, int? driverId, int? reportId, string actor, CancellationToken ct);
     Task<RentalPolicy> CreatePolicyAsync(RentalPolicy policy, CancellationToken ct);
     Task<bool> VehicleTypeExistsAsync(int id, CancellationToken ct);
     Task<bool> HasActivePolicyAsync(int? vehicleTypeId, CancellationToken ct);

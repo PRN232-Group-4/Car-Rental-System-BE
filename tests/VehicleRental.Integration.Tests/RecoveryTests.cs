@@ -5,6 +5,7 @@ using Car_Rental_System_BE.Infrastructure.Features.Assignments;
 using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Features.Inspections;
 using Car_Rental_System_BE.Infrastructure.Features.Maintenances;
+using Car_Rental_System_BE.Infrastructure.Features.Recovery;
 using Car_Rental_System_BE.Infrastructure.Features.Reports;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
@@ -15,6 +16,7 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
 {
     private readonly NpgsqlOperationsRepository store = new(db.DataSource);
     private readonly NpgsqlInspectionRecordRepository inspections = new(db.DataSource);
+    private readonly NpgsqlRecoveryRepository recovery = new(db.DataSource);
     private readonly NpgsqlReportRepository reports = new(db.DataSource);
     private readonly NpgsqlFleetRepository fleet = new(db.DataSource);
     private readonly NpgsqlAssignmentRepository assignments = new(db.DataSource);
@@ -86,7 +88,7 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         Assert.Equal("maintenance",(await fleet.GetVehicleAsync(rental.VehicleId,default))!.Status);
         var candidate=await ReplacementAsync(rental.VehicleId);
         await inspections.InspectReplacementAsync(rental.Id,candidate,inspector,true,null,null,null,null,default);
-        var recovered=await store.ReplaceVehicleAsync(rental.Id,candidate,null,null,Manager,default);
+        var recovered=await recovery.ReplaceVehicleAsync(rental.Id,candidate,null,null,Manager,default);
         Assert.Equal("pre_inspection",recovered.Status);
         Assert.Equal(rental.TotalPrice,recovered.TotalPrice);
     }
@@ -130,13 +132,13 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         await Assert.ThrowsAsync<InvalidOperationException>(()=>inspections.InspectReplacementAsync(rental.Id,wrong,inspector,true,null,null,null,null,default));
         var candidate=await ReplacementAsync(rental.VehicleId);
         await inspections.InspectReplacementAsync(rental.Id,candidate,inspector,true,null,null,null,null,default);
-        await Assert.ThrowsAsync<InvalidOperationException>(()=>store.ReplaceVehicleAsync(rental.Id,candidate,newDriver,report.Id,Manager,default));
+        await Assert.ThrowsAsync<InvalidOperationException>(()=>recovery.ReplaceVehicleAsync(rental.Id,candidate,newDriver,report.Id,Manager,default));
         await Assert.ThrowsAsync<InvalidOperationException>(()=>maintenanceStore.AssignReportMaintenanceAsync(report.Id,newDriver,null,DateOnly.FromDateTime(DateTime.UtcNow),default));
         var maintenance=await maintenanceStore.AssignReportMaintenanceAsync(report.Id,inspector,null,DateOnly.FromDateTime(DateTime.UtcNow),default);
-        await Assert.ThrowsAsync<InvalidOperationException>(()=>store.ReplaceVehicleAsync(rental.Id,candidate,oldDriver,report.Id,Manager,default));
+        await Assert.ThrowsAsync<InvalidOperationException>(()=>recovery.ReplaceVehicleAsync(rental.Id,candidate,oldDriver,report.Id,Manager,default));
         Assert.Equal(rental.VehicleId,(await store.GetRentalAsync(rental.Id,default))!.VehicleId);
         Assert.Equal(0,await Seed.CountAsync(db.DataSource,"SELECT COUNT(*) FROM vehicle_replacements WHERE rental_id=$1",rental.Id));
-        var replaced=await store.ReplaceVehicleAsync(rental.Id,candidate,newDriver,report.Id,Manager,default);
+        var replaced=await recovery.ReplaceVehicleAsync(rental.Id,candidate,newDriver,report.Id,Manager,default);
         Assert.Equal(candidate,replaced.VehicleId);
         Assert.Equal("renting",replaced.Status);
         Assert.Equal(rental.TotalPrice,replaced.TotalPrice);
@@ -192,7 +194,7 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         await inspections.InspectReplacementAsync(b.Id,candidate,staff,true,null,null,null,null,default);
         var attempts=new[] { a.Id,b.Id }.Select(async id=>
         {
-            try { await store.ReplaceVehicleAsync(id,candidate,null,null,Manager,default); return true; }
+            try { await recovery.ReplaceVehicleAsync(id,candidate,null,null,Manager,default); return true; }
             catch (InvalidOperationException) { return false; }
         });
         var results=await Task.WhenAll(attempts);

@@ -4,7 +4,6 @@ namespace Car_Rental_System_BE.Application.Interfaces.Services;
 
 public interface IOperationsService
 {
-    Task<Rental> ReplaceVehicleAsync(int rentalId, int vehicleId, int? driverId, int? reportId, string actor, CancellationToken ct);
     Task<RentalPolicy> CreatePolicyAsync(RentalPolicy policy, CancellationToken ct);
     Task<RentalPolicy> SetPolicyStatusAsync(int id, bool isActive, CancellationToken ct);
     Task<RentalPolicyPage> ListPoliciesAsync(int page, int pageSize, CancellationToken ct);

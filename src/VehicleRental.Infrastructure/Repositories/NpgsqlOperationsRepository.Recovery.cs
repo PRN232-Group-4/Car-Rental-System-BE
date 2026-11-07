@@ -85,13 +85,6 @@ public sealed partial class NpgsqlOperationsRepository
         return (start, end);
     }
 
-    private static async Task WriteAssignmentAsync(NpgsqlConnection cn, NpgsqlTransaction tx, int rental,
-        int vehicle, int? driver, string actor, CancellationToken ct)
-    {
-        await ValueAsync(cn, tx, "UPDATE vehicle_assignments SET status='reassigned' WHERE rental_id=$1 AND status='assigned'", ct, rental);
-        await ValueAsync(cn, tx, "INSERT INTO vehicle_assignments(rental_id,vehicle_id,driver_staff_id,status,assigned_by) VALUES($1,$2,$3,'assigned',$4)", ct, rental, vehicle, driver, actor);
-    }
-
     private static async Task RequirePassedPreAsync(NpgsqlConnection cn, NpgsqlTransaction tx, int rental, int vehicle, CancellationToken ct)
     {
         if (await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM inspections WHERE rental_id=$1 AND vehicle_id=$2 AND inspection_type='pre_rental' AND is_ok=true)", ct, rental, vehicle) is not true)
@@ -127,52 +120,5 @@ public sealed partial class NpgsqlOperationsRepository
         if (status == "pre_inspection") await RentalOrderWriter.EnsurePaidAsync(cn, tx, id, ct);
         await tx.CommitAsync(ct);
         return rental with { Status = status };
-    }
-
-    private static async Task RequireMatchingVehicleAsync(NpgsqlConnection cn, NpgsqlTransaction tx, int oldVehicle, int newVehicle, CancellationToken ct)
-    {
-        if (oldVehicle == newVehicle || await ValueAsync(cn, tx, """
-            SELECT EXISTS(SELECT 1 FROM vehicles old JOIN vehicles replacement ON replacement.vehicle_type_id=old.vehicle_type_id
-                JOIN car_detail oc ON oc.vehicle_id=old.id JOIN car_detail nc ON nc.vehicle_id=replacement.id
-                WHERE old.id=$1 AND replacement.id=$2 AND oc.seat_count>0 AND nc.seat_count=oc.seat_count)
-            """, ct,oldVehicle,newVehicle) is not true)
-            throw new InvalidOperationException("Replacement must be a different vehicle of the same type and exact seat count.");
-    }
-
-    public async Task<Rental> ReplaceVehicleAsync(int rentalId, int vehicle, int? driver, int? report, string actor, CancellationToken ct)
-    {
-        await using var cn = await dataSource.OpenConnectionAsync(ct);
-        await using var tx = await cn.BeginTransactionAsync(ct);
-        await LockOperationsAsync(cn, tx, ct);
-        var rental = await ReadRentalAsync(cn, tx, rentalId, ct);
-        if (rental.Status is not ("pending" or "pre_inspection" or "renting")) throw new InvalidOperationException("Rental cannot be recovered in its current state.");
-        await RequireMatchingVehicleAsync(cn, tx, rental.VehicleId, vehicle, ct);
-        var (start,end) = AssignmentPeriod(rental);
-        await RequireAvailableVehicleAsync(cn, tx, vehicle, start, end, rentalId, ct);
-        await RequirePassedPreAsync(cn, tx, rentalId, vehicle, ct);
-        var oldDriver = await ValueAsync(cn, tx, "SELECT driver_staff_id FROM vehicle_assignments WHERE rental_id=$1 AND status='assigned'", ct,rentalId);
-        if (rental.Status == "renting")
-        {
-            if (report is null || driver is null || oldDriver is int old && old == driver)
-                throw new InvalidOperationException("Breakdown recovery requires a report and a different replacement driver.");
-            if (await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM reports r JOIN vehicle_maintenance m ON m.id=r.maintenance_id WHERE r.id=$1 AND r.rental_id=$2 AND r.vehicle_id=$3 AND r.type='breakdown' AND r.status='assigned' AND m.assigned_staff_id IS NOT NULL AND m.status<>'cancelled')", ct,report,rentalId,rental.VehicleId) is not true)
-                throw new InvalidOperationException("Manager must assign maintenance for this vehicle's breakdown first.");
-        }
-        else if (report is not null) throw new ArgumentException("A breakdown report is only used for ongoing-trip recovery.");
-        if (driver is not null) await RequireDriverAsync(cn, tx, driver.Value, start, end, rentalId, ct);
-        else if (await ValueAsync(cn, tx, "SELECT has_driver FROM hour_rental_detail WHERE rental_id=$1", ct,rentalId) is true)
-            throw new InvalidOperationException("A driver is required for this rental.");
-        var status = rental.Status == "pending" ? "pre_inspection" : rental.Status;
-        // Deliberately preserve all rental price snapshots and invoice/payment amounts.
-        await ValueAsync(cn, tx, "UPDATE rentals SET vehicle_id=$2,status=$3 WHERE id=$1", ct,rentalId,vehicle,status);
-        await WriteAssignmentAsync(cn, tx, rentalId,vehicle,driver,actor,ct);
-        await ValueAsync(cn, tx, "INSERT INTO vehicle_replacements(rental_id,report_id,old_vehicle_id,new_vehicle_id,old_driver_staff_id,new_driver_staff_id,replaced_by) VALUES($1,$2,$3,$4,$5,$6,$7)", ct,rentalId,report,rental.VehicleId,vehicle,oldDriver,driver,actor);
-        if (report is not null)
-        {
-            await ValueAsync(cn, tx, "UPDATE reports SET status='resolved',resolved_by=$2,resolved_at=now(),status_reason=NULL,status_actor=$2 WHERE id=$1", ct,report,actor);
-            await ValueAsync(cn, tx, "UPDATE vehicles SET status='available' WHERE id=$1 AND EXISTS(SELECT 1 FROM vehicle_maintenance WHERE id=(SELECT maintenance_id FROM reports WHERE id=$2) AND status='completed' AND is_safe=true) AND NOT EXISTS(SELECT 1 FROM vehicle_maintenance WHERE vehicle_id=$1 AND (COALESCE(status,'open') NOT IN ('completed','cancelled') OR is_safe=false))", ct,rental.VehicleId,report);
-        }
-        await tx.CommitAsync(ct);
-        return rental with { VehicleId=vehicle, Status=status };
     }
 }

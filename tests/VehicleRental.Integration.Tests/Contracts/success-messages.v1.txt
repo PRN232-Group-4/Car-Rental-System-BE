@@ -254,8 +254,8 @@
 /api/rental/{id:int}/inspections/pre | InspectionRecords.Pre | POST | 200 | inspectionType=post_rental | Pre-rental inspection recorded successfully.
 /api/rental/{id:int}/replacement-inspection/{vehicleId:int} | InspectionRecords.InspectReplacement | POST | 200 | - | Replacement vehicle inspection recorded successfully.
 /api/rental/{id:int}/replacement-inspection/{vehicleId:int} | InspectionRecords.InspectReplacement | POST | 200 | inspectionType=post_rental | Replacement vehicle inspection recorded successfully.
-/api/rental/{id:int}/replacements | Dispatch.ReplaceVehicle | POST | 200 | - | Replacement vehicle dispatched with original rental pricing preserved.
-/api/rental/{id:int}/replacements | Dispatch.ReplaceVehicle | POST | 200 | inspectionType=post_rental | Replacement vehicle dispatched with original rental pricing preserved.
+/api/rental/{id:int}/replacements | Recovery.ReplaceVehicle | POST | 200 | - | Replacement vehicle dispatched with original rental pricing preserved.
+/api/rental/{id:int}/replacements | Recovery.ReplaceVehicle | POST | 200 | inspectionType=post_rental | Replacement vehicle dispatched with original rental pricing preserved.
 /api/rental/{id:int}/reports | Reports.CreateReport | POST | 200 | - | Incident report submitted for manager review.
 /api/rental/{id:int}/reports | Reports.CreateReport | POST | 200 | inspectionType=post_rental | Incident report submitted for manager review.
 /api/rental/{id:int}/reports | Reports.CreateReport | POST | 201 | - | Incident report submitted for manager review.

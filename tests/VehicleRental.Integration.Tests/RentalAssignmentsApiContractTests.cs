@@ -148,8 +148,7 @@ public sealed class RentalAssignmentsApiContractTests
     public async Task Dispatch_shift_actions_are_served_by_the_assignments_slice()
     {
         var assignments = new StubAssignmentService();
-        var operations = DispatchProxy.Create<IOperationsService, UnusedOperationsService>();
-        var controller = new DispatchController(operations, assignments)
+        var controller = new DispatchController(assignments)
         {
             ControllerContext = new ControllerContext
             {
@@ -191,11 +190,6 @@ public sealed class RentalAssignmentsApiContractTests
         app.MapControllers();
         app.StartAsync().GetAwaiter().GetResult();
         return app;
-    }
-
-    public class UnusedOperationsService : DispatchProxy
-    {
-        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) => throw new NotSupportedException(targetMethod?.Name);
     }
 
     private sealed class StubAssignmentService : IAssignmentService

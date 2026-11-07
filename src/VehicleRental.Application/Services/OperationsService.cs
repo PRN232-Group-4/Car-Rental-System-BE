@@ -12,17 +12,6 @@ namespace Car_Rental_System_BE.Application.Services;
 
 public sealed class OperationsService(IOperationsRepository repository, TimeProvider? timeProvider = null, IOperationalNotifications? notifications = null, RentalExpiryOptions? expiryOptions = null) : IOperationsService
 {
-    public async Task<Rental> ReplaceVehicleAsync(int rentalId, int vehicleId, int? driverId, int? reportId, string actor, CancellationToken ct)
-    {
-        var rental = await repository.ReplaceVehicleAsync(rentalId, vehicleId, driverId, reportId, actor, ct);
-        if (notifications is not null)
-        {
-            if (reportId is int report) await notifications.ReportChangedAsync(report, "resolved");
-            await notifications.RentalStatusChangedAsync(rentalId, "vehicle_replaced");
-        }
-        return rental;
-    }
-
     public async Task<RentalPolicy> CreatePolicyAsync(RentalPolicy policy, CancellationToken ct)
     {
         RentalPolicyValidator.Validate(policy);

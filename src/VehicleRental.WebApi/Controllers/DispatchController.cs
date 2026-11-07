@@ -11,17 +11,17 @@ using Microsoft.AspNetCore.Mvc;
 namespace Car_Rental_System_BE.WebApi.Controllers;
 
 /// <summary>
-/// Driver duty shifts and vehicle recovery: the two actions that swap a vehicle or check a candidate
-/// replacement. The five incident-report actions moved to <c>ReportsController</c> with their roles, routes and
-/// shapes unchanged, which is why this controller no longer takes the operations completion service or the
-/// maintenance service.
+/// Driver duty shifts: create, edit and list. The five incident-report actions moved to <c>ReportsController</c>,
+/// the replacement inspection to <c>InspectionRecordsController</c> and vehicle recovery to
+/// <c>RecoveryController</c>, each with its roles, routes and shapes unchanged; this controller only talks to the
+/// assignments slice now.
 /// </summary>
 [ApiController]
 [Route("api")]
 [ProducesResponseType(StatusCodes.Status400BadRequest)]
 [ProducesResponseType(StatusCodes.Status403Forbidden)]
 [ProducesResponseType(StatusCodes.Status404NotFound)]
-public sealed class DispatchController(IOperationsService store, IAssignmentService assignments) : ControllerBase
+public sealed class DispatchController(IAssignmentService assignments) : ControllerBase
 {
     /// <summary>Manager/Admin creates a driver's duty shift.</summary>
     [SuccessMessage("Driver duty shift created successfully.")]
@@ -57,14 +57,6 @@ public sealed class DispatchController(IOperationsService store, IAssignmentServ
         }
         return Ok(await assignments.ListDriverShiftsAsync(driverStaffId,from,to,ct));
     }
-
-    /// <summary>Manager/Admin replaces with the same seat count, preserving prices; ongoing trips require a breakdown report and a new driver.</summary>
-    [SuccessMessage("Replacement vehicle dispatched with original rental pricing preserved.")]
-    [Authorize(Policy=AuthorizationPolicies.Management)]
-    [HttpPost("rental/{id:int}/replacements")]
-    [ProducesResponseType<Rental>(StatusCodes.Status200OK)]
-    public Task<Rental> ReplaceVehicle(int id, VehicleReplacementRequest request, CancellationToken ct)
-        => store.ReplaceVehicleAsync(id,request.VehicleId,request.DriverStaffId,request.ReportId,Email(),ct);
 
     private string Email()=>User.FindFirstValue(ClaimTypes.Email)??throw new UnauthorizedAccessException();
 }

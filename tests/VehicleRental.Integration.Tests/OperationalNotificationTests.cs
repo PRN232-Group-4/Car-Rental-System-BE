@@ -10,6 +10,7 @@ using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Application.Features.Maintenances;
 using Car_Rental_System_BE.Application.Features.Reports;
 using Car_Rental_System_BE.Application.Features.Inspections;
+using Car_Rental_System_BE.Application.Features.Recovery;
 using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Services;
@@ -81,7 +82,7 @@ public sealed class OperationalNotificationTests
             };
         });
         var reportService = new ReportService(reportRepository, notifications);
-        var repository = Proxy<IOperationsRepository>((method, _) =>
+        var repository = Proxy<IRecoveryRepository>((method, _) =>
         {
             committed = true;
             return method.Name switch
@@ -90,7 +91,7 @@ public sealed class OperationalNotificationTests
                 _ => throw new NotSupportedException(method.Name)
             };
         });
-        var operations = new OperationsService(repository, notifications: notifications);
+        var recovery = new RecoveryService(repository, notifications);
         if (action is "review" or "reject")
         {
             var completion = Proxy<IReportRepository>((_, _) =>
@@ -112,7 +113,7 @@ public sealed class OperationalNotificationTests
             };
         }), notifications).AssignReportMaintenanceAsync(41, 2, null, DateOnly.FromDateTime(DateTime.UtcNow), default);
         else if (action == "resolve") await reportService.ResolveReportAsync(41, "manager@test.local", default);
-        else await operations.ReplaceVehicleAsync(72, 1, 2, 41, "manager@test.local", default);
+        else await recovery.ReplaceVehicleAsync(72, 1, 2, 41, "manager@test.local", default);
         var reportEmails = email.Messages.Where(m => m.Subject.Contains("báo cáo")).ToArray();
         Assert.Equal(2, reportEmails.Length);
         Assert.True(sentAfterCommit);
