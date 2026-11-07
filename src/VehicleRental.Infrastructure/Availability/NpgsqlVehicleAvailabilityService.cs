@@ -1,4 +1,3 @@
-using System.Data.Common;
 using Car_Rental_System_BE.Application.Availability;
 using Car_Rental_System_BE.Domain.Availability;
 using Npgsql;
@@ -12,14 +11,5 @@ public sealed class NpgsqlVehicleAvailabilityService(NpgsqlDataSource dataSource
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         return await VehicleAvailabilityChecks.EvaluateAsync(
             connection, null, vehicleId, window, null, options.BufferMinutes, ct);
-    }
-
-    public async Task AssertAvailableAsync(DbTransaction transaction, int vehicleId, TimeRange window, int? excludeRentalId, CancellationToken ct)
-    {
-        var npgsqlTx = (NpgsqlTransaction)transaction;
-        var connection = npgsqlTx.Connection ?? throw new InvalidOperationException("Transaction must have an open connection.");
-        var result = await VehicleAvailabilityChecks.EvaluateAsync(
-            connection, npgsqlTx, vehicleId, window, excludeRentalId, options.BufferMinutes, ct);
-        VehicleAvailabilityChecks.ThrowIfBlocked(result, vehicleId);
     }
 }

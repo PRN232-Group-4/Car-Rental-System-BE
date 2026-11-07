@@ -12,7 +12,7 @@ using Car_Rental_System_BE.Infrastructure.Persistence;
 
 namespace Car_Rental_System_BE.Infrastructure.Assignments;
 
-public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IAssignmentRepository, IMaintenanceIncidentGateway
+public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IAssignmentRepository
 {
     public async Task<RentalScheduleInfo?> GetRentalScheduleAsync(int rentalId, CancellationToken ct)
     {
@@ -360,7 +360,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
         }
     }
 
-    public async Task<int> OpenIncidentMaintenanceAsync(
+    private async Task<int> OpenIncidentMaintenanceAsync(
         DbTransaction tx,
         int vehicleId,
         int? facilityId,

@@ -5,9 +5,9 @@ using Car_Rental_System_BE.Application.Lifecycle;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using VehicleRental.Domain.Lifecycle;
+using Car_Rental_System_BE.Domain.Lifecycle;
 
-namespace Car_Rental_System_BE.Controllers;
+namespace Car_Rental_System_BE.WebApi.Controllers;
 
 public sealed record ReturnRentalApiRequest(DateTime? ReturnedAt);
 public sealed record CancelRentalApiRequest(

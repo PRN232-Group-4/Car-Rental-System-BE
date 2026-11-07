@@ -2,7 +2,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
-namespace Car_Rental_System_BE.Infrastructure.Persistence;
+namespace Car_Rental_System_BE.Infrastructure.HostedServices;
 
 public sealed class RedisConnectionHostedService(
     IConnectionMultiplexer redis,

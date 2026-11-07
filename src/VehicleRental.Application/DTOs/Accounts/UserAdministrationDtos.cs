@@ -2,12 +2,6 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Car_Rental_System_BE.Application.DTOs.Accounts;
 
-public static class AdministrativeRoles
-{
-    public const string Pattern = "^(Admin|Manager|Staff|CustomerService|Driver|Maintenance|Customer)$";
-    public static bool IsKnown(string role) => role is "Admin" or "Manager" or "Staff" or "CustomerService" or "Driver" or "Maintenance" or "Customer";
-}
-
 public sealed class UserListQuery
 {
     [StringLength(255)] public string? Search { get; init; }

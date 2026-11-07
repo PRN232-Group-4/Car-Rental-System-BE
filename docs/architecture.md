@@ -8,26 +8,35 @@ Từ 2026-10-25, truy vấn đọc thông thường dùng LINQ qua `Persistence/
 
 ```text
 src/
-├── VehicleRental.Domain/
-│   ├── Entities/          # User entity
-│   ├── ValueObjects/      # Chờ value object thực tế; README giữ thư mục
-│   ├── Services/          # StaffSpecialty: quy tắc specialty/driver
-│   └── Interfaces/        # IUserRepository chỉ sử dụng Domain types
-├── VehicleRental.Application/
-│   ├── Services/          # Use case implementations, security helpers, exceptions
-│   ├── Interfaces/        # Services/, Repositories/, External/ ports
-│   ├── DTOs/              # Account, staff, rental, payment, request/response và options
-│   └── Validators/        # PasswordRules và StaffValidator
-├── VehicleRental.Infrastructure/
-│   ├── Persistence/       # Migration và hosted services
-│   ├── Repositories/      # Npgsql query, mapping, transaction và lock
-│   └── Services/          # Authentication/, Registration/, Payments/, Media/ adapters
-└── VehicleRental.WebApi/
-    ├── Controllers/       # HTTP, DTO mapping và authorization context
-    ├── Middlewares/       # Authentication/ và Responses/ (middleware/filter hỗ trợ HTTP)
-    ├── Properties/        # launchSettings.json cho local development
-    └── Program.cs         # Composition root và DI
+├── VehicleRental.Domain/              # Quy tắc thuần, không phụ thuộc framework
+│   ├── Entities/                      # User, GeofenceZone
+│   ├── ValueObjects/                  # GeoPoint
+│   ├── Services/                      # StaffSpecialty, RouteGeometryService
+│   ├── Interfaces/                    # IUserRepository (chỉ dùng Domain types)
+│   ├── Availability/ Assignments/     # TimeRange, BookingStatusRules, AssignmentDomain
+│   └── Lifecycle/ Loyalty/            # RentalStateMachine, CancellationPolicy, LoyaltyDomainRules
+├── VehicleRental.Application/         # Use case + port
+│   ├── Services/                      # Use case chung (Account, Session, Payment, Operations, ...)
+│   ├── Interfaces/                    # Services/, Repositories/, External/ ports
+│   ├── DTOs/ Validators/              # Request/response, options, validation
+│   ├── Common/Errors/                 # BusinessRuleException, ConflictException, NotFoundException
+│   └── Assignments/ Availability/ Handovers/ Inspections/ Lifecycle/ Loyalty/
+│                                      # Feature folder: *Contracts.cs (port + DTO) + service
+├── VehicleRental.Infrastructure/      # Adapter cho PostgreSQL, Redis, provider ngoài
+│   ├── Persistence/                   # VehicleRentalDbContext, PersistenceRows
+│   ├── HostedServices/                # Migration, Redis ping, rental/subscription expiry, telemetry retention
+│   ├── Repositories/                  # Npgsql*Repository (query, mapping, transaction, lock)
+│   ├── Assignments/ Availability/ Lifecycle/   # Adapter theo feature
+│   └── Services/                      # Authentication/, Registration/, Payments/, Media/, Mapbox, email
+└── VehicleRental.WebApi/              # Host + HTTP
+    ├── Controllers/                   # HTTP, DTO mapping và authorization context
+    ├── Middlewares/                   # Authentication/, Requests/, Responses/ (helper, filter, envelope)
+    ├── Properties/                    # launchSettings.json
+    └── Program.cs                     # Composition root và DI
 ```
+
+Tất cả namespace dùng gốc `Car_Rental_System_BE.<Layer>.<Folder>`, ví dụ `Car_Rental_System_BE.Domain.Lifecycle`
+và `Car_Rental_System_BE.WebApi.Controllers`. Luồng chạy chi tiết xem [flow.md](flow.md).
 
 Luồng gọi: `Controller → Application Service → Repository interface → EF Core query / Npgsql transaction → PostgreSQL`.
 Chiều tham chiếu compile-time vẫn đi vào trong: Domain độc lập; Application chỉ tham chiếu Domain;

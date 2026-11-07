@@ -8,7 +8,7 @@ Giữ dependency một chiều: `Domain <- Application <- Infrastructure <- WebA
 
 - `Domain`: `Entities/`, `ValueObjects/`, `Services/`, `Interfaces/`; không EF/Npgsql/HTTP/Redis. Domain port chỉ được dùng Domain types/kiểu cơ bản.
 - `Application`: `Services/` điều phối use case; `Interfaces/` cho service/repository/provider ports; `DTOs/` cho input/output/options; `Validators/` cho input rules. Không phụ thuộc Infrastructure/WebApi.
-- `Infrastructure`: `Persistence/` cho migration/hosted service; `Repositories/` chứa SQL/mapping/transaction; `Services/` chứa adapter Redis/Brevo/PayOS/Cloudinary.
+- `Infrastructure`: `Persistence/` cho DbContext/row; `HostedServices/` cho migration và job nền; `Repositories/` chứa SQL/mapping/transaction; `Services/` chứa adapter Redis/Brevo/PayOS/Cloudinary.
 - `WebApi` (`VehicleRental.WebApi`): `Controllers/`, `Middlewares/` và composition root duy nhất. DTO ở Application; HTTP auth/response/filter hỗ trợ nằm dưới Middlewares.
 
 Repository chỉ đại diện aggregate root. Không generic repository; controller không gọi Npgsql/Redis trực tiếp. Schema cố ý không có FK: Application phải xác minh logical reference và transaction khi đổi nhiều bảng.

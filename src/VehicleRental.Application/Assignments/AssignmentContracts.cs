@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using System.Data.Common;
 using Car_Rental_System_BE.Domain.Availability;
 
 namespace Car_Rental_System_BE.Application.Assignments;
@@ -146,17 +145,6 @@ public interface IAssignmentRepository
         CancellationToken ct);
 
     Task<bool> VehicleExistsAndActiveAsync(int vehicleId, int requiredTypeId, CancellationToken ct);
-}
-
-public interface IMaintenanceIncidentGateway
-{
-    Task<int> OpenIncidentMaintenanceAsync(
-        DbTransaction tx,
-        int vehicleId,
-        int? facilityId,
-        int rentalId,
-        string description,
-        CancellationToken ct);
 }
 
 public interface IAssignmentService

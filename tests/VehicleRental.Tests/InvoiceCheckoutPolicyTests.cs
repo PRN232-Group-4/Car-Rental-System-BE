@@ -1,4 +1,4 @@
-using VehicleRental.Domain.Lifecycle;
+using Car_Rental_System_BE.Domain.Lifecycle;
 using Xunit;
 using System.Text.Json;
 using Car_Rental_System_BE.Application.DTOs.Payments;

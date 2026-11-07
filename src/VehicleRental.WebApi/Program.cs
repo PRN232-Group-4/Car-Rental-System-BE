@@ -8,6 +8,7 @@ using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Domain.Entities;
 using Car_Rental_System_BE.Domain.Interfaces;
+using Car_Rental_System_BE.Infrastructure.HostedServices;
 using Car_Rental_System_BE.Infrastructure.Persistence;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Car_Rental_System_BE.Infrastructure.Services;
@@ -36,7 +37,6 @@ using Car_Rental_System_BE.Application.Handovers;
 using Car_Rental_System_BE.Application.Inspections;
 using Car_Rental_System_BE.Infrastructure.Lifecycle;
 using Car_Rental_System_BE.Application.Loyalty;
-using Car_Rental_System_BE.Infrastructure.Loyalty;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 
@@ -223,7 +223,6 @@ builder.Services.AddScoped<VehicleSearchService>();
 builder.Services.Configure<AssignmentOptions>(builder.Configuration.GetSection(AssignmentOptions.SectionName));
 builder.Services.AddScoped<NpgsqlAssignmentRepository>();
 builder.Services.AddScoped<IAssignmentRepository>(sp => sp.GetRequiredService<NpgsqlAssignmentRepository>());
-builder.Services.AddScoped<IMaintenanceIncidentGateway>(sp => sp.GetRequiredService<NpgsqlAssignmentRepository>());
 builder.Services.AddScoped<IAssignmentService>(sp =>
 {
     var repo = sp.GetRequiredService<IAssignmentRepository>();
@@ -248,7 +247,6 @@ builder.Services.AddOptions<LoyaltyOptions>()
 builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<LoyaltyOptions>>().Value);
 builder.Services.AddScoped<ILoyaltyRepository, NpgsqlLoyaltyRepository>();
 builder.Services.AddScoped<ILoyaltyService, LoyaltyService>();
-builder.Services.AddScoped<ILoyaltyRedemption>(sp => (LoyaltyService)sp.GetRequiredService<ILoyaltyService>());
 
 builder.Services.AddScoped<NpgsqlRentalLifecycleRepository>();
 builder.Services.AddScoped<IRentalLifecycleRepository>(sp => sp.GetRequiredService<NpgsqlRentalLifecycleRepository>());

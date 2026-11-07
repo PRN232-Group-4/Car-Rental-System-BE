@@ -70,9 +70,3 @@ public interface ILoyaltyService
     Task<RedemptionQuoteResponse> GetRedemptionQuoteAsync(int customerId, decimal rentAmount, CancellationToken ct);
     Task<IReadOnlyList<LoyaltyReconciliationDto>> GetReconciliationAsync(CancellationToken ct);
 }
-
-public interface ILoyaltyRedemption
-{
-    Task<RedemptionQuoteResponse> QuoteAsync(int customerId, decimal rentAmount, CancellationToken ct);
-    void Validate(int customerId, int points, decimal rentAmount, int currentBalance);
-}

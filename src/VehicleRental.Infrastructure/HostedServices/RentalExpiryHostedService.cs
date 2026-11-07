@@ -4,7 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Car_Rental_System_BE.Infrastructure.Persistence;
+namespace Car_Rental_System_BE.Infrastructure.HostedServices;
 
 /// <summary>
 /// FR-042 maintenance job: quét các yêu cầu đặt xe đã quá hạn duyệt/thanh toán và chuyển sang <c>expired</c>.

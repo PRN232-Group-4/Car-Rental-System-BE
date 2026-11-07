@@ -1,4 +1,4 @@
-namespace VehicleRental.Domain.Lifecycle;
+namespace Car_Rental_System_BE.Domain.Lifecycle;
 
 public enum RentalStatus
 {

@@ -1,12 +1,12 @@
 using Car_Rental_System_BE.Application.Common.Errors;
-using VehicleRental.Domain.Loyalty;
+using Car_Rental_System_BE.Domain.Loyalty;
 
 namespace Car_Rental_System_BE.Application.Loyalty;
 
 public sealed class LoyaltyService(
     ILoyaltyRepository repository,
     LoyaltyOptions? options = null,
-    TimeProvider? timeProvider = null) : ILoyaltyService, ILoyaltyRedemption
+    TimeProvider? timeProvider = null) : ILoyaltyService
 {
     private readonly LoyaltyOptions _options = options ?? new LoyaltyOptions();
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
@@ -95,21 +95,5 @@ public sealed class LoyaltyService(
     public async Task<IReadOnlyList<LoyaltyReconciliationDto>> GetReconciliationAsync(CancellationToken ct)
     {
         return await repository.GetReconciliationsAsync(ct);
-    }
-
-    public Task<RedemptionQuoteResponse> QuoteAsync(int customerId, decimal rentAmount, CancellationToken ct) =>
-        GetRedemptionQuoteAsync(customerId, rentAmount, ct);
-
-    public void Validate(int customerId, int points, decimal rentAmount, int currentBalance)
-    {
-        LoyaltyDomainRules.ValidateRedemption(
-            points,
-            rentAmount,
-            currentBalance,
-            _options.Redemption.Enabled,
-            _options.Redemption.PointValueVnd,
-            _options.Redemption.MinPoints,
-            _options.Redemption.StepPoints,
-            _options.Redemption.MaxPercentOfRent);
     }
 }

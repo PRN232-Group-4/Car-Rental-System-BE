@@ -2,7 +2,7 @@ using Car_Rental_System_BE.Application.Lifecycle;
 using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using VehicleRental.Domain.Lifecycle;
+using Car_Rental_System_BE.Domain.Lifecycle;
 
 namespace Car_Rental_System_BE.Infrastructure.Lifecycle;
 

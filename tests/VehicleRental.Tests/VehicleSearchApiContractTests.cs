@@ -1,7 +1,7 @@
 using System.Reflection;
 using Car_Rental_System_BE.Application.Availability;
 using Car_Rental_System_BE.Application.Common.Errors;
-using Car_Rental_System_BE.Controllers;
+using Car_Rental_System_BE.WebApi.Controllers;
 using Car_Rental_System_BE.Domain.Availability;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authorization;

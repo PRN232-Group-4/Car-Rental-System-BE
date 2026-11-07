@@ -5,8 +5,8 @@ using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Loyalty;
 using Microsoft.Extensions.Logging;
 using Npgsql;
-using VehicleRental.Domain.Loyalty;
-using VehicleRental.Domain.Lifecycle;
+using Car_Rental_System_BE.Domain.Loyalty;
+using Car_Rental_System_BE.Domain.Lifecycle;
 
 namespace Car_Rental_System_BE.Infrastructure.Lifecycle;
 
