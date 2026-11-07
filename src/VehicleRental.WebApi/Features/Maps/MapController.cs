@@ -1,11 +1,10 @@
-using Car_Rental_System_BE.Application.DTOs.Map;
-using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.Application.Features.Maps;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
 
-namespace Car_Rental_System_BE.WebApi.Controllers;
+namespace Car_Rental_System_BE.WebApi.Features.Maps;
 
 [ApiController]
 [Route("api/map")]

@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Car_Rental_System_BE.Application.DTOs.Options;
+namespace Car_Rental_System_BE.Application.Features.Maps;
 
 public sealed class MapboxOptions
 {

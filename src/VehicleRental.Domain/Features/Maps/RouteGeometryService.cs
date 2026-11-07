@@ -1,6 +1,6 @@
 using Car_Rental_System_BE.Domain.ValueObjects;
 
-namespace Car_Rental_System_BE.Domain.Services;
+namespace Car_Rental_System_BE.Domain.Features.Maps;
 
 public static class RouteGeometryService
 {

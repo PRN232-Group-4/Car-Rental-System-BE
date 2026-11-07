@@ -1,9 +1,6 @@
-using Car_Rental_System_BE.Application.DTOs.Map;
 using Car_Rental_System_BE.Application.Features.Tracking;
-using Car_Rental_System_BE.Application.Interfaces.External;
-using Car_Rental_System_BE.Application.Interfaces.Services;
 
-namespace Car_Rental_System_BE.Application.Services;
+namespace Car_Rental_System_BE.Application.Features.Maps;
 
 public sealed class MapService(IMapClient mapClient) : IMapService
 {

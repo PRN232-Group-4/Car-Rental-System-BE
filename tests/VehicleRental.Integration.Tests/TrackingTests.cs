@@ -1,9 +1,8 @@
-using Car_Rental_System_BE.Application.DTOs.Map;
 using Car_Rental_System_BE.Application.DTOs.Options;
+using Car_Rental_System_BE.Application.Features.Maps;
 using Car_Rental_System_BE.Application.Features.Tracking;
-using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Domain.Entities;
-using Car_Rental_System_BE.Domain.Services;
+using Car_Rental_System_BE.Domain.Features.Maps;
 using Car_Rental_System_BE.Domain.ValueObjects;
 using System.Security.Cryptography;
 using System.Text;

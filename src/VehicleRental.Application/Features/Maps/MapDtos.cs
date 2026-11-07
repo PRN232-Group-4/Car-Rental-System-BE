@@ -1,6 +1,6 @@
 using Car_Rental_System_BE.Application.Features.Tracking;
 
-namespace Car_Rental_System_BE.Application.DTOs.Map;
+namespace Car_Rental_System_BE.Application.Features.Maps;
 
 public sealed record GeocodeResult(
     string FormattedAddress,
