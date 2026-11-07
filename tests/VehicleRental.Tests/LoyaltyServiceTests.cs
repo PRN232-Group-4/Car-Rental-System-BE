@@ -1,7 +1,7 @@
 using System.Data.Common;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Loyalty;
-using VehicleRental.Domain.Loyalty;
+using Car_Rental_System_BE.Domain.Loyalty;
 using Xunit;
 
 namespace VehicleRental.Tests;

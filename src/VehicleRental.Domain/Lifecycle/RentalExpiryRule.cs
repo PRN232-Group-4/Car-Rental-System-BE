@@ -1,4 +1,4 @@
-namespace VehicleRental.Domain.Lifecycle;
+namespace Car_Rental_System_BE.Domain.Lifecycle;
 
 /// <summary>
 /// FR-042: quy tắc thời gian của yêu cầu đặt xe.

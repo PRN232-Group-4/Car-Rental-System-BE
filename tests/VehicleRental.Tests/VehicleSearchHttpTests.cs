@@ -1,7 +1,6 @@
-using System.Data.Common;
 using System.Text.Json;
 using Car_Rental_System_BE.Application.Availability;
-using Car_Rental_System_BE.Controllers;
+using Car_Rental_System_BE.WebApi.Controllers;
 using Car_Rental_System_BE.Domain.Availability;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Builder;
@@ -128,7 +127,6 @@ public sealed class VehicleSearchHttpTests : IAsyncLifetime
     private sealed class Availability : IVehicleAvailabilityService
     {
         public Task<AvailabilityResult> CheckAsync(int id, TimeRange window, CancellationToken ct) => throw new NotSupportedException();
-        public Task AssertAvailableAsync(DbTransaction transaction, int id, TimeRange window, int? excluded, CancellationToken ct) => throw new NotSupportedException();
     }
     private sealed class Drivers : IDriverAvailability
     {

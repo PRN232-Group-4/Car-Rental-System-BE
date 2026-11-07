@@ -342,18 +342,6 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
                 x.AssignedStaffId, x.Status, x.MaintenanceType, x.ScheduledDate, x.IsSafe, x.Description, x.Cost,
                 null, null, null, null)).ToListAsync(ct);
     }
-    public async Task<object> DashboardAsync(DateTime? from, DateTime? to, CancellationToken ct)
-    {
-        from = from is { } fromValue ? NpgsqlVehicleSearchRepository.Timestamp(fromValue) : null;
-        to = to is { } toValue ? NpgsqlVehicleSearchRepository.Timestamp(toValue) : null;
-        await using var db = VehicleRentalDbContext.Create(dataSource);
-        var revenue = await db.Set<InvoicesRow>().Where(i => i.Status == "paid" &&
-            (from == null || i.IssuedAt >= from) && (to == null || i.IssuedAt <= to)).SumAsync(i => (decimal?)i.Amount, ct) ?? 0;
-        var renting = await db.Set<RentalsRow>().LongCountAsync(r => r.Status == "renting", ct);
-        var maintenance = await db.Set<VehicleMaintenanceRow>().LongCountAsync(m => m.Status != null && m.Status != "completed" && m.Status != "cancelled", ct);
-        var activeSubscriptions = await db.Set<CustomerSubscriptionsRow>().LongCountAsync(s => s.Status == "active" && s.EndDate >= DateOnly.FromDateTime(DateTime.Today), ct);
-        return new { revenue, renting, maintenance, activeSubscriptions };
-    }
     private async Task<IReadOnlyList<OrganizationUnit>> UnitsAsync(string table, bool address, CancellationToken ct)
     {
         await using var db = VehicleRentalDbContext.Create(dataSource);
@@ -455,14 +443,6 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
         await using var r = await cmd.ExecuteReaderAsync(ct);
         if (!await r.ReadAsync(ct)) throw new InvalidOperationException();
         return new(r.GetInt32(0), r.GetInt32(1), r.GetInt32(2), r.GetDecimal(3), S(r, 4), r.GetDateTime(5));
-    }
-
-    public async Task<IReadOnlyList<StaffRating>> ListStaffRatingsAsync(int staffId, CancellationToken ct)
-    {
-        await using var db = VehicleRentalDbContext.Create(dataSource);
-        return await db.Set<StaffRatingsRow>().AsNoTracking().Where(x => x.StaffId == staffId)
-            .OrderByDescending(x => x.CreatedAt).Select(x => new StaffRating(x.Id, x.RentalId,
-                x.StaffId, x.Rating, x.Comment, x.CreatedAt, null, "visible", null, null, null)).ToListAsync(ct);
     }
 
 }

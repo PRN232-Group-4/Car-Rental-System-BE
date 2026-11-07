@@ -92,8 +92,6 @@ public sealed class ApplicationServiceTests
         var state = Proxy<IWorkflowStateStore>((method, args) => method.Name switch
         {
             "GetAsync" => Task.FromResult(values.GetValueOrDefault((string)args[0]!)),
-            "SetAsync" => SetState(values, args),
-            "DeleteAsync" => DeleteState(values, args),
             "GetTimeToLiveAsync" => Task.FromResult<TimeSpan?>(TimeSpan.FromMinutes(5)),
             "CompareExchangeAsync" => ExchangeState(values, args),
             _ => throw new NotSupportedException(method.Name)
@@ -121,10 +119,6 @@ public sealed class ApplicationServiceTests
         Assert.True(PasswordHash.Verify("secret", created.PasswordHash)); Assert.Empty(values);
     }
 
-    private static Task SetState(Dictionary<string, string> state, object?[] args)
-    { state[(string)args[0]!] = (string)args[1]!; return Task.CompletedTask; }
-    private static Task DeleteState(Dictionary<string, string> state, object?[] args)
-    { state.Remove((string)args[0]!); return Task.CompletedTask; }
     private static Task<bool> ExchangeState(Dictionary<string, string> state, object?[] args)
     {
         var key = (string)args[0]!;

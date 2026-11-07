@@ -8,7 +8,7 @@ using Car_Rental_System_BE.Application.Loyalty;
 using Npgsql;
 using NpgsqlTypes;
 
-namespace Car_Rental_System_BE.Infrastructure.Loyalty;
+namespace Car_Rental_System_BE.Infrastructure.Repositories;
 
 public sealed class NpgsqlLoyaltyRepository(NpgsqlDataSource dataSource, TimeProvider? timeProvider = null) : ILoyaltyRepository
 {

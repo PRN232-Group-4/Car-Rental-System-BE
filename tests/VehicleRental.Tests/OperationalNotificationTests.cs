@@ -13,7 +13,7 @@ using Car_Rental_System_BE.Infrastructure.Services.Registration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using VehicleRental.Domain.Lifecycle;
+using Car_Rental_System_BE.Domain.Lifecycle;
 using Xunit;
 
 namespace VehicleRental.Tests;

@@ -25,9 +25,6 @@ public sealed class OperationsService(IOperationsRepository repository, IDriverA
         return report;
     }
 
-    public Task<IReadOnlyList<IncidentReport>> ListReportsAsync(int? staffId, int? rentalId, CancellationToken ct) =>
-        repository.ListReportsAsync(staffId, rentalId, ct);
-
     public async Task<Maintenance> AssignReportMaintenanceAsync(int reportId, int technicianId, int? facilityId, DateOnly scheduledDate, CancellationToken ct, string? maintenanceType = null, string? description = null, string? actor = null)
     {
         if (reportId < 1 || technicianId < 1 || facilityId is < 1) throw new ArgumentException("Report, technician and facility IDs must be positive.");
@@ -191,9 +188,6 @@ public sealed class OperationsService(IOperationsRepository repository, IDriverA
     public Task<Rental> SaveRentalContractAsync(int id, string contractLink, DateTime signedAt, CancellationToken ct) =>
         repository.SaveRentalContractAsync(id, contractLink, signedAt, ct);
 
-    public Task<Rental?> GetRentalAsync(int id, CancellationToken ct) =>
-        repository.GetRentalAsync(id, ct);
-
     public Task<Rental?> GetRentalForUserAsync(int id, string email, bool readAll, bool customer, bool driver, CancellationToken ct) =>
         repository.GetRentalForUserAsync(id, email, readAll, customer, driver, ct);
 
@@ -206,9 +200,6 @@ public sealed class OperationsService(IOperationsRepository repository, IDriverA
 
     public Task AssignAsync(int rentalId, int? driverStaffId, string assignedByEmail, CancellationToken ct) =>
         repository.AssignAsync(rentalId, driverStaffId, assignedByEmail, ct);
-
-    public Task<IReadOnlyList<DriverScheduleEntry>> ListDriverScheduleAsync(int? driverStaffId, DateTime from, DateTime to, CancellationToken ct) =>
-        repository.ListDriverScheduleAsync(driverStaffId, from, to, ct);
 
     public async Task<Inspection> AddInspectionAsync(int rentalId, int staffId, string type, bool isOk, decimal? odometer, decimal? fuel, string? notes, string? images, CancellationToken ct)
     {
@@ -229,33 +220,13 @@ public sealed class OperationsService(IOperationsRepository repository, IDriverA
     public Task DeletePlanAsync(int id, CancellationToken ct) =>
         repository.DeletePlanAsync(id, ct);
 
-    public Task<int> BuyPlanAsync(string email, int planId, CancellationToken ct) =>
-        repository.BuyPlanAsync(email, planId, ct);
-
     public Task<IReadOnlyList<CustomerSubscription>> ListCustomerSubscriptionsAsync(string email, CancellationToken ct) =>
         repository.ListCustomerSubscriptionsAsync(email, ct);
-
-    public Task<int> ExpireSubscriptionsAsync(DateOnly today, CancellationToken ct) =>
-        repository.ExpireSubscriptionsAsync(today, ct);
-
-    public Task<IReadOnlyList<ExpiringSubscription>> ListSubscriptionsToRemindAsync(DateOnly today, int withinDays, CancellationToken ct) =>
-        repository.ListSubscriptionsToRemindAsync(today, withinDays, ct);
-
-    public Task MarkSubscriptionRemindedAsync(int subscriptionId, CancellationToken ct) =>
-        repository.MarkSubscriptionRemindedAsync(subscriptionId, ct);
 
     public Task<Maintenance> SaveMaintenanceAsync(int? id, Maintenance maintenance, CancellationToken ct, int? actingTechnicianId = null) =>
         repository.SaveMaintenanceAsync(id, maintenance, ct, actingTechnicianId);
 
-    public Task<IReadOnlyList<Maintenance>> ListMaintenanceAsync(int? vehicleId, string? status, CancellationToken ct) =>
-        repository.ListMaintenanceAsync(vehicleId, status, ct);
-
-    public Task<object> DashboardAsync(DateTime? from, DateTime? to, CancellationToken ct) =>
-        repository.DashboardAsync(from, to, ct);
-
     public Task<StaffRating> RateStaffAsync(int rentalId, int staffId, decimal rating, string? comment, string customerEmail, CancellationToken ct) =>
         repository.RateStaffAsync(rentalId, staffId, rating, comment, customerEmail, ct);
 
-    public Task<IReadOnlyList<StaffRating>> ListStaffRatingsAsync(int staffId, CancellationToken ct) =>
-        repository.ListStaffRatingsAsync(staffId, ct);
 }

@@ -1,4 +1,3 @@
-using System.Data.Common;
 using Car_Rental_System_BE.Application.Availability;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Domain.Availability;
@@ -202,8 +201,6 @@ public sealed class VehicleSearchServiceTests
         public Task<AvailabilityResult> CheckAsync(int vehicleId, TimeRange window, CancellationToken ct)
             => Task.FromResult(AvailabilityResult.Free);
 
-        public Task AssertAvailableAsync(DbTransaction transaction, int vehicleId, TimeRange window, int? excludeRentalId, CancellationToken ct)
-            => Task.CompletedTask;
     }
 
     private sealed class FakeDriverAvailability : IDriverAvailability
