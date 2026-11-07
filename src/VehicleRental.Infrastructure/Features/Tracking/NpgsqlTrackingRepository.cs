@@ -1,13 +1,12 @@
 using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
-using Car_Rental_System_BE.Application.DTOs.Map;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Application.Features.Tracking;
 using Car_Rental_System_BE.Domain.Entities;
 using Car_Rental_System_BE.Domain.ValueObjects;
 using Npgsql;
 using System.Data;
 
-namespace Car_Rental_System_BE.Infrastructure.Repositories;
+namespace Car_Rental_System_BE.Infrastructure.Features.Tracking;
 
 public sealed class NpgsqlTrackingRepository(NpgsqlDataSource dataSource) : ITrackingRepository
 {

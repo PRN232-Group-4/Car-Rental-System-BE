@@ -1,9 +1,7 @@
 using Car_Rental_System_BE.Application.DTOs.Map;
 using Car_Rental_System_BE.Application.DTOs.Options;
+using Car_Rental_System_BE.Application.Features.Tracking;
 using Car_Rental_System_BE.Application.Interfaces.External;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
-using Car_Rental_System_BE.Application.Services;
-using Car_Rental_System_BE.Application.Validators;
 using Car_Rental_System_BE.Domain.Entities;
 using Car_Rental_System_BE.Domain.Services;
 using Car_Rental_System_BE.Domain.ValueObjects;
@@ -442,7 +440,7 @@ public sealed class TrackingEfIntegrationTests(PostgresFixture fixture) : IClass
         var db = fixture.DataSource;
         var vehicle = await Seed.VehicleAsync(db);
         var device = "ef-" + Guid.NewGuid().ToString("N");
-        var repo = new Car_Rental_System_BE.Infrastructure.Repositories.NpgsqlTrackingRepository(db);
+        var repo = new Car_Rental_System_BE.Infrastructure.Features.Tracking.NpgsqlTrackingRepository(db);
         await repo.CreateDeviceAsync(device, vehicle, "device-hash", null, default);
         Assert.Equal((true, vehicle), await repo.AuthenticateDeviceAsync(device, "device-hash", default));
         Assert.Equal((false, 0), await repo.AuthenticateDeviceAsync(device, "wrong", default));
@@ -471,7 +469,7 @@ public sealed class TrackingEfIntegrationTests(PostgresFixture fixture) : IClass
     {
         var db = fixture.DataSource;
         var vehicle = await Seed.VehicleAsync(db);
-        var repo = new Car_Rental_System_BE.Infrastructure.Repositories.NpgsqlTrackingRepository(db);
+        var repo = new Car_Rental_System_BE.Infrastructure.Features.Tracking.NpgsqlTrackingRepository(db);
         var zone = await repo.CreateGeofenceAsync(new("EF zone", "circle", 10.77, 106.7, 200), default);
         Assert.Contains(await repo.ListActiveGeofencesAsync(default), z => z.Id == zone.Id);
         Assert.Contains((await repo.ListGeofencesAsync(1, 100, default)).Items, z => z.Id == zone.Id);

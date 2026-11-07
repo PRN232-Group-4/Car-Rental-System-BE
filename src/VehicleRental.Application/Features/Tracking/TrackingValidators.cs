@@ -1,6 +1,4 @@
-using Car_Rental_System_BE.Application.DTOs.Map;
-
-namespace Car_Rental_System_BE.Application.Validators;
+namespace Car_Rental_System_BE.Application.Features.Tracking;
 
 public static class TrackingValidators
 {

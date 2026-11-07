@@ -1,17 +1,13 @@
-using Car_Rental_System_BE.Application.DTOs.Map;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.DTOs.Options;
 using Car_Rental_System_BE.Application.Interfaces.External;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
-using Car_Rental_System_BE.Application.Interfaces.Services;
-using Car_Rental_System_BE.Application.Validators;
 using Car_Rental_System_BE.Domain.Entities;
 using Car_Rental_System_BE.Domain.Services;
 using Car_Rental_System_BE.Domain.ValueObjects;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Car_Rental_System_BE.Application.Services;
+namespace Car_Rental_System_BE.Application.Features.Tracking;
 
 public sealed class TrackingService(
     ITrackingRepository repository,
