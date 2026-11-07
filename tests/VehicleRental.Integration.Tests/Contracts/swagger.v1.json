@@ -12196,7 +12196,7 @@
     "/api/drivers/shifts": {
       "post": {
         "tags": [
-          "Dispatch"
+          "DriverShifts"
         ],
         "description": " Route naming uses plural collection resources and singular resources addressed by ID; creating an item targets the plural collection. Singleton resources and action names keep their own names.",
         "requestBody": {
@@ -12618,7 +12618,7 @@
       },
       "get": {
         "tags": [
-          "Dispatch"
+          "DriverShifts"
         ],
         "description": " Route naming uses plural collection resources and singular resources addressed by ID; creating an item targets the plural collection. Singleton resources and action names keep their own names.",
         "parameters": [
@@ -13058,7 +13058,7 @@
     "/api/drivers/shift/{id}": {
       "put": {
         "tags": [
-          "Dispatch"
+          "DriverShifts"
         ],
         "description": " Route naming uses plural collection resources and singular resources addressed by ID; creating an item targets the plural collection. Singleton resources and action names keep their own names.",
         "parameters": [

@@ -141,14 +141,14 @@ public sealed class RentalAssignmentsApiContractTests
     }
 
     /// <summary>
-    /// The three shift actions moved to the assignments slice: they call <see cref="IAssignmentService"/> and never
-    /// touch the operations service, while their routes, verbs and policies stay where they were.
+    /// The three shift actions moved to the assignments slice: they call <see cref="IAssignmentService"/> and live
+    /// on <see cref="DriverShiftsController"/>, while their routes, verbs and policies stay where they were.
     /// </summary>
     [Fact]
     public async Task Dispatch_shift_actions_are_served_by_the_assignments_slice()
     {
         var assignments = new StubAssignmentService();
-        var controller = new DispatchController(assignments)
+        var controller = new DriverShiftsController(assignments)
         {
             ControllerContext = new ControllerContext
             {

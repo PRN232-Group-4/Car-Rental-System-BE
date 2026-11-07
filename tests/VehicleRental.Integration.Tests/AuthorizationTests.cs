@@ -1,3 +1,4 @@
+using Car_Rental_System_BE.WebApi.Features.Assignments;
 using Car_Rental_System_BE.WebApi.Features.Billing;
 using Car_Rental_System_BE.WebApi.Features.Customers;
 using Car_Rental_System_BE.WebApi.Features.Inspections;
@@ -134,7 +135,7 @@ public sealed class AuthorizationTests
     [InlineData("UpdateShift", "Driver", false)]
     [InlineData("CreateShift", "CustomerService", false)]
     public async Task Dispatch_endpoints_enforce_roles(string action, string role, bool allowed) =>
-        Assert.Equal(allowed, await AuthorizeEndpoint<DispatchController>(action, Principal(role, 7)));
+        Assert.Equal(allowed, await AuthorizeEndpoint<DriverShiftsController>(action, Principal(role, 7)));
 
     /// <summary>
     /// The candidate check of a replacement moved to InspectionRecordsController; it keeps the Inspection

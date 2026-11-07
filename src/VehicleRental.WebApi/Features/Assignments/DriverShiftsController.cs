@@ -1,27 +1,32 @@
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.Features.Assignments;
 using Car_Rental_System_BE.Application.DTOs.Operations;
-using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Domain.Entities;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Car_Rental_System_BE.WebApi.Controllers;
+namespace Car_Rental_System_BE.WebApi.Features.Assignments;
 
 /// <summary>
-/// Driver duty shifts: create, edit and list. The five incident-report actions moved to <c>ReportsController</c>,
-/// the replacement inspection to <c>InspectionRecordsController</c> and vehicle recovery to
-/// <c>RecoveryController</c>, each with its roles, routes and shapes unchanged; this controller only talks to the
-/// assignments slice now.
+/// Driver duty shifts: create, edit and list. The actions used to sit on <c>DispatchController</c>; route,
+/// verb, policy, route constraints, status codes, request and response shapes, success messages and swagger
+/// descriptions travelled with them unchanged, and they call the assignments slice only.
 /// </summary>
+/// <remarks>
+/// The actions keep their own <c>[Authorize]</c> attributes because the two shift commands use the Management
+/// policy while the list uses the driver schedule policy, and ASP.NET Core ANDs class-level with action-level
+/// policy metadata. The three class-level <c>ProducesResponseType</c> entries are repeated because
+/// <c>DispatchController</c> declared 400/403/404 for every action it owned, and dropping them would shrink the
+/// documented contract of the three moved operations.
+/// </remarks>
 [ApiController]
 [Route("api")]
 [ProducesResponseType(StatusCodes.Status400BadRequest)]
 [ProducesResponseType(StatusCodes.Status403Forbidden)]
 [ProducesResponseType(StatusCodes.Status404NotFound)]
-public sealed class DispatchController(IAssignmentService assignments) : ControllerBase
+public sealed class DriverShiftsController(IAssignmentService assignments) : ControllerBase
 {
     /// <summary>Manager/Admin creates a driver's duty shift.</summary>
     [SuccessMessage("Driver duty shift created successfully.")]
