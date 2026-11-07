@@ -1,4 +1,4 @@
-using VehicleRental.Domain.Loyalty;
+using Car_Rental_System_BE.Domain.Loyalty;
 using Xunit;
 
 namespace VehicleRental.Tests;

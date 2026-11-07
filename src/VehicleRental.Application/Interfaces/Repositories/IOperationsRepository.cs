@@ -54,7 +54,5 @@ public interface IOperationsRepository
     Task MarkSubscriptionRemindedAsync(int subscriptionId, CancellationToken ct);
     Task<Maintenance> SaveMaintenanceAsync(int? id, Maintenance maintenance, CancellationToken ct, int? actingTechnicianId = null);
     Task<IReadOnlyList<Maintenance>> ListMaintenanceAsync(int? vehicleId, string? status, CancellationToken ct);
-    Task<object> DashboardAsync(DateTime? from, DateTime? to, CancellationToken ct);
     Task<StaffRating> RateStaffAsync(int rentalId, int staffId, decimal rating, string? comment, string customerEmail, CancellationToken ct);
-    Task<IReadOnlyList<StaffRating>> ListStaffRatingsAsync(int staffId, CancellationToken ct);
 }

@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using System.ComponentModel.DataAnnotations;
 
-namespace Car_Rental_System_BE.Controllers;
+namespace Car_Rental_System_BE.WebApi.Controllers;
 
 [ApiController]
 [Route("api")]

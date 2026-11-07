@@ -31,17 +31,6 @@ internal static class Sql
     /// <summary>Npgsql 8 rejects <c>Kind=Utc</c> for <c>timestamp</c>; send UTC wall-clock values as Unspecified.</summary>
     public static NpgsqlParameter Timestamp(string name, DateTime? value)
         => new(name, NpgsqlDbType.Timestamp) { Value = value is { } v ? DateTime.SpecifyKind(v.Kind == DateTimeKind.Local ? v.ToUniversalTime() : v, DateTimeKind.Unspecified) : DBNull.Value };
-
-    public static NpgsqlParameter Typed(string name, NpgsqlDbType type, object? value)
-        => new(name, type) { Value = value ?? DBNull.Value };
-
-    /// <summary><c>-infinity</c>/<c>infinity</c> come back as MinValue/MaxValue; expose them as open ends.</summary>
-    public static DateTime? Bound(NpgsqlDataReader reader, int ordinal)
-    {
-        if (reader.IsDBNull(ordinal)) return null;
-        var value = reader.GetDateTime(ordinal);
-        return value == DateTime.MinValue || value == DateTime.MaxValue ? null : value;
-    }
 }
 
 internal static class VehicleAvailabilityChecks

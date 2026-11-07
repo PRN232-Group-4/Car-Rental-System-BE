@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using System.Data.Common;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Domain.Availability;
 
@@ -83,7 +82,6 @@ public interface IVehicleAvailabilityService
     /// Re-checks inside the caller's transaction (after taking the vehicle lock) and throws
     /// <c>VEHICLE_UNAVAILABLE</c> (409) or <c>VEHICLE_NOT_FOUND</c> (404).
     /// </summary>
-    Task AssertAvailableAsync(DbTransaction transaction, int vehicleId, TimeRange window, int? excludeRentalId, CancellationToken ct);
 }
 
 /// <summary>Port for driver availability. FR-014 and BE-33 (shifts, days off) plug into the same source.</summary>

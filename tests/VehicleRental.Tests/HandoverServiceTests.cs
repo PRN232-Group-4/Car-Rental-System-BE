@@ -1,7 +1,7 @@
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Handovers;
 using Car_Rental_System_BE.Application.Lifecycle;
-using VehicleRental.Domain.Lifecycle;
+using Car_Rental_System_BE.Domain.Lifecycle;
 using Xunit;
 
 namespace VehicleRental.Tests;

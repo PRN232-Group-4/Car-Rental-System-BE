@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-11-07 — [Dọn code không dùng, thống nhất cấu trúc và tài liệu luồng](2026-11-07-cleanup-structure-flow.md)
+
 - 2026-10-29 — [Cookie SameSite=None cho web cross-site](2026-10-29-cookie-samesite-cross-site.md)
 
 - 2026-10-28 — [CORS cho frontend deploy và localhost 3000/5000](2026-10-28-frontend-cors.md)

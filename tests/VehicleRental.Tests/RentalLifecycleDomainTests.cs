@@ -1,4 +1,4 @@
-using VehicleRental.Domain.Lifecycle;
+using Car_Rental_System_BE.Domain.Lifecycle;
 using Xunit;
 
 namespace VehicleRental.Tests;
