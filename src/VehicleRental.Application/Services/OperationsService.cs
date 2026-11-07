@@ -12,9 +12,6 @@ namespace Car_Rental_System_BE.Application.Services;
 
 public sealed class OperationsService(IOperationsRepository repository, TimeProvider? timeProvider = null, IOperationalNotifications? notifications = null, RentalExpiryOptions? expiryOptions = null) : IOperationsService
 {
-    public Task<Inspection> InspectReplacementAsync(int rentalId, int vehicleId, int staffId, bool isOk, decimal? odometer, decimal? fuel, string? notes, string? images, CancellationToken ct) =>
-        repository.InspectReplacementAsync(rentalId, vehicleId, staffId, isOk, odometer, fuel, notes, images, ct);
-
     public async Task<Rental> ReplaceVehicleAsync(int rentalId, int vehicleId, int? driverId, int? reportId, string actor, CancellationToken ct)
     {
         var rental = await repository.ReplaceVehicleAsync(rentalId, vehicleId, driverId, reportId, actor, ct);
@@ -92,13 +89,6 @@ public sealed class OperationsService(IOperationsRepository repository, TimeProv
 
     public Task<IReadOnlyList<DriverScheduleEntry>> ListDriverScheduleAsync(int? driverStaffId, DateTime from, DateTime to, CancellationToken ct) =>
         repository.ListDriverScheduleAsync(driverStaffId, from, to, ct);
-
-    public async Task<Inspection> AddInspectionAsync(int rentalId, int staffId, string type, bool isOk, decimal? odometer, decimal? fuel, string? notes, string? images, CancellationToken ct)
-    {
-        var inspection = await repository.AddInspectionAsync(rentalId, staffId, type, isOk, odometer, fuel, notes, images, ct);
-        if (notifications is not null) await notifications.InspectionRecordedAsync(rentalId, inspection.Type, isOk);
-        return inspection;
-    }
 
     public Task<IReadOnlyList<SubscriptionPlan>> ListPlansAsync(bool activeOnly, CancellationToken ct) =>
         repository.ListPlansAsync(activeOnly, ct);

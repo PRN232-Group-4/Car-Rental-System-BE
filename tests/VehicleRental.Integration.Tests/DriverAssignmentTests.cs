@@ -3,6 +3,7 @@ using Car_Rental_System_BE.Application.Features.Availability;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Infrastructure.Features.Assignments;
 using Car_Rental_System_BE.Infrastructure.Features.Availability;
+using Car_Rental_System_BE.Infrastructure.Features.Inspections;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
@@ -11,6 +12,7 @@ namespace VehicleRental.Tests;
 public sealed class DriverAssignmentTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
     private readonly NpgsqlOperationsRepository _operations = new(db.DataSource);
+    private readonly NpgsqlInspectionRecordRepository _inspections = new(db.DataSource);
     private readonly NpgsqlAssignmentRepository _assignments = new(db.DataSource);
 
     [Fact]
@@ -42,7 +44,7 @@ public sealed class DriverAssignmentTests(PostgresFixture db) : IClassFixture<Po
         Assert.Equal("PRE_INSPECTION_REQUIRED", uncheckedRental.Code);
         Assert.Empty(await _assignments.ListAssignmentsAsync(rental.RentalId, default));
 
-        await _operations.AddInspectionAsync(rental.RentalId, driverId, "pre_rental", true, null, null, null, null, CancellationToken.None);
+        await _inspections.AddInspectionAsync(rental.RentalId, driverId, "pre_rental", true, null, null, null, null, CancellationToken.None);
         var booked = (await _operations.GetRentalAsync(rental.RentalId, default))!;
         await _assignments.SaveDriverShiftAsync(null,driverId,booked.StartTime!.Value,booked.EndTime!.Value,false,assignedBy,default);
         await service.AssignDriverAsync(new(rental.RentalId, driverId, "initial", null, assignedBy), CancellationToken.None);

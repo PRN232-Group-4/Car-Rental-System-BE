@@ -1,4 +1,5 @@
 using Car_Rental_System_BE.Infrastructure.Features.Billing;
+using Car_Rental_System_BE.Infrastructure.Features.Inspections;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
@@ -8,6 +9,7 @@ public sealed class PaymentTests(PostgresFixture db) : IClassFixture<PostgresFix
 {
     private readonly NpgsqlPaymentRepository _payments = new(db.DataSource);
     private readonly NpgsqlOperationsRepository _operations = new(db.DataSource);
+    private readonly NpgsqlInspectionRecordRepository _inspections = new(db.DataSource);
 
     [Fact]
     public async Task Webhook_completion_is_idempotent_by_provider_reference()
@@ -66,9 +68,9 @@ public sealed class PaymentTests(PostgresFixture db) : IClassFixture<PostgresFix
         var user = await Seed.ScalarAsync(db.DataSource, "INSERT INTO users(email) VALUES($1) RETURNING id", $"inspector-{Guid.NewGuid():N}@test.local");
         var staff = (int)(await Seed.ScalarAsync(db.DataSource, "INSERT INTO staffs(user_id) VALUES($1) RETURNING id", user))!;
 
-        await _operations.AddInspectionAsync(scenario.RentalId, staff, "pre_rental", true, null, null, null, null, CancellationToken.None);
+        await _inspections.AddInspectionAsync(scenario.RentalId, staff, "pre_rental", true, null, null, null, null, CancellationToken.None);
         await _operations.ChangeRentalStatusAsync(scenario.RentalId, "renting", CancellationToken.None);
-        await _operations.AddInspectionAsync(scenario.RentalId, staff, "post_rental", true, null, null, null, null, CancellationToken.None);
+        await _inspections.AddInspectionAsync(scenario.RentalId, staff, "post_rental", true, null, null, null, null, CancellationToken.None);
 
         Assert.Equal(0, await Seed.CountAsync(db.DataSource, "SELECT COUNT(*) FROM payments WHERE rental_id=$1 AND type='refund'", scenario.RentalId));
     }

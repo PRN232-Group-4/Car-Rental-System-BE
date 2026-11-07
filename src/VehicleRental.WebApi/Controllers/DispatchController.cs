@@ -58,18 +58,6 @@ public sealed class DispatchController(IOperationsService store, IAssignmentServ
         return Ok(await assignments.ListDriverShiftsAsync(driverStaffId,from,to,ct));
     }
 
-    /// <summary>Inspection staff checks a candidate replacement before Manager dispatches it.</summary>
-    [SuccessMessage("Replacement vehicle inspection recorded successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Inspection)]
-    [HttpPost("rental/{id:int}/replacement-inspection/{vehicleId:int}")]
-    [ProducesResponseType<Inspection>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> InspectReplacement(int id, int vehicleId, InspectionRequest request, CancellationToken ct)
-    {
-        var staff=AuthorizationPolicies.StaffId(User);
-        if (staff is null || request.StaffId is not null && staff!=request.StaffId) return Forbid();
-        return Ok(await store.InspectReplacementAsync(id,vehicleId,staff.Value,request.IsOk,request.OdometerKm,request.FuelBatteryLevel,request.DamageNotes,request.ImageUrls,ct));
-    }
-
     /// <summary>Manager/Admin replaces with the same seat count, preserving prices; ongoing trips require a breakdown report and a new driver.</summary>
     [SuccessMessage("Replacement vehicle dispatched with original rental pricing preserved.")]
     [Authorize(Policy=AuthorizationPolicies.Management)]

@@ -98,49 +98,6 @@ public sealed partial class NpgsqlOperationsRepository
             throw new InvalidOperationException("This vehicle requires a passed pre-rental inspection.");
     }
 
-    public Task<Inspection> AddInspectionAsync(int rental, int staff, string type, bool ok, decimal? odo, decimal? fuel, string? notes, string? images, CancellationToken ct)
-        => RecordInspectionAsync(rental, null, staff, type, ok, odo, fuel, notes, images, ct);
-
-    public Task<Inspection> InspectReplacementAsync(int rental, int vehicle, int staff, bool ok, decimal? odo, decimal? fuel, string? notes, string? images, CancellationToken ct)
-        => RecordInspectionAsync(rental, vehicle, staff, "pre_rental", ok, odo, fuel, notes, images, ct);
-
-    private async Task<Inspection> RecordInspectionAsync(int rentalId, int? replacementVehicle, int staff, string type,
-        bool ok, decimal? odo, decimal? fuel, string? notes, string? images, CancellationToken ct)
-    {
-        if (type is not ("pre_rental" or "post_rental") || odo < 0 || fuel < 0 || fuel > 100)
-            throw new ArgumentException("Invalid inspection values.");
-        await using var cn = await dataSource.OpenConnectionAsync(ct);
-        await using var tx = await cn.BeginTransactionAsync(ct);
-        await LockOperationsAsync(cn, tx, ct);
-        var rental = await ReadRentalAsync(cn, tx, rentalId, ct);
-        if (await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM staffs s JOIN users u ON u.id=s.user_id WHERE s.id=$1 AND u.is_active)", ct, staff) is not true)
-            throw new InvalidOperationException("Inspection staff was not found or is inactive.");
-        var vehicle = replacementVehicle ?? rental.VehicleId;
-        if (replacementVehicle is not null)
-        {
-            if (rental.Status is not ("pending" or "pre_inspection" or "renting") || vehicle == rental.VehicleId)
-                throw new InvalidOperationException("Replacement inspection is not allowed in this state.");
-            await RequireMatchingVehicleAsync(cn, tx, rental.VehicleId, vehicle, ct);
-            var (start, end) = AssignmentPeriod(rental);
-            await RequireAvailableVehicleAsync(cn, tx, vehicle, start, end, rentalId, ct);
-        }
-        else if (type == "pre_rental" ? rental.Status is not ("pending" or "pre_inspection")
-            : rental.Status is not ("renting" or "post_inspection"))
-            throw new InvalidOperationException("Inspection is not allowed in this rental state.");
-        if (await ValueAsync(cn, tx, "SELECT EXISTS(SELECT 1 FROM inspections WHERE rental_id=$1 AND vehicle_id=$2 AND inspection_type=$3)", ct, rentalId, vehicle, type) is true)
-            throw new InvalidOperationException("Inspection evidence already exists for this vehicle.");
-        var inspectedAt = DateTime.UtcNow;
-        var id = (int)(await ValueAsync(cn, tx, "INSERT INTO inspections(rental_id,vehicle_id,staff_id,inspection_type,is_ok,odometer_km,fuel_battery_level,damage_notes,img_urls,inspected_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id", ct,
-            rentalId, vehicle, staff, type, ok, odo, fuel, notes, images, inspectedAt))!;
-        if (!ok) await ValueAsync(cn, tx, "UPDATE vehicles SET status='maintenance' WHERE id=$1", ct, vehicle);
-        if (replacementVehicle is null &&
-            ((type == "pre_rental" && ok && rental.Status == "pending") ||
-             (type == "post_rental" && rental.Status == "renting")))
-            await ValueAsync(cn, tx, "UPDATE rentals SET status=$2 WHERE id=$1", ct, rentalId, type == "pre_rental" ? "pre_inspection" : "post_inspection");
-        await tx.CommitAsync(ct);
-        return new(id, rentalId, type, ok, odo, fuel, notes, images, inspectedAt, staff, vehicle);
-    }
-
     public async Task<Rental> ChangeRentalStatusAsync(int id, string status, CancellationToken ct)
     {
         await using var cn = await dataSource.OpenConnectionAsync(ct);

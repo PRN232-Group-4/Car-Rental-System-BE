@@ -3,6 +3,7 @@ using Car_Rental_System_BE.Application.Features.Ratings;
 using Car_Rental_System_BE.Application.Features.Reports;
 using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Infrastructure.Features.Assignments;
+using Car_Rental_System_BE.Infrastructure.Features.Inspections;
 using Car_Rental_System_BE.Infrastructure.Features.Maintenances;
 using Car_Rental_System_BE.Infrastructure.Features.Ratings;
 using Car_Rental_System_BE.Infrastructure.Features.Reports;
@@ -42,6 +43,7 @@ public sealed class OperationsCompletionValidationTests
 public sealed class OperationsCompletionIntegrationTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
     private readonly NpgsqlOperationsRepository store=new(db.DataSource);
+    private readonly NpgsqlInspectionRecordRepository inspectionsStore=new(db.DataSource);
     private readonly NpgsqlAssignmentRepository assignments=new(db.DataSource);
     private readonly NpgsqlMaintenanceRepository maintenanceStore=new(db.DataSource);
     private readonly NpgsqlReportRepository reportsStore=new(db.DataSource);
@@ -64,7 +66,7 @@ public sealed class OperationsCompletionIntegrationTests(PostgresFixture db) : I
         var rental=(await store.GetRentalAsync(scenario.RentalId,default))!;
         var driver=await Staff(driver:true);
         await assignments.SaveDriverShiftAsync(null,driver,rental.StartTime!.Value,rental.EndTime!.Value,false,"manager@test.local",default);
-        await store.AddInspectionAsync(rental.Id,driver,"pre_rental",true,null,null,null,null,default);
+        await inspectionsStore.AddInspectionAsync(rental.Id,driver,"pre_rental",true,null,null,null,null,default);
         // Same row the deleted lax AssignAsync wrote; the assignment is only this schedule read's precondition.
         await Seed.ScalarAsync(db.DataSource,"INSERT INTO vehicle_assignments(rental_id,vehicle_id,driver_staff_id,status,assigned_by) SELECT id,vehicle_id,$2,'assigned',$3 FROM rentals WHERE id=$1",rental.Id,driver,"manager@test.local");
         var page=await service.DriverScheduleAsync(driver,rental.StartTime.Value,rental.EndTime.Value,new(){PageSize=1},default);

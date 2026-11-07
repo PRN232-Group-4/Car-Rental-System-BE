@@ -41,6 +41,7 @@ public static class ApplicationExtensions
     {
         services.AddScoped<IInspectionAssignmentService, InspectionAssignmentService>();
         services.AddScoped<IInspectionDirectoryService, InspectionDirectoryService>();
+        services.AddScoped<IInspectionRecordService, InspectionRecordService>();
         services.AddScoped<IAuditLogService, AuditLogService>();
         services.AddHttpContextAccessor();
         services.AddScoped<IAuditRequestContext, HttpAuditRequestContext>();

@@ -3,6 +3,7 @@ using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Features.Handovers;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Features.Fleet;
+using Car_Rental_System_BE.Infrastructure.Features.Inspections;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Car_Rental_System_BE.Domain.Features.Rentals;
@@ -15,6 +16,7 @@ public sealed class HandoverIntegrationTests(PostgresFixture db) : IClassFixture
     private static readonly ActorContext Actor = new(1, "manager@test.local", "Manager");
     private NpgsqlRentalLifecycleRepository Repository => new(db.DataSource);
     private NpgsqlOperationsRepository Operations => new(db.DataSource);
+    private NpgsqlInspectionRecordRepository Inspections => new(db.DataSource);
     private NpgsqlFleetRepository Fleet => new(db.DataSource);
     private HandoverService Service => new(new RentalQueryService(new NpgsqlRentalQueries(db.DataSource, TimeProvider.System)),
         new RentalLifecycleService(Repository, new RentalPaymentGateAdapter(db.DataSource), null!, null!, null!, new Events(),
@@ -46,7 +48,7 @@ public sealed class HandoverIntegrationTests(PostgresFixture db) : IClassFixture
         await Seed.ScalarAsync(db.DataSource, "UPDATE customers SET license_status='approved',license_expiry_date=CURRENT_DATE+365 WHERE id=$1", customer);
         await Repository.UpdateToPreInspectionAsync(rental.Id, DateTime.UtcNow, Actor, default);
         var inspector = await InspectorAsync();
-        var inspection = await Operations.AddInspectionAsync(rental.Id, inspector, "pre_rental", true, 1000, 80, null, null, default);
+        var inspection = await Inspections.AddInspectionAsync(rental.Id, inspector, "pre_rental", true, 1000, 80, null, null, default);
         Assert.Equal("pre_inspection", (await Operations.GetRentalAsync(rental.Id, default))!.Status);
         // Same row the deleted lax AssignAsync wrote: handover has to reuse an existing assignment.
         if (assign) await Seed.ScalarAsync(db.DataSource, "INSERT INTO vehicle_assignments(rental_id,vehicle_id,driver_staff_id,status,assigned_by) SELECT id,vehicle_id,NULL,'assigned',$2 FROM rentals WHERE id=$1", rental.Id, Actor.Email);
@@ -133,7 +135,7 @@ public sealed class HandoverIntegrationTests(PostgresFixture db) : IClassFixture
         Assert.Equal("renting", (await Service.ConfirmAsync(ready.Rental, Actor, default)).RentalStatus);
         Assert.Equal(true, await Seed.ScalarAsync(db.DataSource, "SELECT is_renting FROM vehicles WHERE id=$1", ready.Vehicle));
         await Repository.UpdateToPostInspectionAsync(ready.Rental, DateTime.UtcNow, Actor, default);
-        await Operations.AddInspectionAsync(ready.Rental, ready.Inspector, "post_rental", true, 1100, 50, null, null, default);
+        await Inspections.AddInspectionAsync(ready.Rental, ready.Inspector, "post_rental", true, 1100, 50, null, null, default);
         Assert.Equal("post_inspection", (await Operations.GetRentalAsync(ready.Rental, default))!.Status);
         Assert.Equal("completed", (await Service.GetAsync(ready.Rental, default)).Status);
         var list = await Service.ListAsync(new("completed", VehicleId: ready.Vehicle), default);
@@ -145,9 +147,9 @@ public sealed class HandoverIntegrationTests(PostgresFixture db) : IClassFixture
     {
         var scenario = await Scenarios.CreateDirectRentalAsync(db.DataSource);
         var inspector = await InspectorAsync();
-        await Operations.AddInspectionAsync(scenario.RentalId, inspector, "pre_rental", true, null, null, null, null, default);
+        await Inspections.AddInspectionAsync(scenario.RentalId, inspector, "pre_rental", true, null, null, null, null, default);
         Assert.Equal("pre_inspection", (await Operations.GetRentalAsync(scenario.RentalId, default))!.Status);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => Operations.AddInspectionAsync(scenario.RentalId, inspector,
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Inspections.AddInspectionAsync(scenario.RentalId, inspector,
             "pre_rental", true, null, null, null, null, default));
     }
 
@@ -161,7 +163,7 @@ public sealed class HandoverIntegrationTests(PostgresFixture db) : IClassFixture
         Assert.False(await Repository.HasValidAssignmentAsync(ready.Rental, false, default));
         var missingInspection = await Assert.ThrowsAsync<ConflictException>(() => Repository.UpdateToRentingAsync(ready.Rental, newVehicle, DateTime.UtcNow, Actor, default));
         Assert.Equal("PRE_INSPECTION_REQUIRED", missingInspection.Code);
-        await Operations.AddInspectionAsync(ready.Rental, ready.Inspector, "pre_rental", true, null, null, null, null, default);
+        await Inspections.AddInspectionAsync(ready.Rental, ready.Inspector, "pre_rental", true, null, null, null, null, default);
         var missingAssignment = await Assert.ThrowsAsync<ConflictException>(() => Repository.UpdateToRentingAsync(ready.Rental, newVehicle, DateTime.UtcNow, Actor, default));
         Assert.Equal("ASSIGNMENT_REQUIRED", missingAssignment.Code);
         Assert.Equal("pre_inspection", (await Operations.GetRentalAsync(ready.Rental, default))!.Status);

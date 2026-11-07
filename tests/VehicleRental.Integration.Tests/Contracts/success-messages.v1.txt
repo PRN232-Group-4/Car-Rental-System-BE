@@ -248,12 +248,12 @@
 /api/rental/{id:int}/inspection-assignment | InspectionAssignments.Get | GET | 200 | inspectionType=post_rental | Post-rental inspection technician assignment retrieved successfully.
 /api/rental/{id:int}/inspection-assignment/checked | InspectionAssignments.ConfirmChecked | POST | 200 | - | Technician dispatch and passing pre-rental check confirmed successfully.
 /api/rental/{id:int}/inspection-assignment/checked | InspectionAssignments.ConfirmChecked | POST | 200 | inspectionType=post_rental | Technician dispatch and passing post-rental check confirmed successfully.
-/api/rental/{id:int}/inspections/post | Operations.Post | POST | 200 | - | Post-rental inspection recorded successfully.
-/api/rental/{id:int}/inspections/post | Operations.Post | POST | 200 | inspectionType=post_rental | Post-rental inspection recorded successfully.
-/api/rental/{id:int}/inspections/pre | Operations.Pre | POST | 200 | - | Pre-rental inspection recorded successfully.
-/api/rental/{id:int}/inspections/pre | Operations.Pre | POST | 200 | inspectionType=post_rental | Pre-rental inspection recorded successfully.
-/api/rental/{id:int}/replacement-inspection/{vehicleId:int} | Dispatch.InspectReplacement | POST | 200 | - | Replacement vehicle inspection recorded successfully.
-/api/rental/{id:int}/replacement-inspection/{vehicleId:int} | Dispatch.InspectReplacement | POST | 200 | inspectionType=post_rental | Replacement vehicle inspection recorded successfully.
+/api/rental/{id:int}/inspections/post | InspectionRecords.Post | POST | 200 | - | Post-rental inspection recorded successfully.
+/api/rental/{id:int}/inspections/post | InspectionRecords.Post | POST | 200 | inspectionType=post_rental | Post-rental inspection recorded successfully.
+/api/rental/{id:int}/inspections/pre | InspectionRecords.Pre | POST | 200 | - | Pre-rental inspection recorded successfully.
+/api/rental/{id:int}/inspections/pre | InspectionRecords.Pre | POST | 200 | inspectionType=post_rental | Pre-rental inspection recorded successfully.
+/api/rental/{id:int}/replacement-inspection/{vehicleId:int} | InspectionRecords.InspectReplacement | POST | 200 | - | Replacement vehicle inspection recorded successfully.
+/api/rental/{id:int}/replacement-inspection/{vehicleId:int} | InspectionRecords.InspectReplacement | POST | 200 | inspectionType=post_rental | Replacement vehicle inspection recorded successfully.
 /api/rental/{id:int}/replacements | Dispatch.ReplaceVehicle | POST | 200 | - | Replacement vehicle dispatched with original rental pricing preserved.
 /api/rental/{id:int}/replacements | Dispatch.ReplaceVehicle | POST | 200 | inspectionType=post_rental | Replacement vehicle dispatched with original rental pricing preserved.
 /api/rental/{id:int}/reports | Reports.CreateReport | POST | 200 | - | Incident report submitted for manager review.

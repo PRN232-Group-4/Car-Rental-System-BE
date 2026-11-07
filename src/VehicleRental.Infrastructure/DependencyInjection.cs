@@ -22,6 +22,7 @@ using Car_Rental_System_BE.Infrastructure.Features.Billing;
 using Car_Rental_System_BE.Infrastructure.Features.Customers;
 using Car_Rental_System_BE.Infrastructure.Features.Dashboard;
 using Car_Rental_System_BE.Infrastructure.Features.Fleet;
+using Car_Rental_System_BE.Infrastructure.Features.Inspections;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Features.Loyalty;
 using Car_Rental_System_BE.Infrastructure.Features.Maintenances;
@@ -104,6 +105,7 @@ public static class DependencyInjection
         services.AddScoped<IOrganizationRepository, NpgsqlOrganizationRepository>();
         services.AddScoped<IInspectionAssignmentRepository, NpgsqlInspectionAssignmentRepository>();
         services.AddScoped<IInspectionDirectoryRepository, NpgsqlInspectionDirectoryRepository>();
+        services.AddScoped<IInspectionRecordRepository, NpgsqlInspectionRecordRepository>();
         services.AddScoped<IFleetRepository, NpgsqlFleetRepository>();
         services.AddScoped<IOperationsRepository, NpgsqlOperationsRepository>();
         services.AddScoped<IMaintenanceRepository, NpgsqlMaintenanceRepository>();

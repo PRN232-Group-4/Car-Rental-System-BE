@@ -1,5 +1,6 @@
 using Car_Rental_System_BE.WebApi.Features.Billing;
 using Car_Rental_System_BE.WebApi.Features.Customers;
+using Car_Rental_System_BE.WebApi.Features.Inspections;
 using Car_Rental_System_BE.WebApi.Features.Maintenances;
 using Car_Rental_System_BE.WebApi.Controllers;
 using Car_Rental_System_BE.WebApi.Features.Fleet;
@@ -9,6 +10,7 @@ using Car_Rental_System_BE.WebApi.Features.Reports;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.DTOs.Accounts;
 using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Application.Features.Inspections;
 using Car_Rental_System_BE.Application.Features.Organization;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Services;
@@ -132,9 +134,20 @@ public sealed class AuthorizationTests
     [InlineData("CreateShift", "CustomerService", false)]
     [InlineData("ReplaceVehicle", "Manager", true)]
     [InlineData("ReplaceVehicle", "Driver", false)]
-    [InlineData("InspectReplacement", "Maintenance", true)]
     public async Task Dispatch_endpoints_enforce_roles(string action, string role, bool allowed) =>
         Assert.Equal(allowed, await AuthorizeEndpoint<DispatchController>(action, Principal(role, 7)));
+
+    /// <summary>
+    /// The candidate check of a replacement moved to InspectionRecordsController; it keeps the Inspection
+    /// policy, so a policy left behind on DispatchController cannot pass this matrix.
+    /// </summary>
+    [Theory]
+    [InlineData("InspectReplacement", "Maintenance", true)]
+    [InlineData("InspectReplacement", "Manager", true)]
+    [InlineData("InspectReplacement", "CustomerService", false)]
+    [InlineData("InspectReplacement", "Driver", false)]
+    public async Task Inspection_endpoints_enforce_the_attributes_they_moved_with(string action, string role, bool allowed) =>
+        Assert.Equal(allowed, await AuthorizeEndpoint<InspectionRecordsController>(action, Principal(role, 7)));
 
     /// <summary>
     /// The five incident-report actions moved to ReportsController and keep the attributes they had: two role
@@ -186,6 +199,10 @@ public sealed class AuthorizationTests
                     : AuthorizeEndpoint<PaymentsController>(method, Principal(role))));
     }
 
+    /// <summary>
+    /// The two inspection actions moved to InspectionRecordsController. They are looked up on the controller that
+    /// actually owns them now, so the staff-identity assertion of the policy cannot be lost behind the move.
+    /// </summary>
     [Theory]
     [InlineData("Staff", false)]
     [InlineData("Driver", false)]
@@ -195,8 +212,8 @@ public sealed class AuthorizationTests
     [InlineData("Admin", true)]
     public async Task Inspection_requires_technical_role_and_staff_identity(string role, bool allowed)
     {
-        Assert.Equal(allowed, await AuthorizeEndpoint<OperationsController>("Pre", Principal(role, 7)));
-        Assert.False(await AuthorizeEndpoint<OperationsController>("Pre", Principal(role)));
+        Assert.Equal(allowed, await AuthorizeEndpoint<InspectionRecordsController>("Pre", Principal(role, 7)));
+        Assert.False(await AuthorizeEndpoint<InspectionRecordsController>("Pre", Principal(role)));
     }
 
     [Fact]
@@ -209,7 +226,7 @@ public sealed class AuthorizationTests
     [Fact]
     public async Task Inspector_cannot_supply_another_staff_id()
     {
-        var controller = Controller(Principal("Maintenance", 7), out var calls);
+        var controller = InspectionController(Principal("Maintenance", 7), out var calls);
         Assert.IsType<ForbidResult>(await controller.Pre(1, new(8, true, null, null, null, null), default));
         Assert.Empty(calls.Calls);
         await controller.Pre(1, new(null, true, null, null, null, null), default);
@@ -271,6 +288,13 @@ public sealed class AuthorizationTests
         var metadata = typeof(T).GetCustomAttributes<AuthorizeAttribute>().Concat(typeof(T).GetMethod(method)!.GetCustomAttributes<AuthorizeAttribute>());
         var policy = await AuthorizationPolicy.CombineAsync(provider.GetRequiredService<IAuthorizationPolicyProvider>(), metadata);
         return (await provider.GetRequiredService<IAuthorizationService>().AuthorizeAsync(principal, null, policy!)).Succeeded;
+    }
+
+    private static InspectionRecordsController InspectionController(ClaimsPrincipal principal, out RepositorySpy spy)
+    {
+        var records = DispatchProxy.Create<IInspectionRecordRepository, RepositorySpy>();
+        spy = (RepositorySpy)records;
+        return new(new InspectionRecordService(records)) { ControllerContext = new() { HttpContext = new DefaultHttpContext { User = principal } } };
     }
 
     private static OperationsController Controller(ClaimsPrincipal principal, out RepositorySpy spy)

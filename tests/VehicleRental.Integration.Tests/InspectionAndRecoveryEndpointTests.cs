@@ -4,8 +4,10 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Car_Rental_System_BE.Application.Features.Assignments;
+using Car_Rental_System_BE.Application.Features.Inspections;
 using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Application.Services;
+using Car_Rental_System_BE.Infrastructure.Features.Inspections;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Car_Rental_System_BE.WebApi.Controllers;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
@@ -53,6 +55,8 @@ public sealed class InspectionAndRecoveryEndpointTests(PostgresFixture db) : ICl
 
         // The real composition, wired to the throwaway database instead of the production configuration.
         builder.Services.AddSingleton<IOperationsService>(new OperationsService(new NpgsqlOperationsRepository(db.DataSource)));
+        builder.Services.AddSingleton<IInspectionRecordService>(
+            new InspectionRecordService(new NpgsqlInspectionRecordRepository(db.DataSource)));
         // The shift actions of the dispatch controller are not exercised here; they only need a service to resolve.
         builder.Services.AddSingleton(DispatchProxy.Create<IAssignmentService, UnusedProxy>());
         builder.Services.AddControllers(options => options.Filters.Add<ApiSuccessResponseFilter>())

@@ -100,10 +100,6 @@ public sealed class OperationsController(
     [OperationDescription(" Pagination for list operations defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Invalid values return 400 at HTTP and Application boundaries. data contains items/page/pageSize/totalCount, totalCount is after filters; out-of-range pages retain the count with empty items.", DocumentsPaginationParameters = true)]
     [SuccessMessage("Driver schedule retrieved successfully.")]
     [Authorize(Policy=AuthorizationPolicies.DriverSchedule)] [HttpGet("drivers/schedule")] [ProducesResponseType<OperationsPage<DriverScheduleEntry>>(StatusCodes.Status200OK)] [ProducesResponseType(StatusCodes.Status400BadRequest)] public async Task<IActionResult> DriverSchedule([FromQuery]int? driverStaffId,[FromQuery]DateTime from,[FromQuery]DateTime to,[FromQuery]OperationsPagination pagination,CancellationToken ct){if(to<=from)return Problem("End time must be after start time.",statusCode:StatusCodes.Status400BadRequest);if(!AuthorizationPolicies.CanManage(User)){var own=AuthorizationPolicies.StaffId(User);if(own is null || (driverStaffId is not null && driverStaffId!=own))return Forbid();driverStaffId=own;}return Ok(await Completion.DriverScheduleAsync(driverStaffId,from,to,pagination,ct));}
-    [SuccessMessage("Pre-rental inspection recorded successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Inspection)] [HttpPost("rental/{id:int}/inspections/pre")] public Task<IActionResult> Pre(int id,InspectionRequest x,CancellationToken ct)=>Inspect(id,x,"pre_rental",ct);
-    [SuccessMessage("Post-rental inspection recorded successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Inspection)] [HttpPost("rental/{id:int}/inspections/post")] public Task<IActionResult> Post(int id,InspectionRequest x,CancellationToken ct)=>Inspect(id,x,"post_rental",ct);
     /// <summary>
     /// Deprecated. Kept at its original route, verb, policy and response shape, but it no longer runs a second
     /// state machine: every accepted status is delegated to the single lifecycle implementation
@@ -159,14 +155,6 @@ public sealed class OperationsController(
     [Authorize(Policy=AuthorizationPolicies.Management)] [HttpDelete("subscription-plan/{id:int}")] public async Task<IActionResult> DeletePlan(int id,CancellationToken ct){await store.DeletePlanAsync(id,ct);return NoContent();}
     [SuccessMessage("Customer subscriptions retrieved successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Customer)] [HttpGet("customer-subscriptions")] public Task<IReadOnlyList<CustomerSubscription>> CustomerSubscriptions(CancellationToken ct)=>store.ListCustomerSubscriptionsAsync(Email(),ct);
-    private async Task<IActionResult> Inspect(int id, InspectionRequest request, string type, CancellationToken ct)
-    {
-        var staffId = AuthorizationPolicies.StaffId(User);
-        if (staffId is null || (request.StaffId is not null && request.StaffId != staffId)) return Forbid();
-        return Ok(await store.AddInspectionAsync(id, staffId.Value, type, request.IsOk,
-            request.OdometerKm, request.FuelBatteryLevel, request.DamageNotes, request.ImageUrls, ct));
-    }
-
     private IOperationsCompletionService Completion => completion ?? throw new InvalidOperationException("Operations completion service is not configured.");
 
     private IRentalLifecycleService Lifecycle => lifecycle ?? throw new InvalidOperationException("Rental lifecycle service is not configured.");

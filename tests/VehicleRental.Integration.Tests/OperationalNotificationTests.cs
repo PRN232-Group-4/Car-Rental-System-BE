@@ -9,6 +9,7 @@ using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Application.Features.Maintenances;
 using Car_Rental_System_BE.Application.Features.Reports;
+using Car_Rental_System_BE.Application.Features.Inspections;
 using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Services;
@@ -218,12 +219,12 @@ public sealed class OperationalNotificationTests
         var committed = false;
         var sentAfterCommit = false;
         var email = new Sender((_, _, _, _) => { sentAfterCommit = committed; return Task.FromException(new HttpRequestException()); });
-        var repository = Proxy<IOperationsRepository>((_, _) =>
+        var repository = Proxy<IInspectionRecordRepository>((_, _) =>
         {
             committed = true;
             return Task.FromResult(new Inspection(1, 72, type, isOk, null, null, "private", "private", DateTime.UtcNow));
         });
-        var result = await new OperationsService(repository, notifications: Notifications(email))
+        var result = await new InspectionRecordService(repository, Notifications(email))
             .AddInspectionAsync(72, 2, type, isOk, null, null, "private", null, default);
         Assert.Equal(isOk, result.IsOk);
         Assert.Contains(isOk ? "đạt" : "không đạt", Assert.Single(email.Messages).Text);
