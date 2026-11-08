@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Organization;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Car_Rental_System_BE.Infrastructure.Features.Organization;
 using Xunit;
@@ -63,6 +64,7 @@ public sealed class StaffAuthorizationTests(PostgresFixture db) : IClassFixture<
     [Fact]
     public async Task Customer_cannot_book_with_another_customers_subscription()
     {
+        var bookings = new NpgsqlRentalBookingRepository(db.DataSource);
         var operations = new NpgsqlOperationsRepository(db.DataSource);
         var (_, owner) = await Seed.CustomerAsync(db.DataSource);
         var (_, other) = await Seed.CustomerAsync(db.DataSource);
@@ -70,7 +72,7 @@ public sealed class StaffAuthorizationTests(PostgresFixture db) : IClassFixture<
         var subscription = await operations.BuyPlanAsync(owner, plan, default);
         var vehicle = await Seed.VehicleAsync(db.DataSource);
         var start = DateTime.UtcNow.AddHours(1);
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => operations.CreateRentalAsync(other, vehicle, null, "hourly", start,
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => bookings.CreateRentalAsync(other, vehicle, null, "hourly", start,
             start.AddHours(1), true, subscription, false, default));
     }
 
@@ -146,21 +148,21 @@ public sealed class StaffAuthorizationTests(PostgresFixture db) : IClassFixture<
     [Fact]
     public async Task Rental_read_is_limited_to_owner_or_assigned_driver()
     {
-        var operations = new NpgsqlOperationsRepository(db.DataSource);
+        var bookings = new NpgsqlRentalBookingRepository(db.DataSource);
         var rental = await Scenarios.CreateDirectRentalAsync(db.DataSource);
         var (_, otherEmail) = await Seed.CustomerAsync(db.DataSource);
-        Assert.NotNull(await operations.GetRentalForUserAsync(rental.RentalId, rental.Email, false, true, false, default));
-        Assert.Null(await operations.GetRentalForUserAsync(rental.RentalId, otherEmail, false, true, false, default));
-        Assert.Null(await operations.GetRentalForUserAsync(rental.RentalId, rental.Email, false, false, false, default));
-        Assert.NotNull(await operations.GetRentalForUserAsync(rental.RentalId, "manager@test.local", true, false, false, default));
+        Assert.NotNull(await bookings.GetRentalForUserAsync(rental.RentalId, rental.Email, false, true, false, default));
+        Assert.Null(await bookings.GetRentalForUserAsync(rental.RentalId, otherEmail, false, true, false, default));
+        Assert.Null(await bookings.GetRentalForUserAsync(rental.RentalId, rental.Email, false, false, false, default));
+        Assert.NotNull(await bookings.GetRentalForUserAsync(rental.RentalId, "manager@test.local", true, false, false, default));
 
         var email = $"driver-{Guid.NewGuid():N}@test.local";
         var userId = await Seed.ScalarAsync(db.DataSource, "INSERT INTO users(email) VALUES($1) RETURNING id", email);
         var staffId = await Seed.ScalarAsync(db.DataSource, "INSERT INTO staffs(user_id,is_driver) VALUES($1,true) RETURNING id", userId);
-        Assert.Null(await operations.GetRentalForUserAsync(rental.RentalId, email, false, false, true, default));
+        Assert.Null(await bookings.GetRentalForUserAsync(rental.RentalId, email, false, false, true, default));
         await Seed.ScalarAsync(db.DataSource, "INSERT INTO vehicle_assignments(rental_id,vehicle_id,driver_staff_id,status) SELECT id,vehicle_id,$2,'assigned' FROM rentals WHERE id=$1", rental.RentalId, staffId);
-        Assert.NotNull(await operations.GetRentalForUserAsync(rental.RentalId, email, false, false, true, default));
+        Assert.NotNull(await bookings.GetRentalForUserAsync(rental.RentalId, email, false, false, true, default));
         await Seed.ScalarAsync(db.DataSource, "UPDATE vehicle_assignments SET status='reassigned' WHERE rental_id=$1", rental.RentalId);
-        Assert.Null(await operations.GetRentalForUserAsync(rental.RentalId, email, false, false, true, default));
+        Assert.Null(await bookings.GetRentalForUserAsync(rental.RentalId, email, false, false, true, default));
     }
 }

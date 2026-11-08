@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Rentals;
+using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
@@ -9,6 +10,7 @@ namespace VehicleRental.Tests;
 public sealed class RentalEditingIntegrationTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
     private NpgsqlOperationsRepository Store => new(db.DataSource);
+    private NpgsqlRentalBookingRepository Bookings => new(db.DataSource);
     private static DateTime Start => new(DateTime.UtcNow.AddDays(3).Date.AddHours(8).Ticks, DateTimeKind.Utc);
     private static UpdateRentalCommand Command(Rental rental, double hours = 3)
         => new(rental.VehicleId, rental.StartTime!.Value, rental.StartTime.Value.AddHours(hours), rental.HasDriver ?? false);
@@ -25,7 +27,7 @@ public sealed class RentalEditingIntegrationTests(PostgresFixture db) : IClassFi
             subId = (int)(await Seed.ScalarAsync(db.DataSource, "INSERT INTO customer_subscriptions(customer_id,plan_id,start_date,end_date,remaining_hours) VALUES($1,$2,CURRENT_DATE,CURRENT_DATE+30,100) RETURNING id", customerId, plan))!;
         }
         var start = Start;
-        var rental = await Store.CreateRentalAsync(email, vehicle, policy, type, start, type == "hourly" ? start.AddHours(2) : start.AddDays(30), subscription, subId, false, default);
+        var rental = await Bookings.CreateRentalAsync(email, vehicle, policy, type, start, type == "hourly" ? start.AddHours(2) : start.AddDays(30), subscription, subId, false, default);
         return (rental, email, policy);
     }
 
@@ -63,10 +65,10 @@ public sealed class RentalEditingIntegrationTests(PostgresFixture db) : IClassFi
     {
         var (rental, email, policy) = await CreateAsync();
         var start = rental.StartTime!.Value;
-        await Store.CreateRentalAsync(email, rental.VehicleId, policy, "hourly", start.AddHours(5), start.AddHours(7), false, null, false, default);
+        await Bookings.CreateRentalAsync(email, rental.VehicleId, policy, "hourly", start.AddHours(5), start.AddHours(7), false, null, false, default);
         var error = await Assert.ThrowsAsync<ConflictException>(() => Store.UpdateBeforePickupAsync(rental.Id, Command(rental, 6), default));
         Assert.Equal("VEHICLE_UNAVAILABLE", error.Code);
-        Assert.Equal(rental, await Store.GetRentalAsync(rental.Id, default));
+        Assert.Equal(rental, await Bookings.GetRentalAsync(rental.Id, default));
         Assert.Equal(260m, await Seed.ScalarAsync(db.DataSource, "SELECT amount FROM invoices WHERE rental_id=$1", rental.Id));
         Assert.Equal(rental.EndTime, await Seed.ScalarAsync(db.DataSource, "SELECT ends_at FROM vehicle_bookings WHERE rental_id=$1", rental.Id));
     }
@@ -89,10 +91,10 @@ public sealed class RentalEditingIntegrationTests(PostgresFixture db) : IClassFi
             _ => "UPDATE rentals SET started_at=now() WHERE id=$1"
         };
         await Seed.ScalarAsync(db.DataSource, sql, rental.Id);
-        var beforeEdit = await Store.GetRentalAsync(rental.Id, default);
+        var beforeEdit = await Bookings.GetRentalAsync(rental.Id, default);
         var error = await Assert.ThrowsAsync<ConflictException>(() => Store.UpdateBeforePickupAsync(rental.Id, Command(rental), default));
         Assert.Equal(code, error.Code);
-        Assert.Equal(beforeEdit, await Store.GetRentalAsync(rental.Id, default));
+        Assert.Equal(beforeEdit, await Bookings.GetRentalAsync(rental.Id, default));
     }
 
     [Fact]

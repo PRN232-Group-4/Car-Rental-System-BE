@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.Application.Features.Availability;
 using Car_Rental_System_BE.Infrastructure.Features.Availability;
 using Car_Rental_System_BE.Infrastructure.Features.Fleet;
+using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
@@ -56,7 +57,7 @@ public sealed class VehicleLicenseCatalogIntegrationTests(PostgresFixture db) : 
         }
 
         // Management must retain unconfigured vehicles so they can be fixed.
-        var operations = new NpgsqlOperationsRepository(db.DataSource);
+        var operations = new NpgsqlRentalBookingRepository(db.DataSource);
         var fleet = new NpgsqlFleetRepository(db.DataSource);
         var management = await fleet.SearchVehiclesAsync(vehicleType, facility, null, null, null, 1, 20, default);
         Assert.Equal(5, management.TotalCount);
@@ -69,7 +70,7 @@ public sealed class VehicleLicenseCatalogIntegrationTests(PostgresFixture db) : 
     [Fact]
     public async Task Hidden_vehicle_retains_rental_history_and_reappears_after_configuration()
     {
-        var operations = new NpgsqlOperationsRepository(db.DataSource);
+        var operations = new NpgsqlRentalBookingRepository(db.DataSource);
         var fleet = new NpgsqlFleetRepository(db.DataSource);
         var (customer, _) = await Seed.CustomerAsync(db.DataSource);
         var vehicle = await Seed.VehicleAsync(db.DataSource);

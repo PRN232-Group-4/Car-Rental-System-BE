@@ -3,6 +3,7 @@ using Car_Rental_System_BE.Application.Features.RentalPolicies;
 using Car_Rental_System_BE.Infrastructure.Features.Availability;
 using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Features.RentalPolicies;
+using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
@@ -15,7 +16,7 @@ public sealed class RentalPolicyStatusPersistenceTests(PostgresFixture db) : ICl
     [Fact]
     public async Task Status_only_update_preserves_terms_existing_rental_snapshots_and_other_versions()
     {
-        var repository = new NpgsqlOperationsRepository(db.DataSource);
+        var repository = new NpgsqlRentalBookingRepository(db.DataSource);
         var policies = new NpgsqlRentalPolicyRepository(db.DataSource);
         var service = new RentalPolicyService(policies);
         var (_, email) = await Seed.CustomerAsync(db.DataSource);

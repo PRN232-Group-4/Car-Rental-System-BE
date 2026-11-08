@@ -11,7 +11,7 @@ public sealed class RentalQueryPaginationIntegrationTests(PostgresFixture db) : 
     public async Task Operational_queue_preserves_hourly_and_longterm_types_from_the_database()
     {
         var (customerId, email) = await Seed.CustomerAsync(db.DataSource);
-        var store = new NpgsqlOperationsRepository(db.DataSource);
+        var store = new NpgsqlRentalBookingRepository(db.DataSource);
         var start = DateTime.SpecifyKind(DateTime.UtcNow.AddDays(30), DateTimeKind.Unspecified);
         var hourlyVehicle = await Seed.VehicleAsync(db.DataSource);
         var longtermVehicle = await Seed.VehicleAsync(db.DataSource);
@@ -34,7 +34,7 @@ public sealed class RentalQueryPaginationIntegrationTests(PostgresFixture db) : 
     {
         var (customerId, email) = await Seed.CustomerAsync(db.DataSource);
         var other = await Seed.CustomerAsync(db.DataSource);
-        var store = new NpgsqlOperationsRepository(db.DataSource);
+        var store = new NpgsqlRentalBookingRepository(db.DataSource);
         var start = DateTime.SpecifyKind(DateTime.UtcNow.AddDays(30), DateTimeKind.Unspecified);
         var firstVehicle = await Seed.VehicleAsync(db.DataSource);
         var secondVehicle = await Seed.VehicleAsync(db.DataSource);

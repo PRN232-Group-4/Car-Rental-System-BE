@@ -1,4 +1,5 @@
 using Car_Rental_System_BE.Application.Common.Errors;
+using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Npgsql;
 using Xunit;
@@ -18,8 +19,8 @@ public sealed class VehicleConcurrencyTests(PostgresFixture db) : IClassFixture<
         var start = DateTime.UtcNow.AddDays(2);
         var end = start.AddHours(3);
 
-        var repo1 = new NpgsqlOperationsRepository(db.DataSource);
-        var repo2 = new NpgsqlOperationsRepository(db.DataSource);
+        var repo1 = new NpgsqlRentalBookingRepository(db.DataSource);
+        var repo2 = new NpgsqlRentalBookingRepository(db.DataSource);
 
         using var barrier = new Barrier(2);
 
@@ -87,7 +88,7 @@ public sealed class VehicleConcurrencyTests(PostgresFixture db) : IClassFixture<
         var start2 = end1.AddMinutes(30);
         var end2 = start2.AddHours(2);
 
-        var repo = new NpgsqlOperationsRepository(db.DataSource);
+        var repo = new NpgsqlRentalBookingRepository(db.DataSource);
 
         var rental1 = await repo.CreateRentalAsync(
             email1, vehicleId, policyId, "hourly", start1, end1,

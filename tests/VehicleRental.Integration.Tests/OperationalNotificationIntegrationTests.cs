@@ -20,7 +20,7 @@ public sealed class OperationalNotificationIntegrationTests(PostgresFixture db) 
     {
         var (customerId, customerEmail) = await Seed.CustomerAsync(db.DataSource);
         var vehicle = await Seed.VehicleAsync(db.DataSource);
-        var repository = new NpgsqlOperationsRepository(db.DataSource);
+        var repository = new NpgsqlRentalBookingRepository(db.DataSource);
         var start = DateTime.SpecifyKind(DateTime.UtcNow.AddDays(5), DateTimeKind.Unspecified);
         var rental = await repository.CreateRentalAsync(customerEmail, vehicle, null, "hourly", start, start.AddHours(2), false, null, false, default);
         await Seed.ScalarAsync(db.DataSource, "UPDATE customers SET license_status='pending' WHERE id=$1", customerId);
@@ -73,7 +73,7 @@ public sealed class OperationalNotificationIntegrationTests(PostgresFixture db) 
     {
         var (customer, email) = await Seed.CustomerAsync(db.DataSource);
         var vehicle = await Seed.VehicleAsync(db.DataSource);
-        var repository = new NpgsqlOperationsRepository(db.DataSource);
+        var repository = new NpgsqlRentalBookingRepository(db.DataSource);
         var start = DateTime.SpecifyKind(DateTime.UtcNow.AddDays(7), DateTimeKind.Unspecified);
         var rental = await repository.CreateRentalAsync(email, vehicle, null, "hourly", start, start.AddHours(1), false, null, false, default);
         var staff = (int)(await Seed.ScalarAsync(db.DataSource, "INSERT INTO staffs(user_id) SELECT user_id FROM customers WHERE id=$1 RETURNING id", customer))!;

@@ -48,6 +48,7 @@ public sealed class FrontendFieldsIntegrationTests(PostgresFixture db) : IClassF
     public async Task My_rental_list_and_detail_share_actions_contact_and_subscription_usage()
     {
         var repo=new NpgsqlOperationsRepository(db.DataSource);
+        var bookings=new NpgsqlRentalBookingRepository(db.DataSource);
         var organization=new NpgsqlOrganizationRepository(db.DataSource);
         var (customer,email)=await Seed.CustomerAsync(db.DataSource);
         var facility=await organization.SaveFacilityAsync(null,"Rental branch",null,default,"0281234567");
@@ -56,7 +57,7 @@ public sealed class FrontendFieldsIntegrationTests(PostgresFixture db) : IClassF
         var plan=await Seed.PlanAsync(db.DataSource);
         var subscription=await repo.BuyPlanAsync(email,plan,default);
         var start=DateTime.SpecifyKind(DateTime.UtcNow.AddDays(2),DateTimeKind.Unspecified);
-        var rental=await repo.CreateRentalAsync(email,vehicle,null,"hourly",start,start.AddHours(3.5),true,subscription,false,default);
+        var rental=await bookings.CreateRentalAsync(email,vehicle,null,"hourly",start,start.AddHours(3.5),true,subscription,false,default);
         var queries=new NpgsqlRentalQueries(db.DataSource,TimeProvider.System);
         var list=await queries.ListMyRentalsAsync(customer,null,1,20,default);
         var summary=Assert.Single(list.Items);
@@ -81,7 +82,6 @@ public sealed class FrontendFieldsIntegrationTests(PostgresFixture db) : IClassF
     [Fact]
     public async Task Policy_metadata_survives_status_update_and_returns_real_creation_timestamp()
     {
-        var repo=new NpgsqlOperationsRepository(db.DataSource);
         var policies=new NpgsqlRentalPolicyRepository(db.DataSource);
         var fleet=new NpgsqlFleetRepository(db.DataSource);
         var organization=new NpgsqlOrganizationRepository(db.DataSource);

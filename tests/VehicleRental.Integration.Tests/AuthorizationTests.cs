@@ -9,6 +9,7 @@ using Car_Rental_System_BE.WebApi.Features.Organization;
 using Car_Rental_System_BE.WebApi.Features.Ratings;
 using Car_Rental_System_BE.WebApi.Features.Recovery;
 using Car_Rental_System_BE.WebApi.Features.RentalPolicies;
+using Car_Rental_System_BE.WebApi.Features.Rentals;
 using Car_Rental_System_BE.WebApi.Features.Reports;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.DTOs.Accounts;
@@ -51,8 +52,6 @@ public sealed class AuthorizationTests
     }
 
     [Theory]
-    [InlineData("Hourly", "Staff", false)]
-    [InlineData("Hourly", "Customer", true)]
     [InlineData("SaveContract", "Customer", false)]
     [InlineData("SaveContract", "Driver", false)]
     [InlineData("SaveContract", "Maintenance", false)]
@@ -65,6 +64,19 @@ public sealed class AuthorizationTests
     [InlineData("DeletePlan", "Manager", true)]
     public async Task Operations_enforce_capability_matrix(string action, string role, bool allowed) =>
         Assert.Equal(allowed, await AuthorizeEndpoint<OperationsController>(action, Principal(role, 7)));
+
+    /// <summary>
+    /// The two booking verbs moved to RentalBookingsController and keep the Customer policy they had on
+    /// OperationsController, so a policy left behind on the legacy controller cannot pass this matrix.
+    /// </summary>
+    [Theory]
+    [InlineData("Hourly", "Staff", false)]
+    [InlineData("Hourly", "Customer", true)]
+    [InlineData("Longterm", "Driver", false)]
+    [InlineData("Longterm", "Customer", true)]
+    [InlineData("Rental", "Customer", true)]
+    public async Task Rental_booking_endpoints_enforce_the_attributes_they_moved_with(string action, string role, bool allowed) =>
+        Assert.Equal(allowed, await AuthorizeEndpoint<RentalBookingsController>(action, Principal(role, 7)));
 
     /// <summary>
     /// The three rental-policy actions moved to RentalPoliciesController and keep the Management policy they had

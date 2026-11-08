@@ -34107,1590 +34107,6 @@
         }
       }
     },
-    "/api/rentals/hourly": {
-      "post": {
-        "tags": [
-          "Operations"
-        ],
-        "description": "Customer creates a rental preserving hasDriver for both hourly and longterm. The pickup time must be at least Rental:Expiry:MinimumLeadMinutes (default 60) ahead of the booking moment; earlier start times return 400 RENTAL_START_TIME_TOO_SOON and nothing is written. The created request stores expire_at = booking time + Rental:Expiry:ApprovalWindowMinutes (default 60) for FR-042 auto-expiry. Only available vehicles without a currently renting/post_inspection rental can be booked; schedule/maintenance checks run inside the transaction under a vehicle lock. Driver bookings automatically record a passing pre-rental confirmation with source driver_default and actor system, without assigning a driver. Self-drive requires an approved customer license matching vehicle allowedLicenseTypes and valid through rental end, plus an explicit technician check or Admin confirmation before handover. Route naming uses plural collection resources and singular resources addressed by ID; creating an item targets the plural collection. Singleton resources and action names keep their own names.",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RentalRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RentalRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/RentalRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response using the six-field API envelope.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 200
-                    },
-                    "status": {
-                      "enum": [
-                        "success"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request completed successfully."
-                    },
-                    "error": {
-                      "nullable": true
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 400
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 404
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "405": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 405
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 500
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 401
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 403
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/rentals/longterm": {
-      "post": {
-        "tags": [
-          "Operations"
-        ],
-        "description": "Customer creates a rental preserving hasDriver for both hourly and longterm. The pickup time must be at least Rental:Expiry:MinimumLeadMinutes (default 60) ahead of the booking moment; earlier start times return 400 RENTAL_START_TIME_TOO_SOON and nothing is written. The created request stores expire_at = booking time + Rental:Expiry:ApprovalWindowMinutes (default 60) for FR-042 auto-expiry. Only available vehicles without a currently renting/post_inspection rental can be booked; schedule/maintenance checks run inside the transaction under a vehicle lock. Driver bookings automatically record a passing pre-rental confirmation with source driver_default and actor system, without assigning a driver. Self-drive requires an approved customer license matching vehicle allowedLicenseTypes and valid through rental end, plus an explicit technician check or Admin confirmation before handover. Route naming uses plural collection resources and singular resources addressed by ID; creating an item targets the plural collection. Singleton resources and action names keep their own names.",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RentalRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RentalRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/RentalRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response using the six-field API envelope.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 200
-                    },
-                    "status": {
-                      "enum": [
-                        "success"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request completed successfully."
-                    },
-                    "error": {
-                      "nullable": true
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 400
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 404
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "405": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 405
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 500
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 401
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 403
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/rental/{id}": {
-      "get": {
-        "tags": [
-          "Operations"
-        ],
-        "description": "Authorized rental detail in the flat Rental contract. hasPassingPreInspection and hasPostInspection are boolean readiness flags derived only from persisted inspections for this rental's current vehicle; a successful pre-rental check is mandatory before handover. These fields do not replace server-side lifecycle validation. Route naming uses plural collection resources and singular resources addressed by ID; creating an item targets the plural collection. Singleton resources and action names keep their own names.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response using the six-field API envelope.",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 200
-                    },
-                    "status": {
-                      "enum": [
-                        "success"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/Rental"
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request completed successfully."
-                    },
-                    "error": {
-                      "nullable": true
-                    }
-                  }
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 200
-                    },
-                    "status": {
-                      "enum": [
-                        "success"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/Rental"
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request completed successfully."
-                    },
-                    "error": {
-                      "nullable": true
-                    }
-                  }
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 200
-                    },
-                    "status": {
-                      "enum": [
-                        "success"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/Rental"
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request completed successfully."
-                    },
-                    "error": {
-                      "nullable": true
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 400
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 404
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "405": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 405
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 500
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 401
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 403
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "RentalEditing"
-        ],
-        "description": "Admin/Manager/CustomerService only. Updates vehicleId/startTime/endTime/hasDriver before rental start (pending or pre_inspection, started_at null). Times must be UTC. Immutable customer/type/subscription/policy and server-computed prices cannot be supplied. Conflicting bookings, existing inspection/assignment, signed contracts and committed payments block changes with 409. Unpaid invoice and booking are updated in the same transaction. Route naming uses plural collection resources and singular resources addressed by ID; creating an item targets the plural collection. Singleton resources and action names keep their own names.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "maximum": 2147483647,
-              "minimum": 1,
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateRentalRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateRentalRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateRentalRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response using the six-field API envelope.",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 200
-                    },
-                    "status": {
-                      "enum": [
-                        "success"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/Rental"
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request completed successfully."
-                    },
-                    "error": {
-                      "nullable": true
-                    }
-                  }
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 200
-                    },
-                    "status": {
-                      "enum": [
-                        "success"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/Rental"
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request completed successfully."
-                    },
-                    "error": {
-                      "nullable": true
-                    }
-                  }
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 200
-                    },
-                    "status": {
-                      "enum": [
-                        "success"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/Rental"
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request completed successfully."
-                    },
-                    "error": {
-                      "nullable": true
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 400
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 404
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 409
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 401
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 403
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "405": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 405
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "required": [
-                    "code",
-                    "status",
-                    "is_success",
-                    "data",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 500
-                    },
-                    "status": {
-                      "enum": [
-                        "error"
-                      ],
-                      "type": "string"
-                    },
-                    "is_success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "data": {
-                      "nullable": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Request failed."
-                    },
-                    "error": {
-                      "$ref": "#/components/schemas/ProblemDetails"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/drivers/schedule": {
       "get": {
         "tags": [
@@ -45430,6 +43846,1590 @@
                       "type": "integer",
                       "format": "int32",
                       "example": 400
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 405
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 500
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rentals/hourly": {
+      "post": {
+        "tags": [
+          "RentalBookings"
+        ],
+        "description": "Customer creates a rental preserving hasDriver for both hourly and longterm. The pickup time must be at least Rental:Expiry:MinimumLeadMinutes (default 60) ahead of the booking moment; earlier start times return 400 RENTAL_START_TIME_TOO_SOON and nothing is written. The created request stores expire_at = booking time + Rental:Expiry:ApprovalWindowMinutes (default 60) for FR-042 auto-expiry. Only available vehicles without a currently renting/post_inspection rental can be booked; schedule/maintenance checks run inside the transaction under a vehicle lock. Driver bookings automatically record a passing pre-rental confirmation with source driver_default and actor system, without assigning a driver. Self-drive requires an approved customer license matching vehicle allowedLicenseTypes and valid through rental end, plus an explicit technician check or Admin confirmation before handover. Route naming uses plural collection resources and singular resources addressed by ID; creating an item targets the plural collection. Singleton resources and action names keep their own names.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RentalRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RentalRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RentalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response using the six-field API envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 200
+                    },
+                    "status": {
+                      "enum": [
+                        "success"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request completed successfully."
+                    },
+                    "error": {
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 400
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 404
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 405
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 500
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 401
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 403
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rentals/longterm": {
+      "post": {
+        "tags": [
+          "RentalBookings"
+        ],
+        "description": "Customer creates a rental preserving hasDriver for both hourly and longterm. The pickup time must be at least Rental:Expiry:MinimumLeadMinutes (default 60) ahead of the booking moment; earlier start times return 400 RENTAL_START_TIME_TOO_SOON and nothing is written. The created request stores expire_at = booking time + Rental:Expiry:ApprovalWindowMinutes (default 60) for FR-042 auto-expiry. Only available vehicles without a currently renting/post_inspection rental can be booked; schedule/maintenance checks run inside the transaction under a vehicle lock. Driver bookings automatically record a passing pre-rental confirmation with source driver_default and actor system, without assigning a driver. Self-drive requires an approved customer license matching vehicle allowedLicenseTypes and valid through rental end, plus an explicit technician check or Admin confirmation before handover. Route naming uses plural collection resources and singular resources addressed by ID; creating an item targets the plural collection. Singleton resources and action names keep their own names.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RentalRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RentalRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RentalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response using the six-field API envelope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 200
+                    },
+                    "status": {
+                      "enum": [
+                        "success"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request completed successfully."
+                    },
+                    "error": {
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 400
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 404
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 405
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 500
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 401
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 403
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rental/{id}": {
+      "get": {
+        "tags": [
+          "RentalBookings"
+        ],
+        "description": "Authorized rental detail in the flat Rental contract. hasPassingPreInspection and hasPostInspection are boolean readiness flags derived only from persisted inspections for this rental's current vehicle; a successful pre-rental check is mandatory before handover. These fields do not replace server-side lifecycle validation. Route naming uses plural collection resources and singular resources addressed by ID; creating an item targets the plural collection. Singleton resources and action names keep their own names.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response using the six-field API envelope.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 200
+                    },
+                    "status": {
+                      "enum": [
+                        "success"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Rental"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request completed successfully."
+                    },
+                    "error": {
+                      "nullable": true
+                    }
+                  }
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 200
+                    },
+                    "status": {
+                      "enum": [
+                        "success"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Rental"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request completed successfully."
+                    },
+                    "error": {
+                      "nullable": true
+                    }
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 200
+                    },
+                    "status": {
+                      "enum": [
+                        "success"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Rental"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request completed successfully."
+                    },
+                    "error": {
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 400
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 404
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 405
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 500
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 401
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 403
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "RentalEditing"
+        ],
+        "description": "Admin/Manager/CustomerService only. Updates vehicleId/startTime/endTime/hasDriver before rental start (pending or pre_inspection, started_at null). Times must be UTC. Immutable customer/type/subscription/policy and server-computed prices cannot be supplied. Conflicting bookings, existing inspection/assignment, signed contracts and committed payments block changes with 409. Unpaid invoice and booking are updated in the same transaction. Route naming uses plural collection resources and singular resources addressed by ID; creating an item targets the plural collection. Singleton resources and action names keep their own names.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRentalRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRentalRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRentalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response using the six-field API envelope.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 200
+                    },
+                    "status": {
+                      "enum": [
+                        "success"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Rental"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request completed successfully."
+                    },
+                    "error": {
+                      "nullable": true
+                    }
+                  }
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 200
+                    },
+                    "status": {
+                      "enum": [
+                        "success"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Rental"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request completed successfully."
+                    },
+                    "error": {
+                      "nullable": true
+                    }
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 200
+                    },
+                    "status": {
+                      "enum": [
+                        "success"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Rental"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request completed successfully."
+                    },
+                    "error": {
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 400
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 404
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 409
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 401
+                    },
+                    "status": {
+                      "enum": [
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "is_success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Request failed."
+                    },
+                    "error": {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error response using the six-field API envelope; error contains ProblemDetails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "status",
+                    "is_success",
+                    "data",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "format": "int32",
+                      "example": 403
                     },
                     "status": {
                       "enum": [

@@ -1,4 +1,5 @@
 using Car_Rental_System_BE.Infrastructure.Features.Billing;
+using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Npgsql;
 
@@ -15,7 +16,7 @@ internal static class Scenarios
         var vehicle = await Seed.VehicleAsync(db, hourly: hourly);
         var policy = await Seed.PolicyAsync(db, vatRate: vatRate, depositPercentage: depositPercentage);
         var start = DateTime.UtcNow.AddHours(1);
-        var rental = await new NpgsqlOperationsRepository(db).CreateRentalAsync(email, vehicle, policy, "hourly", start, start.AddHours(2), false, null, false, CancellationToken.None, paymentMethod);
+        var rental = await new NpgsqlRentalBookingRepository(db).CreateRentalAsync(email, vehicle, policy, "hourly", start, start.AddHours(2), false, null, false, CancellationToken.None, paymentMethod);
         var invoiceId = (int)(await Seed.ScalarAsync(db, "SELECT id FROM invoices WHERE rental_id=$1", rental.Id))!;
         var amount = (decimal)(await Seed.ScalarAsync(db, "SELECT amount FROM invoices WHERE id=$1", invoiceId))!;
         var deposit = (decimal)(await Seed.ScalarAsync(db, "SELECT deposit_price FROM rentals WHERE id=$1", rental.Id))!;
@@ -28,9 +29,10 @@ internal static class Scenarios
         var vehicle = await Seed.VehicleAsync(db);
         var plan = await Seed.PlanAsync(db);
         var operations = new NpgsqlOperationsRepository(db);
+        var bookings = new NpgsqlRentalBookingRepository(db);
         var subscriptionId = await operations.BuyPlanAsync(email, plan, CancellationToken.None);
         var start = DateTime.UtcNow.AddHours(1);
-        var rental = await operations.CreateRentalAsync(email, vehicle, null, "hourly", start, start.AddHours(2), true, subscriptionId, false, CancellationToken.None);
+        var rental = await bookings.CreateRentalAsync(email, vehicle, null, "hourly", start, start.AddHours(2), true, subscriptionId, false, CancellationToken.None);
         return (rental.Id, subscriptionId);
     }
 

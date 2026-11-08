@@ -51,6 +51,7 @@ public static class ApplicationExtensions
         services.AddScoped<INavigationCountsService, NavigationCountsService>();
         services.AddScoped<IRentalEditingService, RentalEditingService>();
         services.AddScoped<IRentalPolicyService, RentalPolicyService>();
+        services.AddScoped<IRentalBookingService, RentalBookingService>();
         services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<ICustomerService, CustomerService>();
         services.AddScoped<ICustomerLicenseService, CustomerLicenseService>();

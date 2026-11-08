@@ -15,12 +15,13 @@ public sealed class CheckoutReservationIntegrationTests(PostgresFixture db) : IC
     [Fact]
     public async Task Checkout_without_payment_row_blocks_edits_even_when_provider_times_out()
     {
+        var bookings = new NpgsqlRentalBookingRepository(db.DataSource);
         var operations = new NpgsqlOperationsRepository(db.DataSource);
         var payments = new NpgsqlPaymentRepository(db.DataSource);
         var (_, email) = await Seed.CustomerAsync(db.DataSource);
         var vehicle = await Seed.VehicleAsync(db.DataSource);
         var start = DateTime.UtcNow.Date.AddDays(3).AddHours(8);
-        var rental = await operations.CreateRentalAsync(email, vehicle, null, "hourly", start, start.AddHours(2), false, null, false, default);
+        var rental = await bookings.CreateRentalAsync(email, vehicle, null, "hourly", start, start.AddHours(2), false, null, false, default);
         var invoiceId = (int)(await Seed.ScalarAsync(db.DataSource, "SELECT id FROM invoices WHERE rental_id=$1", rental.Id))!;
         // Reading invoice data has no financial side effect.
         Assert.NotNull(await payments.GetInvoiceForCustomerAsync(invoiceId, email, default));
@@ -41,7 +42,7 @@ public sealed class CheckoutReservationIntegrationTests(PostgresFixture db) : IC
         var error = await Assert.ThrowsAsync<ConflictException>(() => operations.UpdateBeforePickupAsync(rental.Id,
             new(vehicle, start, start.AddHours(3), false), default));
         Assert.Equal("RENTAL_FINANCIALLY_COMMITTED", error.Code);
-        Assert.Equal(rental, await operations.GetRentalAsync(rental.Id, default));
+        Assert.Equal(rental, await bookings.GetRentalAsync(rental.Id, default));
         Assert.NotNull(await payments.ReserveInvoiceCheckoutAsync(invoiceId, email, default));
         Assert.Equal(marker, await Seed.ScalarAsync(db.DataSource, "SELECT checkout_started_at FROM invoices WHERE id=$1", invoiceId));
     }
@@ -49,13 +50,14 @@ public sealed class CheckoutReservationIntegrationTests(PostgresFixture db) : IC
     [Fact]
     public async Task Reservation_enforces_ownership_and_unpaid_status()
     {
+        var bookings = new NpgsqlRentalBookingRepository(db.DataSource);
         var operations = new NpgsqlOperationsRepository(db.DataSource);
         var payments = new NpgsqlPaymentRepository(db.DataSource);
         var (_, email) = await Seed.CustomerAsync(db.DataSource);
         var (_, other) = await Seed.CustomerAsync(db.DataSource);
         var vehicle = await Seed.VehicleAsync(db.DataSource);
         var start = DateTime.UtcNow.Date.AddDays(3).AddHours(8);
-        var rental = await operations.CreateRentalAsync(email, vehicle, null, "hourly", start, start.AddHours(2), false, null, false, default);
+        var rental = await bookings.CreateRentalAsync(email, vehicle, null, "hourly", start, start.AddHours(2), false, null, false, default);
         var invoiceId = (int)(await Seed.ScalarAsync(db.DataSource, "SELECT id FROM invoices WHERE rental_id=$1", rental.Id))!;
         Assert.Null(await payments.ReserveInvoiceCheckoutAsync(invoiceId, other, default));
         Assert.Equal(DBNull.Value, await Seed.ScalarAsync(db.DataSource, "SELECT checkout_started_at FROM invoices WHERE id=$1", invoiceId));

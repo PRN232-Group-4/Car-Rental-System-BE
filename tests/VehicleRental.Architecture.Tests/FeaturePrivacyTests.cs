@@ -50,6 +50,14 @@ public sealed class FeaturePrivacyTests
         "Car_Rental_System_BE.Infrastructure.Features.Rentals.NpgsqlRentalLifecycleRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.VehicleLock",
         "Car_Rental_System_BE.Infrastructure.Features.Rentals.RentalPaymentGateAdapter -> Car_Rental_System_BE.Infrastructure.Features.Billing.RentalRefundWriter",
         "Car_Rental_System_BE.Infrastructure.Repositories.NpgsqlOperationsRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.NpgsqlVehicleSearchRepository",
+        // ---------------------------------------------------------------------------------------
+        // added by the Rentals slice move (Task C7) - the same two calls, same arguments, same helpers as the
+        // two entries this repository used to own above; only the owner of the code moved, so the edge moved
+        // with it. NpgsqlRentalBookingRepository is the slice type that evaluates the booking window inside its
+        // own transaction after taking the vehicle lock.
+        // ---------------------------------------------------------------------------------------
+        "Car_Rental_System_BE.Infrastructure.Features.Rentals.NpgsqlRentalBookingRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.VehicleAvailabilityChecks",
+        "Car_Rental_System_BE.Infrastructure.Features.Rentals.NpgsqlRentalBookingRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.VehicleLock",
         "Car_Rental_System_BE.Infrastructure.Repositories.NpgsqlOperationsRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.VehicleAvailabilityChecks",
         "Car_Rental_System_BE.Infrastructure.Repositories.NpgsqlOperationsRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.VehicleLock",
         // ---------------------------------------------------------------------------------------

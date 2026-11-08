@@ -22,6 +22,7 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Car_Rental_System_BE.Application.Features.Rentals;
 using Xunit;
 
 namespace VehicleRental.Tests;
@@ -38,6 +39,7 @@ public sealed class OperationsCompletionApiTests : IAsyncLifetime
         builder.Services.AddAuthentication("operations").AddScheme<AuthenticationSchemeOptions,TestAuthentication>("operations",_=>{});
         builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
         builder.Services.AddSingleton(DispatchProxy.Create<IOperationsService,UnusedProxy>());
+        builder.Services.AddSingleton(DispatchProxy.Create<IRentalBookingService,UnusedProxy>());
         // The vehicle endpoints moved to the Fleet slice: UnusedProxy already answers SearchVehiclesAsync.
         builder.Services.AddSingleton(DispatchProxy.Create<IFleetService,UnusedProxy>());
         // The departments and facilities endpoints moved to the Organization slice, so they resolve

@@ -212,8 +212,8 @@
 /api/rental-policy/{id:int}/status | RentalPolicies.SetPolicyStatus | PATCH | 200 | inspectionType=post_rental | Rental policy status updated successfully.
 /api/rental/mine/{id:int} | RentalQueries.MineDetail | GET | 200 | - | Your rental details retrieved successfully.
 /api/rental/mine/{id:int} | RentalQueries.MineDetail | GET | 200 | inspectionType=post_rental | Your rental details retrieved successfully.
-/api/rental/{id:int} | Operations.Rental | GET | 200 | - | Rental retrieved successfully.
-/api/rental/{id:int} | Operations.Rental | GET | 200 | inspectionType=post_rental | Rental retrieved successfully.
+/api/rental/{id:int} | RentalBookings.Rental | GET | 200 | - | Rental retrieved successfully.
+/api/rental/{id:int} | RentalBookings.Rental | GET | 200 | inspectionType=post_rental | Rental retrieved successfully.
 /api/rental/{id:int} | RentalEditing.Update | PUT | 200 | - | Rental updated successfully.
 /api/rental/{id:int} | RentalEditing.Update | PUT | 200 | inspectionType=post_rental | Rental updated successfully.
 /api/rental/{id:int}/assignable-drivers | RentalAssignments.ListAssignableDrivers | GET | 200 | - | Assignable drivers retrieved successfully.
@@ -276,10 +276,10 @@
 /api/rental/{rentalId:int}/ratings | Ratings.RateStaff | POST | 201 | inspectionType=post_rental | rate staff created successfully.
 /api/rentals | RentalQueries.List | GET | 200 | - | Rentals retrieved successfully.
 /api/rentals | RentalQueries.List | GET | 200 | inspectionType=post_rental | Rentals retrieved successfully.
-/api/rentals/hourly | Operations.Hourly | POST | 200 | - | Hourly rental created successfully.
-/api/rentals/hourly | Operations.Hourly | POST | 200 | inspectionType=post_rental | Hourly rental created successfully.
-/api/rentals/longterm | Operations.Longterm | POST | 200 | - | Long-term rental created successfully.
-/api/rentals/longterm | Operations.Longterm | POST | 200 | inspectionType=post_rental | Long-term rental created successfully.
+/api/rentals/hourly | RentalBookings.Hourly | POST | 200 | - | Hourly rental created successfully.
+/api/rentals/hourly | RentalBookings.Hourly | POST | 200 | inspectionType=post_rental | Hourly rental created successfully.
+/api/rentals/longterm | RentalBookings.Longterm | POST | 200 | - | Long-term rental created successfully.
+/api/rentals/longterm | RentalBookings.Longterm | POST | 200 | inspectionType=post_rental | Long-term rental created successfully.
 /api/rentals/mine | RentalQueries.Mine | GET | 200 | - | Your rentals retrieved successfully.
 /api/rentals/mine | RentalQueries.Mine | GET | 200 | inspectionType=post_rental | Your rentals retrieved successfully.
 /api/rentals/overdue | RentalQueries.Overdue | GET | 200 | - | Overdue rentals retrieved successfully.

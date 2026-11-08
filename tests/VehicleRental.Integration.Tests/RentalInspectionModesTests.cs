@@ -19,7 +19,7 @@ public sealed class RentalInspectionModesTests(PostgresFixture db) : IClassFixtu
     {
         var (_,email) = await Seed.CustomerAsync(db.DataSource, driver ? "none" : "approved");
         var vehicle = await Seed.VehicleAsync(db.DataSource);
-        var repository = new NpgsqlOperationsRepository(db.DataSource);
+        var repository = new NpgsqlRentalBookingRepository(db.DataSource);
         var rental = await repository.CreateRentalAsync(email,vehicle,null,type,DateTime.UtcNow.AddDays(2),DateTime.UtcNow.AddDays(3),false,null,driver,default);
         Assert.Equal(driver,rental.HasDriver);
         Assert.Equal(driver,rental.HasPassingPreInspection);
@@ -40,7 +40,7 @@ public sealed class RentalInspectionModesTests(PostgresFixture db) : IClassFixtu
     {
         var (_,email)=await Seed.CustomerAsync(db.DataSource);
         var vehicle=await Seed.VehicleAsync(db.DataSource);
-        var rental=await new NpgsqlOperationsRepository(db.DataSource).CreateRentalAsync(email,vehicle,null,"hourly",DateTime.UtcNow.AddDays(2),DateTime.UtcNow.AddDays(3),false,null,false,default);
+        var rental=await new NpgsqlRentalBookingRepository(db.DataSource).CreateRentalAsync(email,vehicle,null,"hourly",DateTime.UtcNow.AddDays(2),DateTime.UtcNow.AddDays(3),false,null,false,default);
         var staff=await TechnicianAsync();
         var service=new InspectionAssignmentService(new NpgsqlInspectionAssignmentRepository(db.DataSource));
         var readiness=new NpgsqlRentalLifecycleRepository(db.DataSource);
@@ -64,7 +64,7 @@ public sealed class RentalInspectionModesTests(PostgresFixture db) : IClassFixtu
     {
         var (_, email) = await Seed.CustomerAsync(db.DataSource);
         var vehicle = await Seed.VehicleAsync(db.DataSource);
-        var store = new NpgsqlOperationsRepository(db.DataSource);
+        var store = new NpgsqlRentalBookingRepository(db.DataSource);
         var rental = await store.CreateRentalAsync(email,vehicle,null,type,DateTime.UtcNow.AddDays(2),DateTime.UtcNow.AddDays(3),false,null,false,default);
         var staff = await TechnicianAsync();
         var service = new InspectionAssignmentService(new NpgsqlInspectionAssignmentRepository(db.DataSource));
@@ -85,7 +85,7 @@ public sealed class RentalInspectionModesTests(PostgresFixture db) : IClassFixtu
     {
         var (_, email) = await Seed.CustomerAsync(db.DataSource);
         var vehicle = await Seed.VehicleAsync(db.DataSource);
-        var rental = await new NpgsqlOperationsRepository(db.DataSource).CreateRentalAsync(email,vehicle,null,"hourly",DateTime.UtcNow.AddDays(2),DateTime.UtcNow.AddDays(3),false,null,false,default);
+        var rental = await new NpgsqlRentalBookingRepository(db.DataSource).CreateRentalAsync(email,vehicle,null,"hourly",DateTime.UtcNow.AddDays(2),DateTime.UtcNow.AddDays(3),false,null,false,default);
         var staff = await TechnicianAsync();
         var service = new InspectionAssignmentService(new NpgsqlInspectionAssignmentRepository(db.DataSource));
         await service.ConfirmCheckedAsync(rental.Id,staff,"inspector@test.local",default);
@@ -123,7 +123,7 @@ public sealed class RentalInspectionModesTests(PostgresFixture db) : IClassFixtu
             Assert.Empty(result.Items);
             Assert.Equal(0,result.TotalCount);
         }
-        var error=await Assert.ThrowsAsync<ConflictException>(()=>new NpgsqlOperationsRepository(db.DataSource).CreateRentalAsync(email,vehicle,null,"hourly",DateTime.UtcNow.AddDays(5),DateTime.UtcNow.AddDays(6),false,null,false,default));
+        var error=await Assert.ThrowsAsync<ConflictException>(()=>new NpgsqlRentalBookingRepository(db.DataSource).CreateRentalAsync(email,vehicle,null,"hourly",DateTime.UtcNow.AddDays(5),DateTime.UtcNow.AddDays(6),false,null,false,default));
         Assert.Equal("VEHICLE_UNAVAILABLE",error.Code);
         // Admin catalogue still contains this vehicle.
         Assert.NotNull(await new NpgsqlFleetRepository(db.DataSource).GetVehicleAsync(vehicle,default));
@@ -157,15 +157,16 @@ public sealed class RentalInspectionModesTests(PostgresFixture db) : IClassFixtu
         var (_,email)=await Seed.CustomerAsync(db.DataSource);
         var vehicle=await Seed.VehicleAsync(db.DataSource);
         await Seed.PolicyAsync(db.DataSource);
-        var store=new NpgsqlOperationsRepository(db.DataSource);
+        var store=new NpgsqlRentalBookingRepository(db.DataSource);
+        var editing=new NpgsqlOperationsRepository(db.DataSource);
         var rental=await store.CreateRentalAsync(email,vehicle,null,type,DateTime.UtcNow.AddDays(2),DateTime.UtcNow.AddDays(3),false,null,false,default);
         var command=new Car_Rental_System_BE.Application.Features.Rentals.UpdateRentalCommand(vehicle,rental.StartTime!.Value,rental.EndTime!.Value,true);
-        var driver=await store.UpdateBeforePickupAsync(rental.Id,command,default);
+        var driver=await editing.UpdateBeforePickupAsync(rental.Id,command,default);
         Assert.True(driver.HasDriver);
         Assert.True(driver.HasPassingPreInspection);
-        var rescheduled=await store.UpdateBeforePickupAsync(rental.Id,command with {EndTime=command.EndTime.AddHours(1)},default);
+        var rescheduled=await editing.UpdateBeforePickupAsync(rental.Id,command with {EndTime=command.EndTime.AddHours(1)},default);
         Assert.True(rescheduled.HasPassingPreInspection);
-        var self=await store.UpdateBeforePickupAsync(rental.Id,command with {HasDriver=false},default);
+        var self=await editing.UpdateBeforePickupAsync(rental.Id,command with {HasDriver=false},default);
         Assert.False(self.HasDriver);
         Assert.False(self.HasPassingPreInspection);
         Assert.Equal(0,await Seed.CountAsync(db.DataSource,"SELECT COUNT(*) FROM inspections WHERE rental_id=$1",rental.Id));

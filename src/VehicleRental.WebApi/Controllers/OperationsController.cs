@@ -19,7 +19,9 @@ public sealed class OperationsController(
     // them (Program.cs/Infrastructure) and they stay optional so hosts and tests that only exercise the other
     // endpoints of this controller keep working unchanged.
     IRentalLifecycleService? lifecycle = null,
-    ICurrentCustomer? currentCustomer = null) : ControllerBase
+    ICurrentCustomer? currentCustomer = null,
+    // The deprecated status endpoint reloads its answer through the rental booking read; see above.
+    IRentalBookingService? bookings = null) : ControllerBase
 {
     /// <summary>Admin, Manager or CustomerService records signed long-term contract evidence.</summary>
     [SuccessMessage("Signed long-term rental contract recorded successfully.")]
@@ -33,24 +35,6 @@ public sealed class OperationsController(
     public async Task<IActionResult> SaveContract(int id, RentalContractRequest request, CancellationToken ct) =>
         Ok(await store.SaveRentalContractAsync(id, request.ContractLink, request.SignedAt, ct));
 
-    [OperationDescription("Customer creates a rental preserving hasDriver for both hourly and longterm. The pickup time must be at least Rental:Expiry:MinimumLeadMinutes (default 60) ahead of the booking moment; earlier start times return 400 RENTAL_START_TIME_TOO_SOON and nothing is written. The created request stores expire_at = booking time + Rental:Expiry:ApprovalWindowMinutes (default 60) for FR-042 auto-expiry. Only available vehicles without a currently renting/post_inspection rental can be booked; schedule/maintenance checks run inside the transaction under a vehicle lock. Driver bookings automatically record a passing pre-rental confirmation with source driver_default and actor system, without assigning a driver. Self-drive requires an approved customer license matching vehicle allowedLicenseTypes and valid through rental end, plus an explicit technician check or Admin confirmation before handover.")]
-    [SuccessMessage("Hourly rental created successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Customer)] [HttpPost("rentals/hourly")] public async Task<IActionResult> Hourly(RentalRequest x,CancellationToken ct)
-    {
-        var rental = await store.CreateRentalAsync(Email(),x.VehicleId,x.PolicyId,"hourly",x.StartTime,x.EndTime,x.SubscriptionId is not null,x.SubscriptionId,x.HasDriver,ct,x.PaymentMethod);
-        return Created($"/api/rental/{rental.Id}", rental);
-    }
-    [OperationDescription("Customer creates a rental preserving hasDriver for both hourly and longterm. The pickup time must be at least Rental:Expiry:MinimumLeadMinutes (default 60) ahead of the booking moment; earlier start times return 400 RENTAL_START_TIME_TOO_SOON and nothing is written. The created request stores expire_at = booking time + Rental:Expiry:ApprovalWindowMinutes (default 60) for FR-042 auto-expiry. Only available vehicles without a currently renting/post_inspection rental can be booked; schedule/maintenance checks run inside the transaction under a vehicle lock. Driver bookings automatically record a passing pre-rental confirmation with source driver_default and actor system, without assigning a driver. Self-drive requires an approved customer license matching vehicle allowedLicenseTypes and valid through rental end, plus an explicit technician check or Admin confirmation before handover.")]
-    [SuccessMessage("Long-term rental created successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Customer)] [HttpPost("rentals/longterm")] public async Task<IActionResult> Longterm(RentalRequest x,CancellationToken ct)
-    {
-        var rental = await store.CreateRentalAsync(Email(),x.VehicleId,x.PolicyId,"longterm",x.StartTime,x.EndTime,x.SubscriptionId is not null,x.SubscriptionId,x.HasDriver,ct,x.PaymentMethod);
-        return Created($"/api/rental/{rental.Id}", rental);
-    }
-    [OperationDescription("Authorized rental detail in the flat Rental contract. hasPassingPreInspection and hasPostInspection are boolean readiness flags derived only from persisted inspections for this rental's current vehicle; a successful pre-rental check is mandatory before handover. These fields do not replace server-side lifecycle validation.")]
-    [SuccessMessage("Rental retrieved successfully.")]
-    [ProducesResponseType<Rental>(StatusCodes.Status200OK)]
-    [Authorize(Policy=AuthorizationPolicies.RentalRead)] [HttpGet("rental/{id:int}")] public async Task<IActionResult> Rental(int id,CancellationToken ct)=>await store.GetRentalForUserAsync(id,Email(),AuthorizationPolicies.CanReadAllRentals(User),User.IsInRole("Customer"),User.IsInRole("Driver"),ct) is { } x?Ok(x):Problem("Rental was not found.", statusCode: StatusCodes.Status404NotFound);
     [OperationDescription(" Pagination for list operations defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Invalid values return 400 at HTTP and Application boundaries. data contains items/page/pageSize/totalCount, totalCount is after filters; out-of-range pages retain the count with empty items.", DocumentsPaginationParameters = true)]
     [SuccessMessage("Driver schedule retrieved successfully.")]
     [Authorize(Policy=AuthorizationPolicies.DriverSchedule)] [HttpGet("drivers/schedule")] [ProducesResponseType<OperationsPage<DriverScheduleEntry>>(StatusCodes.Status200OK)] [ProducesResponseType(StatusCodes.Status400BadRequest)] public async Task<IActionResult> DriverSchedule([FromQuery]int? driverStaffId,[FromQuery]DateTime from,[FromQuery]DateTime to,[FromQuery]OperationsPagination pagination,CancellationToken ct){if(to<=from)return Problem("End time must be after start time.",statusCode:StatusCodes.Status400BadRequest);if(!AuthorizationPolicies.CanManage(User)){var own=AuthorizationPolicies.StaffId(User);if(own is null || (driverStaffId is not null && driverStaffId!=own))return Forbid();driverStaffId=own;}return Ok(await Completion.DriverScheduleAsync(driverStaffId,from,to,pagination,ct));}
@@ -91,8 +75,8 @@ public sealed class OperationsController(
                     statusCode: StatusCodes.Status400BadRequest);
         }
 
-        // The caller gets the same flat Rental contract as before, reloaded through the operations read path.
-        return await store.GetRentalAsync(id, ct) is { } rental
+        // The caller gets the same flat Rental contract as before, reloaded through the rental booking read path.
+        return await Bookings.GetRentalAsync(id, ct) is { } rental
             ? Ok(rental)
             : Problem("Rental was not found.", statusCode: StatusCodes.Status404NotFound);
     }
@@ -110,6 +94,8 @@ public sealed class OperationsController(
     [SuccessMessage("Customer subscriptions retrieved successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Customer)] [HttpGet("customer-subscriptions")] public Task<IReadOnlyList<CustomerSubscription>> CustomerSubscriptions(CancellationToken ct)=>store.ListCustomerSubscriptionsAsync(Email(),ct);
     private IOperationsCompletionService Completion => completion ?? throw new InvalidOperationException("Operations completion service is not configured.");
+
+    private IRentalBookingService Bookings => bookings ?? throw new InvalidOperationException("Rental booking service is not configured.");
 
     private IRentalLifecycleService Lifecycle => lifecycle ?? throw new InvalidOperationException("Rental lifecycle service is not configured.");
 

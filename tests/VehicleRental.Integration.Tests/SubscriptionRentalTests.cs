@@ -1,3 +1,4 @@
+using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
@@ -6,6 +7,7 @@ namespace VehicleRental.Tests;
 public sealed class SubscriptionRentalTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
     private readonly NpgsqlOperationsRepository _operations = new(db.DataSource);
+    private readonly NpgsqlRentalBookingRepository _bookings = new(db.DataSource);
 
     [Fact]
     public async Task Subscription_rental_deducts_remaining_hours()
@@ -16,7 +18,7 @@ public sealed class SubscriptionRentalTests(PostgresFixture db) : IClassFixture<
         var subscription = await _operations.BuyPlanAsync(email, plan, CancellationToken.None);
         var start = DateTime.UtcNow.AddHours(1);
 
-        await _operations.CreateRentalAsync(email, vehicle, null, "hourly", start, start.AddHours(2), true, subscription, false, CancellationToken.None);
+        await _bookings.CreateRentalAsync(email, vehicle, null, "hourly", start, start.AddHours(2), true, subscription, false, CancellationToken.None);
 
         Assert.Equal(98m, await RemainingHoursAsync(subscription));
     }
@@ -31,7 +33,7 @@ public sealed class SubscriptionRentalTests(PostgresFixture db) : IClassFixture<
         var start = DateTime.UtcNow.AddHours(1);
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            _operations.CreateRentalAsync(email, vehicle, null, "hourly", start, start.AddHours(2), true, subscription, false, CancellationToken.None));
+            _bookings.CreateRentalAsync(email, vehicle, null, "hourly", start, start.AddHours(2), true, subscription, false, CancellationToken.None));
 
         Assert.Equal("Subscription does not have enough remaining hours.", error.Message);
         Assert.Equal(1m, await RemainingHoursAsync(subscription));
@@ -55,7 +57,7 @@ public sealed class SubscriptionRentalTests(PostgresFixture db) : IClassFixture<
         {
             try
             {
-                await _operations.CreateRentalAsync(email, vehicle, null, "hourly", start, start.AddHours(60), true, subscription, false, CancellationToken.None);
+                await _bookings.CreateRentalAsync(email, vehicle, null, "hourly", start, start.AddHours(60), true, subscription, false, CancellationToken.None);
                 return true;
             }
             catch (InvalidOperationException)

@@ -7,6 +7,7 @@ using Car_Rental_System_BE.Infrastructure.Features.Inspections;
 using Car_Rental_System_BE.Infrastructure.Features.Maintenances;
 using Car_Rental_System_BE.Infrastructure.Features.Ratings;
 using Car_Rental_System_BE.Infrastructure.Features.Reports;
+using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
@@ -42,7 +43,7 @@ public sealed class OperationsCompletionValidationTests
 
 public sealed class OperationsCompletionIntegrationTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
-    private readonly NpgsqlOperationsRepository store=new(db.DataSource);
+    private readonly NpgsqlRentalBookingRepository store=new(db.DataSource);
     private readonly NpgsqlInspectionRecordRepository inspectionsStore=new(db.DataSource);
     private readonly NpgsqlAssignmentRepository assignments=new(db.DataSource);
     private readonly NpgsqlMaintenanceRepository maintenanceStore=new(db.DataSource);

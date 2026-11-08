@@ -16,7 +16,7 @@ public sealed class OperationsEfReadIntegrationTests(PostgresFixture db) : IClas
         var (_, email) = await Seed.CustomerAsync(db.DataSource);
         var (_, otherEmail) = await Seed.CustomerAsync(db.DataSource);
         var vehicleId = await Seed.VehicleAsync(db.DataSource);
-        var operations = new NpgsqlOperationsRepository(db.DataSource);
+        var operations = new NpgsqlRentalBookingRepository(db.DataSource);
         var start = DateTime.UtcNow.AddDays(2);
         var rental = await operations.CreateRentalAsync(email, vehicleId, null, "longterm", start,
             start.AddDays(30), false, null, false, default);
@@ -34,7 +34,7 @@ public sealed class OperationsEfReadIntegrationTests(PostgresFixture db) : IClas
         Assert.Equal("approved", schedule.CustomerLicenseStatus);
 
         var documents = new NpgsqlRentalContractDocumentRepository(db.DataSource);
-        var service = new RentalContractDocumentService(new OperationsService(operations), documents, TimeProvider.System);
+        var service = new RentalContractDocumentService(new RentalBookingService(operations), documents, TimeProvider.System);
         var pdf = Encoding.ASCII.GetBytes("%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
         using var content = new MemoryStream(pdf);
         var saved = await service.UploadAsync(rental.Id, content, "contract.pdf", "application/pdf",

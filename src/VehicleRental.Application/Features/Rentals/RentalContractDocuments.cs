@@ -1,6 +1,5 @@
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.DTOs.Operations;
-using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Application.Validators;
 
 namespace Car_Rental_System_BE.Application.Features.Rentals;
@@ -19,14 +18,14 @@ public interface IRentalContractDocumentService
     Task<RentalContractDocument> DownloadAsync(int rentalId, ActorContext actor, CancellationToken ct);
 }
 
-public sealed class RentalContractDocumentService(IOperationsService operations, IRentalContractDocumentRepository documents, TimeProvider clock) : IRentalContractDocumentService
+public sealed class RentalContractDocumentService(IRentalBookingService bookings, IRentalContractDocumentRepository documents, TimeProvider clock) : IRentalContractDocumentService
 {
     private async Task<Rental> AuthorizeAsync(int rentalId, ActorContext actor, CancellationToken ct)
     {
         var readAll = actor.Role is "Admin" or "Manager" or "CustomerService";
         if (!readAll && actor.Role != "Customer") throw new UnauthorizedAccessException("Contract access is not allowed.");
         if (string.IsNullOrWhiteSpace(actor.Email)) throw new UnauthorizedAccessException("Contract access is not allowed.");
-        return await operations.GetRentalForUserAsync(rentalId, actor.Email, readAll, actor.Role == "Customer", false, ct)
+        return await bookings.GetRentalForUserAsync(rentalId, actor.Email, readAll, actor.Role == "Customer", false, ct)
             ?? throw new NotFoundException("RENTAL_NOT_FOUND", "Rental was not found.");
     }
 

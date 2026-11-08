@@ -41,7 +41,7 @@ public sealed class PaidOrderIntegrationTests(PostgresFixture db) : IClassFixtur
         Assert.Equal(1, await Seed.CountAsync(db.DataSource, "SELECT count(*) FROM payments WHERE invoice_id=$1", request.InvoiceId));
         var invoice = (await Payments.GetInvoiceAsync(request.InvoiceId, request.Email, default))!;
         Assert.Equal("paid", invoice.Status); Assert.NotNull(invoice.OrderId); Assert.False(invoice.CanPay);
-        Assert.Equal(invoice.OrderId, (await new NpgsqlOperationsRepository(db.DataSource).GetRentalForUserAsync(request.RentalId, request.Email, false, true, false, default))!.OrderId);
+        Assert.Equal(invoice.OrderId, (await new NpgsqlRentalBookingRepository(db.DataSource).GetRentalForUserAsync(request.RentalId, request.Email, false, true, false, default))!.OrderId);
         await AssertQueryOrderId(request.RentalId, invoice.OrderId);
     }
 

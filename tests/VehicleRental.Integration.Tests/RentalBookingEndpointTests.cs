@@ -17,6 +17,8 @@ using Microsoft.AspNetCore.Mvc.ApplicationParts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Car_Rental_System_BE.Application.Features.Rentals;
+using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Xunit;
 
 namespace VehicleRental.Tests;
@@ -44,6 +46,8 @@ public sealed class RentalBookingEndpointTests(PostgresFixture db) : IClassFixtu
         builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
 
         // The real composition, wired to the throwaway database instead of the production configuration.
+        builder.Services.AddSingleton<IRentalBookingService>(new RentalBookingService(new NpgsqlRentalBookingRepository(db.DataSource)));
+        // The contract recording still lives on OperationsController; it only needs a service to resolve.
         builder.Services.AddSingleton<IOperationsService>(new OperationsService(new NpgsqlOperationsRepository(db.DataSource)));
         builder.Services.AddControllers(options => options.Filters.Add<ApiSuccessResponseFilter>())
             .ConfigureApplicationPartManager(parts =>

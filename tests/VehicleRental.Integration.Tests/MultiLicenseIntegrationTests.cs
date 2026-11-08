@@ -14,7 +14,8 @@ namespace VehicleRental.Tests;
 
 public sealed class MultiLicenseIntegrationTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
-    private NpgsqlOperationsRepository Store => new(db.DataSource);
+    private NpgsqlRentalBookingRepository Store => new(db.DataSource);
+    private NpgsqlOperationsRepository Editing => new(db.DataSource);
     private NpgsqlCustomerLicenseRepository Licenses => new(db.DataSource);
     private NpgsqlFleetRepository Fleet => new(db.DataSource);
     private static CustomerLicense License(string number, string type) =>
@@ -75,10 +76,10 @@ public sealed class MultiLicenseIntegrationTests(PostgresFixture db) : IClassFix
         await Seed.ScalarAsync(db.DataSource, "UPDATE vehicles SET allowed_license_types=ARRAY['B'] WHERE id=$1", vehicle);
         var start = DateTime.UtcNow.Date.AddDays(3).AddHours(8);
         var rental = await Store.CreateRentalAsync(email, vehicle, policy, "hourly", start, start.AddHours(2), false, null, false, default);
-        var updated = await Store.UpdateBeforePickupAsync(rental.Id, new UpdateRentalCommand(vehicle, start, start.AddHours(3), false), default);
+        var updated = await Editing.UpdateBeforePickupAsync(rental.Id, new UpdateRentalCommand(vehicle, start, start.AddHours(3), false), default);
         Assert.Equal(start.AddHours(3), updated.EndTime);
         await Seed.ScalarAsync(db.DataSource, "UPDATE vehicles SET allowed_license_types=ARRAY['A1'] WHERE id=$1", vehicle);
-        var error = await Assert.ThrowsAsync<ConflictException>(() => Store.UpdateBeforePickupAsync(rental.Id, new UpdateRentalCommand(vehicle, start, start.AddHours(4), false), default));
+        var error = await Assert.ThrowsAsync<ConflictException>(() => Editing.UpdateBeforePickupAsync(rental.Id, new UpdateRentalCommand(vehicle, start, start.AddHours(4), false), default));
         Assert.Equal("CUSTOMER_LICENSE_NOT_VALID", error.Code);
         Assert.Equal(updated.EndTime, (await Store.GetRentalAsync(rental.Id, default))!.EndTime);
     }

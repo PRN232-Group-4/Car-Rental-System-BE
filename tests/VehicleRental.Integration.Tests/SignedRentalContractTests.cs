@@ -33,6 +33,7 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
     private WebApplication _app = null!;
     private HttpClient _client = null!;
     private NpgsqlOperationsRepository Operations => new(db.DataSource);
+    private NpgsqlRentalBookingRepository Bookings => new(db.DataSource);
     private NpgsqlRentalContractDocumentRepository Documents => new(db.DataSource);
 
     public async Task InitializeAsync()
@@ -50,7 +51,7 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
         });
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(o => o.OperationFilter<ApiSuccessResponseOperationFilter>());
-        builder.Services.AddSingleton<IOperationsService>(new OperationsService(Operations));
+        builder.Services.AddSingleton<IRentalBookingService>(new RentalBookingService(Bookings));
         // The vehicle endpoints moved to the Fleet slice; these tests never call them.
         builder.Services.AddSingleton<Car_Rental_System_BE.Application.Features.Fleet.IFleetService>(new Car_Rental_System_BE.Application.Features.Fleet.FleetService(new NpgsqlFleetRepository(db.DataSource)));
         builder.Services.AddSingleton<IRentalContractDocumentRepository>(Documents);
@@ -74,7 +75,7 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
         var (_, email) = await Seed.CustomerAsync(db.DataSource);
         var vehicle = await Seed.VehicleAsync(db.DataSource);
         var start = DateTime.UtcNow.AddDays(1);
-        var rental = await Operations.CreateRentalAsync(email, vehicle, null, rentalType, start, start.AddDays(30), false, null, false, default);
+        var rental = await Bookings.CreateRentalAsync(email, vehicle, null, rentalType, start, start.AddDays(30), false, null, false, default);
         Authenticate(email);
         return (rental, email);
     }
@@ -147,7 +148,7 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
         using var replacement = await Upload(rental.Id, Form(png, "image/png", "signed.png"));
         Assert.Equal(png, (await Documents.GetAsync(rental.Id, default))!.Content);
         Assert.Equal(1, await Seed.CountAsync(db.DataSource, "SELECT count(*) FROM rental_contract_documents WHERE rental_id=$1", rental.Id));
-        Assert.True((await Operations.GetRentalAsync(rental.Id, default))!.HasUploadedContract);
+        Assert.True((await Bookings.GetRentalAsync(rental.Id, default))!.HasUploadedContract);
     }
 
     [Theory]
@@ -200,7 +201,7 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
             invalid switch { "future-date" => DateTime.UtcNow.AddDays(1).ToString("O"), "invalid-date" => "not-a-date", _ => null },
             invalid == "missing-file", invalid == "missing-date"), 400);
         Assert.Null(await Documents.GetAsync(rental.Id, default));
-        Assert.Null((await Operations.GetRentalAsync(rental.Id, default))!.SignedAt);
+        Assert.Null((await Bookings.GetRentalAsync(rental.Id, default))!.SignedAt);
     }
 
     [Theory]
@@ -210,7 +211,7 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
     {
         var (rental, _) = await RentalAsync();
         using var body = await Upload(rental.Id, Form(Convert.FromHexString(hex), mime, name));
-        Assert.True((await Operations.GetRentalAsync(rental.Id, default))!.HasUploadedContract);
+        Assert.True((await Bookings.GetRentalAsync(rental.Id, default))!.HasUploadedContract);
     }
 
     [Fact]
@@ -222,7 +223,7 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
             "UPDATE longterm_rental_contract SET contract_link=$2 WHERE rental_id=$1",
             rental.Id, $"/api/rentals/{rental.Id}/contract/document");
 
-        var current = (await Operations.GetRentalAsync(rental.Id, default))!;
+        var current = (await Bookings.GetRentalAsync(rental.Id, default))!;
         Assert.Equal($"/api/rental/{rental.Id}/contract/document", current.ContractLink);
         Assert.True(current.HasUploadedContract);
         using var response = await _client.GetAsync(current.ContractLink);
@@ -265,7 +266,7 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
         using var response = await _client.GetAsync($"/api/rental/{rental.Id}/contract/document");
         using var missing = await Envelope(response, 404);
         await Operations.SaveRentalContractAsync(rental.Id, "https://example.test/legacy.pdf", DateTime.UtcNow.AddMinutes(-2), default);
-        Assert.False((await Operations.GetRentalAsync(rental.Id, default))!.HasUploadedContract);
+        Assert.False((await Bookings.GetRentalAsync(rental.Id, default))!.HasUploadedContract);
         Assert.False((await new NpgsqlRentalLifecycleRepository(db.DataSource).GetAsync(rental.Id, default))!.HasUploadedContract);
         using var uploaded = await Upload(rental.Id, Form());
         Assert.True((await new NpgsqlRentalLifecycleRepository(db.DataSource).GetAsync(rental.Id, default))!.HasUploadedContract);
@@ -282,13 +283,13 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
         var actor = new ActorContext(1, "operator@test.local", "Admin");
         var failure = await Assert.ThrowsAsync<ConflictException>(() => repository.UpdateToRentingAsync(rental.Id, rental.VehicleId, DateTime.UtcNow, actor, default));
         Assert.Equal("SIGNED_CONTRACT_REQUIRED", failure.Code);
-        Assert.Equal("pre_inspection", (await Operations.GetRentalAsync(rental.Id, default))!.Status);
+        Assert.Equal("pre_inspection", (await Bookings.GetRentalAsync(rental.Id, default))!.Status);
         await Operations.SaveRentalContractAsync(rental.Id, "https://example.test/legacy.pdf", DateTime.UtcNow.AddMinutes(-2), default);
         var legacyFailure = await Assert.ThrowsAsync<ConflictException>(() => repository.UpdateToRentingAsync(rental.Id, rental.VehicleId, DateTime.UtcNow, actor, default));
         Assert.Equal("SIGNED_CONTRACT_REQUIRED", legacyFailure.Code);
         using var uploaded = await Upload(rental.Id, Form());
         await repository.UpdateToRentingAsync(rental.Id, rental.VehicleId, DateTime.UtcNow, actor, default);
-        Assert.Equal("renting", (await Operations.GetRentalAsync(rental.Id, default))!.Status);
+        Assert.Equal("renting", (await Bookings.GetRentalAsync(rental.Id, default))!.Status);
     }
 
     [Fact]

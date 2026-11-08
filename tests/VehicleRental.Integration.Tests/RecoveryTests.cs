@@ -7,6 +7,7 @@ using Car_Rental_System_BE.Infrastructure.Features.Inspections;
 using Car_Rental_System_BE.Infrastructure.Features.Maintenances;
 using Car_Rental_System_BE.Infrastructure.Features.Recovery;
 using Car_Rental_System_BE.Infrastructure.Features.Reports;
+using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
@@ -15,6 +16,7 @@ namespace VehicleRental.Tests;
 public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
     private readonly NpgsqlOperationsRepository store = new(db.DataSource);
+    private readonly NpgsqlRentalBookingRepository bookings = new(db.DataSource);
     private readonly NpgsqlInspectionRecordRepository inspections = new(db.DataSource);
     private readonly NpgsqlRecoveryRepository recovery = new(db.DataSource);
     private readonly NpgsqlReportRepository reports = new(db.DataSource);
@@ -74,7 +76,7 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         var inspector = await StaffAsync();
         var inspection = await inspections.AddInspectionAsync(scenario.RentalId,inspector,"pre_rental",false,null,null,"Unsafe brakes",null,default);
         Assert.Equal(inspector,inspection.StaffId);
-        var rental = (await store.GetRentalAsync(scenario.RentalId,default))!;
+        var rental = (await bookings.GetRentalAsync(scenario.RentalId,default))!;
         Assert.Equal("pending",rental.Status);
         Assert.Equal("maintenance",(await fleet.GetVehicleAsync(rental.VehicleId,default))!.Status);
         Assert.Empty(await maintenanceStore.ListMaintenanceAsync(rental.VehicleId,null,default));
@@ -97,7 +99,7 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
     public async Task Shifts_reject_overlap_and_cancellation_of_a_stranded_assignment()
     {
         var scenario=await Scenarios.CreateDirectRentalAsync(db.DataSource);
-        var rental=(await store.GetRentalAsync(scenario.RentalId,default))!;
+        var rental=(await bookings.GetRentalAsync(scenario.RentalId,default))!;
         var driver=await StaffAsync(driver:true);
         await inspections.AddInspectionAsync(rental.Id,driver,"pre_rental",true,null,null,null,null,default);
         var shift=await ShiftAsync(driver,rental);
@@ -113,7 +115,7 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
     public async Task Breakdown_requires_owner_manager_maintenance_same_seats_new_driver_and_preserves_prices()
     {
         var scenario=await Scenarios.CreateDirectRentalAsync(db.DataSource);
-        var rental=(await store.GetRentalAsync(scenario.RentalId,default))!;
+        var rental=(await bookings.GetRentalAsync(scenario.RentalId,default))!;
         var oldDriver=await StaffAsync(driver:true);
         var newDriver=await StaffAsync(driver:true);
         var inspector=await StaffAsync(technician:true);
@@ -136,7 +138,7 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         await Assert.ThrowsAsync<InvalidOperationException>(()=>maintenanceStore.AssignReportMaintenanceAsync(report.Id,newDriver,null,DateOnly.FromDateTime(DateTime.UtcNow),default));
         var maintenance=await maintenanceStore.AssignReportMaintenanceAsync(report.Id,inspector,null,DateOnly.FromDateTime(DateTime.UtcNow),default);
         await Assert.ThrowsAsync<InvalidOperationException>(()=>recovery.ReplaceVehicleAsync(rental.Id,candidate,oldDriver,report.Id,Manager,default));
-        Assert.Equal(rental.VehicleId,(await store.GetRentalAsync(rental.Id,default))!.VehicleId);
+        Assert.Equal(rental.VehicleId,(await bookings.GetRentalAsync(rental.Id,default))!.VehicleId);
         Assert.Equal(0,await Seed.CountAsync(db.DataSource,"SELECT COUNT(*) FROM vehicle_replacements WHERE rental_id=$1",rental.Id));
         var replaced=await recovery.ReplaceVehicleAsync(rental.Id,candidate,newDriver,report.Id,Manager,default);
         Assert.Equal(candidate,replaced.VehicleId);
@@ -168,7 +170,7 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         var maintenance=await maintenanceStore.SaveMaintenanceAsync(null,new(0,vehicle,null,technician,"scheduled","repair",DateOnly.FromDateTime(DateTime.UtcNow),false,"Brakes",null),default);
         var (_,customer)=await Seed.CustomerAsync(db.DataSource);
         var start=DateTime.UtcNow.AddHours(1);
-        await Assert.ThrowsAsync<ConflictException>(()=>store.CreateRentalAsync(customer,vehicle,null,"hourly",start,start.AddHours(1),false,null,false,default));
+        await Assert.ThrowsAsync<ConflictException>(()=>bookings.CreateRentalAsync(customer,vehicle,null,"hourly",start,start.AddHours(1),false,null,false,default));
         var catalog=await fleet.SearchVehiclesAsync(null,null,null,start,start.AddHours(1),1,100,default);
         Assert.DoesNotContain(catalog.Items,x=>x.Id==vehicle);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>maintenanceStore.SaveMaintenanceAsync(maintenance.Id,maintenance with { Status="completed",IsSafe=true },default,other));
@@ -176,7 +178,7 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         await Assert.ThrowsAsync<InvalidOperationException>(()=>maintenanceStore.SaveMaintenanceAsync(maintenance.Id,maintenance with { Status="completed" },default,technician));
         await maintenanceStore.SaveMaintenanceAsync(maintenance.Id,maintenance with { Status="completed",IsSafe=true },default,technician);
         Assert.Equal("available",(await fleet.GetVehicleAsync(vehicle,default))!.Status);
-        await store.CreateRentalAsync(customer,vehicle,null,"hourly",start,start.AddHours(1),false,null,false,default);
+        await bookings.CreateRentalAsync(customer,vehicle,null,"hourly",start,start.AddHours(1),false,null,false,default);
     }
 
     [Fact]
@@ -184,8 +186,8 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
     {
         var first=await Scenarios.CreateDirectRentalAsync(db.DataSource);
         var second=await Scenarios.CreateDirectRentalAsync(db.DataSource);
-        var a=(await store.GetRentalAsync(first.RentalId,default))!;
-        var b=(await store.GetRentalAsync(second.RentalId,default))!;
+        var a=(await bookings.GetRentalAsync(first.RentalId,default))!;
+        var b=(await bookings.GetRentalAsync(second.RentalId,default))!;
         var candidate=await ReplacementAsync(a.VehicleId);
         await Seed.ScalarAsync(db.DataSource,"UPDATE vehicles SET vehicle_type_id=(SELECT vehicle_type_id FROM vehicles WHERE id=$1) WHERE id=$2",a.VehicleId,b.VehicleId);
         await Seed.ScalarAsync(db.DataSource,"INSERT INTO car_detail(vehicle_id,seat_count) VALUES($1,4)",b.VehicleId);

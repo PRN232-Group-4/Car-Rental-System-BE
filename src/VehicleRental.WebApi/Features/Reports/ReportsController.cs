@@ -1,8 +1,8 @@
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
-using Car_Rental_System_BE.Application.Features.Maintenances;
-using Car_Rental_System_BE.Application.Features.Reports;
 using Car_Rental_System_BE.Application.DTOs.Operations;
-using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.Application.Features.Maintenances;
+using Car_Rental_System_BE.Application.Features.Rentals;
+using Car_Rental_System_BE.Application.Features.Reports;
 using Car_Rental_System_BE.Domain.Entities;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using System.ComponentModel.DataAnnotations;
@@ -30,7 +30,7 @@ namespace Car_Rental_System_BE.WebApi.Features.Reports;
 [ProducesResponseType(StatusCodes.Status400BadRequest)]
 [ProducesResponseType(StatusCodes.Status403Forbidden)]
 [ProducesResponseType(StatusCodes.Status404NotFound)]
-public sealed class ReportsController(IOperationsService store, IReportService reports, IMaintenanceService maintenanceService) : ControllerBase
+public sealed class ReportsController(IRentalBookingService bookings, IReportService reports, IMaintenanceService maintenanceService) : ControllerBase
 {
     /// <summary>Staff reports damage separately from inspection; Driver reports only their assigned trip; Customer reports their own rental.</summary>
     [SuccessMessage("Incident report submitted for manager review.")]
@@ -44,7 +44,7 @@ public sealed class ReportsController(IOperationsService store, IReportService r
         {
             if (User.IsInRole("Customer"))
             {
-                var ownRental = await store.GetRentalForUserAsync(id, Email(), false, true, false, ct);
+                var ownRental = await bookings.GetRentalForUserAsync(id, Email(), false, true, false, ct);
                 if (ownRental is null) return Forbid();
                 var customerReport = await reports.CreateReportAsync(id, 0, false, request.Type, request.Description, request.ImageUrls, ct);
                 return Created($"/api/report/{customerReport.Id}", customerReport);

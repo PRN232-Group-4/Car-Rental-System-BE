@@ -4,10 +4,7 @@ namespace Car_Rental_System_BE.Application.Interfaces.Services;
 
 public interface IOperationsService
 {
-    Task<Rental> CreateRentalAsync(string email, int vehicleId, int? policyId, string rentalType, DateTime start, DateTime end, bool subscription, int? subscriptionId, bool hasDriver, CancellationToken ct, string paymentMethod = "payos");
     Task<Rental> SaveRentalContractAsync(int id, string contractLink, DateTime signedAt, CancellationToken ct);
-    Task<Rental?> GetRentalAsync(int id, CancellationToken ct);
-    Task<Rental?> GetRentalForUserAsync(int id, string email, bool readAll, bool customer, bool driver, CancellationToken ct);
     /// <summary>
     /// Legacy second implementation of the rental state machine. It is no longer reachable over HTTP:
     /// <c>POST /api/rental/{id}/status/{status}</c> delegates to

@@ -22,6 +22,7 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Car_Rental_System_BE.Application.Features.Rentals;
 using Xunit;
 
 namespace VehicleRental.Tests;
@@ -172,7 +173,7 @@ public sealed class InspectionAssignmentTests(PostgresFixture db) : IClassFixtur
         var ready = (await queries.GetOperationalDetailAsync(rental, default))!;
         Assert.True(ready.HasPassingPreInspection);
         Assert.True(ready.HasPostInspection); // completion accepts failed post evidence and retains damage review
-        var flat = (await new NpgsqlOperationsRepository(db.DataSource).GetRentalForUserAsync(rental,"admin@test.local",true,false,false,default))!;
+        var flat = (await new NpgsqlRentalBookingRepository(db.DataSource).GetRentalForUserAsync(rental,"admin@test.local",true,false,false,default))!;
         Assert.True(flat.HasPassingPreInspection);
         Assert.True(flat.HasPostInspection);
         var error = await Assert.ThrowsAsync<ConflictException>(() => Service.AssignAsync(rental, staff, "admin@test.local", default));
@@ -215,6 +216,7 @@ public sealed class InspectionAssignmentTests(PostgresFixture db) : IClassFixtur
         builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
         builder.Services.AddSingleton<IInspectionAssignmentService>(Service);
         builder.Services.AddSingleton<IOperationsService>(new OperationsService(new NpgsqlOperationsRepository(db.DataSource)));
+        builder.Services.AddSingleton<IRentalBookingService>(new RentalBookingService(new NpgsqlRentalBookingRepository(db.DataSource)));
         // The vehicle endpoints moved to the Fleet slice; these tests never call them.
         builder.Services.AddSingleton(System.Reflection.DispatchProxy.Create<Car_Rental_System_BE.Application.Features.Fleet.IFleetService, UnusedMedia>());
         builder.Services.AddSingleton(System.Reflection.DispatchProxy.Create<IMediaService, UnusedMedia>());
