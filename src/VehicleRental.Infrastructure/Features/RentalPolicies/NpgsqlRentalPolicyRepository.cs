@@ -1,13 +1,18 @@
 using System.Data;
 using Car_Rental_System_BE.Application.DTOs.Operations;
-using Car_Rental_System_BE.Application.Validators;
+using Car_Rental_System_BE.Application.Features.RentalPolicies;
 using Npgsql;
 using Microsoft.EntityFrameworkCore;
 using Car_Rental_System_BE.Infrastructure.Persistence;
 
-namespace Car_Rental_System_BE.Infrastructure.Repositories;
+namespace Car_Rental_System_BE.Infrastructure.Features.RentalPolicies;
 
-public sealed partial class NpgsqlOperationsRepository
+/// <summary>
+/// Rental policy versions. The members came from <c>NpgsqlOperationsRepository</c> (its <c>.Policies.cs</c>
+/// partial) with their SQL, their transactions and their advisory locks unchanged; the scope lock keeps its own
+/// namespace (720011) so it cannot collide with the vehicle/assignment lock.
+/// </summary>
+public sealed class NpgsqlRentalPolicyRepository(NpgsqlDataSource dataSource) : IRentalPolicyRepository
 {
     public async Task<bool> VehicleTypeExistsAsync(int id, CancellationToken ct)
     {
@@ -117,4 +122,10 @@ public sealed partial class NpgsqlOperationsRepository
         await transaction.CommitAsync(ct);
         return result;
     }
+
+    // Private copies of the operations repository helpers, byte-identical to the originals: the moved body
+    // keeps its exact SQL without widening a legacy type's surface.
+    private static RentalPolicy ReadPolicy(NpgsqlDataReader r)=>new(r.GetInt32(0),r.IsDBNull(1)?null:r.GetInt32(1),r.GetString(2),r.GetDecimal(3),r.GetDecimal(4),r.GetDecimal(5),r.GetBoolean(6));
+    private static string? S(NpgsqlDataReader r,int i)=>r.IsDBNull(i)?null:r.GetString(i);
+    private static void Add(NpgsqlCommand c,params object?[] v){foreach(var x in v)c.Parameters.AddWithValue(x??DBNull.Value);}
 }

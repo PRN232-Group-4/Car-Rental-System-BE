@@ -1,8 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using Car_Rental_System_BE.Application.DTOs.Operations;
-using Car_Rental_System_BE.Application.Services;
+using Car_Rental_System_BE.Application.Features.RentalPolicies;
 using Car_Rental_System_BE.Infrastructure.Features.Fleet;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Features.RentalPolicies;
 using Xunit;
 
 namespace VehicleRental.Tests;
@@ -14,7 +14,7 @@ public sealed class RentalPolicyUsagePersistenceTests(PostgresFixture db) : ICla
     [Fact]
     public async Task Counts_follow_exact_policy_references_and_survive_status_updates()
     {
-        var repository = new NpgsqlOperationsRepository(db.DataSource);
+        var repository = new NpgsqlRentalPolicyRepository(db.DataSource);
         var (customerId, _) = await Seed.CustomerAsync(db.DataSource);
         var vehicleId = await Seed.VehicleAsync(db.DataSource);
         var typeId = (await Fleet.GetVehicleAsync(vehicleId, default))!.VehicleTypeId;
@@ -36,8 +36,8 @@ public sealed class RentalPolicyUsagePersistenceTests(PostgresFixture db) : ICla
     [Fact]
     public async Task Missing_type_is_rejected_and_parallel_creates_cannot_both_succeed()
     {
-        var repository = new NpgsqlOperationsRepository(db.DataSource);
-        var service = new OperationsService(repository);
+        var repository = new NpgsqlRentalPolicyRepository(db.DataSource);
+        var service = new RentalPolicyService(repository);
         await Assert.ThrowsAsync<ValidationException>(() => repository.CreatePolicyAsync(new RentalPolicy(0, int.MaxValue, "Missing", 10, 20, 30, true), default));
         var vehicleId = await Seed.VehicleAsync(db.DataSource);
         var typeId = (await Fleet.GetVehicleAsync(vehicleId, default))!.VehicleTypeId;
@@ -56,7 +56,7 @@ public sealed class RentalPolicyUsagePersistenceTests(PostgresFixture db) : ICla
     [Fact]
     public async Task Parallel_activation_only_allows_one_inactive_version_to_become_active()
     {
-        var repository = new NpgsqlOperationsRepository(db.DataSource);
+        var repository = new NpgsqlRentalPolicyRepository(db.DataSource);
         var vehicleId = await Seed.VehicleAsync(db.DataSource);
         var typeId = (await Fleet.GetVehicleAsync(vehicleId, default))!.VehicleTypeId;
         var first = await repository.CreatePolicyAsync(new RentalPolicy(0, typeId, "First", 10, 20, 30, false), default);

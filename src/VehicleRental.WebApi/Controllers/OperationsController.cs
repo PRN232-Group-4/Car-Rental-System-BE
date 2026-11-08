@@ -4,7 +4,6 @@ using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Domain.Entities;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
-using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -33,51 +32,6 @@ public sealed class OperationsController(
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SaveContract(int id, RentalContractRequest request, CancellationToken ct) =>
         Ok(await store.SaveRentalContractAsync(id, request.ContractLink, request.SignedAt, ct));
-
-    [OperationSummary("List rental policy versions with rental usage counts (Admin/Manager).")]
-    [OperationDescription("Pagination defaults to page=1/pageSize=20 (page>=1, pageSize 1..100); data contains items/page/pageSize/totalCount. rentalCount counts all rentals referencing that exact policy, including cancelled rentals; results are ordered by ID descending.")]
-    [SuccessMessage("Rental policies retrieved successfully.")]
-    [Authorize(Policy = AuthorizationPolicies.Management)]
-    [HttpGet("rental-policies")]
-    [ProducesResponseType<RentalPolicyPage>(StatusCodes.Status200OK)]
-    public Task<RentalPolicyPage> Policies([FromQuery, Range(1, int.MaxValue)] int page = 1, [FromQuery, Range(1, 100)] int pageSize = 20, CancellationToken ct = default) =>
-        store.ListPoliciesAsync(page, pageSize, ct);
-
-    [OperationDescription("Creates a policy only when its vehicleTypeId exists (null means global) and no active policy exists in the same scope. Validation failures use error.errors.VehicleTypeId. New policies have rentalCount=0.")]
-    [SchemaPropertyMinimum("PolicyRequest", "vehicleTypeId", 1)]
-    [SuccessMessage("Rental policy created successfully.")]
-    [Authorize(Policy = AuthorizationPolicies.Management)]
-    [HttpPost("rental-policies")]
-    [ProducesResponseType<RentalPolicy>(StatusCodes.Status201Created)]
-    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> AddPolicy(PolicyRequest x, CancellationToken ct)
-    {
-        try
-        {
-            var policy = await store.CreatePolicyAsync(x.ToModel() with { ManagedBy = AuthorizationPolicies.StaffId(User) }, ct);
-            return Created($"/api/rental-policy/{policy.Id}", policy);
-        }
-        catch (ValidationException error)
-        {
-            var fields = error.ValidationResult?.MemberNames ?? [];
-            foreach (var field in fields.DefaultIfEmpty("")) ModelState.AddModelError(field, error.Message);
-            return ValidationProblem(ModelState);
-        }
-    }
-
-    /// <summary>Admin/Manager đặt trạng thái áp dụng; giữ nguyên điều khoản và giá của các đơn cũ.</summary>
-    [OperationSummary("Set rental policy active status (Admin/Manager).")]
-    [OperationDescription("Sets only isActive; policy terms and existing rental snapshots remain unchanged. Repeating the same status is idempotent. Activation is rejected if another active policy exists in the same scope. rentalCount is preserved in the response.")]
-    [SuccessMessage("Rental policy status updated successfully.")]
-    [Authorize(Policy = AuthorizationPolicies.Management)]
-    [HttpPatch("rental-policy/{id:int}/status")]
-    [ProducesResponseType<RentalPolicy>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    public Task<RentalPolicy> SetPolicyStatus([FromRoute, Range(1, int.MaxValue)] int id, PolicyStatusRequest request, CancellationToken ct) =>
-        store.SetPolicyStatusAsync(id, request.IsActive!.Value, ct);
 
     [OperationDescription("Customer creates a rental preserving hasDriver for both hourly and longterm. The pickup time must be at least Rental:Expiry:MinimumLeadMinutes (default 60) ahead of the booking moment; earlier start times return 400 RENTAL_START_TIME_TOO_SOON and nothing is written. The created request stores expire_at = booking time + Rental:Expiry:ApprovalWindowMinutes (default 60) for FR-042 auto-expiry. Only available vehicles without a currently renting/post_inspection rental can be booked; schedule/maintenance checks run inside the transaction under a vehicle lock. Driver bookings automatically record a passing pre-rental confirmation with source driver_default and actor system, without assigning a driver. Self-drive requires an approved customer license matching vehicle allowedLicenseTypes and valid through rental end, plus an explicit technician check or Admin confirmation before handover.")]
     [SuccessMessage("Hourly rental created successfully.")]

@@ -6,6 +6,7 @@ using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Features.Organization;
+using Car_Rental_System_BE.Infrastructure.Features.RentalPolicies;
 using Xunit;
 
 namespace VehicleRental.Tests;
@@ -81,19 +82,20 @@ public sealed class FrontendFieldsIntegrationTests(PostgresFixture db) : IClassF
     public async Task Policy_metadata_survives_status_update_and_returns_real_creation_timestamp()
     {
         var repo=new NpgsqlOperationsRepository(db.DataSource);
+        var policies=new NpgsqlRentalPolicyRepository(db.DataSource);
         var fleet=new NpgsqlFleetRepository(db.DataSource);
         var organization=new NpgsqlOrganizationRepository(db.DataSource);
         var type=await fleet.SaveVehicleTypeAsync(null,"Policy car","gasoline",default,"car");
         var user=await Seed.ScalarAsync(db.DataSource,"INSERT INTO users(email) VALUES($1) RETURNING id",$"manager-{Guid.NewGuid():N}@test.local");
         var staff=(int)(await Seed.ScalarAsync(db.DataSource,"INSERT INTO staffs(user_id) VALUES($1) RETURNING id",user))!;
-        var policy=await repo.CreatePolicyAsync(new RentalPolicy(0,type.Id,"Policy",10,20,30,true,ManagedBy:staff),default);
+        var policy=await policies.CreatePolicyAsync(new RentalPolicy(0,type.Id,"Policy",10,20,30,true,ManagedBy:staff),default);
         Assert.Equal(type.Name,policy.VehicleTypeName);
         Assert.Equal(staff,policy.ManagedBy);
         Assert.NotNull(policy.CreatedAt);
-        var updated=await repo.SetPolicyStatusAsync(policy.Id,false,default);
+        var updated=await policies.SetPolicyStatusAsync(policy.Id,false,default);
         Assert.Equal(policy.CreatedAt,updated!.CreatedAt);
         Assert.Equal(staff,updated.ManagedBy);
-        var listed=Assert.Single((await repo.ListPoliciesAsync(1,100,default)).Items,x=>x.Id==policy.Id);
+        var listed=Assert.Single((await policies.ListPoliciesAsync(1,100,default)).Items,x=>x.Id==policy.Id);
         Assert.Equal(updated,listed);
     }
 }

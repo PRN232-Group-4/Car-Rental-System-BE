@@ -3,10 +3,8 @@ using System.ComponentModel.DataAnnotations;
 using System.Text;
 using System.Text.Json;
 using Car_Rental_System_BE.Application.DTOs.Operations;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Application.Features.RentalPolicies;
 using Car_Rental_System_BE.Application.Interfaces.Services;
-using Car_Rental_System_BE.Application.Services;
-using Car_Rental_System_BE.Application.Validators;
 using Car_Rental_System_BE.WebApi.Controllers;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
@@ -37,10 +35,10 @@ public sealed class RentalPolicyStatusApiTests : IAsyncLifetime
         builder.Services.AddAuthentication("PolicyTest")
             .AddScheme<AuthenticationSchemeOptions, CustomerDetailApiTests.RoleAuthentication>("PolicyTest", _ => { });
         builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
-        var repository = DispatchProxy.Create<IOperationsRepository, PolicyRepository>();
+        var repository = DispatchProxy.Create<IRentalPolicyRepository, PolicyRepository>();
         _repository = (PolicyRepository)(object)repository;
         builder.Services.AddSingleton(repository);
-        builder.Services.AddSingleton<IOperationsService, OperationsService>();
+        builder.Services.AddSingleton<IRentalPolicyService, RentalPolicyService>();
         // The vehicle endpoints moved to the Fleet slice; this suite never calls them.
         builder.Services.AddSingleton(DispatchProxy.Create<Car_Rental_System_BE.Application.Features.Fleet.IFleetService, UnusedMedia>());
         builder.Services.AddSingleton(DispatchProxy.Create<IMediaService, UnusedMedia>());
@@ -128,7 +126,7 @@ public sealed class RentalPolicyStatusApiTests : IAsyncLifetime
     {
         using var response = await Patch(id, "{\"isActive\":false}", "Admin");
         using var json = await Envelope(response, 400);
-        var service = new OperationsService((IOperationsRepository)(object)_repository);
+        var service = new RentalPolicyService((IRentalPolicyRepository)(object)_repository);
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => service.SetPolicyStatusAsync(id, false, default));
         Assert.Equal(0, _repository.Calls);
     }
@@ -265,7 +263,7 @@ public sealed class RentalPolicyStatusApiTests : IAsyncLifetime
         request.Headers.Add("X-Test-Role", "Admin");
         using var response = await _client.SendAsync(request);
         using var json = await Envelope(response, 400);
-        var service = new OperationsService((IOperationsRepository)(object)_repository);
+        var service = new RentalPolicyService((IRentalPolicyRepository)(object)_repository);
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => service.ListPoliciesAsync(page, size, default));
         Assert.Null(_repository.LastPage);
     }
@@ -276,7 +274,7 @@ public sealed class RentalPolicyStatusApiTests : IAsyncLifetime
     [InlineData(4, "Name", 101)]
     public async Task Application_rejects_invalid_policy_before_repository(int typeId, string name, decimal vat)
     {
-        var service = new OperationsService((IOperationsRepository)(object)_repository);
+        var service = new RentalPolicyService((IRentalPolicyRepository)(object)_repository);
         await Assert.ThrowsAsync<ValidationException>(() => service.CreatePolicyAsync(new RentalPolicy(0, typeId, name, vat, 20, 30, true), default));
         Assert.Equal(0, _repository.Creates);
         Assert.Null(_repository.CheckedType);

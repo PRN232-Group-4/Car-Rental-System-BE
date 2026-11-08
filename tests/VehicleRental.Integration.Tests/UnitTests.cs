@@ -1,4 +1,5 @@
 using Car_Rental_System_BE.WebApi.Controllers;
+using Car_Rental_System_BE.WebApi.Features.RentalPolicies;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Car_Rental_System_BE.Application.DTOs.Accounts;
@@ -91,12 +92,19 @@ public sealed class UnitTests
     public void Rental_policy_management_allows_manager_role()
     {
         // "Assign" was the deprecated POST /api/rental/{id}/assignments action. It no longer exists: driver
-        // assignment is owned by RentalAssignmentsController, which this Operations-only matrix does not cover.
-        var endpoints = new[] { "Policies", "AddPolicy", "DriverSchedule" };
-
-        foreach (var endpoint in endpoints)
+        // assignment is owned by RentalAssignmentsController, which this matrix does not cover. The three
+        // policy actions moved to RentalPoliciesController and DriverSchedule stayed behind, so each endpoint
+        // is looked up on the controller that actually owns it now.
+        var endpoints = new[]
         {
-            var method = typeof(OperationsController).GetMethod(endpoint, BindingFlags.Instance | BindingFlags.Public)!;
+            (Controller: typeof(RentalPoliciesController), Action: "Policies"),
+            (Controller: typeof(RentalPoliciesController), Action: "AddPolicy"),
+            (Controller: typeof(OperationsController), Action: "DriverSchedule")
+        };
+
+        foreach (var (controller, endpoint) in endpoints)
+        {
+            var method = controller.GetMethod(endpoint, BindingFlags.Instance | BindingFlags.Public)!;
             var authorization = method.GetCustomAttribute<AuthorizeAttribute>();
 
             Assert.NotNull(authorization);

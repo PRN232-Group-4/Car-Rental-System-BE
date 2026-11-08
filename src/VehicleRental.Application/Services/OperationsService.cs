@@ -3,7 +3,6 @@ using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Interfaces.Services;
-using Car_Rental_System_BE.Application.Validators;
 using Car_Rental_System_BE.Application.Features.Availability;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Domain.Features.Availability;
@@ -12,29 +11,6 @@ namespace Car_Rental_System_BE.Application.Services;
 
 public sealed class OperationsService(IOperationsRepository repository, TimeProvider? timeProvider = null, IOperationalNotifications? notifications = null, RentalExpiryOptions? expiryOptions = null) : IOperationsService
 {
-    public async Task<RentalPolicy> CreatePolicyAsync(RentalPolicy policy, CancellationToken ct)
-    {
-        RentalPolicyValidator.Validate(policy);
-        if (policy.VehicleTypeId is { } typeId && !await repository.VehicleTypeExistsAsync(typeId, ct))
-            throw RentalPolicyValidator.InvalidVehicleType();
-        if (await repository.HasActivePolicyAsync(policy.VehicleTypeId, ct))
-            throw RentalPolicyValidator.ActivePolicyExists();
-        return await repository.CreatePolicyAsync(policy, ct);
-    }
-
-    public async Task<RentalPolicy> SetPolicyStatusAsync(int id, bool isActive, CancellationToken ct)
-    {
-        if (id <= 0) throw new ArgumentOutOfRangeException(nameof(id), "Policy ID must be positive.");
-        return await repository.SetPolicyStatusAsync(id, isActive, ct)
-            ?? throw new KeyNotFoundException("Rental policy was not found.");
-    }
-
-    public Task<RentalPolicyPage> ListPoliciesAsync(int page, int pageSize, CancellationToken ct)
-    {
-        RentalPolicyValidator.ValidatePagination(page, pageSize);
-        return repository.ListPoliciesAsync(page, pageSize, ct);
-    }
-
     public Task<Rental> CreateRentalAsync(string email, int vehicleId, int? policyId, string rentalType, DateTime start, DateTime end, bool subscription, int? subscriptionId, bool hasDriver, CancellationToken ct, string paymentMethod = "payos")
     {
         if (paymentMethod is not ("payos" or "cash")) throw new ArgumentException("PaymentMethod must be payos or cash.", nameof(paymentMethod));

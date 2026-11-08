@@ -202,14 +202,14 @@
 /api/rating/{id:int} | Ratings.ModerateRating | PATCH | 200 | inspectionType=post_rental | Staff rating moderation status updated successfully.
 /api/rating/{id:int}/reply | Ratings.ReplyRating | POST | 200 | - | Management reply to staff rating saved successfully.
 /api/rating/{id:int}/reply | Ratings.ReplyRating | POST | 200 | inspectionType=post_rental | Management reply to staff rating saved successfully.
-/api/rental-policies | Operations.AddPolicy | POST | 200 | - | Rental policy created successfully.
-/api/rental-policies | Operations.AddPolicy | POST | 200 | inspectionType=post_rental | Rental policy created successfully.
-/api/rental-policies | Operations.AddPolicy | POST | 201 | - | Rental policy created successfully.
-/api/rental-policies | Operations.AddPolicy | POST | 201 | inspectionType=post_rental | Rental policy created successfully.
-/api/rental-policies | Operations.Policies | GET | 200 | - | Rental policies retrieved successfully.
-/api/rental-policies | Operations.Policies | GET | 200 | inspectionType=post_rental | Rental policies retrieved successfully.
-/api/rental-policy/{id:int}/status | Operations.SetPolicyStatus | PATCH | 200 | - | Rental policy status updated successfully.
-/api/rental-policy/{id:int}/status | Operations.SetPolicyStatus | PATCH | 200 | inspectionType=post_rental | Rental policy status updated successfully.
+/api/rental-policies | RentalPolicies.AddPolicy | POST | 200 | - | Rental policy created successfully.
+/api/rental-policies | RentalPolicies.AddPolicy | POST | 200 | inspectionType=post_rental | Rental policy created successfully.
+/api/rental-policies | RentalPolicies.AddPolicy | POST | 201 | - | Rental policy created successfully.
+/api/rental-policies | RentalPolicies.AddPolicy | POST | 201 | inspectionType=post_rental | Rental policy created successfully.
+/api/rental-policies | RentalPolicies.Policies | GET | 200 | - | Rental policies retrieved successfully.
+/api/rental-policies | RentalPolicies.Policies | GET | 200 | inspectionType=post_rental | Rental policies retrieved successfully.
+/api/rental-policy/{id:int}/status | RentalPolicies.SetPolicyStatus | PATCH | 200 | - | Rental policy status updated successfully.
+/api/rental-policy/{id:int}/status | RentalPolicies.SetPolicyStatus | PATCH | 200 | inspectionType=post_rental | Rental policy status updated successfully.
 /api/rental/mine/{id:int} | RentalQueries.MineDetail | GET | 200 | - | Your rental details retrieved successfully.
 /api/rental/mine/{id:int} | RentalQueries.MineDetail | GET | 200 | inspectionType=post_rental | Your rental details retrieved successfully.
 /api/rental/{id:int} | Operations.Rental | GET | 200 | - | Rental retrieved successfully.

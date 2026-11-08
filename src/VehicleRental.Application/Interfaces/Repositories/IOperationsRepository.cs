@@ -4,11 +4,6 @@ namespace Car_Rental_System_BE.Application.Interfaces.Repositories;
 
 public interface IOperationsRepository
 {
-    Task<RentalPolicy> CreatePolicyAsync(RentalPolicy policy, CancellationToken ct);
-    Task<bool> VehicleTypeExistsAsync(int id, CancellationToken ct);
-    Task<bool> HasActivePolicyAsync(int? vehicleTypeId, CancellationToken ct);
-    Task<RentalPolicy?> SetPolicyStatusAsync(int id, bool isActive, CancellationToken ct);
-    Task<RentalPolicyPage> ListPoliciesAsync(int page, int pageSize, CancellationToken ct);
     Task<Rental> CreateRentalAsync(string email, int vehicleId, int? policyId, string rentalType, DateTime start, DateTime end, bool subscription, int? subscriptionId, bool hasDriver, CancellationToken ct, string paymentMethod = "payos", DateTime? expireAt = null);
     Task<Rental> SaveRentalContractAsync(int id, string contractLink, DateTime signedAt, CancellationToken ct);
     Task<Rental?> GetRentalAsync(int id, CancellationToken ct);
