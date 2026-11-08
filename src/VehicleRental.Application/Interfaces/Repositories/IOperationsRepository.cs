@@ -15,5 +15,4 @@ public interface IOperationsRepository
     Task<int> ExpireSubscriptionsAsync(DateOnly today, CancellationToken ct);
     Task<IReadOnlyList<ExpiringSubscription>> ListSubscriptionsToRemindAsync(DateOnly today, int withinDays, CancellationToken ct);
     Task MarkSubscriptionRemindedAsync(int subscriptionId, CancellationToken ct);
-    Task<object> DashboardAsync(DateTime? from, DateTime? to, CancellationToken ct);
 }

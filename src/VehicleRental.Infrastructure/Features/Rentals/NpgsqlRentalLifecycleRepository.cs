@@ -613,23 +613,6 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
         return RentalStatusExtensions.FromDbString(currentStatus);
     }
 
-    public async Task<IReadOnlyList<RentalStatusHistoryEntry>> GetHistoryAsync(int rentalId, CancellationToken ct)
-    {
-        await using var db = VehicleRentalDbContext.Create(dataSource);
-        return await db.Set<RentalStatusHistoryRow>().Where(h => h.RentalId == rentalId).OrderBy(h => h.Id)
-            .Select(h => new RentalStatusHistoryEntry(h.Id, h.RentalId, h.FromStatus, h.ToStatus, h.ActorUserId,
-                h.ActorEmail, h.ActorRole, h.Reason, h.CreatedAt)).ToListAsync(ct);
-    }
-
-    public async Task<RentalSettlementDto?> GetSettlementAsync(int rentalId, CancellationToken ct)
-    {
-        await using var db = VehicleRentalDbContext.Create(dataSource);
-        return await db.Set<RentalSettlementsRow>().Where(s => s.RentalId == rentalId)
-            .Select(s => new RentalSettlementDto(s.RentalId, s.ScheduledEnd, s.ReturnedAt, s.OvertimeMinutes, s.OvertimeHours,
-                s.OvertimeAmount, s.OvertimeVat, s.DepositHeld, s.DepositDeducted, s.ShortfallInvoiceId,
-                s.RefundPaymentId, s.DamageReviewRequired, s.CreatedAt, null, null)).SingleOrDefaultAsync(ct);
-    }
-
     private static async Task InsertHistoryAsync(
         NpgsqlConnection conn,
         NpgsqlTransaction tx,

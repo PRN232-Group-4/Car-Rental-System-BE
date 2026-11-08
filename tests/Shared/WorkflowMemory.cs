@@ -21,9 +21,6 @@ public sealed class WorkflowMemory : IWorkflowStateStore
     { lock (Values) { RemoveExpired(key); return Task.FromResult(Values.GetValueOrDefault(key)); } }
     public Task<TimeSpan?> GetTimeToLiveAsync(string key, CancellationToken ct)
     { lock (Values) { RemoveExpired(key); return Task.FromResult<TimeSpan?>(expiries.TryGetValue(key, out var expiry) ? expiry - DateTimeOffset.UtcNow : null); } }
-    public Task SetAsync(string key, string value, TimeSpan? expiry, CancellationToken ct)
-    { Assert.NotNull(expiry); lock (Values) { Values[key] = value; expiries[key] = DateTimeOffset.UtcNow.Add(expiry.Value); } return Task.CompletedTask; }
-    public Task DeleteAsync(string key, CancellationToken ct) { Expire(key); return Task.CompletedTask; }
     public Task<bool> CompareExchangeAsync(string key, string? expected, string? replacement, TimeSpan expiry, CancellationToken ct)
     {
         Assert.True(expiry > TimeSpan.Zero);

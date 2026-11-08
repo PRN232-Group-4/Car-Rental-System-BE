@@ -514,12 +514,6 @@ public sealed class RentalLifecycleServiceTests
             UpdatedToCancelled = true;
             return Task.CompletedTask;
         }
-
-        public Task<IReadOnlyList<RentalStatusHistoryEntry>> GetHistoryAsync(int rentalId, CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<RentalStatusHistoryEntry>>([]);
-
-        public Task<RentalSettlementDto?> GetSettlementAsync(int rentalId, CancellationToken ct) =>
-            Task.FromResult(LastSettlement);
     }
 
     private sealed class StubPaymentGate : IRentalPaymentGate

@@ -9,4 +9,3 @@ public class BusinessRuleException(string code, string message, int statusCode =
 
 public sealed class ConflictException(string code, string message) : BusinessRuleException(code, message, 409);
 public sealed class NotFoundException(string code, string message) : BusinessRuleException(code, message, 404);
-public sealed class ForbiddenException(string code, string message) : BusinessRuleException(code, message, 403);

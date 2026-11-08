@@ -18,16 +18,6 @@ public sealed class RedisWorkflowStateStore(IConnectionMultiplexer redis) : IWor
         ct.ThrowIfCancellationRequested();
         return cache.KeyTimeToLiveAsync(key);
     }
-    public async Task SetAsync(string key, string value, TimeSpan? expiry, CancellationToken ct)
-    {
-        ct.ThrowIfCancellationRequested();
-        await cache.StringSetAsync(key, value, expiry);
-    }
-    public async Task DeleteAsync(string key, CancellationToken ct)
-    {
-        ct.ThrowIfCancellationRequested();
-        await cache.KeyDeleteAsync(key);
-    }
 
     public async Task<bool> CompareExchangeAsync(string key, string? expected, string? replacement, TimeSpan expiry, CancellationToken ct)
     {

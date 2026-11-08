@@ -237,7 +237,6 @@ public sealed class AssignmentServiceTests
         public AvailabilityResult Result { get; set; } = AvailabilityResult.Free;
 
         public Task<AvailabilityResult> CheckAsync(int vehicleId, TimeRange window, CancellationToken ct) => Task.FromResult(Result);
-        public Task AssertAvailableAsync(System.Data.Common.DbTransaction transaction, int vehicleId, TimeRange window, int? excludeRentalId, CancellationToken ct) => Task.CompletedTask;
     }
 
     private sealed class TestTimeProvider(DateTime utcNow) : TimeProvider

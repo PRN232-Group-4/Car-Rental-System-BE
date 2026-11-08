@@ -62,7 +62,7 @@ public sealed class FeaturePrivacyTests
         "Car_Rental_System_BE.Infrastructure.Features.Rentals.NpgsqlRentalEditingRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.VehicleLock",
         // The two legacy VehicleAvailabilityChecks/VehicleLock entries were deleted here: the code that called
         // them (rental creation and rental editing) now lives in the Rentals slice, and both new owners are
-        // recorded above. Timestamp is still called from ListDriverScheduleAsync and DashboardAsync, so the
+        // recorded above. Timestamp is still called from ListDriverScheduleAsync, so the
         // NpgsqlVehicleSearchRepository entry above stays.
         // ---------------------------------------------------------------------------------------
         // added by the Fleet move (Task C2) - the only baseline entry that is new, not carried over
@@ -71,8 +71,8 @@ public sealed class FeaturePrivacyTests
         // NpgsqlVehicleSearchRepository.Timestamp (the one place that normalises a DateTime to the Unspecified
         // kind Npgsql 8 requires for a timestamp parameter). The Fleet slice owns that code now, so the exact
         // edge the entry above already records moved owner: Fleet -> Availability, same call, same helper.
-        // The legacy entry stays because Timestamp is still called from ListDriverScheduleAsync and
-        // DashboardAsync there. Not fixed in C2 because handing that helper to a third owner is a design
+        // The legacy entry stays because Timestamp is still called from ListDriverScheduleAsync there.
+        // Not fixed in C2 because handing that helper to a third owner is a design
         // decision about Availability's internals, not part of moving Fleet.
         "Car_Rental_System_BE.Infrastructure.Features.Fleet.NpgsqlFleetRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.NpgsqlVehicleSearchRepository",
     ];

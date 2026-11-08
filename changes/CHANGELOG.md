@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-11-07 — [Dọn code không dùng, thống nhất cấu trúc và tài liệu luồng](2026-11-07-cleanup-structure-flow.md)
+
 - 2026-11-05 — [Phase 2: quyết toán thuê một transaction, hoá đơn supplementary và đính chính backfill VAT](2026-11-05-phase2-rental-settlement.md)
 
 - 2026-11-05 — [Tách Billing, xác minh Handovers và Inspections](2026-11-05-slice-extraction.md)

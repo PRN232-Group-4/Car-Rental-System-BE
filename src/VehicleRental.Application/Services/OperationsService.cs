@@ -22,9 +22,6 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
         return rental;
     }
 
-    public Task<IReadOnlyList<DriverScheduleEntry>> ListDriverScheduleAsync(int? driverStaffId, DateTime from, DateTime to, CancellationToken ct) =>
-        repository.ListDriverScheduleAsync(driverStaffId, from, to, ct);
-
     public Task<IReadOnlyList<SubscriptionPlan>> ListPlansAsync(bool activeOnly, CancellationToken ct) =>
         repository.ListPlansAsync(activeOnly, ct);
 
@@ -37,21 +34,6 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
     public Task DeletePlanAsync(int id, CancellationToken ct) =>
         repository.DeletePlanAsync(id, ct);
 
-    public Task<int> BuyPlanAsync(string email, int planId, CancellationToken ct) =>
-        repository.BuyPlanAsync(email, planId, ct);
-
     public Task<IReadOnlyList<CustomerSubscription>> ListCustomerSubscriptionsAsync(string email, CancellationToken ct) =>
         repository.ListCustomerSubscriptionsAsync(email, ct);
-
-    public Task<int> ExpireSubscriptionsAsync(DateOnly today, CancellationToken ct) =>
-        repository.ExpireSubscriptionsAsync(today, ct);
-
-    public Task<IReadOnlyList<ExpiringSubscription>> ListSubscriptionsToRemindAsync(DateOnly today, int withinDays, CancellationToken ct) =>
-        repository.ListSubscriptionsToRemindAsync(today, withinDays, ct);
-
-    public Task MarkSubscriptionRemindedAsync(int subscriptionId, CancellationToken ct) =>
-        repository.MarkSubscriptionRemindedAsync(subscriptionId, ct);
-
-    public Task<object> DashboardAsync(DateTime? from, DateTime? to, CancellationToken ct) =>
-        repository.DashboardAsync(from, to, ct);
 }

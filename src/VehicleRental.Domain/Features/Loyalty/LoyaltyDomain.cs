@@ -1,47 +1,8 @@
 namespace Car_Rental_System_BE.Domain.Features.Loyalty;
 
-public enum LoyaltyTransactionType
-{
-    Earn,
-    Redeem,
-    Reverse,
-    Adjust
-}
-
-public static class LoyaltyTransactionTypeExtensions
-{
-    public static string ToDbString(this LoyaltyTransactionType type) => type switch
-    {
-        LoyaltyTransactionType.Earn => "earn",
-        LoyaltyTransactionType.Redeem => "redeem",
-        LoyaltyTransactionType.Reverse => "reverse",
-        LoyaltyTransactionType.Adjust => "adjust",
-        _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
-    };
-
-    public static LoyaltyTransactionType FromDbString(string raw) => raw?.Trim().ToLowerInvariant() switch
-    {
-        "earn" => LoyaltyTransactionType.Earn,
-        "redeem" => LoyaltyTransactionType.Redeem,
-        "reverse" => LoyaltyTransactionType.Reverse,
-        "adjust" => LoyaltyTransactionType.Adjust,
-        _ => throw new ArgumentException($"Invalid loyalty transaction type: '{raw}'", nameof(raw))
-    };
-}
-
 public sealed record LoyaltyTierConfig(string Name, int ThresholdPoints, decimal Multiplier);
 
 public sealed record NextTierInfo(string Name, int PointsNeeded);
-
-public sealed record LoyaltyCustomerSummary(
-    int Balance,
-    string Tier,
-    decimal Multiplier,
-    int LifetimeEarned,
-    NextTierInfo? NextTier,
-    int VndPerPoint,
-    int PointValueVnd,
-    bool RedemptionEnabled);
 
 public sealed record LoyaltyEarnResult(
     int EarnedPoints,

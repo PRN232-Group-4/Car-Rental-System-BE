@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Car_Rental_System_BE.Infrastructure.Persistence;
+namespace Car_Rental_System_BE.Infrastructure.HostedServices;
 
 /// <summary>
 /// FR-025 maintenance job: expires subscriptions whose end_date has passed and warns customers

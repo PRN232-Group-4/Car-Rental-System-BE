@@ -35,6 +35,7 @@ using Car_Rental_System_BE.Infrastructure.Features.Recovery;
 using Car_Rental_System_BE.Infrastructure.Features.RentalPolicies;
 using Car_Rental_System_BE.Infrastructure.Features.Reports;
 using Car_Rental_System_BE.Infrastructure.Features.Tracking;
+using Car_Rental_System_BE.Infrastructure.HostedServices;
 using Car_Rental_System_BE.Infrastructure.Persistence;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Car_Rental_System_BE.Infrastructure.Services;
@@ -139,7 +140,6 @@ public static class DependencyInjection
         services.AddScoped<IDriverAvailability, NpgsqlDriverAvailability>();
         services.AddScoped<NpgsqlAssignmentRepository>();
         services.AddScoped<IAssignmentRepository>(provider => provider.GetRequiredService<NpgsqlAssignmentRepository>());
-        services.AddScoped<IMaintenanceIncidentGateway>(provider => provider.GetRequiredService<NpgsqlAssignmentRepository>());
         services.AddScoped<ILoyaltyRepository, NpgsqlLoyaltyRepository>();
         services.AddScoped<NpgsqlRentalLifecycleRepository>();
         services.AddScoped<IRentalLifecycleRepository>(provider => provider.GetRequiredService<NpgsqlRentalLifecycleRepository>());

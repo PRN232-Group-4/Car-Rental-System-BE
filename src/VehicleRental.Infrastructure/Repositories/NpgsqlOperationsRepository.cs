@@ -73,18 +73,6 @@ public sealed partial class NpgsqlOperationsRepository(NpgsqlDataSource dataSour
             select new ExpiringSubscription(cs.Id, u.Email, u.Fullname ?? u.Email, cs.EndDate, cs.RemainingHours)).ToListAsync(ct);
     }
     public async Task MarkSubscriptionRemindedAsync(int subscriptionId,CancellationToken ct){await using var c=dataSource.CreateCommand("UPDATE customer_subscriptions SET reminder_sent_at=now() WHERE id=$1 AND reminder_sent_at IS NULL");c.Parameters.AddWithValue(subscriptionId);await c.ExecuteNonQueryAsync(ct);}
-    public async Task<object> DashboardAsync(DateTime? from, DateTime? to, CancellationToken ct)
-    {
-        from = from is { } fromValue ? NpgsqlVehicleSearchRepository.Timestamp(fromValue) : null;
-        to = to is { } toValue ? NpgsqlVehicleSearchRepository.Timestamp(toValue) : null;
-        await using var db = VehicleRentalDbContext.Create(dataSource);
-        var revenue = await db.Set<InvoicesRow>().Where(i => i.Status == "paid" &&
-            (from == null || i.IssuedAt >= from) && (to == null || i.IssuedAt <= to)).SumAsync(i => (decimal?)i.Amount, ct) ?? 0;
-        var renting = await db.Set<RentalsRow>().LongCountAsync(r => r.Status == "renting", ct);
-        var maintenance = await db.Set<VehicleMaintenanceRow>().LongCountAsync(m => m.Status != null && m.Status != "completed" && m.Status != "cancelled", ct);
-        var activeSubscriptions = await db.Set<CustomerSubscriptionsRow>().LongCountAsync(s => s.Status == "active" && s.EndDate >= DateOnly.FromDateTime(DateTime.Today), ct);
-        return new { revenue, renting, maintenance, activeSubscriptions };
-    }
     private static Rental ReadRental(NpgsqlDataReader r)=>new(r.GetInt32(0),r.GetInt32(1),r.GetInt32(2),r.GetString(3),r.GetString(4),r.GetBoolean(5),r.GetDecimal(6),r.GetDecimal(7),r.GetDecimal(8),r.GetDecimal(9),r.IsDBNull(10)?null:r.GetDateTime(10),r.IsDBNull(11)?null:r.GetDateTime(11),r.IsDBNull(12)?null:r.GetDecimal(12),r.IsDBNull(13)?null:r.GetDecimal(13),r.IsDBNull(14)?null:r.GetBoolean(14),(r.IsDBNull(15)?null:r.GetString(15)) == $"/api/rentals/{r.GetInt32(0)}/contract/document" ? $"/api/rental/{r.GetInt32(0)}/contract/document" : (r.IsDBNull(15)?null:r.GetString(15)),r.IsDBNull(16)?null:r.GetDateTime(16),r.FieldCount>17&&!r.IsDBNull(17)?r.GetInt32(17):null,r.FieldCount>18&&r.GetBoolean(18),r.FieldCount>19&&r.GetBoolean(19));
     private static DateOnly? D(NpgsqlDataReader r,int i)=>r.IsDBNull(i)?null:r.GetFieldValue<DateOnly>(i);
     private static void Add(NpgsqlCommand c,params object?[] v){foreach(var x in v)c.Parameters.AddWithValue(x??DBNull.Value);}

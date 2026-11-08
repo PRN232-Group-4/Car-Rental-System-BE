@@ -279,8 +279,6 @@ public interface IRentalLifecycleRepository
     /// không còn ở trạng thái chờ, hoặc đã hết hạn trước đó.
     /// </summary>
     Task<RentalStatus?> UpdateToExpiredAsync(int rentalId, DateTime expiredAt, string reason, ActorContext actor, CancellationToken ct);
-    Task<IReadOnlyList<RentalStatusHistoryEntry>> GetHistoryAsync(int rentalId, CancellationToken ct);
-    Task<RentalSettlementDto?> GetSettlementAsync(int rentalId, CancellationToken ct);
 }
 
 public interface IRentalPaymentGate

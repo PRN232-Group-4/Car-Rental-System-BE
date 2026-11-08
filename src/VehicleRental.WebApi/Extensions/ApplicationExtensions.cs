@@ -112,7 +112,6 @@ public static class ApplicationExtensions
             .ValidateOnStart();
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<LoyaltyOptions>>().Value);
         services.AddScoped<ILoyaltyService, LoyaltyService>();
-        services.AddScoped<ILoyaltyRedemption>(sp => (LoyaltyService)sp.GetRequiredService<ILoyaltyService>());
 
         services.AddScoped<IRentalQueries, RentalQueryService>();
         services.AddScoped<IHandoverService, HandoverService>();

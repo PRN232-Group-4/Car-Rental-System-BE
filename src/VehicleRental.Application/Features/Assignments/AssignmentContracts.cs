@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using System.Data.Common;
 using Car_Rental_System_BE.Domain.Features.Availability;
 
 namespace Car_Rental_System_BE.Application.Features.Assignments;
@@ -154,17 +153,6 @@ public interface IAssignmentRepository
 
     Task<DriverShift> SaveDriverShiftAsync(int? id, int driverId, DateTime start, DateTime end, bool cancelled, string actor, CancellationToken ct);
     Task<IReadOnlyList<DriverShift>> ListDriverShiftsAsync(int? driverId, DateTime from, DateTime to, CancellationToken ct);
-}
-
-public interface IMaintenanceIncidentGateway
-{
-    Task<int> OpenIncidentMaintenanceAsync(
-        DbTransaction tx,
-        int vehicleId,
-        int? facilityId,
-        int rentalId,
-        string description,
-        CancellationToken ct);
 }
 
 public interface IAssignmentService
