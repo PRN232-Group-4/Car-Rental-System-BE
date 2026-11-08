@@ -122,7 +122,7 @@ public static class DependencyInjection
         services.AddScoped<IReportRepository, NpgsqlReportRepository>();
         services.AddScoped<IRatingRepository, NpgsqlRatingRepository>();
         services.AddScoped<IRecoveryRepository, NpgsqlRecoveryRepository>();
-        services.AddScoped<IRentalEditingRepository, NpgsqlOperationsRepository>();
+        services.AddScoped<IRentalEditingRepository, NpgsqlRentalEditingRepository>();
         services.AddScoped<IRentalBookingRepository, NpgsqlRentalBookingRepository>();
         services.AddScoped<IRentalPolicyRepository, NpgsqlRentalPolicyRepository>();
         services.AddScoped<IPaymentRepository, NpgsqlPaymentRepository>();

@@ -7,9 +7,6 @@ namespace Car_Rental_System_BE.Application.Services;
 
 public sealed class OperationsService(IOperationsRepository repository, IOperationalNotifications? notifications = null) : IOperationsService
 {
-    public Task<Rental> SaveRentalContractAsync(int id, string contractLink, DateTime signedAt, CancellationToken ct) =>
-        repository.SaveRentalContractAsync(id, contractLink, signedAt, ct);
-
     /// <summary>
     /// Legacy second implementation of the rental state machine (delegates to
     /// <see cref="IOperationsRepository.ChangeRentalStatusAsync"/>). It is no longer reachable over HTTP: the

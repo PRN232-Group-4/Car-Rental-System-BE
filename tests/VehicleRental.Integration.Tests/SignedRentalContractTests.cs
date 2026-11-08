@@ -33,6 +33,7 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
     private WebApplication _app = null!;
     private HttpClient _client = null!;
     private NpgsqlOperationsRepository Operations => new(db.DataSource);
+    private NpgsqlRentalEditingRepository Editing => new(db.DataSource);
     private NpgsqlRentalBookingRepository Bookings => new(db.DataSource);
     private NpgsqlRentalContractDocumentRepository Documents => new(db.DataSource);
 
@@ -265,7 +266,7 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
         var (rental, _) = await RentalAsync();
         using var response = await _client.GetAsync($"/api/rental/{rental.Id}/contract/document");
         using var missing = await Envelope(response, 404);
-        await Operations.SaveRentalContractAsync(rental.Id, "https://example.test/legacy.pdf", DateTime.UtcNow.AddMinutes(-2), default);
+        await Editing.SaveRentalContractAsync(rental.Id, "https://example.test/legacy.pdf", DateTime.UtcNow.AddMinutes(-2), default);
         Assert.False((await Bookings.GetRentalAsync(rental.Id, default))!.HasUploadedContract);
         Assert.False((await new NpgsqlRentalLifecycleRepository(db.DataSource).GetAsync(rental.Id, default))!.HasUploadedContract);
         using var uploaded = await Upload(rental.Id, Form());
@@ -284,7 +285,7 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
         var failure = await Assert.ThrowsAsync<ConflictException>(() => repository.UpdateToRentingAsync(rental.Id, rental.VehicleId, DateTime.UtcNow, actor, default));
         Assert.Equal("SIGNED_CONTRACT_REQUIRED", failure.Code);
         Assert.Equal("pre_inspection", (await Bookings.GetRentalAsync(rental.Id, default))!.Status);
-        await Operations.SaveRentalContractAsync(rental.Id, "https://example.test/legacy.pdf", DateTime.UtcNow.AddMinutes(-2), default);
+        await Editing.SaveRentalContractAsync(rental.Id, "https://example.test/legacy.pdf", DateTime.UtcNow.AddMinutes(-2), default);
         var legacyFailure = await Assert.ThrowsAsync<ConflictException>(() => repository.UpdateToRentingAsync(rental.Id, rental.VehicleId, DateTime.UtcNow, actor, default));
         Assert.Equal("SIGNED_CONTRACT_REQUIRED", legacyFailure.Code);
         using var uploaded = await Upload(rental.Id, Form());

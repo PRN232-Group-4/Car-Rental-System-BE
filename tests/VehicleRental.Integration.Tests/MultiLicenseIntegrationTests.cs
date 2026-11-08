@@ -15,7 +15,7 @@ namespace VehicleRental.Tests;
 public sealed class MultiLicenseIntegrationTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
     private NpgsqlRentalBookingRepository Store => new(db.DataSource);
-    private NpgsqlOperationsRepository Editing => new(db.DataSource);
+    private NpgsqlRentalEditingRepository Editing => new(db.DataSource);
     private NpgsqlCustomerLicenseRepository Licenses => new(db.DataSource);
     private NpgsqlFleetRepository Fleet => new(db.DataSource);
     private static CustomerLicense License(string number, string type) =>

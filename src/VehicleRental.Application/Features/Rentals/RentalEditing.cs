@@ -15,11 +15,13 @@ public sealed record UpdateRentalCommand(int VehicleId, DateTime StartTime, Date
 public interface IRentalEditingService
 {
     Task<Rental> UpdateAsync(int id, UpdateRentalRequest request, CancellationToken ct);
+    Task<Rental> SaveRentalContractAsync(int id, string contractLink, DateTime signedAt, CancellationToken ct);
 }
 
 public interface IRentalEditingRepository
 {
     Task<Rental> UpdateBeforePickupAsync(int id, UpdateRentalCommand command, CancellationToken ct);
+    Task<Rental> SaveRentalContractAsync(int id, string contractLink, DateTime signedAt, CancellationToken ct);
 }
 
 public sealed class RentalEditingService(IRentalEditingRepository repository) : IRentalEditingService
@@ -34,6 +36,10 @@ public sealed class RentalEditingService(IRentalEditingRepository repository) : 
             throw new BusinessRuleException("INVALID_RENTAL_EDIT", "Provide UTC startTime/endTime with endTime after startTime.");
         return repository.UpdateBeforePickupAsync(id, new(request.VehicleId.Value, start, end, request.HasDriver.Value), ct);
     }
+
+    // Same pass-through the operations service did: the repository owns the validation and the write.
+    public Task<Rental> SaveRentalContractAsync(int id, string contractLink, DateTime signedAt, CancellationToken ct) =>
+        repository.SaveRentalContractAsync(id, contractLink, signedAt, ct);
 }
 
 public sealed record RentalEditingPrice(decimal Total, decimal Vat, decimal Deposit, decimal Unit);

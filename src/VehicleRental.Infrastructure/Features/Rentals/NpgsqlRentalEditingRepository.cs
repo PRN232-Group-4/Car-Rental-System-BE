@@ -3,11 +3,19 @@ using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Domain.Features.Availability;
 using Car_Rental_System_BE.Infrastructure.Features.Availability;
+using Car_Rental_System_BE.Infrastructure.Repositories;
 using Npgsql;
 
-namespace Car_Rental_System_BE.Infrastructure.Repositories;
+namespace Car_Rental_System_BE.Infrastructure.Features.Rentals;
 
-public sealed partial class NpgsqlOperationsRepository : IRentalEditingRepository
+/// <summary>
+/// Rental editing before pick-up and the legacy contract recording. Both members came from
+/// <c>NpgsqlOperationsRepository</c> (its <c>.Editing.cs</c> partial): the rules, the SQL, the locks and the
+/// order they run in are unchanged - the dispatcher lock 724232001, the locked rental read, the edit rules
+/// against the current state, the invoice/payment boundary, the licence check, the subscription window, the
+/// policy/vehicle match, the availability window, the reprice and the recreation of the booking row.
+/// </summary>
+public sealed class NpgsqlRentalEditingRepository(NpgsqlDataSource dataSource) : IRentalEditingRepository
 {
     public async Task<Rental> UpdateBeforePickupAsync(int id, UpdateRentalCommand command, CancellationToken ct)
     {
@@ -151,4 +159,38 @@ public sealed partial class NpgsqlOperationsRepository : IRentalEditingRepositor
         await tx.CommitAsync(ct);
         return rental with { ContractLink = contractLink, SignedAt = signedAt };
     }
+
+    // Private copies of the operations repository helpers, byte-identical to the originals once whitespace is
+    // normalised: the moved body keeps its exact SQL and its exact lock without widening a legacy type's surface.
+    // Separate namespace from vehicle/assignment locks.
+    private static async Task LockOperationsAsync(NpgsqlConnection cn, NpgsqlTransaction tx, CancellationToken ct)
+        => await ValueAsync(cn, tx, "SELECT pg_advisory_xact_lock(724232001::bigint)", ct);
+
+    private static async Task<object?> ValueAsync(NpgsqlConnection cn, NpgsqlTransaction tx, string sql, CancellationToken ct, params object?[] values)
+    {
+        await using var command = new NpgsqlCommand(sql, cn, tx);
+        Add(command, values);
+        return await command.ExecuteScalarAsync(ct);
+    }
+
+    private static async Task<Rental> ReadRentalAsync(NpgsqlConnection cn, NpgsqlTransaction tx, int id, CancellationToken ct)
+    {
+        await using var command = new NpgsqlCommand("""
+            SELECT r.id,r.customer_id,r.vehicle_id,r.rental_type,r.status,r.is_subscription,
+                r.vat_price,r.deposit_price,r.overtime_price,r.total_price,
+                COALESCE(h.start_time,l.start_time),COALESCE(h.end_time,l.end_time),h.hourly_price_snapshot,l.monthly_price_snapshot,COALESCE(h.has_driver,l.has_driver,false),l.contract_link,l.signed_at,
+                (SELECT o.id FROM rental_orders o WHERE o.rental_id=r.id),
+                EXISTS(SELECT 1 FROM inspections i WHERE i.rental_id=r.id AND i.vehicle_id=r.vehicle_id AND i.inspection_type='pre_rental' AND i.is_ok=true),
+                EXISTS(SELECT 1 FROM inspections i WHERE i.rental_id=r.id AND i.vehicle_id=r.vehicle_id AND i.inspection_type='post_rental')
+            FROM rentals r LEFT JOIN hour_rental_detail h ON h.rental_id=r.id
+            LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id WHERE r.id=$1 FOR UPDATE OF r
+            """, cn, tx);
+        Add(command, id);
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) throw new KeyNotFoundException("Rental was not found.");
+        return ReadRental(reader);
+    }
+
+    private static Rental ReadRental(NpgsqlDataReader r)=>new(r.GetInt32(0),r.GetInt32(1),r.GetInt32(2),r.GetString(3),r.GetString(4),r.GetBoolean(5),r.GetDecimal(6),r.GetDecimal(7),r.GetDecimal(8),r.GetDecimal(9),r.IsDBNull(10)?null:r.GetDateTime(10),r.IsDBNull(11)?null:r.GetDateTime(11),r.IsDBNull(12)?null:r.GetDecimal(12),r.IsDBNull(13)?null:r.GetDecimal(13),r.IsDBNull(14)?null:r.GetBoolean(14),(r.IsDBNull(15)?null:r.GetString(15)) == $"/api/rentals/{r.GetInt32(0)}/contract/document" ? $"/api/rental/{r.GetInt32(0)}/contract/document" : (r.IsDBNull(15)?null:r.GetString(15)),r.IsDBNull(16)?null:r.GetDateTime(16),r.FieldCount>17&&!r.IsDBNull(17)?r.GetInt32(17):null,r.FieldCount>18&&r.GetBoolean(18),r.FieldCount>19&&r.GetBoolean(19));
+    private static void Add(NpgsqlCommand c,params object?[] v){foreach(var x in v)c.Parameters.AddWithValue(x??DBNull.Value);}
 }

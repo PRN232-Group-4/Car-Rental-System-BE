@@ -9,7 +9,7 @@ namespace VehicleRental.Tests;
 
 public sealed class RentalEditingIntegrationTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
-    private NpgsqlOperationsRepository Store => new(db.DataSource);
+    private NpgsqlRentalEditingRepository Store => new(db.DataSource);
     private NpgsqlRentalBookingRepository Bookings => new(db.DataSource);
     private static DateTime Start => new(DateTime.UtcNow.AddDays(3).Date.AddHours(8).Ticks, DateTimeKind.Utc);
     private static UpdateRentalCommand Command(Rental rental, double hours = 3)

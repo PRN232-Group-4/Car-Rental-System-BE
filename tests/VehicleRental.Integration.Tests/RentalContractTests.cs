@@ -11,6 +11,7 @@ public sealed class RentalContractTests(PostgresFixture db) : IClassFixture<Post
     public async Task Longterm_contract_roundtrips_is_immutable_and_blocks_overlapping_booking()
     {
         var store = new NpgsqlOperationsRepository(db.DataSource);
+        var editing = new NpgsqlRentalEditingRepository(db.DataSource);
         var bookings = new NpgsqlRentalBookingRepository(db.DataSource);
         var (_, email) = await Seed.CustomerAsync(db.DataSource);
         var (_, other) = await Seed.CustomerAsync(db.DataSource);
@@ -18,13 +19,13 @@ public sealed class RentalContractTests(PostgresFixture db) : IClassFixture<Post
         var start = DateTime.UtcNow.AddDays(1);
         var rental = await bookings.CreateRentalAsync(email, vehicle, null, "longterm", start, start.AddDays(30), false, null, false, default);
         var signedAt = DateTime.UtcNow.AddMinutes(-1);
-        var saved = await store.SaveRentalContractAsync(rental.Id, "https://example.com/contract.pdf", signedAt, default);
+        var saved = await editing.SaveRentalContractAsync(rental.Id, "https://example.com/contract.pdf", signedAt, default);
         Assert.Equal(1000m, saved.MonthlyPriceSnapshot);
         Assert.Null(saved.HourlyPriceSnapshot);
-        Assert.Equal(saved, await store.SaveRentalContractAsync(rental.Id, saved.ContractLink!, signedAt, default));
+        Assert.Equal(saved, await editing.SaveRentalContractAsync(rental.Id, saved.ContractLink!, signedAt, default));
         Assert.Equal(saved, await bookings.GetRentalForUserAsync(rental.Id, email, false, true, false, default));
         Assert.Null(await bookings.GetRentalForUserAsync(rental.Id, other, false, true, false, default));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveRentalContractAsync(rental.Id, "https://example.com/replaced.pdf", signedAt, default));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => editing.SaveRentalContractAsync(rental.Id, "https://example.com/replaced.pdf", signedAt, default));
         await Assert.ThrowsAsync<ConflictException>(() => bookings.CreateRentalAsync(email, vehicle, null, "hourly", start, start.AddHours(2), false, null, false, default));
         await Seed.ScalarAsync(db.DataSource, "UPDATE vehicles SET rental_price_longterm=9999 WHERE id=$1", vehicle);
         Assert.Equal(1000m, (await bookings.GetRentalAsync(rental.Id, default))!.MonthlyPriceSnapshot);
@@ -34,14 +35,15 @@ public sealed class RentalContractTests(PostgresFixture db) : IClassFixture<Post
     public async Task Contract_rejects_hourly_missing_rental_invalid_url_and_dates()
     {
         var store = new NpgsqlOperationsRepository(db.DataSource);
+        var editing = new NpgsqlRentalEditingRepository(db.DataSource);
         var bookings = new NpgsqlRentalBookingRepository(db.DataSource);
         var rental = await Scenarios.CreateDirectRentalAsync(db.DataSource);
         var now = DateTime.UtcNow.AddMinutes(-1);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveRentalContractAsync(rental.RentalId, "https://example.com/a", now, default));
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => store.SaveRentalContractAsync(int.MaxValue, "https://example.com/a", now, default));
-        await Assert.ThrowsAsync<ArgumentException>(() => store.SaveRentalContractAsync(rental.RentalId, "file:///secret", now, default));
-        await Assert.ThrowsAsync<ArgumentException>(() => store.SaveRentalContractAsync(rental.RentalId, "https://example.com/a", default, default));
-        await Assert.ThrowsAsync<ArgumentException>(() => store.SaveRentalContractAsync(rental.RentalId, "https://example.com/a", now.AddDays(1), default));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => editing.SaveRentalContractAsync(rental.RentalId, "https://example.com/a", now, default));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => editing.SaveRentalContractAsync(int.MaxValue, "https://example.com/a", now, default));
+        await Assert.ThrowsAsync<ArgumentException>(() => editing.SaveRentalContractAsync(rental.RentalId, "file:///secret", now, default));
+        await Assert.ThrowsAsync<ArgumentException>(() => editing.SaveRentalContractAsync(rental.RentalId, "https://example.com/a", default, default));
+        await Assert.ThrowsAsync<ArgumentException>(() => editing.SaveRentalContractAsync(rental.RentalId, "https://example.com/a", now.AddDays(1), default));
         var detail = (await bookings.GetRentalAsync(rental.RentalId, default))!;
         Assert.Equal(100m, detail.HourlyPriceSnapshot);
         Assert.Equal(20m, detail.VatPrice);

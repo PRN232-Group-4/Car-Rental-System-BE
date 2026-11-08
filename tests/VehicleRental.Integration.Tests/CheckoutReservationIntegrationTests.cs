@@ -16,7 +16,7 @@ public sealed class CheckoutReservationIntegrationTests(PostgresFixture db) : IC
     public async Task Checkout_without_payment_row_blocks_edits_even_when_provider_times_out()
     {
         var bookings = new NpgsqlRentalBookingRepository(db.DataSource);
-        var operations = new NpgsqlOperationsRepository(db.DataSource);
+        var editing = new NpgsqlRentalEditingRepository(db.DataSource);
         var payments = new NpgsqlPaymentRepository(db.DataSource);
         var (_, email) = await Seed.CustomerAsync(db.DataSource);
         var vehicle = await Seed.VehicleAsync(db.DataSource);
@@ -39,7 +39,7 @@ public sealed class CheckoutReservationIntegrationTests(PostgresFixture db) : IC
         await Assert.ThrowsAsync<HttpRequestException>(() => service.CheckoutAsync(invoiceId, email, default));
         var marker = Assert.IsType<DateTime>(await Seed.ScalarAsync(db.DataSource, "SELECT checkout_started_at FROM invoices WHERE id=$1", invoiceId));
         Assert.Equal(0, await Seed.CountAsync(db.DataSource, "SELECT COUNT(*) FROM payments WHERE rental_id=$1", rental.Id));
-        var error = await Assert.ThrowsAsync<ConflictException>(() => operations.UpdateBeforePickupAsync(rental.Id,
+        var error = await Assert.ThrowsAsync<ConflictException>(() => editing.UpdateBeforePickupAsync(rental.Id,
             new(vehicle, start, start.AddHours(3), false), default));
         Assert.Equal("RENTAL_FINANCIALLY_COMMITTED", error.Code);
         Assert.Equal(rental, await bookings.GetRentalAsync(rental.Id, default));
@@ -51,7 +51,7 @@ public sealed class CheckoutReservationIntegrationTests(PostgresFixture db) : IC
     public async Task Reservation_enforces_ownership_and_unpaid_status()
     {
         var bookings = new NpgsqlRentalBookingRepository(db.DataSource);
-        var operations = new NpgsqlOperationsRepository(db.DataSource);
+        var editing = new NpgsqlRentalEditingRepository(db.DataSource);
         var payments = new NpgsqlPaymentRepository(db.DataSource);
         var (_, email) = await Seed.CustomerAsync(db.DataSource);
         var (_, other) = await Seed.CustomerAsync(db.DataSource);

@@ -52,14 +52,18 @@ public sealed class FeaturePrivacyTests
         "Car_Rental_System_BE.Infrastructure.Repositories.NpgsqlOperationsRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.NpgsqlVehicleSearchRepository",
         // ---------------------------------------------------------------------------------------
         // added by the Rentals slice move (Task C7) - the same two calls, same arguments, same helpers as the
-        // two entries this repository used to own above; only the owner of the code moved, so the edge moved
-        // with it. NpgsqlRentalBookingRepository is the slice type that evaluates the booking window inside its
-        // own transaction after taking the vehicle lock.
+        // two legacy entries removed below; only the owner of the code moved, so the edge moved with it.
+        // NpgsqlRentalBookingRepository evaluates the booking window and NpgsqlRentalEditingRepository
+        // re-evaluates the edited window, both inside their own transaction after taking the vehicle lock.
         // ---------------------------------------------------------------------------------------
         "Car_Rental_System_BE.Infrastructure.Features.Rentals.NpgsqlRentalBookingRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.VehicleAvailabilityChecks",
         "Car_Rental_System_BE.Infrastructure.Features.Rentals.NpgsqlRentalBookingRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.VehicleLock",
-        "Car_Rental_System_BE.Infrastructure.Repositories.NpgsqlOperationsRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.VehicleAvailabilityChecks",
-        "Car_Rental_System_BE.Infrastructure.Repositories.NpgsqlOperationsRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.VehicleLock",
+        "Car_Rental_System_BE.Infrastructure.Features.Rentals.NpgsqlRentalEditingRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.VehicleAvailabilityChecks",
+        "Car_Rental_System_BE.Infrastructure.Features.Rentals.NpgsqlRentalEditingRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.VehicleLock",
+        // The two legacy VehicleAvailabilityChecks/VehicleLock entries were deleted here: the code that called
+        // them (rental creation and rental editing) now lives in the Rentals slice, and both new owners are
+        // recorded above. Timestamp is still called from ListDriverScheduleAsync and DashboardAsync, so the
+        // NpgsqlVehicleSearchRepository entry above stays.
         // ---------------------------------------------------------------------------------------
         // added by the Fleet move (Task C2) - the only baseline entry that is new, not carried over
         // ---------------------------------------------------------------------------------------

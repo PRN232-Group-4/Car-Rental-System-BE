@@ -158,7 +158,7 @@ public sealed class RentalInspectionModesTests(PostgresFixture db) : IClassFixtu
         var vehicle=await Seed.VehicleAsync(db.DataSource);
         await Seed.PolicyAsync(db.DataSource);
         var store=new NpgsqlRentalBookingRepository(db.DataSource);
-        var editing=new NpgsqlOperationsRepository(db.DataSource);
+        var editing=new NpgsqlRentalEditingRepository(db.DataSource);
         var rental=await store.CreateRentalAsync(email,vehicle,null,type,DateTime.UtcNow.AddDays(2),DateTime.UtcNow.AddDays(3),false,null,false,default);
         var command=new Car_Rental_System_BE.Application.Features.Rentals.UpdateRentalCommand(vehicle,rental.StartTime!.Value,rental.EndTime!.Value,true);
         var driver=await editing.UpdateBeforePickupAsync(rental.Id,command,default);

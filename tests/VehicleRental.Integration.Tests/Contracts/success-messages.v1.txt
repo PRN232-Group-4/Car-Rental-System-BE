@@ -234,8 +234,8 @@
 /api/rental/{id:int}/complete | RentalLifecycle.Complete | POST | 200 | inspectionType=post_rental | Rental completed successfully.
 /api/rental/{id:int}/confirm | RentalLifecycle.Confirm | POST | 200 | - | Rental confirmed successfully.
 /api/rental/{id:int}/confirm | RentalLifecycle.Confirm | POST | 200 | inspectionType=post_rental | Rental confirmed successfully.
-/api/rental/{id:int}/contract | Operations.SaveContract | PUT | 200 | - | Signed long-term rental contract recorded successfully.
-/api/rental/{id:int}/contract | Operations.SaveContract | PUT | 200 | inspectionType=post_rental | Signed long-term rental contract recorded successfully.
+/api/rental/{id:int}/contract | RentalContracts.SaveContract | PUT | 200 | - | Signed long-term rental contract recorded successfully.
+/api/rental/{id:int}/contract | RentalContracts.SaveContract | PUT | 200 | inspectionType=post_rental | Signed long-term rental contract recorded successfully.
 /api/rental/{id:int}/contract/document | RentalContractDocuments.Download | GET | 200 | - | download retrieved successfully.
 /api/rental/{id:int}/contract/document | RentalContractDocuments.Download | GET | 200 | inspectionType=post_rental | download retrieved successfully.
 /api/rental/{id:int}/contract/upload | RentalContractDocuments.Upload | POST | 200 | - | Signed rental contract uploaded successfully.

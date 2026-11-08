@@ -2,9 +2,6 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using Car_Rental_System_BE.Application.Interfaces.Services;
-using Car_Rental_System_BE.Application.Services;
-using Car_Rental_System_BE.Infrastructure.Repositories;
 using Car_Rental_System_BE.WebApi.Controllers;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
@@ -47,8 +44,7 @@ public sealed class RentalBookingEndpointTests(PostgresFixture db) : IClassFixtu
 
         // The real composition, wired to the throwaway database instead of the production configuration.
         builder.Services.AddSingleton<IRentalBookingService>(new RentalBookingService(new NpgsqlRentalBookingRepository(db.DataSource)));
-        // The contract recording still lives on OperationsController; it only needs a service to resolve.
-        builder.Services.AddSingleton<IOperationsService>(new OperationsService(new NpgsqlOperationsRepository(db.DataSource)));
+        builder.Services.AddSingleton<IRentalEditingService>(new RentalEditingService(new NpgsqlRentalEditingRepository(db.DataSource)));
         builder.Services.AddControllers(options => options.Filters.Add<ApiSuccessResponseFilter>())
             .ConfigureApplicationPartManager(parts =>
             {

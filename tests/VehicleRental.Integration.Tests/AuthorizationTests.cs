@@ -52,18 +52,26 @@ public sealed class AuthorizationTests
     }
 
     [Theory]
-    [InlineData("SaveContract", "Customer", false)]
-    [InlineData("SaveContract", "Driver", false)]
-    [InlineData("SaveContract", "Maintenance", false)]
-    [InlineData("SaveContract", "CustomerService", true)]
-    [InlineData("SaveContract", "Manager", true)]
-    [InlineData("SaveContract", "Admin", true)]
     [InlineData("DriverSchedule", "CustomerService", false)]
     [InlineData("DriverSchedule", "Driver", true)]
     [InlineData("DeletePlan", "CustomerService", false)]
     [InlineData("DeletePlan", "Manager", true)]
     public async Task Operations_enforce_capability_matrix(string action, string role, bool allowed) =>
         Assert.Equal(allowed, await AuthorizeEndpoint<OperationsController>(action, Principal(role, 7)));
+
+    /// <summary>
+    /// The legacy contract recording moved to RentalContractsController and keeps the CustomerService policy it
+    /// had on OperationsController, so a policy left behind on the legacy controller cannot pass this matrix.
+    /// </summary>
+    [Theory]
+    [InlineData("SaveContract", "Customer", false)]
+    [InlineData("SaveContract", "Driver", false)]
+    [InlineData("SaveContract", "Maintenance", false)]
+    [InlineData("SaveContract", "CustomerService", true)]
+    [InlineData("SaveContract", "Manager", true)]
+    [InlineData("SaveContract", "Admin", true)]
+    public async Task Rental_contract_recording_enforces_the_attributes_it_moved_with(string action, string role, bool allowed) =>
+        Assert.Equal(allowed, await AuthorizeEndpoint<RentalContractsController>(action, Principal(role, 7)));
 
     /// <summary>
     /// The two booking verbs moved to RentalBookingsController and keep the Customer policy they had on

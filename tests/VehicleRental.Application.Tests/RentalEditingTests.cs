@@ -76,5 +76,8 @@ public sealed class RentalEditingTests
             Command = command;
             return Task.FromResult(Original);
         }
+
+        public Task<Rental> SaveRentalContractAsync(int id, string contractLink, DateTime signedAt, CancellationToken ct)
+            => throw new NotSupportedException();
     }
 }
