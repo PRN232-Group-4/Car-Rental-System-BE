@@ -1,5 +1,10 @@
 CREATE OR REPLACE FUNCTION fn_immutable_row() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
+  RAISE EXCEPTION '% là bảng chỉ ghi thêm (immutable)', TG_TABLE_NAME;
+END $$;
+
+CREATE OR REPLACE FUNCTION fn_loyalty_immutable_row() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
   RAISE EXCEPTION 'Bản ghi không được phép chỉnh sửa hoặc xóa' USING ERRCODE = '23505';
 END $$;
 
@@ -62,11 +67,11 @@ CREATE TRIGGER trg_clt_after_insert AFTER INSERT ON customer_loyalty_transaction
 -- Bất biến: cấm UPDATE / DELETE / TRUNCATE
 DROP TRIGGER IF EXISTS trg_clt_immutable ON customer_loyalty_transactions;
 CREATE TRIGGER trg_clt_immutable BEFORE UPDATE OR DELETE ON customer_loyalty_transactions
-  FOR EACH ROW EXECUTE FUNCTION fn_immutable_row();
+  FOR EACH ROW EXECUTE FUNCTION fn_loyalty_immutable_row();
 
 DROP TRIGGER IF EXISTS trg_clt_no_truncate ON customer_loyalty_transactions;
 CREATE TRIGGER trg_clt_no_truncate BEFORE TRUNCATE ON customer_loyalty_transactions
-  FOR EACH STATEMENT EXECUTE FUNCTION fn_immutable_row();
+  FOR EACH STATEMENT EXECUTE FUNCTION fn_loyalty_immutable_row();
 
 DO $$
 BEGIN
