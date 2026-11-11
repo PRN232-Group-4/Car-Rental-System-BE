@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 COPY ["src/VehicleRental.WebApi/VehicleRental.WebApi.csproj", "src/VehicleRental.WebApi/"]
 COPY ["src/VehicleRental.Application/VehicleRental.Application.csproj", "src/VehicleRental.Application/"]
