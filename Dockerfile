@@ -8,7 +8,7 @@ RUN dotnet restore "src/VehicleRental.WebApi/VehicleRental.WebApi.csproj"
 COPY . .
 RUN dotnet publish "src/VehicleRental.WebApi/VehicleRental.WebApi.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:11.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/publish .
 RUN adduser --disabled-password --gecos "" --uid 10001 appuser && chown -R appuser /app
