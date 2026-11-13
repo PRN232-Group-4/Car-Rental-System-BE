@@ -39,64 +39,28 @@ public sealed class NpgsqlTrackingRepository(NpgsqlDataSource dataSource) : ITra
 
     public async Task<TrackingDeviceDto> CreateDeviceAsync(string deviceId, int vehicleId, string keyHash, string? name, CancellationToken ct)
     {
-        const string sql = """
-            INSERT INTO tracking_devices (id, vehicle_id, key_hash, name, is_active, created_at)
-            VALUES ($1, $2, $3, $4, TRUE, now())
-            RETURNING id, vehicle_id, name, is_active, last_ping_at, created_at
-            """;
-        await using var cmd = dataSource.CreateCommand(sql);
-        cmd.Parameters.AddWithValue(deviceId);
-        cmd.Parameters.AddWithValue(vehicleId);
-        cmd.Parameters.AddWithValue(keyHash);
-        cmd.Parameters.AddWithValue((object?)name ?? DBNull.Value);
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        await reader.ReadAsync(ct);
-        return new TrackingDeviceDto(
-            reader.GetString(0),
-            reader.GetInt32(1),
-            reader.IsDBNull(2) ? null : reader.GetString(2),
-            reader.GetBoolean(3),
-            reader.IsDBNull(4) ? null : reader.GetFieldValue<DateTimeOffset>(4),
-            reader.GetFieldValue<DateTimeOffset>(5));
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        await db.InsertAsync(new TrackingDevicesRow { Id = deviceId, VehicleId = vehicleId, KeyHash = keyHash, Name = name, IsActive = true }, ct);
+        return await Devices(db.Set<TrackingDevicesRow>().Where(d => d.Id == deviceId)).SingleAsync(ct);
     }
 
     public async Task<TrackingDeviceDto> UpdateDeviceAsync(string deviceId, bool? isActive, int? vehicleId, string? name, CancellationToken ct)
     {
-        const string sql = """
-            UPDATE tracking_devices
-            SET is_active = COALESCE($2, is_active),
-                vehicle_id = COALESCE($3, vehicle_id),
-                name = COALESCE($4, name)
-            WHERE id = $1
-            RETURNING id, vehicle_id, name, is_active, last_ping_at, created_at
-            """;
-        await using var cmd = dataSource.CreateCommand(sql);
-        cmd.Parameters.AddWithValue(deviceId);
-        cmd.Parameters.AddWithValue((object?)isActive ?? DBNull.Value);
-        cmd.Parameters.AddWithValue((object?)vehicleId ?? DBNull.Value);
-        cmd.Parameters.AddWithValue((object?)name ?? DBNull.Value);
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct))
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        if (await db.Set<TrackingDevicesRow>().Where(d => d.Id == deviceId).ExecuteUpdateAsync(s => s
+                .SetProperty(d => d.IsActive, d => isActive ?? d.IsActive)
+                .SetProperty(d => d.VehicleId, d => vehicleId ?? d.VehicleId)
+                .SetProperty(d => d.Name, d => name ?? d.Name), ct) == 0)
             throw new KeyNotFoundException($"Device {deviceId} was not found.");
-
-        return new TrackingDeviceDto(
-            reader.GetString(0),
-            reader.GetInt32(1),
-            reader.IsDBNull(2) ? null : reader.GetString(2),
-            reader.GetBoolean(3),
-            reader.IsDBNull(4) ? null : reader.GetFieldValue<DateTimeOffset>(4),
-            reader.GetFieldValue<DateTimeOffset>(5));
+        return await Devices(db.Set<TrackingDevicesRow>().Where(d => d.Id == deviceId)).SingleAsync(ct);
     }
 
     public async Task UpdateDeviceLastPingAsync(string deviceId, DateTimeOffset pingAt, CancellationToken ct)
     {
-        const string sql = "UPDATE tracking_devices SET last_ping_at = $2 WHERE id = $1";
-        await using var cmd = dataSource.CreateCommand(sql);
-        cmd.Parameters.AddWithValue(deviceId);
-        cmd.Parameters.AddWithValue(pingAt);
-        await cmd.ExecuteNonQueryAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var at = pingAt.UtcDateTime;
+        await db.Set<TrackingDevicesRow>().Where(d => d.Id == deviceId)
+            .ExecuteUpdateAsync(s => s.SetProperty(d => d.LastPingAt, at), ct);
     }
 
     public async Task<int> InsertPositionsBatchAsync(string deviceId, int vehicleId, IReadOnlyList<PositionDto> positions, CancellationToken ct)
@@ -105,58 +69,56 @@ public sealed class NpgsqlTrackingRepository(NpgsqlDataSource dataSource) : ITra
 
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await connection.BeginTransactionAsync(ct);
-
-        const string sql = """
-            INSERT INTO vehicle_positions (vehicle_id, device_id, latitude, longitude, speed_kmh, heading, accuracy_m, recorded_at, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
-            """;
-
+        await using var db = VehicleRentalDbContext.Create(connection, tx);
         foreach (var pos in positions)
-        {
-            await using var cmd = new NpgsqlCommand(sql, connection, tx);
-            cmd.Parameters.AddWithValue(vehicleId);
-            cmd.Parameters.AddWithValue(deviceId);
-            cmd.Parameters.AddWithValue(Convert.ToDecimal(pos.Lat));
-            cmd.Parameters.AddWithValue(Convert.ToDecimal(pos.Lng));
-            cmd.Parameters.AddWithValue((object?)pos.SpeedKmh ?? DBNull.Value);
-            cmd.Parameters.AddWithValue((object?)pos.Heading ?? DBNull.Value);
-            cmd.Parameters.AddWithValue((object?)pos.AccuracyM ?? DBNull.Value);
-            cmd.Parameters.AddWithValue(pos.RecordedAt);
-            await cmd.ExecuteNonQueryAsync(ct);
-        }
-
+            db.Add(new VehiclePositionsRow
+            {
+                VehicleId = vehicleId, DeviceId = deviceId, Latitude = Convert.ToDecimal(pos.Lat), Longitude = Convert.ToDecimal(pos.Lng),
+                SpeedKmh = ToDecimal(pos.SpeedKmh), Heading = ToDecimal(pos.Heading), AccuracyM = ToDecimal(pos.AccuracyM),
+                RecordedAt = pos.RecordedAt.UtcDateTime,
+            });
+        await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return positions.Count;
     }
 
     public async Task UpsertLastPositionAsync(int vehicleId, string deviceId, PositionDto position, string? address, CancellationToken ct)
     {
-        const string sql = """
-            INSERT INTO vehicle_last_positions (vehicle_id, device_id, latitude, longitude, speed_kmh, heading, accuracy_m, address, recorded_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
-            ON CONFLICT (vehicle_id) DO UPDATE SET
-                device_id = EXCLUDED.device_id,
-                latitude = EXCLUDED.latitude,
-                longitude = EXCLUDED.longitude,
-                speed_kmh = EXCLUDED.speed_kmh,
-                heading = EXCLUDED.heading,
-                accuracy_m = EXCLUDED.accuracy_m,
-                address = COALESCE(EXCLUDED.address, vehicle_last_positions.address),
-                recorded_at = EXCLUDED.recorded_at,
-                updated_at = now()
-            """;
-        await using var cmd = dataSource.CreateCommand(sql);
-        cmd.Parameters.AddWithValue(vehicleId);
-        cmd.Parameters.AddWithValue(deviceId);
-        cmd.Parameters.AddWithValue(Convert.ToDecimal(position.Lat));
-        cmd.Parameters.AddWithValue(Convert.ToDecimal(position.Lng));
-        cmd.Parameters.AddWithValue((object?)position.SpeedKmh ?? DBNull.Value);
-        cmd.Parameters.AddWithValue((object?)position.Heading ?? DBNull.Value);
-        cmd.Parameters.AddWithValue((object?)position.AccuracyM ?? DBNull.Value);
-        cmd.Parameters.AddWithValue((object?)address ?? DBNull.Value);
-        cmd.Parameters.AddWithValue(position.RecordedAt);
-        await cmd.ExecuteNonQueryAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        // ON CONFLICT (vehicle_id) DO UPDATE: update, else insert; a concurrent first insert falls back to update.
+        if (await UpdateLastPositionAsync(db, vehicleId, deviceId, position, address, ct) > 0) return;
+        var inserted = await db.TryInsertAsync(new VehicleLastPositionsRow
+        {
+            VehicleId = vehicleId, DeviceId = deviceId, Latitude = Convert.ToDecimal(position.Lat), Longitude = Convert.ToDecimal(position.Lng),
+            SpeedKmh = ToDecimal(position.SpeedKmh), Heading = ToDecimal(position.Heading), AccuracyM = ToDecimal(position.AccuracyM),
+            Address = address, RecordedAt = position.RecordedAt.UtcDateTime,
+        }, ct);
+        if (!inserted) await UpdateLastPositionAsync(db, vehicleId, deviceId, position, address, ct);
     }
+
+    private static async Task<int> UpdateLastPositionAsync(VehicleRentalDbContext db, int vehicleId, string deviceId, PositionDto position, string? address, CancellationToken ct)
+    {
+        var lat = Convert.ToDecimal(position.Lat);
+        var lng = Convert.ToDecimal(position.Lng);
+        var speed = ToDecimal(position.SpeedKmh);
+        var heading = ToDecimal(position.Heading);
+        var accuracy = ToDecimal(position.AccuracyM);
+        var recordedAt = position.RecordedAt.UtcDateTime;
+        var now = await db.DatabaseUtcNowAsync(ct);
+        var updatedAt = DateTime.SpecifyKind(now, DateTimeKind.Utc);
+        return await db.Set<VehicleLastPositionsRow>().Where(p => p.VehicleId == vehicleId).ExecuteUpdateAsync(s => s
+            .SetProperty(p => p.DeviceId, deviceId)
+            .SetProperty(p => p.Latitude, lat)
+            .SetProperty(p => p.Longitude, lng)
+            .SetProperty(p => p.SpeedKmh, speed)
+            .SetProperty(p => p.Heading, heading)
+            .SetProperty(p => p.AccuracyM, accuracy)
+            .SetProperty(p => p.Address, p => address ?? p.Address)
+            .SetProperty(p => p.RecordedAt, recordedAt)
+            .SetProperty(p => p.UpdatedAt, updatedAt), ct);
+    }
+
+    private static decimal? ToDecimal(float? value) => value is null ? null : Convert.ToDecimal(value.Value);
 
     public async Task<VehicleLocationDto?> GetLastPositionAsync(int vehicleId, CancellationToken ct)
     {
@@ -213,19 +175,10 @@ public sealed class NpgsqlTrackingRepository(NpgsqlDataSource dataSource) : ITra
 
     public async Task<int> PurgePositionsOlderThanAsync(DateTimeOffset cutoff, int batchSize, CancellationToken ct)
     {
-        const string sql = """
-            DELETE FROM vehicle_positions
-            WHERE id IN (
-                SELECT id FROM vehicle_positions
-                WHERE recorded_at < $1
-                ORDER BY recorded_at ASC
-                LIMIT $2
-            )
-            """;
-        await using var cmd = dataSource.CreateCommand(sql);
-        cmd.Parameters.AddWithValue(cutoff);
-        cmd.Parameters.AddWithValue(batchSize);
-        return await cmd.ExecuteNonQueryAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var before = cutoff.UtcDateTime;
+        var batch = db.Set<VehiclePositionsRow>().Where(p => p.RecordedAt < before).OrderBy(p => p.RecordedAt).Take(batchSize).Select(p => p.Id);
+        return await db.Set<VehiclePositionsRow>().Where(p => batch.Contains(p.Id)).ExecuteDeleteAsync(ct);
     }
 
     public async Task<IReadOnlyList<GeofenceZone>> ListActiveGeofencesAsync(CancellationToken ct)
@@ -250,48 +203,26 @@ public sealed class NpgsqlTrackingRepository(NpgsqlDataSource dataSource) : ITra
 
     public async Task<GeofenceDto> CreateGeofenceAsync(CreateGeofenceRequest request, CancellationToken ct)
     {
-        const string sql = """
-            INSERT INTO geofences (name, zone_type, center_lat, center_lng, radius_meters, facility_id, is_active, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, TRUE, now())
-            RETURNING id, name, zone_type, center_lat, center_lng, radius_meters, facility_id, is_active, created_at
-            """;
-        await using var cmd = dataSource.CreateCommand(sql);
-        cmd.Parameters.AddWithValue(request.Name);
-        cmd.Parameters.AddWithValue(request.ZoneType);
-        cmd.Parameters.AddWithValue(Convert.ToDecimal(request.CenterLat));
-        cmd.Parameters.AddWithValue(Convert.ToDecimal(request.CenterLng));
-        cmd.Parameters.AddWithValue(Convert.ToDecimal(request.RadiusMeters));
-        cmd.Parameters.AddWithValue((object?)request.FacilityId ?? DBNull.Value);
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        await reader.ReadAsync(ct);
-        return new GeofenceDto(
-            reader.GetInt32(0),
-            reader.GetString(1),
-            reader.GetString(2),
-            Convert.ToDouble(reader.GetDecimal(3)),
-            Convert.ToDouble(reader.GetDecimal(4)),
-            Convert.ToDouble(reader.GetDecimal(5)),
-            reader.IsDBNull(6) ? null : reader.GetInt32(6),
-            reader.GetBoolean(7),
-            reader.GetFieldValue<DateTimeOffset>(8));
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var row = new GeofencesRow
+        {
+            Name = request.Name, ZoneType = request.ZoneType, CenterLat = Convert.ToDecimal(request.CenterLat),
+            CenterLng = Convert.ToDecimal(request.CenterLng), RadiusMeters = Convert.ToDecimal(request.RadiusMeters),
+            FacilityId = request.FacilityId, IsActive = true,
+        };
+        await db.InsertAsync(row, ct);
+        return new GeofenceDto(row.Id, row.Name, row.ZoneType, Convert.ToDouble(row.CenterLat), Convert.ToDouble(row.CenterLng),
+            Convert.ToDouble(row.RadiusMeters), row.FacilityId, row.IsActive, new DateTimeOffset(DateTime.SpecifyKind(row.CreatedAt, DateTimeKind.Utc)));
     }
 
     public async Task RecordGeofenceEventAsync(int vehicleId, int? rentalId, int geofenceId, string eventType, double lat, double lng, DateTimeOffset occurredAt, CancellationToken ct)
     {
-        const string sql = """
-            INSERT INTO geofence_events (vehicle_id, rental_id, geofence_id, event_type, latitude, longitude, occurred_at, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, now())
-            """;
-        await using var cmd = dataSource.CreateCommand(sql);
-        cmd.Parameters.AddWithValue(vehicleId);
-        cmd.Parameters.AddWithValue((object?)rentalId ?? DBNull.Value);
-        cmd.Parameters.AddWithValue(geofenceId);
-        cmd.Parameters.AddWithValue(eventType);
-        cmd.Parameters.AddWithValue(Convert.ToDecimal(lat));
-        cmd.Parameters.AddWithValue(Convert.ToDecimal(lng));
-        cmd.Parameters.AddWithValue(occurredAt);
-        await cmd.ExecuteNonQueryAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        await db.InsertAsync(new GeofenceEventsRow
+        {
+            VehicleId = vehicleId, RentalId = rentalId, GeofenceId = geofenceId, EventType = eventType,
+            Latitude = Convert.ToDecimal(lat), Longitude = Convert.ToDecimal(lng), OccurredAt = occurredAt.UtcDateTime,
+        }, ct);
     }
 
     public async Task<(IReadOnlyList<GeofenceEventDto> Items, int TotalCount)> ListGeofenceEventsAsync(int? vehicleId, int? rentalId, int page, int pageSize, CancellationToken ct)
@@ -314,41 +245,18 @@ public sealed class NpgsqlTrackingRepository(NpgsqlDataSource dataSource) : ITra
 
     public async Task<TrackingAlertDto> CreateAlertAsync(int? rentalId, int vehicleId, string alertType, string severity, string message, double lat, double lng, double? expectedLat, double? expectedLng, double? distanceMeters, CancellationToken ct)
     {
-        const string sql = """
-            INSERT INTO tracking_alerts (rental_id, vehicle_id, alert_type, severity, message, latitude, longitude, expected_latitude, expected_longitude, distance_meters, is_resolved, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, FALSE, now())
-            RETURNING id, rental_id, vehicle_id, alert_type, severity, message, latitude, longitude, expected_latitude, expected_longitude, distance_meters, is_resolved, resolved_at, resolved_by, created_at
-            """;
-        await using var cmd = dataSource.CreateCommand(sql);
-        cmd.Parameters.AddWithValue((object?)rentalId ?? DBNull.Value);
-        cmd.Parameters.AddWithValue(vehicleId);
-        cmd.Parameters.AddWithValue(alertType);
-        cmd.Parameters.AddWithValue(severity);
-        cmd.Parameters.AddWithValue(message);
-        cmd.Parameters.AddWithValue(Convert.ToDecimal(lat));
-        cmd.Parameters.AddWithValue(Convert.ToDecimal(lng));
-        cmd.Parameters.AddWithValue(expectedLat.HasValue ? Convert.ToDecimal(expectedLat.Value) : DBNull.Value);
-        cmd.Parameters.AddWithValue(expectedLng.HasValue ? Convert.ToDecimal(expectedLng.Value) : DBNull.Value);
-        cmd.Parameters.AddWithValue(distanceMeters.HasValue ? Convert.ToDecimal(distanceMeters.Value) : DBNull.Value);
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        await reader.ReadAsync(ct);
-        return new TrackingAlertDto(
-            reader.GetInt64(0),
-            reader.IsDBNull(1) ? null : reader.GetInt32(1),
-            reader.GetInt32(2),
-            reader.GetString(3),
-            reader.GetString(4),
-            reader.GetString(5),
-            Convert.ToDouble(reader.GetDecimal(6)),
-            Convert.ToDouble(reader.GetDecimal(7)),
-            reader.IsDBNull(8) ? null : Convert.ToDouble(reader.GetDecimal(8)),
-            reader.IsDBNull(9) ? null : Convert.ToDouble(reader.GetDecimal(9)),
-            reader.IsDBNull(10) ? null : Convert.ToDouble(reader.GetDecimal(10)),
-            reader.GetBoolean(11),
-            reader.IsDBNull(12) ? null : reader.GetFieldValue<DateTimeOffset>(12),
-            reader.IsDBNull(13) ? null : reader.GetString(13),
-            reader.GetFieldValue<DateTimeOffset>(14));
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var row = new TrackingAlertsRow
+        {
+            RentalId = rentalId, VehicleId = vehicleId, AlertType = alertType, Severity = severity, Message = message,
+            Latitude = Convert.ToDecimal(lat), Longitude = Convert.ToDecimal(lng),
+            ExpectedLatitude = expectedLat.HasValue ? Convert.ToDecimal(expectedLat.Value) : null,
+            ExpectedLongitude = expectedLng.HasValue ? Convert.ToDecimal(expectedLng.Value) : null,
+            DistanceMeters = distanceMeters.HasValue ? Convert.ToDecimal(distanceMeters.Value) : null,
+            IsResolved = false,
+        };
+        await db.InsertAsync(row, ct);
+        return await Alerts(db.Set<TrackingAlertsRow>().Where(a => a.Id == row.Id)).SingleAsync(ct);
     }
 
     public async Task<(IReadOnlyList<TrackingAlertDto> Items, int TotalCount)> ListAlertsAsync(int? rentalId, int? vehicleId, bool? isResolved, int page, int pageSize, CancellationToken ct)
@@ -359,46 +267,20 @@ public sealed class NpgsqlTrackingRepository(NpgsqlDataSource dataSource) : ITra
         var total = await alerts.CountAsync(ct);
         var offset = ((long)page - 1) * pageSize;
         if (offset >= total) return ([], total);
-        var items = await alerts.OrderByDescending(a => a.CreatedAt).ThenByDescending(a => a.Id).Skip((int)offset).Take(pageSize)
-            .Select(a => new TrackingAlertDto(a.Id, a.RentalId, a.VehicleId, a.AlertType, a.Severity, a.Message,
-                (double)a.Latitude, (double)a.Longitude, (double?)a.ExpectedLatitude, (double?)a.ExpectedLongitude,
-                (double?)a.DistanceMeters, a.IsResolved, a.ResolvedAt.HasValue ? new DateTimeOffset(a.ResolvedAt.Value) : null,
-                a.ResolvedBy, new DateTimeOffset(a.CreatedAt))).ToListAsync(ct);
+        var items = await Alerts(alerts.OrderByDescending(a => a.CreatedAt).ThenByDescending(a => a.Id).Skip((int)offset).Take(pageSize)).ToListAsync(ct);
         return (items, total);
     }
 
     public async Task<TrackingAlertDto> ResolveAlertAsync(long alertId, string resolvedBy, CancellationToken ct)
     {
-        const string sql = """
-            UPDATE tracking_alerts
-            SET is_resolved = TRUE, resolved_at = now(), resolved_by = $2
-            WHERE id = $1
-            RETURNING id, rental_id, vehicle_id, alert_type, severity, message, latitude, longitude, expected_latitude, expected_longitude, distance_meters, is_resolved, resolved_at, resolved_by, created_at
-            """;
-        await using var cmd = dataSource.CreateCommand(sql);
-        cmd.Parameters.AddWithValue(alertId);
-        cmd.Parameters.AddWithValue(resolvedBy);
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct))
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        var now = DateTime.SpecifyKind(await db.DatabaseUtcNowAsync(ct), DateTimeKind.Utc);
+        if (await db.Set<TrackingAlertsRow>().Where(a => a.Id == alertId).ExecuteUpdateAsync(s => s
+                .SetProperty(a => a.IsResolved, true)
+                .SetProperty(a => a.ResolvedAt, now)
+                .SetProperty(a => a.ResolvedBy, resolvedBy), ct) == 0)
             throw new KeyNotFoundException($"Alert {alertId} was not found.");
-
-        return new TrackingAlertDto(
-            reader.GetInt64(0),
-            reader.IsDBNull(1) ? null : reader.GetInt32(1),
-            reader.GetInt32(2),
-            reader.GetString(3),
-            reader.GetString(4),
-            reader.GetString(5),
-            Convert.ToDouble(reader.GetDecimal(6)),
-            Convert.ToDouble(reader.GetDecimal(7)),
-            reader.IsDBNull(8) ? null : Convert.ToDouble(reader.GetDecimal(8)),
-            reader.IsDBNull(9) ? null : Convert.ToDouble(reader.GetDecimal(9)),
-            reader.IsDBNull(10) ? null : Convert.ToDouble(reader.GetDecimal(10)),
-            reader.GetBoolean(11),
-            reader.IsDBNull(12) ? null : reader.GetFieldValue<DateTimeOffset>(12),
-            reader.IsDBNull(13) ? null : reader.GetString(13),
-            reader.GetFieldValue<DateTimeOffset>(14));
+        return await Alerts(db.Set<TrackingAlertsRow>().Where(a => a.Id == alertId)).SingleAsync(ct);
     }
 
     public async Task<(int Id, int CustomerId, int VehicleId, int? FacilityId, string Status, DateTime? StartTime, DateTime? EndTime, string? PickupLocation)?> GetRentalDetailsAsync(int rentalId, CancellationToken ct)
@@ -433,6 +315,12 @@ public sealed class NpgsqlTrackingRepository(NpgsqlDataSource dataSource) : ITra
     private static IQueryable<TrackingDeviceDto> Devices(IQueryable<TrackingDevicesRow> devices) =>
         devices.Select(d => new TrackingDeviceDto(d.Id, d.VehicleId, d.Name, d.IsActive,
             d.LastPingAt.HasValue ? new DateTimeOffset(d.LastPingAt.Value) : null, new DateTimeOffset(d.CreatedAt)));
+
+    private static IQueryable<TrackingAlertDto> Alerts(IQueryable<TrackingAlertsRow> alerts) =>
+        alerts.Select(a => new TrackingAlertDto(a.Id, a.RentalId, a.VehicleId, a.AlertType, a.Severity, a.Message,
+            (double)a.Latitude, (double)a.Longitude, (double?)a.ExpectedLatitude, (double?)a.ExpectedLongitude,
+            (double?)a.DistanceMeters, a.IsResolved, a.ResolvedAt.HasValue ? new DateTimeOffset(a.ResolvedAt.Value) : null,
+            a.ResolvedBy, new DateTimeOffset(a.CreatedAt)));
 
     private static IQueryable<PositionDto> Positions(IQueryable<VehiclePositionsRow> positions) =>
         positions.Select(p => new PositionDto((double)p.Latitude, (double)p.Longitude, new DateTimeOffset(p.RecordedAt),

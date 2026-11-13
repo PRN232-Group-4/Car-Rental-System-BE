@@ -33,20 +33,19 @@ public sealed class NpgsqlAccountRepository(NpgsqlDataSource dataSource) : IAcco
 
     public async Task UpdateProfileAsync(string email, AccountProfile profile, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("UPDATE users SET fullname = $1, gender = $2, phone = $3 WHERE email = $4 AND is_active = TRUE");
-        command.Parameters.AddWithValue(profile.FullName);
-        command.Parameters.AddWithValue((object?)profile.Gender ?? DBNull.Value);
-        command.Parameters.AddWithValue((object?)profile.Phone ?? DBNull.Value);
-        command.Parameters.AddWithValue(email);
-        if (await command.ExecuteNonQueryAsync(ct) != 1) throw new AccountNotFoundException();
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        if (await db.Set<UsersRow>().Where(u => u.Email == email && u.IsActive).ExecuteUpdateAsync(s => s
+                .SetProperty(u => u.Fullname, profile.FullName)
+                .SetProperty(u => u.Gender, profile.Gender)
+                .SetProperty(u => u.Phone, profile.Phone), ct) != 1)
+            throw new AccountNotFoundException();
     }
 
     public async Task UpdatePasswordHashAsync(string email, string passwordHash, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("UPDATE users SET password_hash = $1 WHERE email = $2 AND is_active = TRUE");
-        command.Parameters.AddWithValue(passwordHash);
-        command.Parameters.AddWithValue(email);
-        if (await command.ExecuteNonQueryAsync(ct) != 1) throw new AccountNotFoundException();
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        if (await db.Set<UsersRow>().Where(u => u.Email == email && u.IsActive)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.PasswordHash, passwordHash), ct) != 1)
+            throw new AccountNotFoundException();
     }
 }
-

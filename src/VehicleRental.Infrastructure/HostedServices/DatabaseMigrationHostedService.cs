@@ -1,4 +1,6 @@
 using System.Security.Cryptography;
+using Car_Rental_System_BE.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -139,21 +141,24 @@ public sealed class DatabaseMigrationHostedService(
 
     private static async Task<string?> GetAppliedChecksumAsync(NpgsqlConnection connection, string id, CancellationToken ct)
     {
-        await using var command = new NpgsqlCommand("SELECT checksum FROM schema_migrations WHERE id = $1", connection);
-        command.Parameters.AddWithValue(id);
-        return (string?)await command.ExecuteScalarAsync(ct);
+        await using var db = new MigrationDbContext(connection);
+        return await db.History.AsNoTracking().Where(row => row.Id == id)
+            .Select(row => row.Checksum).SingleOrDefaultAsync(ct);
     }
 
     private static async Task<bool> HasExistingSchemaAsync(NpgsqlConnection connection, CancellationToken ct)
     {
-        await using var command = new NpgsqlCommand("SELECT to_regclass('public.users') IS NOT NULL", connection);
-        return (bool)(await command.ExecuteScalarAsync(ct))!;
+        await using var db = new MigrationDbContext(connection);
+        return await (from relation in db.Relations
+                      join schema in db.Namespaces on relation.NamespaceId equals schema.Id
+                      where schema.Name == "public" && relation.Name == "users"
+                      select relation.Name).AnyAsync(ct);
     }
 
     private static async Task RecordAsync(NpgsqlConnection connection, string id, string checksum, CancellationToken ct, NpgsqlTransaction? transaction = null)
     {
-        await using var command = new NpgsqlCommand("INSERT INTO schema_migrations (id, checksum) VALUES ($1, $2)", connection, transaction);
-        command.Parameters.AddWithValue(id); command.Parameters.AddWithValue(checksum);
-        await command.ExecuteNonQueryAsync(ct);
+        await using var db = new MigrationDbContext(connection, transaction);
+        db.History.Add(new MigrationHistoryRow { Id = id, Checksum = checksum });
+        await db.SaveChangesAsync(ct);
     }
 }

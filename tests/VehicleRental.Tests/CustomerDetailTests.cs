@@ -43,7 +43,7 @@ public sealed class CustomerDetailTests(PostgresFixture db) : IClassFixture<Post
     }
 
     [Fact]
-    public async Task Detail_preserves_nullable_fields_and_excludes_missing_logical_user()
+    public async Task Detail_preserves_nullable_fields_and_foreign_key_protects_referenced_user()
     {
         var (customerId, _) = await Seed.CustomerAsync(db.DataSource, "pending", withLicense: false);
         // Seed.CustomerAsync normally supplies valid license metadata; this case explicitly tests its absence.
@@ -67,7 +67,9 @@ public sealed class CustomerDetailTests(PostgresFixture db) : IClassFixture<Post
         Assert.Equal("pending", result.License.Status);
         Assert.Equal(0, result.Loyalty.Points);
         Assert.Null(await repository.FindByIdAsync(int.MaxValue, default));
-        await Seed.ScalarAsync(db.DataSource, "DELETE FROM users WHERE id=$1", result.UserId);
-        Assert.Null(await repository.FindByIdAsync(customerId, default));
+        var deletion = await Assert.ThrowsAsync<Npgsql.PostgresException>(() =>
+            Seed.ScalarAsync(db.DataSource, "DELETE FROM users WHERE id=$1", result.UserId));
+        Assert.Equal(Npgsql.PostgresErrorCodes.ForeignKeyViolation, deletion.SqlState);
+        Assert.NotNull(await repository.FindByIdAsync(customerId, default));
     }
 }

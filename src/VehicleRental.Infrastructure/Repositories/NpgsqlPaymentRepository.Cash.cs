@@ -1,5 +1,7 @@
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.DTOs.Payments;
+using Car_Rental_System_BE.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Car_Rental_System_BE.Domain.Lifecycle;
 
@@ -13,26 +15,16 @@ public sealed partial class NpgsqlPaymentRepository
         if (string.IsNullOrWhiteSpace(reviewer)) throw new UnauthorizedAccessException();
         await using var cn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await cn.BeginTransactionAsync(ct);
-        await using var find = new NpgsqlCommand("SELECT rental_id FROM invoices WHERE id=$1", cn, tx);
-        find.Parameters.AddWithValue(invoiceId);
-        if (await find.ExecuteScalarAsync(ct) is not int rentalId) throw new NotFoundException("INVOICE_NOT_FOUND", "Invoice was not found.");
-        await using var rental = new NpgsqlCommand("SELECT customer_id,status,confirmed_at FROM rentals WHERE id=$1 FOR UPDATE", cn, tx);
-        rental.Parameters.AddWithValue(rentalId);
-        int customerId; string rentalStatus; DateTime? confirmedAt;
-        await using (var reader = await rental.ExecuteReaderAsync(ct))
-        {
-            if (!await reader.ReadAsync(ct)) throw new NotFoundException("RENTAL_NOT_FOUND", "Rental was not found.");
-            customerId = reader.GetInt32(0); rentalStatus = reader.GetString(1); confirmedAt = reader.IsDBNull(2) ? null : reader.GetDateTime(2);
-        }
-        await using var invoice = new NpgsqlCommand("SELECT amount,status,kind,payment_method,checkout_started_at,EXISTS(SELECT 1 FROM rental_settlements s WHERE s.rental_id=$2 AND s.shortfall_invoice_id=$1) FROM invoices WHERE id=$1 AND rental_id=$2 FOR UPDATE", cn, tx);
-        invoice.Parameters.AddWithValue(invoiceId); invoice.Parameters.AddWithValue(rentalId);
-        decimal amount; string status; string kind; string method; bool checkoutStarted; bool linkedSettlement;
-        await using (var reader = await invoice.ExecuteReaderAsync(ct))
-        {
-            if (!await reader.ReadAsync(ct)) throw new NotFoundException("INVOICE_NOT_FOUND", "Invoice was not found.");
-            amount = reader.GetDecimal(0); status = reader.GetString(1); kind = reader.GetString(2);
-            method = reader.GetString(3); checkoutStarted = !reader.IsDBNull(4); linkedSettlement = reader.GetBoolean(5);
-        }
+        await using var db = VehicleRentalDbContext.Create(cn, tx);
+        var rentalId = await db.Set<InvoicesRow>().Where(i => i.Id == invoiceId).Select(i => (int?)i.RentalId).FirstOrDefaultAsync(ct)
+            ?? throw new NotFoundException("INVOICE_NOT_FOUND", "Invoice was not found.");
+        var rental = await db.LockByKeyAsync<RentalsRow>(rentalId, ct) ?? throw new NotFoundException("RENTAL_NOT_FOUND", "Rental was not found.");
+        int customerId = rental.CustomerId; string rentalStatus = rental.Status; DateTime? confirmedAt = rental.ConfirmedAt;
+        var invoiceRow = await db.LockByKeyAsync<InvoicesRow>(invoiceId, ct);
+        if (invoiceRow is null || invoiceRow.RentalId != rentalId) throw new NotFoundException("INVOICE_NOT_FOUND", "Invoice was not found.");
+        decimal amount = invoiceRow.Amount; string status = invoiceRow.Status; string kind = invoiceRow.Kind;
+        string method = invoiceRow.PaymentMethod; bool checkoutStarted = invoiceRow.CheckoutStartedAt is not null;
+        bool linkedSettlement = await db.Set<RentalSettlementsRow>().AnyAsync(x => x.RentalId == rentalId && x.ShortfallInvoiceId == invoiceId, ct);
         if (kind is not ("rental" or "overtime"))
             throw new ConflictException("INVOICE_NOT_PAYABLE", "Loại hóa đơn không thể thu tiền mặt.");
         if (kind == "overtime" && (rentalStatus != "completed" || !linkedSettlement))
@@ -41,14 +33,11 @@ public sealed partial class NpgsqlPaymentRepository
             throw new ConflictException("PAYMENT_METHOD_MISMATCH", "Hóa đơn này không chọn thanh toán tiền mặt.");
         if (status == "paid")
         {
-            await using var existing = new NpgsqlCommand("SELECT id,provider_reference FROM payments WHERE invoice_id=$1 AND method='cash' AND status='paid' AND type IN ('rental','overtime') ORDER BY id LIMIT 1", cn, tx);
-            existing.Parameters.AddWithValue(invoiceId);
-            int existingId; string? reference;
-            await using (var reader = await existing.ExecuteReaderAsync(ct))
-            {
-                if (!await reader.ReadAsync(ct)) throw new ConflictException("INVOICE_NOT_PAYABLE", "Hóa đơn đã được thanh toán.");
-                existingId = reader.GetInt32(0); reference = reader.IsDBNull(1) ? null : reader.GetString(1);
-            }
+            var existing = await db.Set<PaymentsRow>().Where(p => p.InvoiceId == invoiceId && p.Method == "cash" && p.Status == "paid"
+                    && (p.Type == "rental" || p.Type == "overtime")).OrderBy(p => p.Id)
+                .Select(p => new { p.Id, p.ProviderReference }).FirstOrDefaultAsync(ct)
+                ?? throw new ConflictException("INVOICE_NOT_PAYABLE", "Hóa đơn đã được thanh toán.");
+            int existingId = existing.Id; string? reference = existing.ProviderReference;
             var existingOrder = kind == "rental" ? await RentalOrderWriter.EnsurePaidAsync(cn, tx, rentalId, ct) : null;
             await tx.CommitAsync(ct);
             return new(existingId, invoiceId, amount, "paid", reference, existingOrder);
@@ -58,16 +47,18 @@ public sealed partial class NpgsqlPaymentRepository
         if (kind == "overtime" && checkoutStarted)
             throw new ConflictException("PAYMENT_IN_PROGRESS", "Đã bắt đầu thanh toán online; không thể thu thêm tiền mặt cho hóa đơn này.");
         var cashReference = $"cash:{invoiceId}";
-        await using var add = new NpgsqlCommand("""
-            INSERT INTO payments(rental_id,invoice_id,customer_id,is_subscription_payment,amount,status,type,method,paid_at,provider_reference,reviewed_by,reviewed_at)
-            VALUES($1,$2,$3,false,$4,'paid',$7,'cash',now() AT TIME ZONE 'utc',$5,$6,now() AT TIME ZONE 'utc') RETURNING id
-            """, cn, tx);
-        add.Parameters.AddWithValue(rentalId); add.Parameters.AddWithValue(invoiceId); add.Parameters.AddWithValue(customerId);
-        add.Parameters.AddWithValue(amount); add.Parameters.AddWithValue(cashReference); add.Parameters.AddWithValue(reviewer);
-        add.Parameters.AddWithValue(kind == "overtime" ? "overtime" : "rental");
-        var paymentId = (int)(await add.ExecuteScalarAsync(ct))!;
-        await using var paid = new NpgsqlCommand("UPDATE invoices SET status='paid',payment_method='cash' WHERE id=$1", cn, tx);
-        paid.Parameters.AddWithValue(invoiceId); await paid.ExecuteNonQueryAsync(ct);
+        var utcNow = await db.DatabaseUtcNowAsync(ct);
+        var payment = new PaymentsRow
+        {
+            RentalId = rentalId, InvoiceId = invoiceId, CustomerId = customerId, IsSubscriptionPayment = false, Amount = amount,
+            Status = "paid", Type = kind == "overtime" ? "overtime" : "rental", Method = "cash", PaidAt = utcNow,
+            ProviderReference = cashReference, ReviewedBy = reviewer, ReviewedAt = utcNow,
+        };
+        await db.InsertAsync(payment, ct);
+        var paymentId = payment.Id;
+        await db.Set<InvoicesRow>().Where(i => i.Id == invoiceId).ExecuteUpdateAsync(s => s
+            .SetProperty(i => i.Status, "paid")
+            .SetProperty(i => i.PaymentMethod, "cash"), ct);
         var orderId = kind == "rental" ? await RentalOrderWriter.EnsurePaidAsync(cn, tx, rentalId, ct) : null;
         await tx.CommitAsync(ct);
         return new(paymentId, invoiceId, amount, "paid", cashReference, orderId);

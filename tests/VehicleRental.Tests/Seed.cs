@@ -4,6 +4,15 @@ namespace VehicleRental.Tests;
 
 internal static class Seed
 {
+    public static async Task<(int Id, int UserId)> StaffAsync(NpgsqlDataSource db)
+    {
+        var userId = (int)(await ScalarAsync(db,
+            "INSERT INTO users(email) VALUES($1) RETURNING id", $"staff-{Guid.NewGuid():N}@test.local"))!;
+        var staffId = (int)(await ScalarAsync(db,
+            "INSERT INTO staffs(user_id) VALUES($1) RETURNING id", userId))!;
+        return (staffId, userId);
+    }
+
     public static async Task<(int Id, string Email)> CustomerAsync(NpgsqlDataSource db, string licenseStatus = "approved", bool withLicense = true)
     {
         var email = $"customer-{Guid.NewGuid():N}@test.local";

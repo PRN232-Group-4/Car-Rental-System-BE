@@ -72,32 +72,31 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
             && l.Status == "approved" && l.ExpiryDate >= DateOnly.FromDateTime(DateTime.Today), ct);
     }
 
+    /// <summary>Per-rental advisory lock followed by the rental row lock, as before.</summary>
+    private static async Task<RentalsRow?> LockRentalAsync(VehicleRentalDbContext db, int rentalId, CancellationToken ct)
+    {
+        await db.AdvisoryLockAsync((long)rentalId, ct);
+        return await db.LockByKeyAsync<RentalsRow>(rentalId, ct);
+    }
+
+    private static Task ReleaseVehicleAsync(VehicleRentalDbContext db, int vehicleId, CancellationToken ct) =>
+        db.Set<VehiclesRow>().Where(v => v.Id == vehicleId).ExecuteUpdateAsync(s => s
+            .SetProperty(v => v.IsRenting, false)
+            .SetProperty(v => v.Status, v => v.Status == "maintenance" ? "maintenance" : "available"), ct);
+
     public async Task UpdateToPreInspectionAsync(int rentalId, DateTime confirmedAt, ActorContext actor, CancellationToken ct)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(conn, tx);
 
-        await using (var lockCmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock($1)", conn, tx))
-        {
-            lockCmd.Parameters.AddWithValue(rentalId);
-            await lockCmd.ExecuteNonQueryAsync(ct);
-        }
+        var rental = await LockRentalAsync(db, rentalId, ct) ?? throw new NotFoundException("RENTAL_NOT_FOUND", "Rental was not found.");
+        if (rental.Status == "pre_inspection" && rental.ConfirmedAt is not null)
+            throw new ConflictException("ALREADY_IN_STATE", "Rental is already confirmed.");
+        if (rental.Status is not ("pending" or "pre_inspection"))
+            throw new ConflictException("ILLEGAL_TRANSITION", $"Rental cannot be confirmed from {rental.Status}.");
 
-        string? previousStatus;
-        await using (var checkCmd = new NpgsqlCommand("SELECT status,confirmed_at FROM rentals WHERE id = $1 FOR UPDATE", conn, tx))
-        {
-            checkCmd.Parameters.AddWithValue(rentalId);
-            await using var reader = await checkCmd.ExecuteReaderAsync(ct);
-            if (!await reader.ReadAsync(ct)) throw new NotFoundException("RENTAL_NOT_FOUND", "Rental was not found.");
-            var curStatus = reader.GetString(0);
-            previousStatus = curStatus;
-            if (curStatus == "pre_inspection" && !reader.IsDBNull(1))
-                throw new ConflictException("ALREADY_IN_STATE", "Rental is already confirmed.");
-            if (curStatus is not ("pending" or "pre_inspection"))
-                throw new ConflictException("ILLEGAL_TRANSITION", $"Rental cannot be confirmed from {curStatus}.");
-        }
-
-        await Car_Rental_System_BE.Infrastructure.Repositories.RentalApprovalWriter.WriteAsync(conn, tx, rentalId, previousStatus, confirmedAt, actor, "Rental confirmed", ct);
+        await Car_Rental_System_BE.Infrastructure.Repositories.RentalApprovalWriter.WriteAsync(conn, tx, rentalId, rental.Status, confirmedAt, actor, "Rental confirmed", ct);
         await tx.CommitAsync(ct);
     }
 
@@ -105,149 +104,119 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(conn, tx);
 
         // Dispatch mutations take this lock; newer assignments and vehicle swaps use VehicleLock.
         // Acquire both before the rental row and recheck evidence inside this transaction.
-        await using (var dispatchLock = new NpgsqlCommand("SELECT pg_advisory_xact_lock(724232001::bigint)", conn, tx))
-            await dispatchLock.ExecuteNonQueryAsync(ct);
+        await db.AdvisoryLockAsync(724232001L, ct);
         await VehicleLock.AcquireAsync(conn, tx, vehicleId, ct);
 
-        await using (var lockCmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock($1)", conn, tx))
-        {
-            lockCmd.Parameters.AddWithValue(rentalId);
-            await lockCmd.ExecuteNonQueryAsync(ct);
-        }
+        var rental = await LockRentalAsync(db, rentalId, ct) ?? throw new NotFoundException("RENTAL_NOT_FOUND", "Rental was not found.");
+        if (rental.Status == "renting")
+            throw new ConflictException("ALREADY_IN_STATE", "Rental is already started.");
+        if (rental.Status != "pre_inspection")
+            throw new ConflictException("ILLEGAL_TRANSITION", $"Rental cannot be started from {rental.Status}.");
+        if (rental.VehicleId != vehicleId)
+            throw new ConflictException("RENTAL_CHANGED", "The assigned vehicle changed. Reload the rental before confirming handover.");
 
-        await using (var checkCmd = new NpgsqlCommand("SELECT status,vehicle_id FROM rentals WHERE id = $1 FOR UPDATE", conn, tx))
-        {
-            checkCmd.Parameters.AddWithValue(rentalId);
-            await using var reader = await checkCmd.ExecuteReaderAsync(ct);
-            if (!await reader.ReadAsync(ct)) throw new NotFoundException("RENTAL_NOT_FOUND", "Rental was not found.");
-            var curStatus = reader.GetString(0);
-            if (curStatus == "renting")
-                throw new ConflictException("ALREADY_IN_STATE", "Rental is already started.");
-            if (curStatus != "pre_inspection")
-                throw new ConflictException("ILLEGAL_TRANSITION", $"Rental cannot be started from {curStatus}.");
-            if (reader.GetInt32(1) != vehicleId)
-                throw new ConflictException("RENTAL_CHANGED", "The assigned vehicle changed. Reload the rental before confirming handover.");
-        }
-
-        await RequireStartEvidenceAsync(conn, tx, rentalId, vehicleId, startedAt, ct);
+        var started = Sql.Ts(startedAt);
+        var schedule = await RequireStartEvidenceAsync(db, conn, tx, rental, vehicleId, started, ct);
 
         // Evidence, payment and availability have passed while dispatch/vehicle/rental locks
         // are held. Record self-drive handover without requiring a separate driver action.
-        await using (var assignment = new NpgsqlCommand("""
-            INSERT INTO vehicle_assignments(rental_id,vehicle_id,driver_staff_id,status,assigned_by,assigned_at,starts_at,ends_at,reason)
-            SELECT r.id,r.vehicle_id,NULL,'assigned',$3,$2,
-                GREATEST(COALESCE(h.start_time,l.start_time),$2),
-                GREATEST(COALESCE(h.end_time,l.end_time),$2 + interval '1 microsecond'),'initial'
-            FROM rentals r
-            LEFT JOIN hour_rental_detail h ON h.rental_id=r.id
-            LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id
-            WHERE r.id=$1 AND NOT COALESCE(h.has_driver,l.has_driver,false)
-                AND NOT EXISTS(SELECT 1 FROM vehicle_assignments a WHERE a.rental_id=r.id AND a.status='assigned')
-            """, conn, tx))
+        if (!schedule.HasDriver && !await db.Set<VehicleAssignmentsRow>().AnyAsync(a => a.RentalId == rentalId && a.Status == "assigned", ct))
         {
-            assignment.Parameters.AddWithValue(rentalId);
-            assignment.Parameters.Add(Sql.Timestamp("", startedAt));
-            assignment.Parameters.AddWithValue(actor.Email);
-            await assignment.ExecuteNonQueryAsync(ct);
+            var minimumEnd = started.AddTicks(10); // + interval '1 microsecond'
+            await db.InsertAsync(new VehicleAssignmentsRow
+            {
+                RentalId = rentalId, VehicleId = rental.VehicleId, DriverStaffId = null, Status = "assigned", AssignedBy = actor.Email,
+                AssignedAt = started,
+                StartsAt = schedule.Start is { } s && s > started ? s : started,
+                EndsAt = schedule.End is { } e && e > minimumEnd ? e : minimumEnd,
+                Reason = "initial",
+            }, ct);
         }
 
-        await using var cmdRental = new NpgsqlCommand("""
-            UPDATE rentals
-            SET status = 'renting', started_at = $2, status_changed_at = now()
-            WHERE id = $1
-            """, conn, tx);
-        cmdRental.Parameters.AddWithValue(rentalId);
-        cmdRental.Parameters.Add(Sql.Timestamp("", startedAt));
-        await cmdRental.ExecuteNonQueryAsync(ct);
+        var now = await db.DatabaseNowAsync(ct);
+        await db.Set<RentalsRow>().Where(r => r.Id == rentalId).ExecuteUpdateAsync(s => s
+            .SetProperty(r => r.Status, "renting")
+            .SetProperty(r => r.StartedAt, started)
+            .SetProperty(r => r.StatusChangedAt, now), ct);
+        await db.Set<VehiclesRow>().Where(v => v.Id == vehicleId).ExecuteUpdateAsync(s => s
+            .SetProperty(v => v.Status, "renting")
+            .SetProperty(v => v.IsRenting, true), ct);
 
-        await using var cmdVehicle = new NpgsqlCommand("""
-            UPDATE vehicles
-            SET status = 'renting', is_renting = true
-            WHERE id = $1
-            """, conn, tx);
-        cmdVehicle.Parameters.AddWithValue(vehicleId);
-        await cmdVehicle.ExecuteNonQueryAsync(ct);
-
-        await InsertHistoryAsync(conn, tx, rentalId, "pre_inspection", "renting", actor, "Rental started", ct);
+        await InsertHistoryAsync(db, rentalId, "pre_inspection", "renting", actor, "Rental started", ct);
         await tx.CommitAsync(ct);
     }
 
-    private static async Task RequireStartEvidenceAsync(NpgsqlConnection conn, NpgsqlTransaction tx, int rentalId,
-        int vehicleId, DateTime startedAt, CancellationToken ct)
+    private sealed record StartSchedule(bool HasDriver, DateTime? Start, DateTime? End);
+
+    private static async Task<StartSchedule> RequireStartEvidenceAsync(VehicleRentalDbContext db, NpgsqlConnection conn, NpgsqlTransaction tx,
+        RentalsRow rental, int vehicleId, DateTime startedAt, CancellationToken ct)
     {
         // A separate statement takes the customer lock before the eligibility snapshot.
-        await using (var customerLock = new NpgsqlCommand("SELECT c.id FROM customers c JOIN rentals r ON r.customer_id=c.id WHERE r.id=$1 FOR SHARE OF c",conn,tx))
-        { customerLock.Parameters.AddWithValue(rentalId); await customerLock.ExecuteScalarAsync(ct); }
-        await using var command = new NpgsqlCommand($"""
-            SELECT
-                EXISTS(SELECT 1 FROM inspections i WHERE i.rental_id=r.id AND i.vehicle_id=r.vehicle_id
-                    AND i.inspection_type='pre_rental' AND i.is_ok=true),
-                CASE WHEN COALESCE(h.has_driver,l.has_driver,false) THEN
-                    EXISTS(SELECT 1 FROM vehicle_assignments a WHERE a.rental_id=r.id AND a.vehicle_id=r.vehicle_id
-                        AND a.status='assigned' AND a.driver_staff_id IS NOT NULL)
-                ELSE NOT EXISTS(SELECT 1 FROM vehicle_assignments a WHERE a.rental_id=r.id AND a.status='assigned'
-                    AND (a.vehicle_id<>r.vehicle_id OR a.driver_staff_id IS NOT NULL)) END,
-                COALESCE(h.has_driver,l.has_driver,false) OR {CustomerLicenseSql.Eligible("c.id", "r.vehicle_id", "COALESCE(h.end_time,l.end_time)::date")},
-                r.is_subscription OR EXISTS(SELECT 1 FROM invoices inv WHERE inv.rental_id=r.id
-                    AND inv.kind='rental' AND inv.status='paid'),
-                LEAST(COALESCE(h.start_time,l.start_time),$2),
-                GREATEST(COALESCE(h.end_time,l.end_time),$2 + interval '1 microsecond'),
-                r.rental_type <> 'longterm' OR EXISTS(SELECT 1 FROM rental_contract_documents d WHERE d.rental_id=r.id)
-            FROM rentals r JOIN customers c ON c.id=r.customer_id
-            LEFT JOIN hour_rental_detail h ON h.rental_id=r.id
-            LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id
-            WHERE r.id=$1
-            FOR SHARE OF c
-            """, conn, tx);
-        command.Parameters.AddWithValue(rentalId);
-        command.Parameters.Add(Sql.Timestamp("", startedAt));
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct)) throw new ConflictException("CUSTOMER_LICENSE_NOT_VALID", "Rental customer was not found.");
-        if (!reader.GetBoolean(0)) throw new ConflictException("PRE_INSPECTION_REQUIRED", "A passed inspection for the current vehicle is required.");
-        if (!reader.GetBoolean(1)) throw new ConflictException("ASSIGNMENT_REQUIRED", "An active assignment for the current vehicle is required.");
-        if (reader.IsDBNull(2) || !reader.GetBoolean(2)) throw new ConflictException("CUSTOMER_LICENSE_NOT_VALID", "Customer license must be approved and valid for self-drive.");
-        if (!reader.GetBoolean(3)) throw new ConflictException("PAYMENT_REQUIRED", "Direct rental invoice must be paid before handover.");
-        if (!reader.GetBoolean(6)) throw new ConflictException("SIGNED_CONTRACT_REQUIRED", "Upload the signed long-term contract before handover.");
-        var window = new TimeRange(reader.GetDateTime(4), reader.GetDateTime(5));
-        await reader.CloseAsync();
+        if (await db.LockByKeyAsync<CustomersRow>(rental.CustomerId, ct, RowLock.Share) is null)
+            throw new ConflictException("CUSTOMER_LICENSE_NOT_VALID", "Rental customer was not found.");
+        var rentalId = rental.Id;
+        var schedule = await (from r in db.Set<RentalsRow>()
+            join h in db.Set<HourRentalDetailRow>() on r.Id equals h.RentalId into hourly
+            from h in hourly.DefaultIfEmpty()
+            join l in db.Set<LongtermRentalContractRow>() on r.Id equals l.RentalId into longterm
+            from l in longterm.DefaultIfEmpty()
+            where r.Id == rentalId
+            select new StartSchedule((bool?)h.HasDriver ?? (bool?)l.HasDriver ?? false,
+                (DateTime?)h.StartTime ?? l.StartTime, (DateTime?)h.EndTime ?? l.EndTime)).SingleAsync(ct);
+
+        if (!await db.Set<InspectionsRow>().AnyAsync(i => i.RentalId == rentalId && i.VehicleId == rental.VehicleId
+                && i.InspectionType == "pre_rental" && i.IsOk == true, ct))
+            throw new ConflictException("PRE_INSPECTION_REQUIRED", "A passed inspection for the current vehicle is required.");
+        var assignmentOk = schedule.HasDriver
+            ? await db.Set<VehicleAssignmentsRow>().AnyAsync(a => a.RentalId == rentalId && a.VehicleId == rental.VehicleId
+                && a.Status == "assigned" && a.DriverStaffId != null, ct)
+            : !await db.Set<VehicleAssignmentsRow>().AnyAsync(a => a.RentalId == rentalId && a.Status == "assigned"
+                && (a.VehicleId != rental.VehicleId || a.DriverStaffId != null), ct);
+        if (!assignmentOk) throw new ConflictException("ASSIGNMENT_REQUIRED", "An active assignment for the current vehicle is required.");
+        if (!schedule.HasDriver)
+        {
+            var endDate = schedule.End is { } end ? DateOnly.FromDateTime(end) : DateOnly.MinValue;
+            var through = await CustomerLicenseEligibility.ValidThroughAsync(db, endDate, ct);
+            if (!await CustomerLicenseEligibility.EligibleLicenses(db, rental.VehicleId, through).AnyAsync(cl => cl.CustomerId == rental.CustomerId, ct))
+                throw new ConflictException("CUSTOMER_LICENSE_NOT_VALID", "Customer license must be approved and valid for self-drive.");
+        }
+        if (!rental.IsSubscription && !await db.Set<InvoicesRow>().AnyAsync(i => i.RentalId == rentalId && i.Kind == "rental" && i.Status == "paid", ct))
+            throw new ConflictException("PAYMENT_REQUIRED", "Direct rental invoice must be paid before handover.");
+        if (rental.RentalType == "longterm" && !await db.Set<RentalContractDocumentsRow>().AnyAsync(d => d.RentalId == rentalId, ct))
+            throw new ConflictException("SIGNED_CONTRACT_REQUIRED", "Upload the signed long-term contract before handover.");
+        var minimumEnd = startedAt.AddTicks(10);
+        var window = new TimeRange(
+            schedule.Start is { } s && s < startedAt ? s : startedAt,
+            schedule.End is { } e && e > minimumEnd ? e : minimumEnd);
         var availability = await VehicleAvailabilityChecks.EvaluateAsync(conn, tx, vehicleId, window, rentalId, 60, ct);
         VehicleAvailabilityChecks.ThrowIfBlocked(availability, vehicleId);
+        return schedule;
     }
 
     public async Task UpdateToPostInspectionAsync(int rentalId, DateTime returnedAt, ActorContext actor, CancellationToken ct)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(conn, tx);
 
-        await using (var lockCmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock($1)", conn, tx))
-        {
-            lockCmd.Parameters.AddWithValue(rentalId);
-            await lockCmd.ExecuteNonQueryAsync(ct);
-        }
+        var curStatus = (await LockRentalAsync(db, rentalId, ct))?.Status;
+        if (curStatus == "post_inspection")
+            throw new ConflictException("ALREADY_IN_STATE", "Rental vehicle is already returned.");
+        if (curStatus != "renting")
+            throw new ConflictException("ILLEGAL_TRANSITION", $"Rental cannot be returned from {curStatus}.");
 
-        await using (var checkCmd = new NpgsqlCommand("SELECT status FROM rentals WHERE id = $1 FOR UPDATE", conn, tx))
-        {
-            checkCmd.Parameters.AddWithValue(rentalId);
-            var curStatus = (string?)(await checkCmd.ExecuteScalarAsync(ct));
-            if (curStatus == "post_inspection")
-                throw new ConflictException("ALREADY_IN_STATE", "Rental vehicle is already returned.");
-            if (curStatus != "renting")
-                throw new ConflictException("ILLEGAL_TRANSITION", $"Rental cannot be returned from {curStatus}.");
-        }
+        var returned = Sql.Ts(returnedAt);
+        var now = await db.DatabaseNowAsync(ct);
+        await db.Set<RentalsRow>().Where(r => r.Id == rentalId).ExecuteUpdateAsync(s => s
+            .SetProperty(r => r.Status, "post_inspection")
+            .SetProperty(r => r.ReturnedAt, returned)
+            .SetProperty(r => r.StatusChangedAt, now), ct);
 
-        await using var cmd = new NpgsqlCommand("""
-            UPDATE rentals
-            SET status = 'post_inspection', returned_at = $2, status_changed_at = now()
-            WHERE id = $1
-            """, conn, tx);
-        cmd.Parameters.AddWithValue(rentalId);
-        cmd.Parameters.Add(Sql.Timestamp("", returnedAt));
-        await cmd.ExecuteNonQueryAsync(ct);
-
-        await InsertHistoryAsync(conn, tx, rentalId, "renting", "post_inspection", actor, "Vehicle returned", ct);
+        await InsertHistoryAsync(db, rentalId, "renting", "post_inspection", actor, "Vehicle returned", ct);
         await tx.CommitAsync(ct);
     }
 
@@ -266,80 +235,42 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(conn, tx);
 
-        await using (var lockCmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock($1)", conn, tx))
-        {
-            lockCmd.Parameters.AddWithValue(rentalId);
-            await lockCmd.ExecuteNonQueryAsync(ct);
-        }
+        var curStatus = (await LockRentalAsync(db, rentalId, ct))?.Status;
+        if (curStatus == "completed")
+            throw new ConflictException("ALREADY_IN_STATE", "Rental is already in completed status.");
+        if (curStatus != "post_inspection")
+            throw new ConflictException("ILLEGAL_TRANSITION", $"Rental cannot be completed from {curStatus}.");
 
-        await using (var checkCmd = new NpgsqlCommand("SELECT status FROM rentals WHERE id = $1 FOR UPDATE", conn, tx))
-        {
-            checkCmd.Parameters.AddWithValue(rentalId);
-            var curStatus = (string?)(await checkCmd.ExecuteScalarAsync(ct));
-            if (curStatus == "completed")
-            {
-                throw new ConflictException("ALREADY_IN_STATE", "Rental is already in completed status.");
-            }
-            if (curStatus != "post_inspection")
-            {
-                throw new ConflictException("ILLEGAL_TRANSITION", $"Rental cannot be completed from {curStatus}.");
-            }
-        }
-
-        await using var cmdRental = new NpgsqlCommand("""
-            UPDATE rentals
-            SET status = 'completed', completed_at = $2, returned_at = $3,
-                overtime_price = $4, vat_price = $5, total_price = $6,
-                overtime_hours = $7, status_changed_at = now()
-            WHERE id = $1
-            """, conn, tx);
-        cmdRental.Parameters.AddWithValue(rentalId);
-        cmdRental.Parameters.AddWithValue(completedAt);
-        cmdRental.Parameters.AddWithValue(returnedAt);
-        cmdRental.Parameters.AddWithValue(overtimePrice);
-        cmdRental.Parameters.AddWithValue(vatPrice);
-        cmdRental.Parameters.AddWithValue(totalPrice);
-        cmdRental.Parameters.AddWithValue(overtimeHours);
-        await cmdRental.ExecuteNonQueryAsync(ct);
+        var completed = Sql.Ts(completedAt);
+        var returned = Sql.Ts(returnedAt);
+        var now = await db.DatabaseNowAsync(ct);
+        await db.Set<RentalsRow>().Where(r => r.Id == rentalId).ExecuteUpdateAsync(s => s
+            .SetProperty(r => r.Status, "completed")
+            .SetProperty(r => r.CompletedAt, completed)
+            .SetProperty(r => r.ReturnedAt, returned)
+            .SetProperty(r => r.OvertimePrice, overtimePrice)
+            .SetProperty(r => r.VatPrice, vatPrice)
+            .SetProperty(r => r.TotalPrice, totalPrice)
+            .SetProperty(r => r.OvertimeHours, overtimeHours)
+            .SetProperty(r => r.StatusChangedAt, now), ct);
 
         // Release vehicle to available if not under maintenance
-        await using var cmdVehicle = new NpgsqlCommand("""
-            UPDATE vehicles
-            SET is_renting = false,
-                status = CASE WHEN status = 'maintenance' THEN 'maintenance' ELSE 'available' END
-            WHERE id = $1
-            """, conn, tx);
-        cmdVehicle.Parameters.AddWithValue(vehicleId);
-        await cmdVehicle.ExecuteNonQueryAsync(ct);
+        await ReleaseVehicleAsync(db, vehicleId, ct);
 
-        // Insert settlement record
-        await using var cmdSettlement = new NpgsqlCommand("""
-            INSERT INTO rental_settlements(
-                rental_id, scheduled_end, returned_at,
-                overtime_minutes, overtime_hours, overtime_amount, overtime_vat,
-                deposit_held, deposit_deducted, shortfall_invoice_id, refund_payment_id,
-                damage_review_required, created_at
-            )
-            VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-            ON CONFLICT (rental_id) DO NOTHING
-            """, conn, tx);
-        cmdSettlement.Parameters.AddWithValue(rentalId);
-        cmdSettlement.Parameters.AddWithValue(settlement.ScheduledEnd);
-        cmdSettlement.Parameters.AddWithValue(settlement.ReturnedAt);
-        cmdSettlement.Parameters.AddWithValue(settlement.OvertimeMinutes);
-        cmdSettlement.Parameters.AddWithValue(settlement.OvertimeHours);
-        cmdSettlement.Parameters.AddWithValue(settlement.OvertimeAmount);
-        cmdSettlement.Parameters.AddWithValue(settlement.OvertimeVat);
-        cmdSettlement.Parameters.AddWithValue(settlement.DepositHeld);
-        cmdSettlement.Parameters.AddWithValue(settlement.DepositDeducted);
-        cmdSettlement.Parameters.AddWithValue((object?)settlement.ShortfallInvoiceId ?? DBNull.Value);
-        cmdSettlement.Parameters.AddWithValue((object?)settlement.RefundPaymentId ?? DBNull.Value);
-        cmdSettlement.Parameters.AddWithValue(settlement.DamageReviewRequired);
-        cmdSettlement.Parameters.AddWithValue(settlement.CreatedAt);
-        await cmdSettlement.ExecuteNonQueryAsync(ct);
+        // Insert settlement record (ON CONFLICT (rental_id) DO NOTHING)
+        await db.TryInsertAsync(new RentalSettlementsRow
+        {
+            RentalId = rentalId, ScheduledEnd = Sql.Ts(settlement.ScheduledEnd), ReturnedAt = Sql.Ts(settlement.ReturnedAt),
+            OvertimeMinutes = settlement.OvertimeMinutes, OvertimeHours = settlement.OvertimeHours,
+            OvertimeAmount = settlement.OvertimeAmount, OvertimeVat = settlement.OvertimeVat,
+            DepositHeld = settlement.DepositHeld, DepositDeducted = settlement.DepositDeducted,
+            ShortfallInvoiceId = settlement.ShortfallInvoiceId, RefundPaymentId = settlement.RefundPaymentId,
+            DamageReviewRequired = settlement.DamageReviewRequired, CreatedAt = Sql.Ts(settlement.CreatedAt),
+        }, ct);
 
-        await InsertHistoryAsync(conn, tx, rentalId, "post_inspection", "completed", actor, "Rental completed and settled", ct);
+        await InsertHistoryAsync(db, rentalId, "post_inspection", "completed", actor, "Rental completed and settled", ct);
         await tx.CommitAsync(ct);
     }
 
@@ -354,50 +285,27 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(conn, tx);
 
-        await using (var lockCmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock($1)", conn, tx))
-        {
-            lockCmd.Parameters.AddWithValue(rentalId);
-            await lockCmd.ExecuteNonQueryAsync(ct);
-        }
+        var curStatus = (await LockRentalAsync(db, rentalId, ct))?.Status;
+        if (curStatus == "cancelled")
+            throw new ConflictException("ALREADY_IN_STATE", "Rental is already cancelled.");
+        if (curStatus != "pending" && curStatus != "pre_inspection")
+            throw new ConflictException("ILLEGAL_TRANSITION", $"Rental cannot be cancelled from {curStatus}.");
 
-        await using (var checkCmd = new NpgsqlCommand("SELECT status FROM rentals WHERE id = $1 FOR UPDATE", conn, tx))
-        {
-            checkCmd.Parameters.AddWithValue(rentalId);
-            var curStatus = (string?)(await checkCmd.ExecuteScalarAsync(ct));
-            if (curStatus == "cancelled")
-            {
-                throw new ConflictException("ALREADY_IN_STATE", "Rental is already cancelled.");
-            }
-            if (curStatus != "pending" && curStatus != "pre_inspection")
-            {
-                throw new ConflictException("ILLEGAL_TRANSITION", $"Rental cannot be cancelled from {curStatus}.");
-            }
-        }
-
-        await using var cmdRental = new NpgsqlCommand("""
-            UPDATE rentals
-            SET status = 'cancelled', cancelled_at = $2, cancelled_by = $3,
-                cancel_reason = $4, status_changed_at = now()
-            WHERE id = $1
-            """, conn, tx);
-        cmdRental.Parameters.AddWithValue(rentalId);
-        cmdRental.Parameters.AddWithValue(cancelledAt);
-        cmdRental.Parameters.AddWithValue(cancelledBy);
-        cmdRental.Parameters.AddWithValue(reason);
-        await cmdRental.ExecuteNonQueryAsync(ct);
+        var cancelled = Sql.Ts(cancelledAt);
+        var now = await db.DatabaseNowAsync(ct);
+        await db.Set<RentalsRow>().Where(r => r.Id == rentalId).ExecuteUpdateAsync(s => s
+            .SetProperty(r => r.Status, "cancelled")
+            .SetProperty(r => r.CancelledAt, cancelled)
+            .SetProperty(r => r.CancelledBy, cancelledBy)
+            .SetProperty(r => r.CancelReason, reason)
+            .SetProperty(r => r.StatusChangedAt, now), ct);
 
         // Release vehicle to available if not under maintenance
-        await using var cmdVehicle = new NpgsqlCommand("""
-            UPDATE vehicles
-            SET is_renting = false,
-                status = CASE WHEN status = 'maintenance' THEN 'maintenance' ELSE 'available' END
-            WHERE id = $1
-            """, conn, tx);
-        cmdVehicle.Parameters.AddWithValue(vehicleId);
-        await cmdVehicle.ExecuteNonQueryAsync(ct);
+        await ReleaseVehicleAsync(db, vehicleId, ct);
 
-        await InsertHistoryAsync(conn, tx, rentalId, null, "cancelled", actor, reason, ct);
+        await InsertHistoryAsync(db, rentalId, null, "cancelled", actor, reason, ct);
         await tx.CommitAsync(ct);
     }
 
@@ -424,96 +332,49 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(conn, tx);
 
-        await using (var lockCmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock($1)", conn, tx))
-        {
-            lockCmd.Parameters.AddWithValue(rentalId);
-            await lockCmd.ExecuteNonQueryAsync(ct);
-        }
-
-        string currentStatus;
-        bool isSubscription;
-        DateTime? expireAt;
-        bool confirmed;
-        bool invoicePaid;
-        await using (var checkCmd = new NpgsqlCommand("""
-            SELECT r.status, r.is_subscription, r.expire_at,
-                   r.confirmed_at IS NOT NULL,
-                   EXISTS(SELECT 1 FROM invoices i
-                          WHERE i.rental_id = r.id AND i.kind = 'rental' AND i.status = 'paid')
-            FROM rentals r
-            WHERE r.id = $1
-            FOR UPDATE
-            """, conn, tx))
-        {
-            checkCmd.Parameters.AddWithValue(rentalId);
-            await using var reader = await checkCmd.ExecuteReaderAsync(ct);
-            if (!await reader.ReadAsync(ct)) return null;
-            currentStatus = reader.GetString(0);
-            isSubscription = reader.GetBoolean(1);
-            expireAt = reader.IsDBNull(2) ? null : reader.GetDateTime(2);
-            confirmed = reader.GetBoolean(3);
-            invoicePaid = reader.GetBoolean(4);
-        }
+        var rental = await LockRentalAsync(db, rentalId, ct);
+        if (rental is null) return null;
+        var currentStatus = rental.Status;
+        var invoicePaid = await db.Set<InvoicesRow>().AnyAsync(i => i.RentalId == rentalId && i.Kind == "rental" && i.Status == "paid", ct);
 
         // Đã rời trạng thái chờ, chưa tới hạn, hoặc đã đủ điều kiện duyệt + thanh toán: bỏ qua.
         // Điều kiện được kiểm tra lại trong transaction nên duyệt/thanh toán sát giờ hết hạn không bị xử lý hai lần.
         if (currentStatus is not ("pending" or "pre_inspection")) return null;
-        if (!RentalExpiryRule.IsPastDeadline(expiredAt, expireAt)) return null;
-        if (RentalExpiryRule.IsFulfilled(confirmed, isSubscription, invoicePaid)) return null;
+        if (!RentalExpiryRule.IsPastDeadline(expiredAt, rental.ExpireAt)) return null;
+        if (RentalExpiryRule.IsFulfilled(rental.ConfirmedAt is not null, rental.IsSubscription, invoicePaid)) return null;
 
-        await using (var cmd = new NpgsqlCommand("""
-            UPDATE rentals
-            SET status = 'expired', expired_at = $2, cancel_reason = $3, status_changed_at = now()
-            WHERE id = $1
-            """, conn, tx))
-        {
-            cmd.Parameters.AddWithValue(rentalId);
-            cmd.Parameters.Add(Sql.Timestamp("", expiredAt));
-            cmd.Parameters.AddWithValue(reason);
-            await cmd.ExecuteNonQueryAsync(ct);
-        }
+        var expired = Sql.Ts(expiredAt);
+        var now = await db.DatabaseNowAsync(ct);
+        await db.Set<RentalsRow>().Where(r => r.Id == rentalId).ExecuteUpdateAsync(s => s
+            .SetProperty(r => r.Status, "expired")
+            .SetProperty(r => r.ExpiredAt, expired)
+            .SetProperty(r => r.CancelReason, reason)
+            .SetProperty(r => r.StatusChangedAt, now), ct);
 
         // Hóa đơn chưa thu tiền bị hủy để khách không thanh toán cho đơn đã hết hạn.
-        await using (var voidInvoice = new NpgsqlCommand("""
-            UPDATE invoices SET status = 'cancelled'
-            WHERE rental_id = $1 AND kind = 'rental' AND status = 'unpaid'
-            """, conn, tx))
-        {
-            voidInvoice.Parameters.AddWithValue(rentalId);
-            await voidInvoice.ExecuteNonQueryAsync(ct);
-        }
+        await db.Set<InvoicesRow>().Where(i => i.RentalId == rentalId && i.Kind == "rental" && i.Status == "unpaid")
+            .ExecuteUpdateAsync(s => s.SetProperty(i => i.Status, "cancelled"), ct);
 
         // Lịch xe được giải phóng tự động: trigger trg_rentals_sync_booking đặt vehicle_bookings.is_blocking=false
         // khi status chuyển sang 'expired', nên xe lại được tìm thấy cho khung giờ đó.
-        await InsertHistoryAsync(conn, tx, rentalId, currentStatus, RentalStatus.Expired.ToDbString(), actor, reason, ct);
+        await InsertHistoryAsync(db, rentalId, currentStatus, RentalStatus.Expired.ToDbString(), actor, reason, ct);
         await tx.CommitAsync(ct);
         return RentalStatusExtensions.FromDbString(currentStatus);
     }
 
-    private static async Task InsertHistoryAsync(
-        NpgsqlConnection conn,
-        NpgsqlTransaction tx,
+    private static Task InsertHistoryAsync(
+        VehicleRentalDbContext db,
         int rentalId,
         string? fromStatus,
         string toStatus,
         ActorContext actor,
         string? reason,
-        CancellationToken ct)
-    {
-        await using var cmd = new NpgsqlCommand("""
-            INSERT INTO rental_status_history(
-                rental_id, from_status, to_status, actor_user_id, actor_email, actor_role, reason, created_at
-            )
-            VALUES($1, $2, $3, $4, $5, $6, $7, now())
-            """, conn, tx);
-        cmd.Parameters.AddWithValue(rentalId);
-        cmd.Parameters.AddWithValue((object?)fromStatus ?? DBNull.Value);
-        cmd.Parameters.AddWithValue(toStatus);
-        cmd.Parameters.AddWithValue((object?)actor.UserId ?? DBNull.Value);
-        cmd.Parameters.AddWithValue((object?)actor.Email ?? DBNull.Value);
-        cmd.Parameters.AddWithValue((object?)actor.Role ?? DBNull.Value);
-        cmd.Parameters.AddWithValue((object?)reason ?? DBNull.Value);
-        await cmd.ExecuteNonQueryAsync(ct);
-    }
+        CancellationToken ct) =>
+        db.InsertAsync(new RentalStatusHistoryRow
+        {
+            RentalId = rentalId, FromStatus = fromStatus, ToStatus = toStatus, ActorUserId = actor.UserId,
+            ActorEmail = actor.Email, ActorRole = actor.Role, Reason = reason,
+        }, ct);
 }

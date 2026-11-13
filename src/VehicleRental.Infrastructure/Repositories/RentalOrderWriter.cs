@@ -1,3 +1,5 @@
+using Car_Rental_System_BE.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 namespace Car_Rental_System_BE.Infrastructure.Repositories;
@@ -5,27 +7,36 @@ namespace Car_Rental_System_BE.Infrastructure.Repositories;
 /// <summary>Creates the formal paid order inside the caller's rental/payment transaction.</summary>
 internal static class RentalOrderWriter
 {
+    private static readonly string[] Closed = ["cancelled", "expired"];
+    private static readonly string[] OrderMethods = ["payos", "cash"];
+
     public static async Task<int?> EnsurePaidAsync(NpgsqlConnection cn, NpgsqlTransaction tx, int rentalId, CancellationToken ct)
     {
-        await using var create = new NpgsqlCommand("""
-            INSERT INTO rental_orders(rental_id,payment_id,amount,payment_method,confirmed_by)
-            SELECT r.id,p.id,CASE WHEN r.is_subscription THEN 0 ELSE p.amount END,
-                   CASE WHEN r.is_subscription THEN 'subscription' ELSE p.method END,p.reviewed_by
-            FROM rentals r
-            LEFT JOIN LATERAL (
-                SELECT p.id,p.amount,p.method,p.reviewed_by FROM invoices i JOIN payments p ON p.invoice_id=i.id
-                WHERE i.rental_id=r.id AND i.kind='rental' AND i.status='paid'
-                  AND p.type='rental' AND p.status='paid' AND p.method IN ('payos','cash')
-                ORDER BY p.id LIMIT 1
-            ) p ON true
-            WHERE r.id=$1 AND r.confirmed_at IS NOT NULL AND r.status NOT IN ('cancelled','expired')
-              AND (r.is_subscription OR p.id IS NOT NULL)
-            ON CONFLICT(rental_id) DO NOTHING
-            """, cn, tx);
-        create.Parameters.AddWithValue(rentalId);
-        await create.ExecuteNonQueryAsync(ct);
-        await using var find = new NpgsqlCommand("SELECT id FROM rental_orders WHERE rental_id=$1", cn, tx);
-        find.Parameters.AddWithValue(rentalId);
-        return await find.ExecuteScalarAsync(ct) is int id ? id : null;
+        await using var db = VehicleRentalDbContext.Create(cn, tx);
+        var existing = await db.Set<RentalOrdersRow>().Where(o => o.RentalId == rentalId).Select(o => (int?)o.Id).FirstOrDefaultAsync(ct);
+        if (existing is not null) return existing;
+
+        var rental = await db.Set<RentalsRow>()
+            .Where(r => r.Id == rentalId && r.ConfirmedAt != null && !Closed.Contains(r.Status))
+            .Select(r => new { r.Id, r.IsSubscription }).FirstOrDefaultAsync(ct);
+        if (rental is null) return null;
+        var payment = await (from i in db.Set<InvoicesRow>()
+                join p in db.Set<PaymentsRow>() on i.Id equals p.InvoiceId
+                where i.RentalId == rentalId && i.Kind == "rental" && i.Status == "paid"
+                      && p.Type == "rental" && p.Status == "paid" && OrderMethods.Contains(p.Method!)
+                orderby p.Id
+                select new { p.Id, p.Amount, p.Method, p.ReviewedBy }).FirstOrDefaultAsync(ct);
+        if (!rental.IsSubscription && payment is null) return null;
+
+        // ON CONFLICT(rental_id) DO NOTHING: a concurrent writer may create the order first.
+        await db.TryInsertAsync(new RentalOrdersRow
+        {
+            RentalId = rental.Id,
+            PaymentId = payment?.Id,
+            Amount = rental.IsSubscription ? 0 : payment!.Amount,
+            PaymentMethod = rental.IsSubscription ? "subscription" : payment!.Method!,
+            ConfirmedBy = payment?.ReviewedBy,
+        }, ct);
+        return await db.Set<RentalOrdersRow>().Where(o => o.RentalId == rentalId).Select(o => (int?)o.Id).FirstOrDefaultAsync(ct);
     }
 }

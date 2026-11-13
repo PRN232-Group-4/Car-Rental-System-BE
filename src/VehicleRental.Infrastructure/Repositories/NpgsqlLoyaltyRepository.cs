@@ -63,30 +63,21 @@ public sealed class NpgsqlLoyaltyRepository(NpgsqlDataSource dataSource, TimePro
 
         try
         {
-            await using var cmd = dataSource.CreateCommand("""
-                INSERT INTO customer_loyalty_transactions(customer_id, type, points, reason, idempotency_key, created_by, created_at)
-                VALUES($1, 'adjust', $2, $3, $4, $5, $6)
-                RETURNING id, customer_id, rental_id, type, points, reason, ref_type, ref_id, idempotency_key, balance_after, created_by, created_at
-                """);
-
-            cmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Integer, Value = customerId });
-            cmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Integer, Value = points });
-            cmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Varchar, Value = reason });
-            cmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Varchar, Value = (object?)idempotencyKey ?? DBNull.Value });
-            cmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Varchar, Value = (object?)createdBy ?? DBNull.Value });
-            cmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Timestamp, Value = now });
-
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-            if (!await reader.ReadAsync(ct))
-                throw new InvalidOperationException("Failed to insert loyalty adjustment.");
-
-            return ReadTransaction(reader);
+            await using var db = VehicleRentalDbContext.Create(dataSource);
+            var row = new CustomerLoyaltyTransactionsRow
+            {
+                CustomerId = customerId, Type = "adjust", Points = points, Reason = reason,
+                IdempotencyKey = idempotencyKey, CreatedBy = createdBy, CreatedAt = now,
+            };
+            await db.InsertAsync(row, ct);
+            // balance_after is computed by the BEFORE INSERT trigger; read the stored ledger row back.
+            return await db.Set<CustomerLoyaltyTransactionsRow>().Where(t => t.Id == row.Id).Select(TransactionProjection).SingleAsync(ct);
         }
-        catch (PostgresException ex) when (ex.SqlState == "23514")
+        catch (Exception ex) when (ex.SqlState() == "23514")
         {
             throw new ConflictException("INSUFFICIENT_POINTS", $"Insufficient points balance to perform adjustment of {points} points.");
         }
-        catch (PostgresException ex) when (ex.SqlState == "23505" && idempotencyKey is not null)
+        catch (Exception ex) when (ex.SqlState() == "23505" && idempotencyKey is not null)
         {
             var existing = await FindAdjustmentByIdempotencyKeyAsync(customerId, idempotencyKey, ct);
             if (existing is not null)
@@ -108,52 +99,15 @@ public sealed class NpgsqlLoyaltyRepository(NpgsqlDataSource dataSource, TimePro
         if (points <= 0) return null;
         var now = DateTime.SpecifyKind(_time.GetUtcNow().UtcDateTime, DateTimeKind.Unspecified);
 
-        NpgsqlCommand cmd;
-        if (cn is NpgsqlConnection npgsqlConn)
+        await using var db = cn is NpgsqlConnection npgsqlConn
+            ? VehicleRentalDbContext.Create(npgsqlConn, tx as NpgsqlTransaction)
+            : VehicleRentalDbContext.Create(dataSource);
+        var row = new CustomerLoyaltyTransactionsRow
         {
-            cmd = new NpgsqlCommand("""
-                INSERT INTO customer_loyalty_transactions(customer_id, rental_id, type, points, reason, ref_type, ref_id, created_by, created_at)
-                VALUES($1, $2, 'earn', $3, $4, 'rental', $2, 'system', $5)
-                ON CONFLICT (type, ref_type, ref_id) WHERE ref_type IS NOT NULL AND type IN ('earn','redeem','reverse') DO NOTHING
-                RETURNING id
-                """, npgsqlConn, tx as NpgsqlTransaction);
-        }
-        else
-        {
-            cmd = dataSource.CreateCommand("""
-                INSERT INTO customer_loyalty_transactions(customer_id, rental_id, type, points, reason, ref_type, ref_id, created_by, created_at)
-                VALUES($1, $2, 'earn', $3, $4, 'rental', $2, 'system', $5)
-                ON CONFLICT (type, ref_type, ref_id) WHERE ref_type IS NOT NULL AND type IN ('earn','redeem','reverse') DO NOTHING
-                RETURNING id
-                """);
-        }
-
-        await using (cmd)
-        {
-            cmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Integer, Value = customerId });
-            cmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Integer, Value = rentalId });
-            cmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Integer, Value = points });
-            cmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Varchar, Value = reason });
-            cmd.Parameters.Add(new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Timestamp, Value = now });
-
-            var result = await cmd.ExecuteScalarAsync(ct);
-            return result is long id ? (int)id : (result is int idInt ? idInt : null);
-        }
+            CustomerId = customerId, RentalId = rentalId, Type = "earn", Points = points, Reason = reason,
+            RefType = "rental", RefId = rentalId, CreatedBy = "system", CreatedAt = now,
+        };
+        // ON CONFLICT (type, ref_type, ref_id) ... DO NOTHING: an already awarded rental returns null.
+        return await db.TryInsertAsync(row, ct) ? (int)row.Id : null;
     }
-
-    private static LoyaltyTransactionDto ReadTransaction(NpgsqlDataReader r) =>
-        new(
-            Id: r.GetInt64(0),
-            CustomerId: r.GetInt32(1),
-            RentalId: r.IsDBNull(2) ? null : r.GetInt32(2),
-            Type: r.GetString(3),
-            Points: r.GetInt32(4),
-            Reason: r.GetString(5),
-            RefType: r.IsDBNull(6) ? null : r.GetString(6),
-            RefId: r.IsDBNull(7) ? null : r.GetInt64(7),
-            IdempotencyKey: r.IsDBNull(8) ? null : r.GetString(8),
-            BalanceAfter: r.GetInt32(9),
-            CreatedBy: r.IsDBNull(10) ? null : r.GetString(10),
-            CreatedAt: r.GetDateTime(11)
-        );
 }

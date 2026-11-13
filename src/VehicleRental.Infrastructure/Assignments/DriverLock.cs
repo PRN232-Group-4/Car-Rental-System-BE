@@ -1,4 +1,5 @@
 using System.Data.Common;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 using Npgsql;
 
 namespace Car_Rental_System_BE.Infrastructure.Assignments;
@@ -12,9 +13,7 @@ public static class DriverLock
         if (transaction.Connection is not NpgsqlConnection connection)
             throw new InvalidOperationException("Driver advisory locks require an Npgsql connection.");
 
-        await using var command = new NpgsqlCommand("SELECT pg_advisory_xact_lock($1, $2)", connection, (NpgsqlTransaction)transaction);
-        command.Parameters.AddWithValue(DriverLockCategory);
-        command.Parameters.AddWithValue(driverStaffId);
-        await command.ExecuteNonQueryAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(connection, (NpgsqlTransaction)transaction);
+        await db.AdvisoryLockAsync(DriverLockCategory, driverStaffId, ct);
     }
 }

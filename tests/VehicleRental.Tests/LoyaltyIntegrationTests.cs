@@ -233,7 +233,11 @@ public sealed class LoyaltyIntegrationTests(PostgresFixture db) : IClassFixture<
         Assert.Equal(500, balance);
 
         // Adjust does not increase lifetimeEarned; earn does. Award 500 points via earn to reach Silver tier.
-        await loyaltyRepo.AwardForRentalAsync(customerId, 8888, 500, "Rental award for 500 points", null, null, CancellationToken.None);
+        var vehicleId = await Seed.VehicleAsync(db.DataSource);
+        var rentalId = (int)(await Seed.ScalarAsync(db.DataSource,
+            "INSERT INTO rentals(customer_id,vehicle_id,rental_type,status) VALUES($1,$2,'hourly','completed') RETURNING id",
+            customerId, vehicleId))!;
+        await loyaltyRepo.AwardForRentalAsync(customerId, rentalId, 500, "Rental award for 500 points", null, null, CancellationToken.None);
 
         var summary = await service.GetSummaryAsync(customerId, CancellationToken.None);
         Assert.Equal(1000, summary.Balance); // 500 adjusted + 500 earned

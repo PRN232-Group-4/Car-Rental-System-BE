@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Npgsql;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace VehicleRental.Tests;
@@ -62,8 +63,9 @@ public sealed class VehicleCrudTests(PostgresFixture db) : IClassFixture<Postgre
         var type = await Category("car", "gasoline");
         await Assert.ThrowsAsync<ArgumentException>(() => repository.SaveVehicleAsync(null, Input(type, new VehicleDetail(BatteryType: "Lithium")), default));
         var saved = await repository.SaveVehicleAsync(null, Input(type, new VehicleDetail(SeatCount: 4)), default);
-        await Assert.ThrowsAsync<PostgresException>(() => repository.SaveVehicleAsync(saved.Id, saved with {
+        var failure = await Assert.ThrowsAsync<DbUpdateException>(() => repository.SaveVehicleAsync(saved.Id, saved with {
             Model = "Must rollback", Detail = new VehicleDetail(SeatCount: 7, GalleryImages: new[] { new string('x', 256) }) }, default));
+        Assert.Equal(PostgresErrorCodes.StringDataRightTruncation, Assert.IsType<PostgresException>(failure.InnerException).SqlState);
         var unchanged = await repository.GetVehicleAsync(saved.Id, default);
         Assert.Equal("Model", unchanged!.Model);
         Assert.Equal(4, unchanged.Detail!.SeatCount);

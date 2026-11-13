@@ -2,7 +2,7 @@
 - Status: Accepted
 - Ngày: 2026-09-30
 ## Bối cảnh
-Cần tách nghiệp vụ thuê xe khỏi PostgreSQL/Redis/Brevo; schema không có FK.
+Cần tách nghiệp vụ thuê xe khỏi PostgreSQL/Redis/Brevo; schema ban đầu không có FK (đã thêm FK theo ADR-014).
 ## Quyết định
 Bốn layer Domain, Application, Infrastructure, Web API. Repository theo aggregate root, không generic repository. Application kiểm tra toàn vẹn logic, Infrastructure bao transaction.
 ## Hệ quả

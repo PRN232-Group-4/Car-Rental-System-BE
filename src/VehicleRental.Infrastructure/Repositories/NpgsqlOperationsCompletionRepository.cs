@@ -90,18 +90,18 @@ public sealed class NpgsqlOperationsCompletionRepository(NpgsqlDataSource dataSo
     {
         await using var cn=await dataSource.OpenConnectionAsync(ct);
         await using var tx=await cn.BeginTransactionAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(cn, tx);
         // Same global lock as recovery/maintenance preserves their status checks.
-        await Scalar(cn,tx,"SELECT pg_advisory_xact_lock(724232001::bigint)",ct);
-        string current;
-        await using (var command=new NpgsqlCommand("SELECT status FROM reports WHERE id=$1 AND reporter_staff_id IS NOT NULL FOR UPDATE",cn,tx))
-        {
-            Add(command,id);
-            current=await command.ExecuteScalarAsync(ct) as string ?? throw new KeyNotFoundException("Report was not found.");
-        }
+        await db.AdvisoryLockAsync(724232001L, ct);
+        var report = await db.LockByKeyAsync<ReportsRow>(id, ct);
+        if (report is not { ReporterStaffId: not null, Status: not null }) throw new KeyNotFoundException("Report was not found.");
+        var current = report.Status;
         if ((current,status) is not (("open","in_progress") or ("rejected","in_progress") or ("open","rejected") or ("in_progress","rejected")))
             throw new InvalidOperationException("Report status transition is not allowed.");
-        await Scalar(cn,tx,"UPDATE reports SET status=$2,status_reason=$3,status_actor=$4 WHERE id=$1",ct,id,status,reason,actor);
-        await using var db = VehicleRentalDbContext.Create(cn, tx);
+        await db.Set<ReportsRow>().Where(r => r.Id == id).ExecuteUpdateAsync(s => s
+            .SetProperty(r => r.Status, status)
+            .SetProperty(r => r.StatusReason, reason)
+            .SetProperty(r => r.StatusActor, actor), ct);
         var row = await ReportRows(db, id).FirstAsync(ct);
         row=await AddHistory(cn,tx,row,ct);
         await tx.CommitAsync(ct);
@@ -124,9 +124,15 @@ public sealed class NpgsqlOperationsCompletionRepository(NpgsqlDataSource dataSo
     {
         await using var cn=await dataSource.OpenConnectionAsync(ct);
         await using var tx=await cn.BeginTransactionAsync(ct);
-        if(await Scalar(cn,tx,"UPDATE staff_ratings SET status=$2,moderation_reason=$3,moderated_by=$4,moderated_at=now() AT TIME ZONE 'utc' WHERE id=$1 RETURNING id",ct,id,status,reason,actor) is not int)
+        await using var db = VehicleRentalDbContext.Create(cn, tx);
+        var now = await db.DatabaseUtcNowAsync(ct);
+        if (await db.Set<StaffRatingsRow>().Where(r => r.Id == id).ExecuteUpdateAsync(s => s
+                .SetProperty(r => r.Status, status)
+                .SetProperty(r => r.ModerationReason, reason)
+                .SetProperty(r => r.ModeratedBy, actor)
+                .SetProperty(r => r.ModeratedAt, now), ct) == 0)
             throw new KeyNotFoundException("Rating was not found.");
-        await Scalar(cn,tx,"INSERT INTO rating_moderation_history(rating_id,status,reason,actor) VALUES($1,$2,$3,$4)",ct,id,status,reason,actor);
+        await db.InsertAsync(new RatingModerationHistoryRow { RatingId = id, Status = status, Reason = reason, Actor = actor }, ct);
         var row=await ReadRating(cn,tx,id,ct);
         await tx.CommitAsync(ct); return row;
     }
@@ -134,7 +140,12 @@ public sealed class NpgsqlOperationsCompletionRepository(NpgsqlDataSource dataSo
     {
         await using var cn=await dataSource.OpenConnectionAsync(ct);
         await using var tx=await cn.BeginTransactionAsync(ct);
-        if(await Scalar(cn,tx,"UPDATE staff_ratings SET reply_text=$2,reply_by=$3,reply_at=now() AT TIME ZONE 'utc' WHERE id=$1 RETURNING id",ct,id,text,actor) is not int)
+        await using var db = VehicleRentalDbContext.Create(cn, tx);
+        var now = await db.DatabaseUtcNowAsync(ct);
+        if (await db.Set<StaffRatingsRow>().Where(r => r.Id == id).ExecuteUpdateAsync(s => s
+                .SetProperty(r => r.ReplyText, text)
+                .SetProperty(r => r.ReplyBy, actor)
+                .SetProperty(r => r.ReplyAt, now), ct) == 0)
             throw new KeyNotFoundException("Rating was not found.");
         var row=await ReadRating(cn,tx,id,ct);
         await tx.CommitAsync(ct); return row;
@@ -193,9 +204,4 @@ public sealed class NpgsqlOperationsCompletionRepository(NpgsqlDataSource dataSo
             Utc(rating.CreatedAt), user.Fullname, rating.Status,
             rating.ReplyText == null ? null : new RatingReply(rating.ReplyText!, rating.ReplyBy!, Utc(rating.ReplyAt!.Value)),
             (vehicle.Brand ?? "") + (vehicle.Brand != null && vehicle.Model != null ? " " : "") + (vehicle.Model ?? ""), vehicle.LicensePlate);
-    private static void Add(NpgsqlCommand command,params object?[] values) { foreach(var value in values) command.Parameters.AddWithValue(value??DBNull.Value); }
-    private static async Task<object?> Scalar(NpgsqlConnection cn,NpgsqlTransaction tx,string sql,CancellationToken ct,params object?[] values)
-    {
-        await using var command=new NpgsqlCommand(sql,cn,tx); Add(command,values); return await command.ExecuteScalarAsync(ct);
-    }
 }
