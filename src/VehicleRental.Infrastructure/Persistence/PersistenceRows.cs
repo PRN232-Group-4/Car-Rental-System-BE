@@ -5,7 +5,7 @@ using NpgsqlTypes;
 
 namespace Car_Rental_System_BE.Infrastructure.Persistence;
 
-// Persistence rows mirror the existing SQL-managed schema. No navigation properties or FK conventions.
+// Persistence rows mirror the SQL-managed schema. No navigation properties; FKs are declared in VehicleRentalDbContext.
 [Table("users")]
 public sealed class UsersRow
 {
@@ -25,7 +25,7 @@ public sealed class UsersRow
     [Column("phone", TypeName = "varchar(255)")]
     public string? Phone { get; set; }
     [Column("is_active", TypeName = "boolean")]
-    public bool IsActive { get; set; }
+    public bool IsActive { get; set; } = true;
     [Column("created_at", TypeName = "timestamp")]
     public DateTime CreatedAt { get; set; }
     [Column("authorization_version", TypeName = "integer")]
@@ -129,7 +129,7 @@ public sealed class CustomersRow
     [Column("license_img", TypeName = "varchar(255)")]
     public string? LicenseImg { get; set; }
     [Column("license_status", TypeName = "varchar(20)")]
-    public string LicenseStatus { get; set; } = null!;
+    public string LicenseStatus { get; set; } = "pending";
     [Column("loyalty_point", TypeName = "integer")]
     public int LoyaltyPoint { get; set; }
 }
@@ -189,9 +189,9 @@ public sealed class VehiclesRow
     [Column("license_plate", TypeName = "varchar(255)")]
     public string? LicensePlate { get; set; }
     [Column("features", TypeName = "text[]")]
-    public string[] Features { get; set; } = null!;
+    public string[] Features { get; set; } = [];
     [Column("allowed_license_types", TypeName = "text[]")]
-    public string[] AllowedLicenseTypes { get; set; } = null!;
+    public string[] AllowedLicenseTypes { get; set; } = [];
 }
 
 [Table("vehicle_imgs")]
@@ -285,7 +285,7 @@ public sealed class RentalPoliciesRow
     [Column("deposit_percentage", TypeName = "numeric(5,2)")]
     public decimal DepositPercentage { get; set; }
     [Column("is_active", TypeName = "boolean")]
-    public bool IsActive { get; set; }
+    public bool IsActive { get; set; } = true;
     [Column("managed_by", TypeName = "integer")]
     public int? ManagedBy { get; set; }
     [Column("created_at", TypeName = "timestamp")]
@@ -311,7 +311,7 @@ public sealed class SubscriptionPlansRow
     [Column("included_hours", TypeName = "numeric(10,2)")]
     public decimal? IncludedHours { get; set; }
     [Column("is_active", TypeName = "boolean")]
-    public bool IsActive { get; set; }
+    public bool IsActive { get; set; } = true;
     [Column("created_at", TypeName = "timestamp")]
     public DateTime CreatedAt { get; set; }
 }
@@ -327,7 +327,7 @@ public sealed class CustomerSubscriptionsRow
     [Column("plan_id", TypeName = "integer")]
     public int PlanId { get; set; }
     [Column("status", TypeName = "varchar(255)")]
-    public string Status { get; set; } = null!;
+    public string Status { get; set; } = "active";
     [Column("start_date", TypeName = "date")]
     public DateOnly StartDate { get; set; }
     [Column("end_date", TypeName = "date")]
@@ -473,7 +473,7 @@ public sealed class VehicleAssignmentsRow
     [Column("ends_at", TypeName = "timestamp")]
     public DateTime? EndsAt { get; set; }
     [Column("buffer_minutes", TypeName = "integer")]
-    public int BufferMinutes { get; set; }
+    public int BufferMinutes { get; set; } = 60;
     [Column("period", TypeName = "tsrange")]
     public NpgsqlRange<DateTime>? Period { get; set; }
 }
@@ -507,7 +507,7 @@ public sealed class InspectionsRow
     [Column("created_at", TypeName = "timestamp")]
     public DateTime CreatedAt { get; set; }
     [Column("confirmation_source", TypeName = "varchar(30)")]
-    public string ConfirmationSource { get; set; } = null!;
+    public string ConfirmationSource { get; set; } = "technician";
     [Column("confirmed_by", TypeName = "varchar(255)")]
     public string? ConfirmedBy { get; set; }
 }
@@ -527,17 +527,17 @@ public sealed class InvoicesRow
     [Column("vat_amount", TypeName = "numeric(14,2)")]
     public decimal VatAmount { get; set; }
     [Column("status", TypeName = "varchar(255)")]
-    public string Status { get; set; } = null!;
+    public string Status { get; set; } = "unpaid";
     [Column("issued_at", TypeName = "timestamp")]
     public DateTime IssuedAt { get; set; }
     [Column("due_at", TypeName = "timestamp")]
     public DateTime? DueAt { get; set; }
     [Column("kind", TypeName = "varchar(20)")]
-    public string Kind { get; set; } = null!;
+    public string Kind { get; set; } = "rental";
     [Column("checkout_started_at", TypeName = "timestamp")]
     public DateTime? CheckoutStartedAt { get; set; }
     [Column("payment_method", TypeName = "varchar(20)")]
-    public string PaymentMethod { get; set; } = null!;
+    public string PaymentMethod { get; set; } = "payos";
 }
 
 [Table("payments")]
@@ -663,7 +663,7 @@ public sealed class DriverShiftsRow
     [Column("end_time", TypeName = "timestamp")]
     public DateTime EndTime { get; set; }
     [Column("status", TypeName = "varchar(20)")]
-    public string Status { get; set; } = null!;
+    public string Status { get; set; } = "scheduled";
     [Column("created_by", TypeName = "varchar(255)")]
     public string CreatedBy { get; set; } = null!;
     [Column("modified_by", TypeName = "varchar(255)")]
@@ -711,7 +711,7 @@ public sealed class StaffRatingsRow
     [Column("created_at", TypeName = "timestamp")]
     public DateTime CreatedAt { get; set; }
     [Column("status", TypeName = "varchar(20)")]
-    public string Status { get; set; } = null!;
+    public string Status { get; set; } = "visible";
     [Column("moderation_reason", TypeName = "text")]
     public string? ModerationReason { get; set; }
     [Column("moderated_by", TypeName = "varchar(255)")]
@@ -739,9 +739,9 @@ public sealed class VehicleBookingsRow
     [Column("ends_at", TypeName = "timestamp")]
     public DateTime EndsAt { get; set; }
     [Column("buffer_minutes", TypeName = "integer")]
-    public int BufferMinutes { get; set; }
+    public int BufferMinutes { get; set; } = 60;
     [Column("is_blocking", TypeName = "boolean")]
-    public bool IsBlocking { get; set; }
+    public bool IsBlocking { get; set; } = true;
     [Column("period", TypeName = "tsrange")]
     public NpgsqlRange<DateTime>? Period { get; set; }
     [Column("created_at", TypeName = "timestamp")]
@@ -761,7 +761,7 @@ public sealed class TrackingDevicesRow
     [Column("name", TypeName = "varchar(255)")]
     public string? Name { get; set; }
     [Column("is_active", TypeName = "boolean")]
-    public bool IsActive { get; set; }
+    public bool IsActive { get; set; } = true;
     [Column("last_ping_at", TypeName = "timestamp with time zone")]
     public DateTime? LastPingAt { get; set; }
     [Column("created_at", TypeName = "timestamp with time zone")]
@@ -829,7 +829,7 @@ public sealed class GeofencesRow
     [Column("name", TypeName = "varchar(255)")]
     public string Name { get; set; } = null!;
     [Column("zone_type", TypeName = "varchar(50)")]
-    public string ZoneType { get; set; } = null!;
+    public string ZoneType { get; set; } = "allowed";
     [Column("center_lat", TypeName = "numeric(10, 7)")]
     public decimal CenterLat { get; set; }
     [Column("center_lng", TypeName = "numeric(10, 7)")]
@@ -841,7 +841,7 @@ public sealed class GeofencesRow
     [Column("facility_id", TypeName = "integer")]
     public int? FacilityId { get; set; }
     [Column("is_active", TypeName = "boolean")]
-    public bool IsActive { get; set; }
+    public bool IsActive { get; set; } = true;
     [Column("created_at", TypeName = "timestamp with time zone")]
     public DateTime CreatedAt { get; set; }
 }
@@ -883,7 +883,7 @@ public sealed class TrackingAlertsRow
     [Column("alert_type", TypeName = "varchar(50)")]
     public string AlertType { get; set; } = null!;
     [Column("severity", TypeName = "varchar(20)")]
-    public string Severity { get; set; } = null!;
+    public string Severity { get; set; } = "warning";
     [Column("message", TypeName = "varchar(500)")]
     public string Message { get; set; } = null!;
     [Column("latitude", TypeName = "numeric(10, 7)")]
@@ -1009,7 +1009,7 @@ public sealed class RentalOrdersRow
     [Column("payment_method", TypeName = "varchar(20)")]
     public string PaymentMethod { get; set; } = null!;
     [Column("payment_status", TypeName = "varchar(20)")]
-    public string PaymentStatus { get; set; } = null!;
+    public string PaymentStatus { get; set; } = "paid";
     [Column("confirmed_by", TypeName = "varchar(255)")]
     public string? ConfirmedBy { get; set; }
     [Column("created_at", TypeName = "timestamp")]
@@ -1035,7 +1035,7 @@ public sealed class UserAdministrationAuditRow
     [Column("ip_address", TypeName = "varchar(45)")]
     public string? IpAddress { get; set; }
     [Column("status", TypeName = "varchar(20)")]
-    public string Status { get; set; } = null!;
+    public string Status { get; set; } = "success";
 }
 
 [Table("report_history")]
@@ -1091,7 +1091,7 @@ public sealed class InspectionAssignmentsRow
     [Column("assigned_by", TypeName = "varchar(255)")]
     public string AssignedBy { get; set; } = null!;
     [Column("inspection_type", TypeName = "text")]
-    public string InspectionType { get; set; } = null!;
+    public string InspectionType { get; set; } = "pre_rental";
 }
 
 [Table("customer_licenses")]
@@ -1113,7 +1113,7 @@ public sealed class CustomerLicensesRow
     [Column("image_url", TypeName = "text")]
     public string? ImageUrl { get; set; }
     [Column("status", TypeName = "varchar(20)")]
-    public string Status { get; set; } = null!;
+    public string Status { get; set; } = "pending";
 }
 
 [Table("rental_contract_documents")]

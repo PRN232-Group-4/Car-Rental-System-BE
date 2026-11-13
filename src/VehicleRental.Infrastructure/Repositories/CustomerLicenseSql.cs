@@ -1,12 +1,27 @@
+using Car_Rental_System_BE.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+
 namespace Car_Rental_System_BE.Infrastructure.Repositories;
 
-internal static class CustomerLicenseSql
+/// <summary>Self-drive eligibility: an approved license of an allowed class, valid through max(today, end date).</summary>
+internal static class CustomerLicenseEligibility
 {
-    // Expressions are developer-owned SQL identifiers/parameters, never user input.
-    internal static string Eligible(string customerId, string vehicleId, string throughDate) => $"""
-        EXISTS(SELECT 1 FROM customer_license_records cl JOIN vehicles lv ON lv.id={vehicleId}
-            WHERE cl.customer_id={customerId} AND cl.status='approved'
-            AND cl.expiry_date >= GREATEST(CURRENT_DATE,{throughDate})
-            AND (cardinality(lv.allowed_license_types)=0 OR upper(btrim(cl.type))=ANY(lv.allowed_license_types)))
-        """;
+    public static IQueryable<CustomerLicenseRecordsRow> EligibleLicenses(VehicleRentalDbContext db, int vehicleId, DateOnly validThrough) =>
+        from cl in db.Set<CustomerLicenseRecordsRow>()
+        from v in db.Set<VehiclesRow>()
+        where v.Id == vehicleId && cl.Status == "approved" && cl.ExpiryDate >= validThrough
+            && (v.AllowedLicenseTypes.Length == 0 || v.AllowedLicenseTypes.Contains(cl.Type.Trim().ToUpper()))
+        select cl;
+
+    public static async Task<bool> IsEligibleAsync(VehicleRentalDbContext db, int customerId, int vehicleId, DateTime rentalEnd, CancellationToken ct)
+    {
+        var through = await ValidThroughAsync(db, DateOnly.FromDateTime(rentalEnd), ct);
+        return await EligibleLicenses(db, vehicleId, through).AnyAsync(cl => cl.CustomerId == customerId, ct);
+    }
+
+    public static async Task<DateOnly> ValidThroughAsync(VehicleRentalDbContext db, DateOnly endDate, CancellationToken ct)
+    {
+        var today = await db.DatabaseTodayAsync(ct);
+        return endDate > today ? endDate : today;
+    }
 }

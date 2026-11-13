@@ -37,16 +37,11 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
                 end == null ? null : DateOnly.FromDateTime(end.Value))).FirstOrDefaultAsync(ct);
     }
 
-    private static async Task RequireLicenseAsync(NpgsqlConnection connection, NpgsqlTransaction tx, RentalScheduleInfo rental, int vehicleId, CancellationToken ct)
+    private static async Task RequireLicenseAsync(VehicleRentalDbContext db, RentalScheduleInfo rental, int vehicleId, CancellationToken ct)
     {
         if (rental.HasDriver) return;
-        await using (var customerLock = new NpgsqlCommand("SELECT id FROM customers WHERE id=$1 FOR SHARE",connection,tx))
-        { customerLock.Parameters.AddWithValue(rental.CustomerId); await customerLock.ExecuteScalarAsync(ct); }
-        await using var command = new NpgsqlCommand("SELECT " + CustomerLicenseSql.Eligible("$1", "$2", "$3::timestamp::date"),connection,tx);
-        command.Parameters.AddWithValue(rental.CustomerId);
-        command.Parameters.AddWithValue(vehicleId);
-        command.Parameters.Add(Sql.Timestamp("", rental.EndTime));
-        if (await command.ExecuteScalarAsync(ct) is not true)
+        await db.LockByKeyAsync<CustomersRow>(rental.CustomerId, ct, RowLock.Share);
+        if (!await CustomerLicenseEligibility.IsEligibleAsync(db, rental.CustomerId, vehicleId, Sql.Ts(rental.EndTime), ct))
             throw new ConflictException("CUSTOMER_LICENSE_NOT_VALID", "Cần GPLX đã duyệt, đúng hạng xe và còn hạn đến hết chuyến thuê.");
     }
 
@@ -93,13 +88,14 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await connection.BeginTransactionAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(connection, tx);
 
         try
         {
             // Lock vehicle (1001)
             await VehicleLock.AcquireAsync(connection, tx, rental.VehicleId, ct);
-            await RequireCurrentScheduleAsync(connection, tx, rental, ct);
-            await RequireLicenseAsync(connection, tx, rental, rental.VehicleId, ct);
+            await RequireCurrentScheduleAsync(db, rental, ct);
+            await RequireLicenseAsync(db, rental, rental.VehicleId, ct);
 
             // Lock driver (1002) if provided
             if (driverStaffId is not null)
@@ -107,75 +103,20 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
                 await DriverLock.AcquireAsync(tx, driverStaffId.Value, ct);
             }
 
-            int? supersedesId = null;
-            await using (var getCurrentCmd = new NpgsqlCommand("""
-                SELECT id, starts_at, ends_at FROM vehicle_assignments
-                WHERE rental_id = @rentalId AND status = 'assigned'
-                FOR UPDATE
-                """, connection, tx))
-            {
-                getCurrentCmd.Parameters.AddWithValue("rentalId", rental.RentalId);
-                await using var reader = await getCurrentCmd.ExecuteReaderAsync(ct);
-                if (await reader.ReadAsync(ct))
-                {
-                    supersedesId = reader.GetInt32(0);
-                }
-            }
+            var current = (await db.LockWhereAsync<VehicleAssignmentsRow>(nameof(VehicleAssignmentsRow.RentalId), [rental.RentalId], ct))
+                .FirstOrDefault(a => a.Status == "assigned");
+            int? supersedesId = current?.Id;
+            if (supersedesId is not null) await CloseAssignmentAsync(db, supersedesId.Value, startsAt, ct);
 
-            if (supersedesId is not null)
-            {
-                await using var closeCmd = new NpgsqlCommand("""
-                    UPDATE vehicle_assignments
-                    SET status = 'reassigned', ended_at = @now, ends_at = LEAST(ends_at, @now)
-                    WHERE id = @id
-                    """, connection, tx);
-                closeCmd.Parameters.AddWithValue("id", supersedesId.Value);
-                closeCmd.Parameters.Add(Sql.Timestamp("now", startsAt));
-                await closeCmd.ExecuteNonQueryAsync(ct);
-            }
+            var inserted = await InsertAssignmentAsync(db, rental.RentalId, rental.VehicleId, driverStaffId, reason, note,
+                supersedesId, startsAt, endsAt, bufferMinutes, assignedByEmail, ct);
 
-            int assignmentId;
-            DateTime assignedAt;
-            await using (var insertCmd = new NpgsqlCommand("""
-                INSERT INTO vehicle_assignments(
-                    rental_id, vehicle_id, driver_staff_id, status, reason, note,
-                    supersedes_id, starts_at, ends_at, buffer_minutes, assigned_by)
-                VALUES(
-                    @rentalId, @vehicleId, @driverStaffId, 'assigned', @reason, @note,
-                    @supersedesId, @startsAt, @endsAt, @bufferMinutes, @assignedBy)
-                RETURNING id, assigned_at
-                """, connection, tx))
-            {
-                insertCmd.Parameters.AddWithValue("rentalId", rental.RentalId);
-                insertCmd.Parameters.AddWithValue("vehicleId", rental.VehicleId);
-                insertCmd.Parameters.AddWithValue("driverStaffId", (object?)driverStaffId ?? DBNull.Value);
-                insertCmd.Parameters.AddWithValue("reason", reason);
-                insertCmd.Parameters.AddWithValue("note", (object?)note ?? DBNull.Value);
-                insertCmd.Parameters.AddWithValue("supersedesId", (object?)supersedesId ?? DBNull.Value);
-                insertCmd.Parameters.Add(Sql.Timestamp("startsAt", startsAt));
-                insertCmd.Parameters.Add(Sql.Timestamp("endsAt", endsAt));
-                insertCmd.Parameters.AddWithValue("bufferMinutes", bufferMinutes);
-                insertCmd.Parameters.AddWithValue("assignedBy", assignedByEmail);
-
-                await using var reader = await insertCmd.ExecuteReaderAsync(ct);
-                await reader.ReadAsync(ct);
-                assignmentId = reader.GetInt32(0);
-                assignedAt = reader.GetDateTime(1);
-            }
-
-            string? driverName = null;
-            if (driverStaffId is not null)
-            {
-                await using var db = VehicleRentalDbContext.Create(connection, tx);
-                driverName = await (from st in db.Set<StaffsRow>() join u in db.Set<UsersRow>() on st.UserId equals u.Id
-                    where st.Id == driverStaffId select u.Fullname ?? u.Email).FirstOrDefaultAsync(ct);
-            }
-
-            var vehicleInfo = await VehicleInfoAsync(connection, tx, rental.VehicleId, ct);
+            var driverName = await DriverNameAsync(db, driverStaffId, ct);
+            var vehicleInfo = await VehicleInfoAsync(db, rental.VehicleId, ct);
             await tx.CommitAsync(ct);
 
             return new AssignmentResponse(
-                assignmentId,
+                inserted.Id,
                 rental.RentalId,
                 rental.VehicleId,
                 driverStaffId,
@@ -187,17 +128,43 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
                 startsAt,
                 endsAt,
                 null,
-                assignedAt,
+                inserted.AssignedAt,
                 assignedByEmail, vehicleInfo.Name, vehicleInfo.LicensePlate, bufferMinutes);
         }
-        catch (PostgresException ex) when (ex.SqlState == "23P01")
+        catch (Exception ex) when (ex.Postgres() is { SqlState: "23P01" } pg)
         {
-            if (ex.ConstraintName == "ex_va_driver_no_overlap")
+            if (pg.ConstraintName == "ex_va_driver_no_overlap")
                 throw new ConflictException("DRIVER_BUSY", "Driver has another conflicting assignment during this period.");
 
             throw new ConflictException("VEHICLE_UNAVAILABLE", "Vehicle has an overlapping booking during this period.");
         }
     }
+
+    private static Task CloseAssignmentAsync(VehicleRentalDbContext db, int id, DateTime closedAt, CancellationToken ct)
+    {
+        var at = Sql.Ts(closedAt);
+        return db.Set<VehicleAssignmentsRow>().Where(a => a.Id == id).ExecuteUpdateAsync(s => s
+            .SetProperty(a => a.Status, "reassigned")
+            .SetProperty(a => a.EndedAt, at)
+            .SetProperty(a => a.EndsAt, a => a.EndsAt == null || a.EndsAt > at ? at : a.EndsAt), ct);
+    }
+
+    private static async Task<VehicleAssignmentsRow> InsertAssignmentAsync(VehicleRentalDbContext db, int rentalId, int vehicleId,
+        int? driverStaffId, string reason, string? note, int? supersedesId, DateTime startsAt, DateTime endsAt, int bufferMinutes,
+        string assignedBy, CancellationToken ct)
+    {
+        var row = new VehicleAssignmentsRow
+        {
+            RentalId = rentalId, VehicleId = vehicleId, DriverStaffId = driverStaffId, Status = "assigned", Reason = reason, Note = note,
+            SupersedesId = supersedesId, StartsAt = Sql.Ts(startsAt), EndsAt = Sql.Ts(endsAt), BufferMinutes = bufferMinutes, AssignedBy = assignedBy,
+        };
+        await db.InsertAsync(row, ct);
+        return row;
+    }
+
+    private static async Task<string?> DriverNameAsync(VehicleRentalDbContext db, int? driverStaffId, CancellationToken ct) =>
+        driverStaffId is null ? null : await (from st in db.Set<StaffsRow>() join u in db.Set<UsersRow>() on st.UserId equals u.Id
+            where st.Id == driverStaffId select u.Fullname ?? u.Email).FirstOrDefaultAsync(ct);
 
     public async Task<VehicleReplacementResult> ReplaceVehicleAsync(
         RentalScheduleInfo rental,
@@ -213,6 +180,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await connection.BeginTransactionAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(connection, tx);
 
         try
         {
@@ -221,25 +189,13 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
             var secondId = Math.Max(rental.VehicleId, newVehicleId);
             await VehicleLock.AcquireAsync(connection, tx, firstId, ct);
             await VehicleLock.AcquireAsync(connection, tx, secondId, ct);
-            await RequireCurrentScheduleAsync(connection, tx, rental, ct);
-            await RequireLicenseAsync(connection, tx, rental, newVehicleId, ct);
+            await RequireCurrentScheduleAsync(db, rental, ct);
+            await RequireLicenseAsync(db, rental, newVehicleId, ct);
 
-            int? currentAssignmentId = null;
-            int? currentDriverId = null;
-            await using (var getCurrentCmd = new NpgsqlCommand("""
-                SELECT id, driver_staff_id FROM vehicle_assignments
-                WHERE rental_id = @rentalId AND status = 'assigned'
-                FOR UPDATE
-                """, connection, tx))
-            {
-                getCurrentCmd.Parameters.AddWithValue("rentalId", rental.RentalId);
-                await using var reader = await getCurrentCmd.ExecuteReaderAsync(ct);
-                if (await reader.ReadAsync(ct))
-                {
-                    currentAssignmentId = reader.GetInt32(0);
-                    currentDriverId = reader.IsDBNull(1) ? null : reader.GetInt32(1);
-                }
-            }
+            var current = (await db.LockWhereAsync<VehicleAssignmentsRow>(nameof(VehicleAssignmentsRow.RentalId), [rental.RentalId], ct))
+                .FirstOrDefault(a => a.Status == "assigned");
+            int? currentAssignmentId = current?.Id;
+            int? currentDriverId = current?.DriverStaffId;
 
             var newDriverStaffId = keepDriver ? currentDriverId : null;
             if (newDriverStaffId is not null)
@@ -248,93 +204,32 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
             }
 
             // 1. Update rentals.vehicle_id -> triggers BE-10 sync_booking to migrate booking to new vehicle
-            await using (var updateRentalCmd = new NpgsqlCommand("""
-                UPDATE rentals SET vehicle_id = @newVehicleId WHERE id = @rentalId
-                """, connection, tx))
-            {
-                updateRentalCmd.Parameters.AddWithValue("newVehicleId", newVehicleId);
-                updateRentalCmd.Parameters.AddWithValue("rentalId", rental.RentalId);
-                await updateRentalCmd.ExecuteNonQueryAsync(ct);
-            }
+            await db.Set<RentalsRow>().Where(r => r.Id == rental.RentalId)
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.VehicleId, newVehicleId), ct);
 
             // 2. Close old assignment if exists
-            if (currentAssignmentId is not null)
-            {
-                await using var closeCmd = new NpgsqlCommand("""
-                    UPDATE vehicle_assignments
-                    SET status = 'reassigned', ended_at = @now, ends_at = LEAST(ends_at, @now)
-                    WHERE id = @id
-                    """, connection, tx);
-                closeCmd.Parameters.AddWithValue("id", currentAssignmentId.Value);
-                closeCmd.Parameters.Add(Sql.Timestamp("now", startsAt));
-                await closeCmd.ExecuteNonQueryAsync(ct);
-            }
+            if (currentAssignmentId is not null) await CloseAssignmentAsync(db, currentAssignmentId.Value, startsAt, ct);
 
             // 3. Insert new assignment
-            int newAssignmentId;
-            DateTime assignedAt;
-            await using (var insertCmd = new NpgsqlCommand("""
-                INSERT INTO vehicle_assignments(
-                    rental_id, vehicle_id, driver_staff_id, status, reason, note,
-                    supersedes_id, starts_at, ends_at, buffer_minutes, assigned_by)
-                VALUES(
-                    @rentalId, @vehicleId, @driverStaffId, 'assigned', @reason, @note,
-                    @supersedesId, @startsAt, @endsAt, @bufferMinutes, @assignedBy)
-                RETURNING id, assigned_at
-                """, connection, tx))
-            {
-                insertCmd.Parameters.AddWithValue("rentalId", rental.RentalId);
-                insertCmd.Parameters.AddWithValue("vehicleId", newVehicleId);
-                insertCmd.Parameters.AddWithValue("driverStaffId", (object?)newDriverStaffId ?? DBNull.Value);
-                insertCmd.Parameters.AddWithValue("reason", reason);
-                insertCmd.Parameters.AddWithValue("note", (object?)note ?? DBNull.Value);
-                insertCmd.Parameters.AddWithValue("supersedesId", (object?)currentAssignmentId ?? DBNull.Value);
-                insertCmd.Parameters.Add(Sql.Timestamp("startsAt", startsAt));
-                insertCmd.Parameters.Add(Sql.Timestamp("endsAt", endsAt));
-                insertCmd.Parameters.AddWithValue("bufferMinutes", bufferMinutes);
-                insertCmd.Parameters.AddWithValue("assignedBy", assignedByEmail);
-
-                await using var reader = await insertCmd.ExecuteReaderAsync(ct);
-                await reader.ReadAsync(ct);
-                newAssignmentId = reader.GetInt32(0);
-                assignedAt = reader.GetDateTime(1);
-            }
+            var inserted = await InsertAssignmentAsync(db, rental.RentalId, newVehicleId, newDriverStaffId, reason, note,
+                currentAssignmentId, startsAt, endsAt, bufferMinutes, assignedByEmail, ct);
 
             // 4. Handle incident on old vehicle (breakdown / accident)
             int? maintenanceId = null;
             if (AssignmentReason.IsIncident(reason))
             {
                 // Mark old vehicle as maintenance
-                await using (var markVehCmd = new NpgsqlCommand("""
-                    UPDATE vehicles SET status = 'maintenance' WHERE id = @id
-                    """, connection, tx))
-                {
-                    markVehCmd.Parameters.AddWithValue("id", rental.VehicleId);
-                    await markVehCmd.ExecuteNonQueryAsync(ct);
-                }
-
-                maintenanceId = await OpenIncidentMaintenanceAsync(
-                    tx,
-                    rental.VehicleId,
-                    rental.FacilityId,
-                    rental.RentalId,
-                    note ?? reason,
-                    ct);
+                await db.Set<VehiclesRow>().Where(v => v.Id == rental.VehicleId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(v => v.Status, "maintenance"), ct);
+                maintenanceId = await OpenIncidentMaintenanceAsync(db, rental.VehicleId, rental.FacilityId, rental.RentalId, note ?? reason, ct);
             }
 
-            string? driverName = null;
-            if (newDriverStaffId is not null)
-            {
-                await using var db = VehicleRentalDbContext.Create(connection, tx);
-                driverName = await (from st in db.Set<StaffsRow>() join u in db.Set<UsersRow>() on st.UserId equals u.Id
-                    where st.Id == newDriverStaffId select u.Fullname ?? u.Email).FirstOrDefaultAsync(ct);
-            }
-
-            var vehicleInfo = await VehicleInfoAsync(connection, tx, newVehicleId, ct);
+            var driverName = await DriverNameAsync(db, newDriverStaffId, ct);
+            var vehicleInfo = await VehicleInfoAsync(db, newVehicleId, ct);
             await tx.CommitAsync(ct);
 
             var response = new AssignmentResponse(
-                newAssignmentId,
+                inserted.Id,
                 rental.RentalId,
                 newVehicleId,
                 newDriverStaffId,
@@ -346,47 +241,35 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
                 startsAt,
                 endsAt,
                 null,
-                assignedAt,
+                inserted.AssignedAt,
                 assignedByEmail, vehicleInfo.Name, vehicleInfo.LicensePlate, bufferMinutes);
 
             return new VehicleReplacementResult(response, RequiresInspection: true, maintenanceId);
         }
-        catch (PostgresException ex) when (ex.SqlState == "23P01")
+        catch (Exception ex) when (ex.Postgres() is { SqlState: "23P01" } pg)
         {
-            if (ex.ConstraintName == "ex_va_driver_no_overlap")
+            if (pg.ConstraintName == "ex_va_driver_no_overlap")
                 throw new ConflictException("DRIVER_BUSY", "Driver has another conflicting assignment during this period.");
 
             throw new ConflictException("VEHICLE_UNAVAILABLE", "Replacement vehicle has an overlapping booking during this period.");
         }
     }
 
-    private async Task<int> OpenIncidentMaintenanceAsync(
-        DbTransaction tx,
+    private static async Task<int> OpenIncidentMaintenanceAsync(
+        VehicleRentalDbContext db,
         int vehicleId,
         int? facilityId,
         int rentalId,
         string description,
         CancellationToken ct)
     {
-        var connection = (NpgsqlConnection)tx.Connection!;
-        var npgsqlTx = (NpgsqlTransaction)tx;
-
-        await using var cmd = new NpgsqlCommand("""
-            INSERT INTO vehicle_maintenance(
-                vehicle_id, facility_id, rental_id, status, maintenance_type,
-                scheduled_date, is_safe, description, created_at)
-            VALUES(
-                @vehicleId, @facilityId, @rentalId, 'open', 'incident',
-                CURRENT_DATE, false, @description, now())
-            RETURNING id
-            """, connection, npgsqlTx);
-
-        cmd.Parameters.AddWithValue("vehicleId", vehicleId);
-        cmd.Parameters.AddWithValue("facilityId", (object?)facilityId ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("rentalId", rentalId);
-        cmd.Parameters.AddWithValue("description", description);
-
-        return (int)(await cmd.ExecuteScalarAsync(ct))!;
+        var row = new VehicleMaintenanceRow
+        {
+            VehicleId = vehicleId, FacilityId = facilityId, RentalId = rentalId, Status = "open", MaintenanceType = "incident",
+            ScheduledDate = await db.DatabaseTodayAsync(ct), IsSafe = false, Description = description,
+        };
+        await db.InsertAsync(row, ct);
+        return row.Id;
     }
 
     public async Task<IReadOnlyList<DriverCandidateRaw>> ListDriverCandidatesAsync(
@@ -431,31 +314,31 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
             (v.Status == "available" || v.Status == "renting"), ct);
     }
 
-    private static async Task RequireCurrentScheduleAsync(NpgsqlConnection connection, NpgsqlTransaction tx,
-        RentalScheduleInfo expected, CancellationToken ct)
+    private static async Task RequireCurrentScheduleAsync(VehicleRentalDbContext db, RentalScheduleInfo expected, CancellationToken ct)
     {
         // The Application snapshot can predate an edit that was waiting on the same vehicle lock.
         // Read again after taking that lock and keep the rental row locked until assignment commit.
-        await using var command = new NpgsqlCommand("""
-            SELECT r.vehicle_id,r.status,r.customer_id,COALESCE(h.has_driver,l.has_driver,false),
-                COALESCE(h.start_time,l.start_time),COALESCE(h.end_time,l.end_time)
-            FROM rentals r LEFT JOIN hour_rental_detail h ON h.rental_id=r.id
-            LEFT JOIN longterm_rental_contract l ON l.rental_id=r.id
-            WHERE r.id=$1 FOR UPDATE OF r
-            """, connection, tx);
-        command.Parameters.AddWithValue(expected.RentalId);
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct))
+        if (await db.LockByKeyAsync<RentalsRow>(expected.RentalId, ct) is null)
             throw new NotFoundException("RENTAL_NOT_FOUND", "Rental was not found.");
-        if (reader.GetInt32(0) != expected.VehicleId || reader.GetString(1) != expected.Status ||
-            reader.GetInt32(2) != expected.CustomerId || reader.GetBoolean(3) != expected.HasDriver ||
-            reader.IsDBNull(4) || reader.IsDBNull(5) || reader.GetDateTime(4) != expected.StartTime || reader.GetDateTime(5) != expected.EndTime)
+        var current = await (from r in db.Set<RentalsRow>()
+            join h in db.Set<HourRentalDetailRow>() on r.Id equals h.RentalId into hourly
+            from h in hourly.DefaultIfEmpty()
+            join l in db.Set<LongtermRentalContractRow>() on r.Id equals l.RentalId into longterm
+            from l in longterm.DefaultIfEmpty()
+            where r.Id == expected.RentalId
+            select new
+            {
+                r.VehicleId, r.Status, r.CustomerId, HasDriver = (bool?)h.HasDriver ?? (bool?)l.HasDriver ?? false,
+                Start = (DateTime?)h.StartTime ?? l.StartTime, End = (DateTime?)h.EndTime ?? l.EndTime,
+            }).SingleAsync(ct);
+        if (current.VehicleId != expected.VehicleId || current.Status != expected.Status ||
+            current.CustomerId != expected.CustomerId || current.HasDriver != expected.HasDriver ||
+            current.Start is null || current.End is null || current.Start != expected.StartTime || current.End != expected.EndTime)
             throw new ConflictException("RENTAL_CHANGED", "Rental terms changed. Reload the rental before assigning or replacing a vehicle.");
     }
 
-    private static async Task<(string? Name, string? LicensePlate)> VehicleInfoAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int id, CancellationToken ct)
+    private static async Task<(string? Name, string? LicensePlate)> VehicleInfoAsync(VehicleRentalDbContext db, int id, CancellationToken ct)
     {
-        await using var db = VehicleRentalDbContext.Create(connection, transaction);
         var row = await db.Set<VehiclesRow>().Where(v => v.Id == id)
             .Select(v => new { Name = v.Brand == null ? (v.Model ?? "") : v.Model == null ? v.Brand : v.Brand + " " + v.Model, v.LicensePlate })
             .FirstOrDefaultAsync(ct);

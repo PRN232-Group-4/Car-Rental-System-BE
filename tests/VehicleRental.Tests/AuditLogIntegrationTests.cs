@@ -56,14 +56,16 @@ public sealed class AuditLogIntegrationTests(PostgresFixture db) : IClassFixture
         Assert.Empty((await repository.ListAsync(new() { Action = "unknown_action" }, default)).Items);
         Assert.Empty((await repository.ListAsync(new() { Search = "%" }, default)).Items);
 
-        // No foreign keys: retain history and nullable identity metadata after logical references disappear.
-        await Seed.ScalarAsync(db.DataSource, "DELETE FROM users WHERE id=$1 OR id=$2", actor, target);
-        var orphan = Assert.Single((await repository.ListAsync(new() { Action = "role_assigned" }, default)).Items);
-        Assert.Null(orphan.ActorEmail);
-        Assert.Null(orphan.ActorName);
-        Assert.Null(orphan.TargetUser);
-        Assert.Equal(actor, orphan.ActorId);
-        Assert.Equal(target, orphan.TargetUserId);
+        // Foreign keys preserve identities referenced by immutable audit history.
+        var deletion = await Assert.ThrowsAsync<Npgsql.PostgresException>(() =>
+            Seed.ScalarAsync(db.DataSource, "DELETE FROM users WHERE id=$1 OR id=$2", actor, target));
+        Assert.Equal(Npgsql.PostgresErrorCodes.ForeignKeyViolation, deletion.SqlState);
+        var retained = Assert.Single((await repository.ListAsync(new() { Action = "role_assigned" }, default)).Items);
+        Assert.Equal("audit-actor@test.local", retained.ActorEmail);
+        Assert.Equal("Audit Administrator", retained.ActorName);
+        Assert.Equal("audit-target@test.local", retained.TargetUser);
+        Assert.Equal(actor, retained.ActorId);
+        Assert.Equal(target, retained.TargetUserId);
         await Seed.ScalarAsync(db.DataSource,
             "INSERT INTO user_administration_audit(user_id,actor_user_id,action) VALUES($1,$2,'legacy_action')", target, actor);
         var legacy = Assert.Single((await repository.ListAsync(new() { Action = "legacy_action" }, default)).Items);

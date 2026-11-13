@@ -9,6 +9,8 @@ namespace Car_Rental_System_BE.Infrastructure.Repositories;
 
 public sealed class NpgsqlUserAdministrationRepository(NpgsqlDataSource dataSource, IAuditRequestContext? auditContext = null) : IUserAdministrationRepository
 {
+    private static readonly string[] StaffSpecialties = ["CustomerService", "Driver", "Maintenance"];
+
     private static IQueryable<AdministrativeUser> Project(VehicleRentalDbContext db, IQueryable<UsersRow> users) =>
         users.Select(u => new AdministrativeUser(u.Id, u.Email, u.Fullname ?? "", u.Phone, u.Avatar,
             u.Gender, u.Address, u.IsActive, u.CreatedAt,
@@ -42,126 +44,125 @@ public sealed class NpgsqlUserAdministrationRepository(NpgsqlDataSource dataSour
     }
 
     public Task<AdministrativeUser> SetStatusAsync(int id, bool isActive, string reason, int actorUserId, CancellationToken ct) =>
-        MutateAsync(id, actorUserId, isActive ? "activate" : "deactivate", reason, async (connection, transaction) =>
+        MutateAsync(id, actorUserId, isActive ? "activate" : "deactivate", reason, async db =>
         {
             if (!isActive)
             {
                 if (id == actorUserId) throw new UserAdministrationException(409, "You cannot deactivate your own account.");
-                await ProtectLastAdminAsync(connection, transaction, id, ct);
+                await ProtectLastAdminAsync(db, id, ct);
             }
-            await ExecuteAsync(connection, transaction, "UPDATE users SET is_active=$2, authorization_version=authorization_version+1 WHERE id=$1", ct, id, isActive);
+            await db.Set<UsersRow>().Where(u => u.Id == id).ExecuteUpdateAsync(s => s
+                .SetProperty(u => u.IsActive, isActive)
+                .SetProperty(u => u.AuthorizationVersion, u => u.AuthorizationVersion + 1), ct);
         }, ct);
 
     public Task<AdministrativeUser> SetRoleAsync(int id, string role, bool assigned, int actorUserId, CancellationToken ct) =>
-        MutateAsync(id, actorUserId, assigned ? "role:add" : "role:remove", role, async (connection, transaction) =>
+        MutateAsync(id, actorUserId, assigned ? "role:add" : "role:remove", role, async db =>
         {
             if (assigned && id == actorUserId)
                 throw new UserAdministrationException(409, "You cannot assign additional roles to yourself.");
             // Resolve to the stored spelling before applying built-in invariants: e.g.
             // a request for 'admin' must still run the last active Admin protection.
-            await using (var canonical = new NpgsqlCommand("SELECT name FROM roles WHERE lower(name)=lower($1)", connection, transaction))
-            {
-                canonical.Parameters.AddWithValue(role);
-                role = (string?)await canonical.ExecuteScalarAsync(ct)
-                    ?? throw new UserAdministrationException(400, "Role was not found.");
-            }
-            if (assigned) await ValidateRoleProfileAsync(connection, transaction, id, role, ct);
-            if (!assigned && role == "Admin") await ProtectLastAdminAsync(connection, transaction, id, ct);
-            if (!assigned && role == "Staff" && await ExistsAsync(connection, transaction,
-                "SELECT EXISTS(SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=$1 AND r.name IN ('CustomerService','Driver','Maintenance'))", ct, id))
+            var requested = role;
+            var stored = await db.Set<RolesRow>().Where(r => r.Name.ToLower() == requested.ToLower())
+                .Select(r => new { r.Id, r.Name }).FirstOrDefaultAsync(ct)
+                ?? throw new UserAdministrationException(400, "Role was not found.");
+            role = stored.Name;
+            if (assigned) await ValidateRoleProfileAsync(db, id, role, ct);
+            if (!assigned && role == "Admin") await ProtectLastAdminAsync(db, id, ct);
+            if (!assigned && role == "Staff" && await HasAnyRoleAsync(db, id, StaffSpecialties, ct))
                 throw new UserAdministrationException(409, "Remove the staff specialty roles before removing Staff.");
+            var name = role;
             if (assigned)
             {
-                await ExecuteAsync(connection, transaction, """
-                    INSERT INTO user_roles(user_id,role_id) SELECT $1,id FROM roles WHERE name=$2
-                    AND NOT EXISTS(SELECT 1 FROM user_roles WHERE user_id=$1 AND role_id=roles.id)
-                    """, ct, id, role);
+                var roleIds = await db.Set<RolesRow>().Where(r => r.Name == name).Select(r => r.Id).ToListAsync(ct);
+                foreach (var roleId in roleIds)
+                    if (!await db.Set<UserRolesRow>().AnyAsync(ur => ur.UserId == id && ur.RoleId == roleId, ct))
+                        await db.InsertAsync(new UserRolesRow { UserId = id, RoleId = roleId }, ct);
             }
-            else await ExecuteAsync(connection, transaction,
-                "DELETE FROM user_roles WHERE user_id=$1 AND role_id IN(SELECT id FROM roles WHERE name=$2)", ct, id, role);
+            else
+            {
+                await db.Set<UserRolesRow>().Where(ur => ur.UserId == id &&
+                        db.Set<RolesRow>().Any(r => r.Id == ur.RoleId && r.Name == name))
+                    .ExecuteDeleteAsync(ct);
+            }
             if (role == "Driver" || (assigned && role is "CustomerService" or "Maintenance") || (!assigned && role == "Staff"))
-                await ExecuteAsync(connection, transaction, "UPDATE staffs SET is_driver=$2 WHERE user_id=$1", ct, id, assigned && role == "Driver");
+            {
+                var isDriver = assigned && role == "Driver";
+                await db.Set<StaffsRow>().Where(s => s.UserId == id).ExecuteUpdateAsync(s => s.SetProperty(x => x.IsDriver, isDriver), ct);
+            }
             // Also invalidate on idempotent retries, so a failed Redis call can be retried safely.
-            await ExecuteAsync(connection, transaction, "UPDATE users SET authorization_version=authorization_version+1 WHERE id=$1", ct, id);
+            await BumpAuthorizationAsync(db, id, ct);
         }, ct);
 
     public Task<AdministrativeUser> InvalidateSessionsAsync(int id, int actorUserId, CancellationToken ct) =>
-        MutateAsync(id, actorUserId, "sessions:revoke", null, async (connection, transaction) =>
-            await ExecuteAsync(connection, transaction, "UPDATE users SET authorization_version=authorization_version+1 WHERE id=$1", ct, id), ct);
+        MutateAsync(id, actorUserId, "sessions:revoke", null, db => BumpAuthorizationAsync(db, id, ct), ct);
+
+    private static Task<int> BumpAuthorizationAsync(VehicleRentalDbContext db, int id, CancellationToken ct) =>
+        db.Set<UsersRow>().Where(u => u.Id == id)
+            .ExecuteUpdateAsync(s => s.SetProperty(u => u.AuthorizationVersion, u => u.AuthorizationVersion + 1), ct);
 
     private async Task<AdministrativeUser> MutateAsync(int id, int actorUserId, string action, string? reason,
-        Func<NpgsqlConnection, NpgsqlTransaction, Task> mutate, CancellationToken ct)
+        Func<VehicleRentalDbContext, Task> mutate, CancellationToken ct)
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(connection, transaction);
         // Match the dispatcher lock before taking account locks: activation and driver-role
         // changes must not race driver availability checks in an assignment transaction.
-        await ExecuteAsync(connection, transaction, "SELECT pg_advisory_xact_lock(724232001::bigint)", ct);
+        await db.AdvisoryLockAsync(724232001L, ct);
         // All administrator membership/status mutations acquire the same lock before row locks.
-        await ExecuteAsync(connection, transaction, "SELECT pg_advisory_xact_lock(379123220)", ct);
-        if (!await ExistsAsync(connection, transaction, """
-            SELECT EXISTS(SELECT 1 FROM users u JOIN user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id
-            WHERE u.id=$1 AND u.is_active AND r.name='Admin')
-            """, ct, actorUserId)) throw new UserAdministrationException(403, "An active administrator is required.");
-        await using var target = new NpgsqlCommand("SELECT id FROM users WHERE id=$1 FOR UPDATE", connection, transaction);
-        target.Parameters.AddWithValue(id);
-        if (await target.ExecuteScalarAsync(ct) is null) throw new UserAdministrationException(404, "User was not found.");
-        await mutate(connection, transaction);
-        await ExecuteAsync(connection, transaction,
-            "INSERT INTO user_administration_audit(user_id,actor_user_id,action,reason,ip_address) VALUES($1,$2,$3,$4,$5)", ct,
-            id, actorUserId, action, (object?)reason ?? DBNull.Value, (object?)auditContext?.IpAddress ?? DBNull.Value);
-        await using var db = VehicleRentalDbContext.Create(connection, transaction);
+        await db.AdvisoryLockAsync(379123220L, ct);
+        if (!await ActiveAdmins(db).AnyAsync(u => u.Id == actorUserId, ct))
+            throw new UserAdministrationException(403, "An active administrator is required.");
+        if (await db.LockByKeyAsync<UsersRow>(id, ct) is null) throw new UserAdministrationException(404, "User was not found.");
+        await mutate(db);
+        await db.InsertAsync(new UserAdministrationAuditRow
+        {
+            UserId = id, ActorUserId = actorUserId, Action = action, Reason = reason, IpAddress = auditContext?.IpAddress,
+        }, ct);
         var user = await Project(db, db.Set<UsersRow>().Where(u => u.Id == id)).SingleAsync(ct);
         await transaction.CommitAsync(ct);
         return user;
     }
 
-    private static async Task ProtectLastAdminAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int id, CancellationToken ct)
+    private static IQueryable<UsersRow> ActiveAdmins(VehicleRentalDbContext db) =>
+        db.Set<UsersRow>().Where(u => u.IsActive && (from ur in db.Set<UserRolesRow>()
+            join r in db.Set<RolesRow>() on ur.RoleId equals r.Id
+            where ur.UserId == u.Id && r.Name == "Admin" select ur.Id).Any());
+
+    private static Task<bool> HasAnyRoleAsync(VehicleRentalDbContext db, int userId, string[] names, CancellationToken ct) =>
+        (from ur in db.Set<UserRolesRow>() join r in db.Set<RolesRow>() on ur.RoleId equals r.Id
+         where ur.UserId == userId && names.Contains(r.Name) select ur.Id).AnyAsync(ct);
+
+    private static async Task ProtectLastAdminAsync(VehicleRentalDbContext db, int id, CancellationToken ct)
     {
-        if (await ExistsAsync(connection, transaction, """
-            SELECT EXISTS(SELECT 1 FROM users u JOIN user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id
-              WHERE u.id=$1 AND u.is_active AND r.name='Admin')
-              AND NOT EXISTS(SELECT 1 FROM users u JOIN user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id
-              WHERE u.id<>$1 AND u.is_active AND r.name='Admin')
-            """, ct, id)) throw new UserAdministrationException(409, "The last active administrator cannot be removed or deactivated.");
+        if (await ActiveAdmins(db).AnyAsync(u => u.Id == id, ct) && !await ActiveAdmins(db).AnyAsync(u => u.Id != id, ct))
+            throw new UserAdministrationException(409, "The last active administrator cannot be removed or deactivated.");
     }
 
-    private static async Task ValidateRoleProfileAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int id, string role, CancellationToken ct)
+    private static async Task ValidateRoleProfileAsync(VehicleRentalDbContext db, int id, string role, CancellationToken ct)
     {
-        if (!await ExistsAsync(connection, transaction, "SELECT EXISTS(SELECT 1 FROM roles WHERE name=$1)", ct, role))
+        if (!await db.Set<RolesRow>().AnyAsync(r => r.Name == role, ct))
             throw new UserAdministrationException(400, "Role was not found.");
-        if (role == "Customer" && !await ExistsAsync(connection, transaction, "SELECT EXISTS(SELECT 1 FROM customers WHERE user_id=$1)", ct, id))
+        if (role == "Customer" && !await db.Set<CustomersRow>().AnyAsync(c => c.UserId == id, ct))
             throw new UserAdministrationException(409, "A customer profile is required for the Customer role.");
-        if (role is "Staff" or "Manager" or "CustomerService" or "Driver" or "Maintenance")
-        {
-            await using var profileLock = new NpgsqlCommand("SELECT id FROM staffs WHERE user_id=$1 FOR UPDATE", connection, transaction);
-            profileLock.Parameters.AddWithValue(id);
-            if (await profileLock.ExecuteScalarAsync(ct) is null) throw new UserAdministrationException(409, "An employee profile is required for this role.");
-        }
+        if (role is "Staff" or "Manager" or "CustomerService" or "Driver" or "Maintenance"
+            && (await db.LockWhereAsync<StaffsRow>(nameof(StaffsRow.UserId), [id], ct)).Count == 0)
+            throw new UserAdministrationException(409, "An employee profile is required for this role.");
         if (role is "CustomerService" or "Driver" or "Maintenance")
         {
-            if (!await ExistsAsync(connection, transaction, "SELECT EXISTS(SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=$1 AND r.name='Staff')", ct, id))
+            if (!await HasAnyRoleAsync(db, id, ["Staff"], ct))
                 throw new UserAdministrationException(409, "Assign the Staff role before assigning a staff specialty.");
-            if (await ExistsAsync(connection, transaction, "SELECT EXISTS(SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=$1 AND r.name IN ('CustomerService','Driver','Maintenance') AND r.name<>$2)", ct, id, role))
+            if (await HasAnyRoleAsync(db, id, StaffSpecialties.Where(name => name != role).ToArray(), ct))
                 throw new UserAdministrationException(409, "Remove the existing staff specialty before assigning a different specialty.");
         }
-        if (role == "Driver" && !await ExistsAsync(connection, transaction,
-            "SELECT EXISTS(SELECT 1 FROM staffs WHERE user_id=$1 AND NULLIF(btrim(license_number),'') IS NOT NULL AND license_expiry_date>=CURRENT_DATE AND (license_issue_date IS NULL OR license_issue_date<=CURRENT_DATE))", ct, id))
-            throw new UserAdministrationException(409, "The Driver role requires a driver profile with a valid license.");
+        if (role == "Driver")
+        {
+            var today = await db.DatabaseTodayAsync(ct);
+            if (!await db.Set<StaffsRow>().AnyAsync(s => s.UserId == id && s.LicenseNumber != null && s.LicenseNumber.Trim() != ""
+                    && s.LicenseExpiryDate >= today && (s.LicenseIssueDate == null || s.LicenseIssueDate <= today), ct))
+                throw new UserAdministrationException(409, "The Driver role requires a driver profile with a valid license.");
+        }
     }
-
-    private static async Task<bool> ExistsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string sql, CancellationToken ct, params object[] values)
-    {
-        await using var command = new NpgsqlCommand(sql, connection, transaction);
-        foreach (var value in values) command.Parameters.AddWithValue(value);
-        return (bool)(await command.ExecuteScalarAsync(ct))!;
-    }
-
-    private static async Task ExecuteAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string sql, CancellationToken ct, params object[] values)
-    {
-        await using var command = new NpgsqlCommand(sql, connection, transaction);
-        foreach (var value in values) command.Parameters.AddWithValue(value);
-        await command.ExecuteNonQueryAsync(ct);
-    }
-
 }

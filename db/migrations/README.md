@@ -20,3 +20,7 @@ Mỗi thay đổi schema tiếp theo tạo file immutable `NNNN_description.sql`
 `0030_customer_licenses_and_vehicle_classes.sql` thêm allowed_license_types, bảng customer_licenses và view tương thích; backfill bằng đã có, giữ nguyên duyệt. Migration runner tự phát hiện; triển khai BE và FE đồng bộ.
 
 `0032_rental_expiry.sql` thêm `rentals.expire_at`/`expired_at`, mở rộng CHECK trạng thái với `expired`, index theo `expire_at` và backfill cho đơn đang mở; `fn_rental_is_blocking` không đổi tập trạng thái đang giữ lịch nên đơn hết hạn tự giải phóng `vehicle_bookings`. Runner tự phát hiện file mới.
+
+`0034_foreign_keys.sql` thêm FK cho mọi quan hệ logic (ADR-014): tạo `NOT VALID` rồi thử `VALIDATE`; dữ liệu cũ mồ côi chỉ sinh WARNING, FK vẫn ràng buộc dữ liệu ghi mới. Dọn dữ liệu rồi chạy `ALTER TABLE <bảng> VALIDATE CONSTRAINT fk_<bảng>_<cột>`. CASCADE chỉ cho bảng con thuần (user_roles, ảnh/chi tiết xe, telemetry); runner tự phát hiện.
+
+Kiểm chứng ngày 2026-11-13: sau toàn bộ migration, 46 bảng nghiệp vụ có tổng 88 FK (82 từ 0034, 6 từ 0013/0017); không thiếu FK so với EF model và các cột tham chiếu. `ForeignKeySchemaTests` kiểm tra catalog, validation, idempotency và nâng cấp dữ liệu legacy mồ côi. Các bảng gốc/danh mục độc lập và lịch sử migration không cần FK đi ra; `customer_loyalty_transactions.ref_id` là tham chiếu đa hình.

@@ -85,7 +85,9 @@ public sealed class CustomerListTests(PostgresFixture db) : IClassFixture<Postgr
         var second = await CreateAsync(marker, "Bob", null, false);
         var third = await CreateAsync(marker, null, "0903", true);
         await Seed.ScalarAsync(db.DataSource, "INSERT INTO users(email) VALUES($1)", $"staff-{marker}@test.local");
-        await Seed.ScalarAsync(db.DataSource, "INSERT INTO customers(user_id) VALUES($1)", int.MaxValue);
+        var orphan = await Assert.ThrowsAsync<Npgsql.PostgresException>(() =>
+            Seed.ScalarAsync(db.DataSource, "INSERT INTO customers(user_id) VALUES($1)", int.MaxValue));
+        Assert.Equal(Npgsql.PostgresErrorCodes.ForeignKeyViolation, orphan.SqlState);
         var service = new CustomerService(new NpgsqlCustomerRepository(db.DataSource));
 
         var page = await service.ListAsync(new() { Search = marker, PageSize = 2 }, default);

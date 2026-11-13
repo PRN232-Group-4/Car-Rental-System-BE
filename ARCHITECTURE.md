@@ -16,7 +16,7 @@ Dự án được xây dựng theo phong cách **Clean Architecture (Onion Archi
 - **Nguyên tắc phụ thuộc một chiều (Dependency Inversion):**
   $$\text{Domain} \longleftarrow \text{Application} \longleftarrow \text{Infrastructure} \longleftarrow \text{WebApi}$$
 - **Độc lập hạ tầng (Infrastructure Independence):** Lớp `Application` và `Domain` hoàn toàn độc lập với framework HTTP, ORM, cơ sở dữ liệu và thư viện bên ngoài.
-- **Truy vấn đọc bằng EF Core:** LINQ và no-tracking trong Infrastructure, ánh xạ schema PostgreSQL hiện có. Giữ Npgsql cho ghi dữ liệu, transaction và khóa đặc thù; xem [ADR-012](docs/decisions/ADR-012-entity-framework-read-queries.md).
+- **Truy vấn đọc bằng EF Core:** LINQ và no-tracking trong Infrastructure, ánh xạ schema PostgreSQL hiện có. Ghi dữ liệu cũng bằng EF Core; chỉ khóa PostgreSQL và đồng hồ DB còn SQL trong `DbLocks`; xem [ADR-012](docs/decisions/ADR-012-entity-framework-read-queries.md) và [ADR-014](docs/decisions/ADR-014-ef-writes-and-foreign-keys.md).
 - **Chủ đích không dùng Khóa Ngoại vật lý (No Physical Foreign Keys):** Toàn vẹn tham chiếu logic do các Use Cases và Repositories đảm bảo.
 - **Bảo mật Session:** Không sử dụng JWT Bearer; sử dụng Cookie Session kết hợp Redis Ticket Store để hỗ trợ thu hồi phiên đăng nhập tức thì.
 

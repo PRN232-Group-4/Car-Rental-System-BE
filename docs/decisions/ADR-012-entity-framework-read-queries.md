@@ -1,7 +1,7 @@
 # ADR-012 — Entity Framework Core cho truy vấn đọc
 
 - Ngày: 2026-10-25
-- Trạng thái: Chấp nhận
+- Trạng thái: Chấp nhận; phần ghi dữ liệu bằng SQL được thay bởi [ADR-014](ADR-014-ef-writes-and-foreign-keys.md)
 
 ## Bối cảnh
 

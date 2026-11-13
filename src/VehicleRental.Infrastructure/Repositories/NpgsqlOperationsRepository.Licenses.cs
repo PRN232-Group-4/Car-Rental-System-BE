@@ -33,36 +33,66 @@ public sealed partial class NpgsqlOperationsRepository
             .ToListAsync(ct);
     }
 
-    private static CustomerLicense ReadLicense(NpgsqlDataReader reader) =>
-        new(S(reader,0),S(reader,1),D(reader,2),D(reader,3),S(reader,4),reader.GetString(5)) { Id = reader.IsDBNull(6) ? null : reader.GetInt32(6) };
+
+    private static CustomerLicense ToLicense(CustomerLicensesRow row) =>
+        new(row.Number, row.Type, row.IssueDate, row.ExpiryDate, row.ImageUrl, row.Status) { Id = row.Id };
+
+    /// <summary>Preserves a legacy (customers.*) license as a customer_licenses row; ON CONFLICT DO NOTHING semantics.</summary>
+    private static async Task PreserveLegacyLicenseAsync(VehicleRentalDbContext db, int customerId, CancellationToken ct)
+    {
+        var legacy = await db.Set<CustomerLicenseRecordsRow>().AsNoTracking()
+            .Where(x => x.CustomerId == customerId && x.Id == null).ToListAsync(ct);
+        foreach (var x in legacy)
+            await db.TryInsertAsync(new CustomerLicensesRow
+            {
+                CustomerId = x.CustomerId, Number = x.Number, Type = x.Type, IssueDate = x.IssueDate,
+                ExpiryDate = x.ExpiryDate, ImageUrl = x.ImageUrl, Status = x.Status,
+            }, ct);
+    }
 
     public async Task<CustomerLicense> SaveLicenseAsync(string email, CustomerLicense x, CancellationToken ct)
     {
         await using var cn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await cn.BeginTransactionAsync(ct);
-        var customer = await ScalarAsync(cn,tx,"SELECT c.id FROM customers c JOIN users u ON u.id=c.user_id WHERE u.email=$1 FOR UPDATE OF c",email,ct);
-        if (customer is not int customerId) throw new KeyNotFoundException();
+        await using var db = VehicleRentalDbContext.Create(cn, tx);
+        var customerId = await (from c in db.Set<CustomersRow>() join u in db.Set<UsersRow>() on c.UserId equals u.Id
+            where u.Email == email select (int?)c.Id).FirstOrDefaultAsync(ct);
+        if (customerId is null || await db.LockByKeyAsync<CustomersRow>(customerId.Value, ct) is null) throw new KeyNotFoundException();
         // Preserve an older legacy license before switching the compatibility projection.
-        await using (var legacy = new NpgsqlCommand("INSERT INTO customer_licenses(customer_id,number,type,issue_date,expiry_date,image_url,status) SELECT customer_id,number,type,issue_date,expiry_date,image_url,status FROM customer_license_records WHERE customer_id=$1 AND id IS NULL ON CONFLICT DO NOTHING",cn,tx))
-        { Add(legacy,customerId); await legacy.ExecuteNonQueryAsync(ct); }
-        var sql = x.Id is null
-            ? "INSERT INTO customer_licenses(customer_id,number,type,issue_date,expiry_date,image_url,status) VALUES($1,$2,$3,$4,$5,$6,'pending') ON CONFLICT(customer_id,number) DO UPDATE SET type=EXCLUDED.type,issue_date=EXCLUDED.issue_date,expiry_date=EXCLUDED.expiry_date,image_url=EXCLUDED.image_url,status='pending' RETURNING number,type,issue_date,expiry_date,image_url,status,id"
-            : "UPDATE customer_licenses SET number=$2,type=$3,issue_date=$4,expiry_date=$5,image_url=$6,status='pending' WHERE customer_id=$1 AND id=$7 RETURNING number,type,issue_date,expiry_date,image_url,status,id";
+        await PreserveLegacyLicenseAsync(db, customerId.Value, ct);
+        var number = x.Number!.Trim();
+        var type = x.Type!.Trim().ToUpperInvariant();
         CustomerLicense result;
         try
         {
-            await using var cmd = new NpgsqlCommand(sql,cn,tx);
-            Add(cmd,customerId,x.Number!.Trim(),x.Type!.Trim().ToUpperInvariant(),x.IssueDate,x.ExpiryDate,x.ImageUrl);
-            if (x.Id is not null) Add(cmd,x.Id.Value);
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-            if (!await reader.ReadAsync(ct)) throw new KeyNotFoundException("License was not found for this customer.");
-            result = ReadLicense(reader);
+            // The customer row lock serializes license writes, so find-then-write replaces ON CONFLICT(customer_id,number).
+            var targetId = x.Id ?? await db.Set<CustomerLicensesRow>()
+                .Where(l => l.CustomerId == customerId && l.Number == number).Select(l => (int?)l.Id).FirstOrDefaultAsync(ct);
+            if (targetId is null)
+            {
+                var row = new CustomerLicensesRow
+                {
+                    CustomerId = customerId.Value, Number = number, Type = type, IssueDate = x.IssueDate,
+                    ExpiryDate = x.ExpiryDate, ImageUrl = x.ImageUrl, Status = "pending",
+                };
+                await db.InsertAsync(row, ct);
+                targetId = row.Id;
+            }
+            else if (await db.Set<CustomerLicensesRow>().Where(l => l.CustomerId == customerId && l.Id == targetId).ExecuteUpdateAsync(s => s
+                         .SetProperty(l => l.Number, number)
+                         .SetProperty(l => l.Type, type)
+                         .SetProperty(l => l.IssueDate, x.IssueDate)
+                         .SetProperty(l => l.ExpiryDate, x.ExpiryDate)
+                         .SetProperty(l => l.ImageUrl, x.ImageUrl)
+                         .SetProperty(l => l.Status, "pending"), ct) == 0)
+                throw new KeyNotFoundException("License was not found for this customer.");
+            result = ToLicense(await db.Set<CustomerLicensesRow>().AsNoTracking().SingleAsync(l => l.Id == targetId, ct));
         }
-        catch (PostgresException error) when (error.SqlState == "23505")
+        catch (Exception error) when (error.SqlState() == "23505")
         { throw new ConflictException("LICENSE_NUMBER_EXISTS", "Số GPLX này đã tồn tại. Vui lòng chọn bằng đã lưu để cập nhật."); }
-        await ProjectLicenseAsync(cn,tx,customerId,result,ct);
+        await ProjectLicenseAsync(db, customerId.Value, result, ct);
         await tx.CommitAsync(ct);
-        return result with { Licenses = await ReadLicensesAsync(dataSource,customerId,ct) };
+        return result with { Licenses = await ReadLicensesAsync(dataSource, customerId.Value, ct) };
     }
 
     public Task<CustomerLicense> ReviewLicenseAsync(int customerId, string status, CancellationToken ct) => ReviewLicenseAsync(customerId,status,ct,null);
@@ -71,27 +101,29 @@ public sealed partial class NpgsqlOperationsRepository
     {
         await using var cn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await cn.BeginTransactionAsync(ct);
-        if (await ScalarAsync(cn,tx,"SELECT id FROM customers WHERE id=$1 FOR UPDATE",customerId,ct) is not int) throw new KeyNotFoundException();
-        await using (var legacy = new NpgsqlCommand("INSERT INTO customer_licenses(customer_id,number,type,issue_date,expiry_date,image_url,status) SELECT customer_id,number,type,issue_date,expiry_date,image_url,status FROM customer_license_records WHERE customer_id=$1 AND id IS NULL ON CONFLICT DO NOTHING",cn,tx))
-        { Add(legacy,customerId); await legacy.ExecuteNonQueryAsync(ct); }
-        await using var cmd = new NpgsqlCommand("UPDATE customer_licenses SET status=$1 WHERE customer_id=$2 AND (($3::integer IS NOT NULL AND id=$3) OR ($3::integer IS NULL AND number=(SELECT btrim(license_number) FROM customers WHERE id=$2))) RETURNING number,type,issue_date,expiry_date,image_url,status,id",cn,tx);
-        Add(cmd,status,customerId,licenseId);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct)) throw new KeyNotFoundException("License was not found for this customer.");
-        var result = ReadLicense(reader);
-        await reader.CloseAsync();
+        await using var db = VehicleRentalDbContext.Create(cn, tx);
+        var customer = await db.LockByKeyAsync<CustomersRow>(customerId, ct) ?? throw new KeyNotFoundException();
+        await PreserveLegacyLicenseAsync(db, customerId, ct);
+        var selectedNumber = customer.LicenseNumber?.Trim();
+        var target = await db.Set<CustomerLicensesRow>().Where(l => l.CustomerId == customerId &&
+                (licenseId != null ? l.Id == licenseId : l.Number == selectedNumber))
+            .Select(l => (int?)l.Id).FirstOrDefaultAsync(ct)
+            ?? throw new KeyNotFoundException("License was not found for this customer.");
+        await db.Set<CustomerLicensesRow>().Where(l => l.Id == target).ExecuteUpdateAsync(s => s.SetProperty(l => l.Status, status), ct);
+        var result = ToLicense(await db.Set<CustomerLicensesRow>().AsNoTracking().SingleAsync(l => l.Id == target, ct));
         // Reviewing another license must not switch the customer's selected edit record.
-        await using var projection = new NpgsqlCommand("UPDATE customers SET license_status=$1 WHERE id=$2 AND btrim(license_number)=$3",cn,tx);
-        Add(projection,status,customerId,result.Number);
-        await projection.ExecuteNonQueryAsync(ct);
+        await db.Set<CustomersRow>().Where(c => c.Id == customerId && c.LicenseNumber!.Trim() == result.Number)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.LicenseStatus, status), ct);
         await tx.CommitAsync(ct);
-        return result with { Licenses = await ReadLicensesAsync(dataSource,customerId,ct) };
+        return result with { Licenses = await ReadLicensesAsync(dataSource, customerId, ct) };
     }
 
-    private static async Task ProjectLicenseAsync(NpgsqlConnection cn,NpgsqlTransaction tx,int customerId,CustomerLicense x,CancellationToken ct)
-    {
-        await using var cmd = new NpgsqlCommand("UPDATE customers SET license_number=$1,license_type=$2,license_issue_date=$3,license_expiry_date=$4,license_img=$5,license_status=$6 WHERE id=$7",cn,tx);
-        Add(cmd,x.Number,x.Type,x.IssueDate,x.ExpiryDate,x.ImageUrl,x.Status,customerId);
-        await cmd.ExecuteNonQueryAsync(ct);
-    }
+    private static Task ProjectLicenseAsync(VehicleRentalDbContext db, int customerId, CustomerLicense x, CancellationToken ct) =>
+        db.Set<CustomersRow>().Where(c => c.Id == customerId).ExecuteUpdateAsync(s => s
+            .SetProperty(c => c.LicenseNumber, x.Number)
+            .SetProperty(c => c.LicenseType, x.Type)
+            .SetProperty(c => c.LicenseIssueDate, x.IssueDate)
+            .SetProperty(c => c.LicenseExpiryDate, x.ExpiryDate)
+            .SetProperty(c => c.LicenseImg, x.ImageUrl)
+            .SetProperty(c => c.LicenseStatus, x.Status), ct);
 }

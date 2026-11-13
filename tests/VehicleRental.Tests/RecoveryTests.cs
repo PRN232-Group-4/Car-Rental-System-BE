@@ -69,6 +69,24 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
     }
 
     [Fact]
+    public async Task New_driver_shift_ignores_unrelated_self_drive_assignments()
+    {
+        var scenario = await Scenarios.CreateDirectRentalAsync(db.DataSource);
+        var rental = (await store.GetRentalAsync(scenario.RentalId, default))!;
+        var inspector = await StaffAsync();
+        await store.AddInspectionAsync(rental.Id, inspector, "pre_rental", true, null, null, null, null, default);
+        await store.AssignAsync(rental.Id, null, Manager, default);
+        var driver = await StaffAsync(driver: true);
+
+        var shift = await ShiftAsync(driver, rental);
+
+        Assert.Equal(driver, shift.DriverStaffId);
+        Assert.Equal("scheduled", shift.Status);
+        Assert.Equal(1, await Seed.CountAsync(db.DataSource,
+            "SELECT count(*) FROM vehicle_assignments WHERE rental_id=$1 AND driver_staff_id IS NULL AND status='assigned'", rental.Id));
+    }
+
+    [Fact]
     public async Task Shifts_reject_overlap_outside_duty_and_cancellation_of_assigned_trip()
     {
         var scenario=await Scenarios.CreateDirectRentalAsync(db.DataSource);

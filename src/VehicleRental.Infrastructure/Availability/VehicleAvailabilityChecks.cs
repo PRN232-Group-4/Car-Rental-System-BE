@@ -4,7 +4,6 @@ using Car_Rental_System_BE.Domain.Availability;
 using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using NpgsqlTypes;
 
 namespace Car_Rental_System_BE.Infrastructure.Availability;
 
@@ -19,18 +18,17 @@ public static class VehicleLock
 
     public static async Task AcquireAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int vehicleId, CancellationToken ct)
     {
-        await using var command = new NpgsqlCommand("SELECT pg_advisory_xact_lock($1, $2)", connection, transaction);
-        command.Parameters.AddWithValue(LockClass);
-        command.Parameters.AddWithValue(vehicleId);
-        await command.ExecuteNonQueryAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(connection, transaction);
+        await db.AdvisoryLockAsync(LockClass, vehicleId, ct);
     }
 }
 
 internal static class Sql
 {
-    /// <summary>Npgsql 8 rejects <c>Kind=Utc</c> for <c>timestamp</c>; send UTC wall-clock values as Unspecified.</summary>
-    public static NpgsqlParameter Timestamp(string name, DateTime? value)
-        => new(name, NpgsqlDbType.Timestamp) { Value = value is { } v ? DateTime.SpecifyKind(v.Kind == DateTimeKind.Local ? v.ToUniversalTime() : v, DateTimeKind.Unspecified) : DBNull.Value };
+    /// <summary>Npgsql 8 rejects <c>Kind=Utc</c> for <c>timestamp</c>; EF values use UTC wall-clock as Unspecified.</summary>
+    public static DateTime Ts(DateTime value) => DateTime.SpecifyKind(value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : value, DateTimeKind.Unspecified);
+    public static DateTime? Ts(DateTime? value) => value is { } v ? Ts(v) : null;
+
 }
 
 internal static class VehicleAvailabilityChecks
