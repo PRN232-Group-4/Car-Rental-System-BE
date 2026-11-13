@@ -5,6 +5,8 @@ using Car_Rental_System_BE.Domain.Entities;
 using Car_Rental_System_BE.Domain.Interfaces;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using Xunit;
 
@@ -12,6 +14,27 @@ namespace VehicleRental.Tests;
 
 public sealed class ArchitectureTests
 {
+    [Fact]
+    public void Raw_database_APIs_are_confined_to_Postgres_primitives_and_schema_scripts()
+    {
+        var sourceRoot = SourceRoot();
+        var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "VehicleRental.Infrastructure/Persistence/DbLocks.cs",
+            "VehicleRental.Infrastructure/HostedServices/DatabaseMigrationHostedService.cs",
+        };
+        var rawApi = new Regex(@"\b(?:NpgsqlCommand|NpgsqlBatch|SqlCommand|FromSql\w*|SqlQuery\w*|ExecuteSql\w*|ExecuteReader\w*|ExecuteScalar\w*|ExecuteNonQuery\w*|CreateCommand|CommandText|Dapper)\b");
+        var violations = Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
+            .Select(path => (Path: path, Relative: Path.GetRelativePath(sourceRoot, path).Replace('\\', '/')))
+            .Where(file => !file.Relative.Split('/').Any(part => part is "bin" or "obj") && !allowed.Contains(file.Relative))
+            .Where(file => rawApi.IsMatch(File.ReadAllText(file.Path)))
+            .Select(file => file.Relative).ToArray();
+        Assert.True(violations.Length == 0, "Use EF Core for data queries: " + string.Join(", ", violations));
+    }
+
+    private static string SourceRoot([CallerFilePath] string file = "") =>
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(file)!, "..", "..", "src"));
+
     [Fact]
     public void Inner_layers_do_not_reference_outer_layers_or_persistence_drivers()
     {

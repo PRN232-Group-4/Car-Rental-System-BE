@@ -1,5 +1,13 @@
 # Tiến độ
 
+## Foreign key toàn bộ schema — 2026-11-13
+
+Kiểm tra catalog PostgreSQL sau migration: **46 bảng nghiệp vụ, 88 FK**, mọi cột tham chiếu có FK đúng bảng/cột đích và tất cả đã validate trên DB sạch. Migration 0034 bổ sung 82 FK ngoài 6 FK có sẵn; không còn quan hệ thiếu để cần migration mới. Thêm regression catalog/ORM, chạy lại migration và legacy orphan. Build 0 warning/error; **1.260/1.260 test pass, 0 fail/skip** trên PostgreSQL 18 tạm UTC. Chưa thay đổi DB ứng dụng/production. Xem [chi tiết](../changes/2026-11-13-foreign-key-audit.md).
+
+## Rà soát ORM và kiểm chứng ghi dữ liệu — 2026-11-13
+
+Repository nghiệp vụ dùng EF Core cho đọc/ghi; chuyển thêm checksum, history và kiểm tra catalog của migration runner sang ORM. Chỉ giữ SQL cho primitive khóa/đồng hồ PostgreSQL (`DbLocks`) và DDL/bootstrap/file migration. Thêm architecture test chặn raw API ngoài hai vị trí này. Sửa lỗi LINQ so sánh null khiến ca tài xế bị chặn bởi đơn tự lái; cập nhật fixture theo FK, exception EF và trigger 0033, giữ kiểm tra rollback/idempotency/concurrency. Build warnings-as-errors đạt **0 warning/error**; toàn suite **1.257/1.257 pass, 0 fail/skip** trên PostgreSQL 18 tạm UTC (31 giây). Không dùng DB ứng dụng, chưa deploy. Xem [thay đổi](../changes/2026-11-13-orm-query-audit.md), [ADR-014](decisions/ADR-014-ef-writes-and-foreign-keys.md).
+
 ## Cookie SameSite cho web cross-site — 2026-10-29
 
 `AuthCookies.Write`/`Clear` chọn `SameSite=None` khi request có header `Origin` (browser gọi API khác domain: Flutter web `http://localhost:5000` → Railway, FE Cloudflare Workers → API) và giữ `SameSite=Lax` cho native/server-to-server; `HttpOnly`/`Secure` không đổi, `Clear` dùng cùng `SameSite` với `Write`. Sửa lỗi login trả 200 nhưng `GET /api/account/profile` trả 401 vì trình duyệt chặn `Set-Cookie` `SameSite=Lax` từ response cross-site. Chưa build/chạy test trong phiên này; chưa deploy. Xem [thay đổi](../changes/2026-10-29-cookie-samesite-cross-site.md).

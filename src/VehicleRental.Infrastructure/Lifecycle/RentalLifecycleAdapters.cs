@@ -49,21 +49,13 @@ public sealed class RentalPaymentGateAdapter(NpgsqlDataSource dataSource) : IRen
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
-
-        await using (var lockCmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock($1)", conn, tx))
-        {
-            lockCmd.Parameters.AddWithValue(rentalId);
-            await lockCmd.ExecuteNonQueryAsync(ct);
-        }
+        await using var db = VehicleRentalDbContext.Create(conn, tx);
+        await db.AdvisoryLockAsync((long)rentalId, ct);
 
         // 1. Check idempotency: already requested or paid refund for this rental
-        await using var checkCmd = new NpgsqlCommand("""
-            SELECT id FROM payments
-            WHERE rental_id = $1 AND type = 'refund' AND status IN ('requested', 'paid')
-            LIMIT 1
-            """, conn, tx);
-        checkCmd.Parameters.AddWithValue(rentalId);
-        var existingId = await checkCmd.ExecuteScalarAsync(ct);
+        var existingId = await db.Set<PaymentsRow>()
+            .Where(p => p.RentalId == rentalId && p.Type == "refund" && (p.Status == "requested" || p.Status == "paid"))
+            .Select(p => (int?)p.Id).FirstOrDefaultAsync(ct);
         if (existingId is int pId)
         {
             await tx.CommitAsync(ct);
@@ -73,45 +65,24 @@ public sealed class RentalPaymentGateAdapter(NpgsqlDataSource dataSource) : IRen
         // 2. Ensure invoice_id is present if not subscription payment (per ck_payments_invoice_rule)
         var effectiveInvoiceId = invoiceId;
         if (!isSubscription && effectiveInvoiceId is null)
+            effectiveInvoiceId = await db.Set<InvoicesRow>().Where(i => i.RentalId == rentalId)
+                .OrderBy(i => i.Kind == "rental" ? 0 : 1).ThenBy(i => i.Id).Select(i => (int?)i.Id).FirstOrDefaultAsync(ct);
+
+        var row = new PaymentsRow
         {
-            await using var invCmd = new NpgsqlCommand("""
-                SELECT id FROM invoices
-                WHERE rental_id = $1
-                ORDER BY CASE WHEN kind = 'rental' THEN 0 ELSE 1 END, id ASC
-                LIMIT 1
-                """, conn, tx);
-            invCmd.Parameters.AddWithValue(rentalId);
-            var res = await invCmd.ExecuteScalarAsync(ct);
-            if (res is int invId) effectiveInvoiceId = invId;
-        }
-
-        await using var insertCmd = new NpgsqlCommand("""
-            INSERT INTO payments(
-                rental_id, invoice_id, customer_id, is_subscription_payment,
-                amount, status, type, method, created_at
-            )
-            VALUES($1, $2, $3, $4, $5, 'requested', 'refund', 'deposit', now())
-            RETURNING id
-            """, conn, tx);
-        insertCmd.Parameters.AddWithValue(rentalId);
-        insertCmd.Parameters.AddWithValue((object?)effectiveInvoiceId ?? DBNull.Value);
-        insertCmd.Parameters.AddWithValue(customerId);
-        insertCmd.Parameters.AddWithValue(isSubscription);
-        insertCmd.Parameters.AddWithValue(amount);
-
-        var newId = (int)(await insertCmd.ExecuteScalarAsync(ct))!;
+            RentalId = rentalId, InvoiceId = effectiveInvoiceId, CustomerId = customerId, IsSubscriptionPayment = isSubscription,
+            Amount = amount, Status = "requested", Type = "refund", Method = "deposit",
+        };
+        await db.InsertAsync(row, ct);
         await tx.CommitAsync(ct);
-        return newId;
+        return row.Id;
     }
 
     public async Task VoidUnpaidInvoiceAsync(int rentalId, CancellationToken ct)
     {
-        await using var cmd = dataSource.CreateCommand("""
-            UPDATE invoices SET status = 'cancelled'
-            WHERE rental_id = $1 AND status = 'unpaid'
-            """);
-        cmd.Parameters.AddWithValue(rentalId);
-        await cmd.ExecuteNonQueryAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        await db.Set<InvoicesRow>().Where(i => i.RentalId == rentalId && i.Status == "unpaid")
+            .ExecuteUpdateAsync(s => s.SetProperty(i => i.Status, "cancelled"), ct);
     }
 }
 
@@ -132,18 +103,13 @@ public sealed class InvoiceGatewayAdapter(NpgsqlDataSource dataSource, TimeProvi
         var now = timeProvider.GetUtcNow().UtcDateTime;
         var invoiceNumber = $"INV-{now:yyyyMMdd}-{rentalId}-OT";
 
-        await using var cmd = dataSource.CreateCommand("""
-            INSERT INTO invoices(rental_id, invoice_number, amount, vat_amount, status, due_at, kind, issued_at)
-            VALUES($1, $2, $3, $4, 'unpaid', $5, 'overtime', now())
-            RETURNING id
-            """);
-        cmd.Parameters.AddWithValue(rentalId);
-        cmd.Parameters.AddWithValue(invoiceNumber);
-        cmd.Parameters.AddWithValue(amount);
-        cmd.Parameters.AddWithValue(vatAmount);
-        cmd.Parameters.AddWithValue(dueAt);
-
-        return (int)(await cmd.ExecuteScalarAsync(ct))!;
+        var row = new InvoicesRow
+        {
+            RentalId = rentalId, InvoiceNumber = invoiceNumber, Amount = amount, VatAmount = vatAmount, Status = "unpaid",
+            DueAt = Car_Rental_System_BE.Infrastructure.Availability.Sql.Ts(dueAt), Kind = "overtime",
+        };
+        await db.InsertAsync(row, ct);
+        return row.Id;
     }
 }
 
@@ -153,14 +119,10 @@ public sealed class SubscriptionUsageAdapter(NpgsqlDataSource dataSource) : ISub
     {
         if (subscriptionId <= 0 || hours <= 0) return;
 
-        await using var cmd = dataSource.CreateCommand("""
-            UPDATE customer_subscriptions
-            SET remaining_hours = GREATEST(0, remaining_hours - $2)
-            WHERE id = $1
-            """);
-        cmd.Parameters.AddWithValue(subscriptionId);
-        cmd.Parameters.AddWithValue(hours);
-        await cmd.ExecuteNonQueryAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        // GREATEST(0, remaining_hours - hours): PostgreSQL GREATEST ignores NULL, so NULL also becomes 0.
+        await db.Set<CustomerSubscriptionsRow>().Where(x => x.Id == subscriptionId).ExecuteUpdateAsync(s => s
+            .SetProperty(x => x.RemainingHours, x => x.RemainingHours == null || x.RemainingHours - hours < 0 ? 0 : x.RemainingHours - hours), ct);
     }
 }
 

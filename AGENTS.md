@@ -11,7 +11,7 @@ Giữ dependency một chiều: `Domain <- Application <- Infrastructure <- WebA
 - `Infrastructure`: `Persistence/` cho DbContext/row; `HostedServices/` cho migration và job nền; `Repositories/` chứa SQL/mapping/transaction; `Services/` chứa adapter Redis/Brevo/PayOS/Cloudinary.
 - `WebApi` (`VehicleRental.WebApi`): `Controllers/`, `Middlewares/` và composition root duy nhất. DTO ở Application; HTTP auth/response/filter hỗ trợ nằm dưới Middlewares.
 
-Repository chỉ đại diện aggregate root. Không generic repository; controller không gọi Npgsql/Redis trực tiếp. Schema cố ý không có FK: Application phải xác minh logical reference và transaction khi đổi nhiều bảng.
+Repository chỉ đại diện aggregate root. Không generic repository; controller không gọi Npgsql/Redis trực tiếp. Schema có FK (migration 0034, ADR-014); Application vẫn xác minh reference để trả lỗi nghiệp vụ và giữ transaction khi đổi nhiều bảng. Repository ghi/đọc bằng EF Core; SQL chỉ còn trong `Persistence/DbLocks.cs` (khóa, đồng hồ DB) và migration.
 
 Controller gọi Application service interface, không inject Repository hoặc Redis implementation.
 Service không kế thừa repository interface; SQL chỉ nằm ở Infrastructure. Khi chuyển invariant đang

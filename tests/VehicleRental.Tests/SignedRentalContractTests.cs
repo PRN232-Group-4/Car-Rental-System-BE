@@ -273,9 +273,10 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
         var (rental, _) = await RentalAsync();
         await Seed.ScalarAsync(db.DataSource, "UPDATE rentals SET status='pre_inspection' WHERE id=$1", rental.Id);
         await Seed.ScalarAsync(db.DataSource, "UPDATE invoices SET status='paid' WHERE rental_id=$1", rental.Id);
-        await Seed.ScalarAsync(db.DataSource, "INSERT INTO inspections(rental_id,vehicle_id,staff_id,inspection_type,is_ok,inspected_at) VALUES($1,$2,1,'pre_rental',true,now())", rental.Id, rental.VehicleId);
+        var staff = await Seed.StaffAsync(db.DataSource);
+        await Seed.ScalarAsync(db.DataSource, "INSERT INTO inspections(rental_id,vehicle_id,staff_id,inspection_type,is_ok,inspected_at) VALUES($1,$2,$3,'pre_rental',true,now())", rental.Id, rental.VehicleId, staff.Id);
         var repository = new NpgsqlRentalLifecycleRepository(db.DataSource);
-        var actor = new ActorContext(1, "operator@test.local", "Admin");
+        var actor = new ActorContext(staff.UserId, "operator@test.local", "Admin");
         var failure = await Assert.ThrowsAsync<ConflictException>(() => repository.UpdateToRentingAsync(rental.Id, rental.VehicleId, DateTime.UtcNow, actor, default));
         Assert.Equal("SIGNED_CONTRACT_REQUIRED", failure.Code);
         Assert.Equal("pre_inspection", (await Operations.GetRentalAsync(rental.Id, default))!.Status);

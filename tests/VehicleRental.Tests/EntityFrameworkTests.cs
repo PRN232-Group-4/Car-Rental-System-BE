@@ -24,12 +24,16 @@ public sealed class EntityFrameworkModelTests
     }
 
     [Fact]
-    public void Read_model_preserves_existing_tables_views_and_no_foreign_keys()
+    public void Model_preserves_existing_tables_views_and_explicit_foreign_keys_without_navigations()
     {
         using var source = NpgsqlDataSource.Create("Host=localhost;Database=model_only;Username=postgres");
         using var db = VehicleRentalDbContext.Create(source);
         Assert.Equal(QueryTrackingBehavior.NoTracking, db.ChangeTracker.QueryTrackingBehavior);
-        Assert.All(db.Model.GetEntityTypes(), entity => Assert.Empty(entity.GetForeignKeys()));
+        Assert.All(db.Model.GetEntityTypes(), entity => Assert.Empty(entity.GetNavigations()));
+        Assert.Contains(db.Model.FindEntityType(typeof(RentalsRow))!.GetForeignKeys(),
+            fk => fk.PrincipalEntityType.ClrType == typeof(CustomersRow) && fk.Properties.Single().Name == nameof(RentalsRow.CustomerId));
+        Assert.All(db.Model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()),
+            fk => Assert.Equal(DeleteBehavior.NoAction, fk.DeleteBehavior));
         Assert.Equal("timestamp", db.Model.FindEntityType(typeof(RentalsRow))!
             .FindProperty(nameof(RentalsRow.CreatedAt))!.GetColumnType());
         Assert.Equal("customer_license_records", db.Model.FindEntityType(typeof(CustomerLicenseRecordsRow))!.GetViewName());

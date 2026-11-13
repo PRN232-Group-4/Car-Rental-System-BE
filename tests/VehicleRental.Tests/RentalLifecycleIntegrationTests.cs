@@ -106,7 +106,8 @@ public sealed class RentalLifecycleIntegrationTests(PostgresFixture db) : IClass
         var scheduledEnd = T0.AddHours(4); // 4 hours rental: rent = 400k, vat = 40k, total = 440k. deposit = 500k
         var (cId, vId, rId, invId) = await CreatePaidDirectRentalAsync(start, scheduledEnd, 100_000m, 500_000m, false);
 
-        var staffActor = new ActorContext(1, "staff@test.local", "Staff");
+        var staff = await Seed.StaffAsync(db.DataSource);
+        var staffActor = new ActorContext(staff.UserId, "staff@test.local", "Staff");
         var (service, queries) = CreateServices(timeProvider: tp);
 
         // 1. Confirm: pending -> pre_inspection
@@ -116,8 +117,8 @@ public sealed class RentalLifecycleIntegrationTests(PostgresFixture db) : IClass
         // 2. Pre-rental inspection passes
         await Seed.ScalarAsync(db.DataSource, """
             INSERT INTO inspections(rental_id, vehicle_id, staff_id, inspection_type, is_ok, odometer_km, fuel_battery_level, inspected_at)
-            VALUES($1, $2, 1, 'pre_rental', true, 1000, 100, now())
-            """, rId, vId);
+            VALUES($1, $2, $3, 'pre_rental', true, 1000, 100, now())
+            """, rId, vId, staff.Id);
 
         // 3. Assign vehicle (without driver for self-drive)
         await Seed.ScalarAsync(db.DataSource, """
@@ -147,8 +148,8 @@ public sealed class RentalLifecycleIntegrationTests(PostgresFixture db) : IClass
         // 6. Post-rental inspection recorded
         await Seed.ScalarAsync(db.DataSource, """
             INSERT INTO inspections(rental_id, vehicle_id, staff_id, inspection_type, is_ok, odometer_km, fuel_battery_level, inspected_at)
-            VALUES($1, $2, 1, 'post_rental', true, 1080, 95, now())
-            """, rId, vId);
+            VALUES($1, $2, $3, 'post_rental', true, 1080, 95, now())
+            """, rId, vId, staff.Id);
 
         // 7. Complete & Settlement
         var completeResult = await service.CompleteAsync(rId, staffActor, CancellationToken.None);
@@ -201,14 +202,15 @@ public sealed class RentalLifecycleIntegrationTests(PostgresFixture db) : IClass
         // UnitHourly = 200k, Deposit = 100k
         var (cId, vId, rId, invId) = await CreatePaidDirectRentalAsync(start, scheduledEnd, 200_000m, 100_000m, false);
 
-        var staffActor = new ActorContext(1, "staff@test.local", "Staff");
+        var staff = await Seed.StaffAsync(db.DataSource);
+        var staffActor = new ActorContext(staff.UserId, "staff@test.local", "Staff");
         var (service, _) = CreateServices(timeProvider: tp);
 
         await service.ConfirmAsync(rId, staffActor, default);
         await Seed.ScalarAsync(db.DataSource, """
             INSERT INTO inspections(rental_id, vehicle_id, staff_id, inspection_type, is_ok, inspected_at)
-            VALUES($1, $2, 1, 'pre_rental', true, now())
-            """, rId, vId);
+            VALUES($1, $2, $3, 'pre_rental', true, now())
+            """, rId, vId, staff.Id);
         await Seed.ScalarAsync(db.DataSource, """
             INSERT INTO vehicle_assignments(rental_id, vehicle_id, status, assigned_by, starts_at, ends_at)
             VALUES($1, $2, 'assigned', 'admin@test.local', $3, $4)
@@ -223,8 +225,8 @@ public sealed class RentalLifecycleIntegrationTests(PostgresFixture db) : IClass
         await service.ReturnAsync(rId, actualReturnedAt, staffActor, default);
         await Seed.ScalarAsync(db.DataSource, """
             INSERT INTO inspections(rental_id, vehicle_id, staff_id, inspection_type, is_ok, inspected_at)
-            VALUES($1, $2, 1, 'post_rental', true, now())
-            """, rId, vId);
+            VALUES($1, $2, $3, 'post_rental', true, now())
+            """, rId, vId, staff.Id);
 
         var completeResult = await service.CompleteAsync(rId, staffActor, default);
         var settlement = (RentalSettlementDto)completeResult.Extra!;
@@ -257,14 +259,15 @@ public sealed class RentalLifecycleIntegrationTests(PostgresFixture db) : IClass
             var scheduledEnd = testTime.AddHours(2);
             var (_, vId, rId, _) = await CreatePaidDirectRentalAsync(start, scheduledEnd, 100_000m, 300_000m, false);
 
-            var staffActor = new ActorContext(1, "staff@test.local", "Staff");
+            var staff = await Seed.StaffAsync(db.DataSource);
+            var staffActor = new ActorContext(staff.UserId, "staff@test.local", "Staff");
             var (service, _) = CreateServices(timeProvider: tp);
 
             await service.ConfirmAsync(rId, staffActor, default);
             await Seed.ScalarAsync(db.DataSource, """
                 INSERT INTO inspections(rental_id, vehicle_id, staff_id, inspection_type, is_ok, inspected_at)
-                VALUES($1, $2, 1, 'pre_rental', true, now())
-                """, rId, vId);
+                VALUES($1, $2, $3, 'pre_rental', true, now())
+                """, rId, vId, staff.Id);
             await Seed.ScalarAsync(db.DataSource, """
                 INSERT INTO vehicle_assignments(rental_id, vehicle_id, status, assigned_by, starts_at, ends_at)
                 VALUES($1, $2, 'assigned', 'admin@test.local', $3, $4)
@@ -275,8 +278,8 @@ public sealed class RentalLifecycleIntegrationTests(PostgresFixture db) : IClass
             await service.ReturnAsync(rId, scheduledEnd, staffActor, default);
             await Seed.ScalarAsync(db.DataSource, """
                 INSERT INTO inspections(rental_id, vehicle_id, staff_id, inspection_type, is_ok, inspected_at)
-                VALUES($1, $2, 1, 'post_rental', true, now())
-                """, rId, vId);
+                VALUES($1, $2, $3, 'post_rental', true, now())
+                """, rId, vId, staff.Id);
 
             // Execute 2 concurrent CompleteAsync calls
             var t1 = Task.Run<(RentalLifecycleResult? Result, Exception? Error)>(async () =>

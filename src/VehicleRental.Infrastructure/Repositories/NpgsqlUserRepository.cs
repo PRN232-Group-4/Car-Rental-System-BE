@@ -19,12 +19,11 @@ public sealed class NpgsqlUserRepository(NpgsqlDataSource dataSource) : IUserRep
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
-        await using var command = new NpgsqlCommand("INSERT INTO users (email, fullname, password_hash) VALUES ($1, $2, $3) RETURNING id", connection, transaction);
-        command.Parameters.AddWithValue(user.Email); command.Parameters.AddWithValue(user.FullName); command.Parameters.AddWithValue(user.PasswordHash);
-        var userId = (int)(await command.ExecuteScalarAsync(ct))!;
-        await using var customer = new NpgsqlCommand("INSERT INTO customers (user_id) VALUES ($1)", connection, transaction);
-        customer.Parameters.AddWithValue(userId); await customer.ExecuteNonQueryAsync(ct);
-        await EnsureCustomerRoleAsync(connection, transaction, userId, ct);
+        await using var db = VehicleRentalDbContext.Create(connection, transaction);
+        var row = new UsersRow { Email = user.Email, Fullname = user.FullName, PasswordHash = user.PasswordHash };
+        await db.InsertAsync(row, ct);
+        await db.InsertAsync(new CustomersRow { UserId = row.Id }, ct);
+        await EnsureCustomerRoleAsync(db, row.Id, ct);
         await transaction.CommitAsync(ct);
     }
 
@@ -35,34 +34,38 @@ public sealed class NpgsqlUserRepository(NpgsqlDataSource dataSource) : IUserRep
         await using var db = VehicleRentalDbContext.Create(connection, transaction);
         var existing = await db.Set<UsersRow>().Where(user => user.Email == email)
             .Select(user => (int?)user.Id).FirstOrDefaultAsync(ct);
-        var userId = existing ?? await CreateGoogleUserAsync(connection, transaction, email, fullName, ct);
-        await using var customer = new NpgsqlCommand("INSERT INTO customers (user_id) SELECT $1 WHERE NOT EXISTS (SELECT 1 FROM customers WHERE user_id = $1)", connection, transaction);
-        customer.Parameters.AddWithValue(userId);
-        await customer.ExecuteNonQueryAsync(ct);
-        await EnsureCustomerRoleAsync(connection, transaction, userId, ct);
+        var userId = existing ?? await CreateGoogleUserAsync(db, email, fullName, ct);
+        if (!await db.Set<CustomersRow>().AnyAsync(c => c.UserId == userId, ct))
+            await db.InsertAsync(new CustomersRow { UserId = userId }, ct);
+        await EnsureCustomerRoleAsync(db, userId, ct);
         await transaction.CommitAsync(ct);
     }
 
     public async Task UpdateAvatarAsync(string email, string avatarUrl, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("UPDATE users SET avatar = $1 WHERE email = $2");
-        command.Parameters.AddWithValue(avatarUrl); command.Parameters.AddWithValue(email);
-        if (await command.ExecuteNonQueryAsync(ct) != 1) throw new InvalidOperationException("Authenticated user was not found.");
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        if (await db.Set<UsersRow>().Where(u => u.Email == email)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.Avatar, avatarUrl), ct) != 1)
+            throw new InvalidOperationException("Authenticated user was not found.");
     }
 
-    private static async Task<int> CreateGoogleUserAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string email, string fullName, CancellationToken ct)
+    private static async Task<int> CreateGoogleUserAsync(VehicleRentalDbContext db, string email, string fullName, CancellationToken ct)
     {
-        await using var command = new NpgsqlCommand("INSERT INTO users (email, fullname, password_hash) VALUES ($1, $2, NULL) RETURNING id", connection, transaction);
-        command.Parameters.AddWithValue(email); command.Parameters.AddWithValue(fullName);
-        return (int)(await command.ExecuteScalarAsync(ct))!;
+        var row = new UsersRow { Email = email, Fullname = fullName, PasswordHash = null };
+        await db.InsertAsync(row, ct);
+        return row.Id;
     }
 
-    private static async Task EnsureCustomerRoleAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int userId, CancellationToken ct)
+    private static async Task EnsureCustomerRoleAsync(VehicleRentalDbContext db, int userId, CancellationToken ct)
     {
-        await using var role = new NpgsqlCommand("INSERT INTO roles (name) SELECT 'Customer' WHERE NOT EXISTS (SELECT 1 FROM roles WHERE name = 'Customer')", connection, transaction);
-        await role.ExecuteNonQueryAsync(ct);
-        await using var membership = new NpgsqlCommand("INSERT INTO user_roles (user_id, role_id) SELECT $1, id FROM roles WHERE name = 'Customer' AND NOT EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = $1 AND ur.role_id = roles.id)", connection, transaction);
-        membership.Parameters.AddWithValue(userId);
-        await membership.ExecuteNonQueryAsync(ct);
+        var roleId = await db.Set<RolesRow>().Where(r => r.Name == "Customer").Select(r => (int?)r.Id).FirstOrDefaultAsync(ct);
+        if (roleId is null)
+        {
+            var role = new RolesRow { Name = "Customer" };
+            await db.InsertAsync(role, ct);
+            roleId = role.Id;
+        }
+        if (!await db.Set<UserRolesRow>().AnyAsync(ur => ur.UserId == userId && ur.RoleId == roleId, ct))
+            await db.InsertAsync(new UserRolesRow { UserId = userId, RoleId = roleId.Value }, ct);
     }
 }

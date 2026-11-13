@@ -47,51 +47,44 @@ public sealed class NpgsqlRoleRepository(NpgsqlDataSource dataSource) : IRoleRep
         new[] { "Admin", "Manager", "Staff", "CustomerService", "Driver", "Maintenance", "Customer" }
             .Contains(name, StringComparer.OrdinalIgnoreCase), count);
 
-    public Task<RoleDetails> CreateAsync(string name, CancellationToken ct) => MutateAsync(async (connection, transaction) =>
+    public Task<RoleDetails> CreateAsync(string name, CancellationToken ct) => MutateAsync(async db =>
     {
-        await EnsureUniqueAsync(connection, transaction, name, null, ct);
-        await using var command = new NpgsqlCommand("INSERT INTO roles(name) VALUES($1) RETURNING id", connection, transaction);
-        command.Parameters.AddWithValue(name);
-        return new((int)(await command.ExecuteScalarAsync(ct))!, name, false, 0);
+        await EnsureUniqueAsync(db, name, null, ct);
+        var row = new RolesRow { Name = name };
+        await db.InsertAsync(row, ct);
+        return new(row.Id, name, false, 0);
     }, ct);
 
-    public Task<RoleDetails> UpdateAsync(int id, string name, CancellationToken ct) => MutateAsync(async (connection, transaction) =>
+    public Task<RoleDetails> UpdateAsync(int id, string name, CancellationToken ct) => MutateAsync(async db =>
     {
-        var role = await RequireAsync(connection, transaction, id, ct);
+        var role = await RequireAsync(db, id, ct);
         if (role.Name == name) return role;
         ProtectRole(role);
-        await EnsureUniqueAsync(connection, transaction, name, id, ct);
-        await using var command = new NpgsqlCommand("UPDATE roles SET name=$2 WHERE id=$1", connection, transaction);
-        command.Parameters.AddWithValue(id);
-        command.Parameters.AddWithValue(name);
-        await command.ExecuteNonQueryAsync(ct);
+        await EnsureUniqueAsync(db, name, id, ct);
+        await db.Set<RolesRow>().Where(r => r.Id == id).ExecuteUpdateAsync(s => s.SetProperty(r => r.Name, name), ct);
         return role with { Name = name };
     }, ct);
 
-    public async Task DeleteAsync(int id, CancellationToken ct) => await MutateAsync(async (connection, transaction) =>
+    public async Task DeleteAsync(int id, CancellationToken ct) => await MutateAsync(async db =>
     {
-        var role = await RequireAsync(connection, transaction, id, ct);
+        var role = await RequireAsync(db, id, ct);
         ProtectRole(role);
-        await using var command = new NpgsqlCommand("DELETE FROM roles WHERE id=$1", connection, transaction);
-        command.Parameters.AddWithValue(id);
-        await command.ExecuteNonQueryAsync(ct);
+        await db.Set<RolesRow>().Where(r => r.Id == id).ExecuteDeleteAsync(ct);
         return role;
     }, ct);
 
-    private async Task<RoleDetails> MutateAsync(Func<NpgsqlConnection, NpgsqlTransaction, Task<RoleDetails>> mutate, CancellationToken ct)
+    private async Task<RoleDetails> MutateAsync(Func<VehicleRentalDbContext, Task<RoleDetails>> mutate, CancellationToken ct)
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(connection, transaction);
         // Match account administration lock ordering. Table locks additionally serialize
         // legacy staff/registration writers that do not acquire the admin advisory lock.
         // No users rows are updated/locked here: assigned role renames are rejected.
-        await using var locks = new NpgsqlCommand("""
-            SELECT pg_advisory_xact_lock(724232001::bigint);
-            SELECT pg_advisory_xact_lock(379123220);
-            LOCK TABLE roles, user_roles IN SHARE ROW EXCLUSIVE MODE;
-            """, connection, transaction);
-        await locks.ExecuteNonQueryAsync(ct);
-        var role = await mutate(connection, transaction);
+        await db.AdvisoryLockAsync(724232001L, ct);
+        await db.AdvisoryLockAsync(379123220L, ct);
+        await db.LockTablesAsync("SHARE ROW EXCLUSIVE", ct, typeof(RolesRow), typeof(UserRolesRow));
+        var role = await mutate(db);
         await transaction.CommitAsync(ct);
         return role;
     }
@@ -102,18 +95,13 @@ public sealed class NpgsqlRoleRepository(NpgsqlDataSource dataSource) : IRoleRep
         if (role.UserCount > 0) throw new ConflictException("role_in_use", "Remove all user assignments before renaming or deleting this role.");
     }
 
-    private static async Task EnsureUniqueAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string name, int? exceptId, CancellationToken ct)
+    private static async Task EnsureUniqueAsync(VehicleRentalDbContext db, string name, int? exceptId, CancellationToken ct)
     {
-        await using var db = VehicleRentalDbContext.Create(connection, transaction);
         if (await db.Set<RolesRow>().AnyAsync(role => role.Name.ToLower() == name.ToLower() &&
                 (exceptId == null || role.Id != exceptId), ct))
             throw new ConflictException("role_name_exists", "A role with this name already exists.");
     }
 
-    private static async Task<RoleDetails> RequireAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int id, CancellationToken ct)
-    {
-        await using var db = VehicleRentalDbContext.Create(connection, transaction);
-        return await FindAsync(db, id, ct) ?? throw new NotFoundException("role_not_found", "Role was not found.");
-    }
-
+    private static async Task<RoleDetails> RequireAsync(VehicleRentalDbContext db, int id, CancellationToken ct) =>
+        await FindAsync(db, id, ct) ?? throw new NotFoundException("role_not_found", "Role was not found.");
 }

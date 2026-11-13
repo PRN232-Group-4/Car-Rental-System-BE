@@ -62,60 +62,58 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
-        await using (var dispatcher = new NpgsqlCommand("SELECT pg_advisory_xact_lock(724232001::bigint)", connection, transaction))
-            await dispatcher.ExecuteNonQueryAsync(ct);
-        await using (var account = new NpgsqlCommand("SELECT id FROM users WHERE id=$1 AND is_active FOR UPDATE", connection, transaction))
-        {
-            account.Parameters.AddWithValue(command.UserId);
-            if (await account.ExecuteScalarAsync(ct) is null) throw new StaffNotFoundException();
-        }
         await using var db = VehicleRentalDbContext.Create(connection, transaction);
+        await db.AdvisoryLockAsync(724232001L, ct);
+        if (await db.LockByKeyAsync<UsersRow>(command.UserId, ct) is not { IsActive: true }) throw new StaffNotFoundException();
         if (await db.Set<StaffsRow>().AnyAsync(staff => staff.UserId == command.UserId, ct))
             throw new StaffConflictException("Tài khoản đã có hồ sơ nhân viên. Hãy mở hồ sơ để cập nhật.");
-        await ValidateReferencesAsync(connection, transaction, command.DepartmentId, command.FacilityId, ct);
+        await ValidateReferencesAsync(db, command.DepartmentId, command.FacilityId, ct);
         var isDriver = await (from membership in db.Set<UserRolesRow>()
             join role in db.Set<RolesRow>() on membership.RoleId equals role.Id
             where membership.UserId == command.UserId && role.Name == "Driver"
             select role.Id).AnyAsync(ct);
         StaffValidator.ValidateDriver(isDriver, command.LicenseNumber, command.LicenseExpiryDate, command.LicenseIssueDate);
         // Existing account identity and roles are authoritative; no password or specialty replacement.
-        await using var insert = new NpgsqlCommand("""
-            INSERT INTO staffs(user_id,department_id,facility_id,hired_date,is_driver,
-                license_number,license_type,license_issue_date,license_expiry_date,license_img)
-            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id
-            """, connection, transaction);
-        insert.Parameters.AddWithValue(command.UserId);
-        insert.Parameters.AddWithValue((object?)command.DepartmentId ?? DBNull.Value);
-        insert.Parameters.AddWithValue((object?)command.FacilityId ?? DBNull.Value);
-        insert.Parameters.AddWithValue((object?)command.HiredDate ?? DBNull.Value);
-        insert.Parameters.AddWithValue(isDriver);
-        insert.Parameters.AddWithValue(isDriver ? (object?)command.LicenseNumber ?? DBNull.Value : DBNull.Value);
-        insert.Parameters.AddWithValue(isDriver ? (object?)command.LicenseType ?? DBNull.Value : DBNull.Value);
-        insert.Parameters.AddWithValue(isDriver ? (object?)command.LicenseIssueDate ?? DBNull.Value : DBNull.Value);
-        insert.Parameters.AddWithValue(isDriver ? (object?)command.LicenseExpiryDate ?? DBNull.Value : DBNull.Value);
-        insert.Parameters.AddWithValue(isDriver ? (object?)command.LicenseImageUrl ?? DBNull.Value : DBNull.Value);
-        var staffId = (int)(await insert.ExecuteScalarAsync(ct))!;
-        await EnsureRoleAsync(connection, transaction, command.UserId, "Staff", ct);
+        var row = new StaffsRow
+        {
+            UserId = command.UserId, DepartmentId = command.DepartmentId, FacilityId = command.FacilityId, HiredDate = command.HiredDate,
+            IsDriver = isDriver,
+            LicenseNumber = isDriver ? command.LicenseNumber : null,
+            LicenseType = isDriver ? command.LicenseType : null,
+            LicenseIssueDate = isDriver ? command.LicenseIssueDate : null,
+            LicenseExpiryDate = isDriver ? command.LicenseExpiryDate : null,
+            LicenseImg = isDriver ? command.LicenseImageUrl : null,
+        };
+        await db.InsertAsync(row, ct);
+        await EnsureRoleAsync(db, command.UserId, "Staff", ct);
         await transaction.CommitAsync(ct);
-        return (await FindByIdAsync(staffId, ct))!;
+        return (await FindByIdAsync(row.Id, ct))!;
     }
 
     public async Task<Staff> CreateAsync(CreateStaff command, string passwordHash, CancellationToken ct)
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(connection, transaction);
         StaffSpecialty.Validate(command.StaffRole, command.IsDriver);
-        await ValidateReferencesAsync(connection, transaction, command.DepartmentId, command.FacilityId, ct);
+        await ValidateReferencesAsync(db, command.DepartmentId, command.FacilityId, ct);
         try
         {
-            var userId = await InsertUserAsync(connection, transaction, command, passwordHash, ct);
-            var staffId = await InsertStaffAsync(connection, transaction, userId, command, ct);
-            await EnsureRoleAsync(connection, transaction, userId, "Staff", ct);
-            await SetSpecialtyAsync(connection, transaction, userId, command.IsDriver ? "Driver" : command.StaffRole, ct);
+            var user = new UsersRow
+            {
+                Email = command.Email, Fullname = command.FullName, Phone = command.Phone, PasswordHash = passwordHash,
+                Avatar = command.AvatarUrl, Gender = command.Gender, Address = command.Address,
+            };
+            await db.InsertAsync(user, ct);
+            var staff = ToRow(user.Id, new UpdateStaff(command.FullName, command.Phone, command.DepartmentId, command.FacilityId, command.HiredDate,
+                command.IsDriver, command.LicenseNumber, command.LicenseType, command.LicenseIssueDate, command.LicenseExpiryDate, command.LicenseImageUrl));
+            await db.InsertAsync(staff, ct);
+            await EnsureRoleAsync(db, user.Id, "Staff", ct);
+            await SetSpecialtyAsync(db, user.Id, command.IsDriver ? "Driver" : command.StaffRole, ct);
             await transaction.CommitAsync(ct);
-            return (await FindByIdAsync(staffId, ct))!;
+            return (await FindByIdAsync(staff.Id, ct))!;
         }
-        catch (PostgresException error) when (error.SqlState == PostgresErrorCodes.UniqueViolation)
+        catch (Exception error) when (error.SqlState() == PostgresErrorCodes.UniqueViolation)
         {
             throw new StaffConflictException("Email đã được sử dụng hoặc người dùng đã là staff.");
         }
@@ -125,28 +123,29 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(connection, transaction);
         StaffSpecialty.Validate(command.StaffRole, command.IsDriver);
-        await ValidateReferencesAsync(connection, transaction, command.DepartmentId, command.FacilityId, ct);
-        await using var update = new NpgsqlCommand("""
-            UPDATE staffs s SET department_id = $1, facility_id = $2, hired_date = $3, is_driver = $4,
-                license_number = $5, license_type = $6, license_issue_date = $7, license_expiry_date = $8, license_img = $9
-            WHERE s.id = $10
-            RETURNING s.user_id
-            """, connection, transaction);
-        AddStaffParameters(update, command);
-        update.Parameters.AddWithValue(staffId);
-        var userIdValue = await update.ExecuteScalarAsync(ct);
-        if (userIdValue is not int userId) throw new StaffNotFoundException();
-        await using var user = new NpgsqlCommand("UPDATE users SET fullname = $1, phone = $2, avatar=COALESCE($4,avatar), gender=COALESCE($5,gender), address=COALESCE($6,address) WHERE id = $3", connection, transaction);
-        user.Parameters.AddWithValue(command.FullName);
-        user.Parameters.AddWithValue((object?)command.Phone ?? DBNull.Value);
-        user.Parameters.AddWithValue(userId);
-        user.Parameters.AddWithValue((object?)command.AvatarUrl ?? DBNull.Value);
-        user.Parameters.AddWithValue((object?)command.Gender ?? DBNull.Value);
-        user.Parameters.AddWithValue((object?)command.Address ?? DBNull.Value);
-        await user.ExecuteNonQueryAsync(ct);
-        await EnsureRoleAsync(connection, transaction, userId, "Staff", ct);
-        await SetSpecialtyAsync(connection, transaction, userId, command.IsDriver ? "Driver" : command.StaffRole, ct);
+        await ValidateReferencesAsync(db, command.DepartmentId, command.FacilityId, ct);
+        var userId = await db.Set<StaffsRow>().Where(s => s.Id == staffId).Select(s => (int?)s.UserId).FirstOrDefaultAsync(ct)
+            ?? throw new StaffNotFoundException();
+        await db.Set<StaffsRow>().Where(s => s.Id == staffId).ExecuteUpdateAsync(s => s
+            .SetProperty(x => x.DepartmentId, command.DepartmentId)
+            .SetProperty(x => x.FacilityId, command.FacilityId)
+            .SetProperty(x => x.HiredDate, command.HiredDate)
+            .SetProperty(x => x.IsDriver, command.IsDriver)
+            .SetProperty(x => x.LicenseNumber, command.LicenseNumber)
+            .SetProperty(x => x.LicenseType, command.LicenseType)
+            .SetProperty(x => x.LicenseIssueDate, command.LicenseIssueDate)
+            .SetProperty(x => x.LicenseExpiryDate, command.LicenseExpiryDate)
+            .SetProperty(x => x.LicenseImg, command.LicenseImageUrl), ct);
+        await db.Set<UsersRow>().Where(u => u.Id == userId).ExecuteUpdateAsync(s => s
+            .SetProperty(u => u.Fullname, command.FullName)
+            .SetProperty(u => u.Phone, command.Phone)
+            .SetProperty(u => u.Avatar, u => command.AvatarUrl ?? u.Avatar)
+            .SetProperty(u => u.Gender, u => command.Gender ?? u.Gender)
+            .SetProperty(u => u.Address, u => command.Address ?? u.Address), ct);
+        await EnsureRoleAsync(db, userId, "Staff", ct);
+        await SetSpecialtyAsync(db, userId, command.IsDriver ? "Driver" : command.StaffRole, ct);
 
         await transaction.CommitAsync(ct);
         return (await FindByIdAsync(staffId, ct))!;
@@ -154,9 +153,10 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
 
     public async Task DeactivateAsync(int staffId, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("UPDATE users SET is_active = FALSE WHERE id = (SELECT user_id FROM staffs WHERE id = $1) AND is_active = TRUE");
-        command.Parameters.AddWithValue(staffId);
-        if (await command.ExecuteNonQueryAsync(ct) != 1) throw new StaffNotFoundException();
+        await using var db = VehicleRentalDbContext.Create(dataSource);
+        if (await db.Set<UsersRow>().Where(u => u.IsActive && db.Set<StaffsRow>().Any(s => s.Id == staffId && s.UserId == u.Id))
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.IsActive, false), ct) != 1)
+            throw new StaffNotFoundException();
     }
 
     public Task<Staff> AssignDepartmentAsync(int userId, int departmentId, bool actorIsAdmin, CancellationToken ct) =>
@@ -169,12 +169,10 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
-        // Serialize profile creation and membership changes for this account.
-        await using var account = new NpgsqlCommand("SELECT id FROM users WHERE id=$1 AND is_active=TRUE FOR UPDATE", connection, transaction);
-        account.Parameters.AddWithValue(userId);
-        if (await account.ExecuteScalarAsync(ct) is null) throw new StaffNotFoundException();
-
         await using var db = VehicleRentalDbContext.Create(connection, transaction);
+        // Serialize profile creation and membership changes for this account.
+        if (await db.LockByKeyAsync<UsersRow>(userId, ct) is not { IsActive: true }) throw new StaffNotFoundException();
+
         var names = new HashSet<string>(await (from membership in db.Set<UserRolesRow>()
             join role in db.Set<RolesRow>() on membership.RoleId equals role.Id
             where membership.UserId == userId select role.Name).ToListAsync(ct), StringComparer.Ordinal);
@@ -183,100 +181,59 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
         if (!names.Contains("Manager") && !names.Contains("Staff"))
             throw new OrganizationReferenceNotFoundException("The account must already have the Staff or Manager role.");
 
-        // SQL identifiers come only from fixed values, never request input.
-        var table = isFacility ? "facilities" : "departments";
-        var column = isFacility ? "facility_id" : "department_id";
-        await using var unit = new NpgsqlCommand($"SELECT id FROM {table} WHERE id=$1 FOR SHARE", connection, transaction);
-        unit.Parameters.AddWithValue(unitId);
-        if (await unit.ExecuteScalarAsync(ct) is null)
+        var unitExists = isFacility
+            ? await db.LockByKeyAsync<FacilitiesRow>(unitId, ct, RowLock.Share) is not null
+            : await db.LockByKeyAsync<DepartmentsRow>(unitId, ct, RowLock.Share) is not null;
+        if (!unitExists)
             throw new OrganizationReferenceNotFoundException(isFacility ? "Facility was not found." : "Department was not found.");
 
-        await using var assign = new NpgsqlCommand($"""
-            INSERT INTO staffs(user_id, {column}) VALUES($1, $2)
-            ON CONFLICT (user_id) DO UPDATE SET {column}=EXCLUDED.{column}
-            RETURNING id
-            """, connection, transaction);
-        assign.Parameters.AddWithValue(userId);
-        assign.Parameters.AddWithValue(unitId);
-        var staffId = (int)(await assign.ExecuteScalarAsync(ct))!;
+        // The users row lock serializes this account, so update-or-insert replaces ON CONFLICT (user_id).
+        var profile = db.Set<StaffsRow>().Where(s => s.UserId == userId);
+        var updated = isFacility
+            ? await profile.ExecuteUpdateAsync(s => s.SetProperty(x => x.FacilityId, unitId), ct)
+            : await profile.ExecuteUpdateAsync(s => s.SetProperty(x => x.DepartmentId, unitId), ct);
+        if (updated == 0)
+            await db.InsertAsync(new StaffsRow
+            {
+                UserId = userId, FacilityId = isFacility ? unitId : null, DepartmentId = isFacility ? null : unitId,
+            }, ct);
+        var staffId = await profile.Select(s => s.Id).SingleAsync(ct);
         await transaction.CommitAsync(ct);
         return (await FindByIdAsync(staffId, ct))!;
     }
 
-    private static async Task ValidateReferencesAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int? departmentId, int? facilityId, CancellationToken ct)
+    private static async Task ValidateReferencesAsync(VehicleRentalDbContext db, int? departmentId, int? facilityId, CancellationToken ct)
     {
-        if (departmentId.HasValue && !await ExistsAsync(connection, transaction, "departments", departmentId.Value, ct))
+        if (departmentId.HasValue && !await db.Set<DepartmentsRow>().AnyAsync(unit => unit.Id == departmentId, ct))
             throw new OrganizationReferenceNotFoundException("Phòng ban không tồn tại.");
-        if (facilityId.HasValue && !await ExistsAsync(connection, transaction, "facilities", facilityId.Value, ct))
+        if (facilityId.HasValue && !await db.Set<FacilitiesRow>().AnyAsync(unit => unit.Id == facilityId, ct))
             throw new OrganizationReferenceNotFoundException("Cơ sở không tồn tại.");
     }
 
-    private static async Task<bool> ExistsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string table, int id, CancellationToken ct)
+    private static StaffsRow ToRow(int userId, UpdateStaff staff) => new()
     {
-        await using var db = VehicleRentalDbContext.Create(connection, transaction);
-        return table switch
-        {
-            "departments" => await db.Set<DepartmentsRow>().AnyAsync(unit => unit.Id == id, ct),
-            "facilities" => await db.Set<FacilitiesRow>().AnyAsync(unit => unit.Id == id, ct),
-            _ => throw new ArgumentOutOfRangeException(nameof(table))
-        };
+        UserId = userId, DepartmentId = staff.DepartmentId, FacilityId = staff.FacilityId, HiredDate = staff.HiredDate,
+        IsDriver = staff.IsDriver, LicenseNumber = staff.LicenseNumber, LicenseType = staff.LicenseType,
+        LicenseIssueDate = staff.LicenseIssueDate, LicenseExpiryDate = staff.LicenseExpiryDate, LicenseImg = staff.LicenseImageUrl,
+    };
+
+    private static readonly string[] Specialties = ["CustomerService", "Driver", "Maintenance"];
+
+    private static async Task SetSpecialtyAsync(VehicleRentalDbContext db, int userId, string? roleName, CancellationToken ct)
+    {
+        await db.Set<UserRolesRow>().Where(ur => ur.UserId == userId &&
+                db.Set<RolesRow>().Any(r => r.Id == ur.RoleId && Specialties.Contains(r.Name)))
+            .ExecuteDeleteAsync(ct);
+        if (roleName is not null) await EnsureRoleAsync(db, userId, roleName, ct);
     }
 
-    private static async Task<int> InsertUserAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CreateStaff command, string passwordHash, CancellationToken ct)
+    private static async Task EnsureRoleAsync(VehicleRentalDbContext db, int userId, string roleName, CancellationToken ct)
     {
-        await using var user = new NpgsqlCommand("INSERT INTO users (email, fullname, phone, password_hash, avatar, gender, address) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id", connection, transaction);
-        user.Parameters.AddWithValue(command.Email);
-        user.Parameters.AddWithValue(command.FullName);
-        user.Parameters.AddWithValue((object?)command.Phone ?? DBNull.Value);
-        user.Parameters.AddWithValue(passwordHash);
-        user.Parameters.AddWithValue((object?)command.AvatarUrl ?? DBNull.Value);
-        user.Parameters.AddWithValue((object?)command.Gender ?? DBNull.Value);
-        user.Parameters.AddWithValue((object?)command.Address ?? DBNull.Value);
-        return (int)(await user.ExecuteScalarAsync(ct))!;
+        if (!await db.Set<RolesRow>().AnyAsync(r => r.Name == roleName, ct))
+            await db.InsertAsync(new RolesRow { Name = roleName }, ct);
+        var roleIds = await db.Set<RolesRow>().Where(r => r.Name == roleName).Select(r => r.Id).ToListAsync(ct);
+        foreach (var roleId in roleIds)
+            if (!await db.Set<UserRolesRow>().AnyAsync(ur => ur.UserId == userId && ur.RoleId == roleId, ct))
+                await db.InsertAsync(new UserRolesRow { UserId = userId, RoleId = roleId }, ct);
     }
-
-    private static async Task<int> InsertStaffAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int userId, CreateStaff command, CancellationToken ct)
-    {
-        await using var staff = new NpgsqlCommand("""
-            INSERT INTO staffs (user_id, department_id, facility_id, hired_date, is_driver, license_number, license_type, license_issue_date, license_expiry_date, license_img)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id
-            """, connection, transaction);
-        staff.Parameters.AddWithValue(userId);
-        AddStaffParameters(staff, command);
-        return (int)(await staff.ExecuteScalarAsync(ct))!;
-    }
-
-    private static void AddStaffParameters(NpgsqlCommand command, CreateStaff staff) => AddStaffParameters(command, new UpdateStaff(staff.FullName, staff.Phone, staff.DepartmentId, staff.FacilityId, staff.HiredDate, staff.IsDriver, staff.LicenseNumber, staff.LicenseType, staff.LicenseIssueDate, staff.LicenseExpiryDate, staff.LicenseImageUrl));
-    private static void AddStaffParameters(NpgsqlCommand command, UpdateStaff staff)
-    {
-        command.Parameters.AddWithValue((object?)staff.DepartmentId ?? DBNull.Value);
-        command.Parameters.AddWithValue((object?)staff.FacilityId ?? DBNull.Value);
-        command.Parameters.AddWithValue((object?)staff.HiredDate ?? DBNull.Value);
-        command.Parameters.AddWithValue(staff.IsDriver);
-        command.Parameters.AddWithValue((object?)staff.LicenseNumber ?? DBNull.Value);
-        command.Parameters.AddWithValue((object?)staff.LicenseType ?? DBNull.Value);
-        command.Parameters.AddWithValue((object?)staff.LicenseIssueDate ?? DBNull.Value);
-        command.Parameters.AddWithValue((object?)staff.LicenseExpiryDate ?? DBNull.Value);
-        command.Parameters.AddWithValue((object?)staff.LicenseImageUrl ?? DBNull.Value);
-    }
-
-    private static async Task SetSpecialtyAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int userId, string? roleName, CancellationToken ct)
-    {
-        await using var remove = new NpgsqlCommand("DELETE FROM user_roles WHERE user_id=$1 AND role_id IN (SELECT id FROM roles WHERE name IN ('CustomerService','Driver','Maintenance'))", connection, transaction);
-        remove.Parameters.AddWithValue(userId);
-        await remove.ExecuteNonQueryAsync(ct);
-        if (roleName is not null) await EnsureRoleAsync(connection, transaction, userId, roleName, ct);
-    }
-
-    private static async Task EnsureRoleAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int userId, string roleName, CancellationToken ct)
-    {
-        await using var create = new NpgsqlCommand("INSERT INTO roles (name) SELECT $1 WHERE NOT EXISTS (SELECT 1 FROM roles WHERE name = $1)", connection, transaction);
-        create.Parameters.AddWithValue(roleName);
-        await create.ExecuteNonQueryAsync(ct);
-        await using var assign = new NpgsqlCommand("INSERT INTO user_roles (user_id, role_id) SELECT $1, id FROM roles WHERE name = $2 AND NOT EXISTS (SELECT 1 FROM user_roles WHERE user_id = $1 AND role_id = roles.id)", connection, transaction);
-        assign.Parameters.AddWithValue(userId);
-        assign.Parameters.AddWithValue(roleName);
-        await assign.ExecuteNonQueryAsync(ct);
-    }
-
 }
