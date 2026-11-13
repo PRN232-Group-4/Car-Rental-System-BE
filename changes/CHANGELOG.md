@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-11-13 — [Tích hợp Features layout và giữ ORM/FK](2026-11-13-merge-features-layout.md)
+
 - 2026-11-13 — [Kiểm chứng 88 foreign key trên toàn bộ schema](2026-11-13-foreign-key-audit.md)
 
 - 2026-11-13 — [Rà soát raw query và ORM cho lịch sử migration](2026-11-13-orm-query-audit.md)
@@ -7,6 +9,10 @@
 - 2026-11-13 — [Ghi dữ liệu bằng EF Core và thêm foreign key](2026-11-13-ef-writes-foreign-keys.md)
 
 - 2026-11-07 — [Dọn code không dùng, thống nhất cấu trúc và tài liệu luồng](2026-11-07-cleanup-structure-flow.md)
+
+- 2026-11-05 — [Phase 2: quyết toán thuê một transaction, hoá đơn supplementary và đính chính backfill VAT](2026-11-05-phase2-rental-settlement.md)
+
+- 2026-11-05 — [Tách Billing, xác minh Handovers và Inspections](2026-11-05-slice-extraction.md)
 
 - 2026-10-29 — [Cookie SameSite=None cho web cross-site](2026-10-29-cookie-samesite-cross-site.md)
 

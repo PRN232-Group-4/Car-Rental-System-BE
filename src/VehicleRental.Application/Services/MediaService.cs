@@ -1,5 +1,5 @@
 using Car_Rental_System_BE.Application.DTOs.Registration;
-using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Application.Features.Customers;
 using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Domain.Interfaces;
@@ -7,7 +7,7 @@ using Car_Rental_System_BE.Application.Validators;
 
 namespace Car_Rental_System_BE.Application.Services;
 
-public sealed class MediaService(IImageStorage images, IUserRepository users, IOperationsService operations) : IMediaService
+public sealed class MediaService(IImageStorage images, IUserRepository users, ICustomerLicenseService licenses) : IMediaService
 {
     public async Task<StoredImage> UploadAvatarAsync(string email, Stream content, string fileName, CancellationToken ct)
     {
@@ -23,10 +23,10 @@ public sealed class MediaService(IImageStorage images, IUserRepository users, IO
     {
         CustomerLicenseValidator.ValidateDetails(license);
         await ImageUploadValidator.ValidateAsync(content, 5 * 1024 * 1024, ct);
-        if (await operations.GetLicenseAsync(email, ct) is null)
+        if (await licenses.GetLicenseAsync(email, ct) is null)
             throw new KeyNotFoundException("Customer was not found.");
         var image = await images.UploadAsync(content, fileName, "customer-licenses", ct);
-        return await operations.SaveLicenseAsync(email, license with { ImageUrl = image.SecureUrl, Status = "pending" }, ct);
+        return await licenses.SaveLicenseAsync(email, license with { ImageUrl = image.SecureUrl, Status = "pending" }, ct);
     }
 
     public Task<StoredImage> UploadStaffLicenseAsync(Stream content, string fileName, CancellationToken ct) =>

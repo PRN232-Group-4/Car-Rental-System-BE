@@ -19,7 +19,6 @@ Content-Type: application/json
 
 - PUT `/api/drivers/shifts/{id}` nhận cùng body; thêm `cancelled: true` để hủy.
 - GET `/api/drivers/shifts?from=...&to=...&driverStaffId=12` xem ca trực. Driver chỉ đọc ca mình.
-- POST `/api/rentals/{id}/assignments` với `{ "driverStaffId": 12 }`: Manager/Admin phân công sau pre-inspection đạt hoặc khi đang renting.
 - GET `/api/drivers/schedule` vẫn là lịch chuyến, khác ca trực.
 - Ca phải bao phủ chuyến (phần thời gian còn lại nếu đang renting), driver active/bằng còn hạn, không trùng chuyến. Không được sửa/hủy ca khiến chuyến đã giao không còn ca bao phủ.
 - Dữ liệu cũ chưa có ca: Manager cần tạo ca trước lần phân công hoặc bắt đầu chuyến tiếp theo. Không tự suy diễn ca từ assignment cũ.
