@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <!-- Reads the compiled IL of the four source assemblies, so a dependency that only appears inside a
+         method body is still a dependency. MIT licence, stable since 2024-10-02. -->
+    <PackageReference Include="Mono.Cecil" Version="0.11.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\VehicleRental.Domain\VehicleRental.Domain.csproj" />
+    <ProjectReference Include="..\..\src\VehicleRental.Application\VehicleRental.Application.csproj" />
+    <ProjectReference Include="..\..\src\VehicleRental.Infrastructure\VehicleRental.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\VehicleRental.WebApi\VehicleRental.WebApi.csproj" />
+  </ItemGroup>
+
+</Project>

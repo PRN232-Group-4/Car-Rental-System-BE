@@ -1,5 +1,9 @@
 # Tiến độ
 
+## Tích hợp Features layout và giữ ORM/FK — 2026-11-13
+
+Merge `refactor/features-layout` vào `refactor/db` theo lựa chọn của người dùng. Cấu trúc nghiệp vụ nằm trong `Features/<Module>` ở bốn layer; row mapping ở `Persistence/Rows`; bộ test tách Domain/Application/Integration/Architecture. Chuyển các triển khai ORM sang repository tương ứng và chuyển các writer mới của nhánh Features sang EF, giữ transaction quyết toán, ledger giờ gói và supplementary payment. Catalog **47 bảng, 90 FK**, tất cả validated; build warnings-as-errors đạt **0 warning/error**; toàn suite **1.466/1.466 pass, 0 fail/skip** trên PostgreSQL 18 tạm UTC. Không thay DB ứng dụng/chưa deploy. Xem [thay đổi](../changes/2026-11-13-merge-features-layout.md), [ADR-015](decisions/ADR-015-features-layout-with-ef.md).
+
 ## Foreign key toàn bộ schema — 2026-11-13
 
 Kiểm tra catalog PostgreSQL sau migration: **46 bảng nghiệp vụ, 88 FK**, mọi cột tham chiếu có FK đúng bảng/cột đích và tất cả đã validate trên DB sạch. Migration 0034 bổ sung 82 FK ngoài 6 FK có sẵn; không còn quan hệ thiếu để cần migration mới. Thêm regression catalog/ORM, chạy lại migration và legacy orphan. Build 0 warning/error; **1.260/1.260 test pass, 0 fail/skip** trên PostgreSQL 18 tạm UTC. Chưa thay đổi DB ứng dụng/production. Xem [chi tiết](../changes/2026-11-13-foreign-key-audit.md).
@@ -7,6 +11,15 @@ Kiểm tra catalog PostgreSQL sau migration: **46 bảng nghiệp vụ, 88 FK**,
 ## Rà soát ORM và kiểm chứng ghi dữ liệu — 2026-11-13
 
 Repository nghiệp vụ dùng EF Core cho đọc/ghi; chuyển thêm checksum, history và kiểm tra catalog của migration runner sang ORM. Chỉ giữ SQL cho primitive khóa/đồng hồ PostgreSQL (`DbLocks`) và DDL/bootstrap/file migration. Thêm architecture test chặn raw API ngoài hai vị trí này. Sửa lỗi LINQ so sánh null khiến ca tài xế bị chặn bởi đơn tự lái; cập nhật fixture theo FK, exception EF và trigger 0033, giữ kiểm tra rollback/idempotency/concurrency. Build warnings-as-errors đạt **0 warning/error**; toàn suite **1.257/1.257 pass, 0 fail/skip** trên PostgreSQL 18 tạm UTC (31 giây). Không dùng DB ứng dụng, chưa deploy. Xem [thay đổi](../changes/2026-11-13-orm-query-audit.md), [ADR-014](decisions/ADR-014-ef-writes-and-foreign-keys.md).
+## Phase 2 quyết toán thuê một transaction và hoá đơn supplementary, 2026-11-05
+
+Phase 2 gồm `9b2e5b4` (quyết toán hoàn tất trong một transaction, trừ giờ gói đúng một lần, migration 0033), `e56372b` (loyalty đọc trên connection của transaction), `ce8f7c4` (hoá đơn supplementary thu được bằng cash và PayOS, migration 0034), `7eb105a` (VAT trên hoá đơn supplementary) và `356b6c7` (route trạng thái cũ gọi lifecycle service). Writer báo build 0 warning và toàn suite 1.299 đạt sau commit cuối; reviewer độc lập (Claude Code, model `claude-opus-5-5`, so với base `main` tại `e438f7f`) chạy toàn suite Neon 1.422 đạt tại `248de35` và kết luận không có khiếm khuyết nào buộc phải sửa code, chỉ còn rủi ro tồn đọng ghi ở mục Giới hạn của tài liệu thay đổi: kiểm tra hoàn tiền theo rental của `RentalRefundWriter`, rental gói thiếu `customer_subscription_id`, và hai thay đổi hành vi ở đường loyalty và route trạng thái lỗi thời. Message `7eb105a` hướng dẫn chạy backfill VAT trước khi phát hành; hướng dẫn đó sai và đã được đính chính: production không cần backfill VAT, chỉ hoá đơn `kind='supplementary'` trong database dev/test đã chạy `ce8f7c4` trước `7eb105a` mới cần sửa. Hai CHECK của migration 0034 mới chỉ validate trên DB rỗng và DB seed demo, nên dòng production vi phạm sẽ làm migration fail. Chưa push/deploy. Xem [thay đổi](../changes/2026-11-05-phase2-rental-settlement.md).
+
+## Tách slice Billing, xác minh Handovers và Inspections, tách Dispatch và Maintenance, 2026-11-05
+
+Billing đã tách tại `c031bb1`, giữ API và logic tài chính. Lead kiểm build 0 warning/error và 81 test contract đạt; worker báo toàn suite Neon 1.380 test đạt. Handovers và Inspections đã có slice riêng từ trước nên 3.2 và 3.3 chỉ xác minh; Lead chạy 175 và 87 test trên Neon, tất cả đạt. Dispatch tại `44a1f93`: ca làm tài xế chuyển sang slice Assignments với SQL giữ nguyên từng byte, và route lỗi thời `POST /api/rental/{id}/assignments` bị xóa theo yêu cầu, nên đây là thay đổi API không tương thích ngược; cổng kiểm tra ca trực chỉ route cũ có nay mất và được ghi thành nợ kỹ thuật. Maintenance tại `3a4e730`: slice riêng, ba route giữ nguyên, 77 dòng SQL giữ nguyên từng byte.
+
+Reviewer độc lập chấp nhận cả năm bước; lượt 3.3, 3.4 và 3.5 dùng `river/zai-org/GLM-5.3-Flash` vì GPT-6 Astra hết hạn mức, nên đa dạng model bị giảm. Toàn bộ test DB chạy trên database dùng một lần. Chưa push/deploy; Phase 3 không còn hạng mục code. Giới hạn coverage và việc D2/FE còn lại được ghi trong [thay đổi](../changes/2026-11-05-slice-extraction.md).
 
 ## Cookie SameSite cho web cross-site — 2026-10-29
 

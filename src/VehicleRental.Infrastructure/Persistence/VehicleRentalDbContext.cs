@@ -92,6 +92,8 @@ public sealed class VehicleRentalDbContext(DbContextOptions<VehicleRentalDbConte
     /// </summary>
     private static void ConfigureForeignKeys(ModelBuilder b)
     {
+        Fk<SubscriptionHourLedgerRow, RentalsRow>(b, nameof(SubscriptionHourLedgerRow.RentalId));
+        Fk<SubscriptionHourLedgerRow, CustomerSubscriptionsRow>(b, nameof(SubscriptionHourLedgerRow.CustomerSubscriptionId));
         Fk<UserRolesRow, UsersRow>(b, nameof(UserRolesRow.UserId));
         Fk<UserRolesRow, RolesRow>(b, nameof(UserRolesRow.RoleId));
         Fk<StaffsRow, UsersRow>(b, nameof(StaffsRow.UserId));

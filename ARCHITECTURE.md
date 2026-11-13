@@ -1,8 +1,9 @@
 # Kiến trúc Hệ thống Car Rental System (Backend Architecture)
 
-Cập nhật cấu trúc 2026-10-07: layout hiện hành là Domain (`Entities/ValueObjects/Services/Interfaces`),
-Application (`Services/Interfaces/DTOs/Validators`), Infrastructure (`Persistence/Repositories/Services`),
-API (`Controllers/Middlewares`). Xem [tài liệu kiến trúc hiện hành](docs/architecture.md).
+Cập nhật cấu trúc 2026-11-13: bốn layer tổ chức nghiệp vụ theo `Features/<Module>`,
+mapping ở `Infrastructure/Persistence/Rows`, composition ở `WebApi/Extensions`, test tách theo layer.
+Phần dùng chung giữ trong `Services`, `Interfaces`, `DTOs`, `Repositories`, `Middlewares`.
+Xem [tài liệu kiến trúc hiện hành](docs/architecture.md) và [ADR-015](docs/decisions/ADR-015-features-layout-with-ef.md).
 Phân tích CodeGraph bên dưới là snapshot trước khi tách Services/DTOs; danh mục module và luồng session
 trong snapshot chưa phản ánh toàn bộ code hiện tại (hiện dùng JWT access cookie và Redis refresh token).
 
@@ -17,8 +18,8 @@ Dự án được xây dựng theo phong cách **Clean Architecture (Onion Archi
   $$\text{Domain} \longleftarrow \text{Application} \longleftarrow \text{Infrastructure} \longleftarrow \text{WebApi}$$
 - **Độc lập hạ tầng (Infrastructure Independence):** Lớp `Application` và `Domain` hoàn toàn độc lập với framework HTTP, ORM, cơ sở dữ liệu và thư viện bên ngoài.
 - **Truy vấn đọc bằng EF Core:** LINQ và no-tracking trong Infrastructure, ánh xạ schema PostgreSQL hiện có. Ghi dữ liệu cũng bằng EF Core; chỉ khóa PostgreSQL và đồng hồ DB còn SQL trong `DbLocks`; xem [ADR-012](docs/decisions/ADR-012-entity-framework-read-queries.md) và [ADR-014](docs/decisions/ADR-014-ef-writes-and-foreign-keys.md).
-- **Chủ đích không dùng Khóa Ngoại vật lý (No Physical Foreign Keys):** Toàn vẹn tham chiếu logic do các Use Cases và Repositories đảm bảo.
-- **Bảo mật Session:** Không sử dụng JWT Bearer; sử dụng Cookie Session kết hợp Redis Ticket Store để hỗ trợ thu hồi phiên đăng nhập tức thì.
+- **Khóa ngoại vật lý:** PostgreSQL ràng buộc quan hệ bằng FK; Application vẫn kiểm tra reference để trả lỗi nghiệp vụ phù hợp.
+- **Bảo mật Session:** JWT access cookie và refresh token hash trong Redis, đối chiếu authorization version để thu hồi phiên.
 
 ---
 

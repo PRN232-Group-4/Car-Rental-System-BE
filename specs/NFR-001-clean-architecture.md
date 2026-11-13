@@ -1,5 +1,12 @@
 # NFR-001 — Clean Architecture
 
+## Features layout cùng ORM/FK — 2026-11-13
+
+- Tích hợp `refactor/features-layout` vào `refactor/db`: các module ở `Features/<Module>` trong bốn layer; row mapping tách theo module trong `Persistence/Rows`; test tách Domain/Application/Integration/Architecture.
+- Giữ ORM và FK từ ADR-014. Các writer/quyết toán mới của nhánh Features dùng EF Core trên cùng connection/transaction; không đưa raw query nghiệp vụ trở lại.
+- Giữ nguyên nội dung/checksum migration đã có; chạy đủ cả migration loyalty/FK và các migration settlement/supplementary từ nhánh Features.
+- Acceptance: build sạch, không conflict marker, API/transaction/rollback/idempotency/concurrency và toàn bộ regression đạt; catalog DB khớp FK của model, kể cả ledger giờ gói mới.
+
 ## Kiểm chứng foreign key — 2026-11-13
 
 - Mọi cột tham chiếu quan hệ phải có foreign key thật trong PostgreSQL, khớp bảng/cột đích của EF model; không chỉ khai báo quan hệ ở ORM.

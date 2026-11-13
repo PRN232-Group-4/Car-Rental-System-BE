@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Car_Rental_System_BE.Application.Services.Exceptions;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 
 namespace Car_Rental_System_BE.WebApi.Controllers;
 
@@ -15,6 +16,8 @@ namespace Car_Rental_System_BE.WebApi.Controllers;
 [Route("api/auth")]
 public sealed class SessionController(ISessionService sessions) : ControllerBase
 {
+    [OperationDescription(" Authentication request limit: Registration:MaxRequests (1-5, default 5) per RequestWindowSeconds (default 60) per IP per instance; password-change send/confirm share one budget, other endpoints have separate budgets. Rejection returns 429 with Retry-After. Login and current-password failures additionally use independent Redis counters per normalized email, maximum 5 attempts per 10-minute window (Registration options); fifth failure returns 429 and correct credentials cannot bypass an active lock. Success before lock resets the password counter; expiry allows retry. Registration/reset/change OTPs lock on the fifth failure and remain locked until code expiry or replacement after cooldown.")]
+    [SuccessMessage("Signed in successfully.")]
     [HttpPost("login")]
     [EnableRateLimiting("authentication")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -44,6 +47,7 @@ public sealed class SessionController(ISessionService sessions) : ControllerBase
         return NoContent();
     }
 
+    [SuccessMessage("Signed out successfully.")]
     [HttpPost("logout")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Logout(CancellationToken ct)
@@ -54,6 +58,7 @@ public sealed class SessionController(ISessionService sessions) : ControllerBase
         return NoContent();
     }
 
+    [SuccessMessage("Signed out from all sessions successfully.")]
     [Authorize]
     [HttpPost("logout-all")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

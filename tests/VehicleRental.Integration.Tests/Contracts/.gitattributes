@@ -1,0 +1,6 @@
+# SwaggerContractTests and SuccessMessageContractTests compare these files byte for byte with what the host
+# produces, so git must never rewrite their line endings on checkout (core.autocrlf=true would turn every LF
+# into CRLF and fail the test on a fresh worktree). -text disables the conversion and keeps the files diffable
+# as text.
+swagger.v1.json -text
+success-messages.v1.txt -text

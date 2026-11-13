@@ -4,6 +4,7 @@ using Car_Rental_System_BE.Application.DTOs.Registration;
 using Car_Rental_System_BE.WebApi.Middlewares.Requests;
 using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Domain.Entities;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -15,6 +16,7 @@ namespace Car_Rental_System_BE.WebApi.Controllers;
 [Route("api/media")]
 public sealed class MediaController(IMediaService media) : ControllerBase
 {
+    [SuccessMessage("Avatar uploaded successfully.")]
     [HttpPost("avatar")]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -30,6 +32,7 @@ public sealed class MediaController(IMediaService media) : ControllerBase
         return Ok(image);
     }
 
+    [SuccessMessage("Vehicle image uploaded successfully.")]
     [Authorize(Policy = Car_Rental_System_BE.WebApi.Middlewares.Authentication.AuthorizationPolicies.Management)]
     [HttpPost("vehicle")]
     [Consumes("multipart/form-data")]
@@ -45,6 +48,7 @@ public sealed class MediaController(IMediaService media) : ControllerBase
     }
 
     /// <summary>Admin or Manager uploads a driver's license image before creating or updating staff.</summary>
+    [SuccessMessage("Staff driver license image uploaded successfully.")]
     [Authorize(Policy = AuthorizationPolicies.Management)]
     [HttpPost("staff-license")]
     [Consumes("multipart/form-data")]
@@ -54,6 +58,7 @@ public sealed class MediaController(IMediaService media) : ControllerBase
         await UploadEvidence(file, 5 * 1024 * 1024, media.UploadStaffLicenseAsync, ct);
 
     /// <summary>Admin, Manager or Maintenance with a staff profile uploads inspection evidence.</summary>
+    [SuccessMessage("Inspection image uploaded successfully.")]
     [Authorize(Policy = AuthorizationPolicies.Inspection)]
     [HttpPost("inspection")]
     [Consumes("multipart/form-data")]
@@ -63,6 +68,7 @@ public sealed class MediaController(IMediaService media) : ControllerBase
         await UploadEvidence(file, 10 * 1024 * 1024, media.UploadInspectionImageAsync, ct);
 
     /// <summary>Staff uploads an image to include in a rental incident report.</summary>
+    [SuccessMessage("Incident report image uploaded successfully.")]
     [Authorize(Roles = "Admin,Manager,Staff,Maintenance,CustomerService,Driver")]
     [HttpPost("report")]
     [Consumes("multipart/form-data")]
