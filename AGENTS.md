@@ -6,10 +6,10 @@
 ## Kiến trúc bắt buộc
 Giữ dependency một chiều: `Domain <- Application <- Infrastructure <- WebApi`.
 
-- `Domain`: `Entities/`, `ValueObjects/`, `Services/`, `Interfaces/`; không EF/Npgsql/HTTP/Redis. Domain port chỉ được dùng Domain types/kiểu cơ bản.
-- `Application`: `Services/` điều phối use case; `Interfaces/` cho service/repository/provider ports; `DTOs/` cho input/output/options; `Validators/` cho input rules. Không phụ thuộc Infrastructure/WebApi.
-- `Infrastructure`: `Persistence/` cho DbContext/row; `HostedServices/` cho migration và job nền; `Repositories/` chứa SQL/mapping/transaction; `Services/` chứa adapter Redis/Brevo/PayOS/Cloudinary.
-- `WebApi` (`VehicleRental.WebApi`): `Controllers/`, `Middlewares/` và composition root duy nhất. DTO ở Application; HTTP auth/response/filter hỗ trợ nằm dưới Middlewares.
+- `Domain`: nghiệp vụ theo `Features/<Module>`; phần chung ở `Entities/`, `ValueObjects/`, `Services/`, `Interfaces/`. Không EF/Npgsql/HTTP/Redis. Domain port chỉ được dùng Domain types/kiểu cơ bản.
+- `Application`: use case, port và DTO theo `Features/<Module>`; phần chung ở `Services/`, `Interfaces/`, `DTOs/`, `Validators/`, `Common/`. Không phụ thuộc Infrastructure/WebApi.
+- `Infrastructure`: adapter/repository theo `Features/<Module>`; `Persistence/Rows` cho mapping theo module, `HostedServices/` cho migration và job nền; `Repositories/` và `Services/` cho phần dùng chung. Đọc/ghi dữ liệu dùng EF Core.
+- `WebApi` (`VehicleRental.WebApi`): endpoint theo `Features/<Module>`; `Controllers/` cho phần chung, `Middlewares/` cho HTTP/auth/response/filter; composition ở `Program.cs` và `Extensions/`. DTO ở Application.
 
 Repository chỉ đại diện aggregate root. Không generic repository; controller không gọi Npgsql/Redis trực tiếp. Schema có FK (migration 0034, ADR-014); Application vẫn xác minh reference để trả lỗi nghiệp vụ và giữ transaction khi đổi nhiều bảng. Repository ghi/đọc bằng EF Core; SQL chỉ còn trong `Persistence/DbLocks.cs` (khóa, đồng hồ DB) và migration.
 

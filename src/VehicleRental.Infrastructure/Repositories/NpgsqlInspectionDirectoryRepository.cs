@@ -1,5 +1,5 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
-using Car_Rental_System_BE.Application.Inspections;
+using Car_Rental_System_BE.Application.Features.Inspections;
 using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;

@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Domain.Entities;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
@@ -24,6 +25,7 @@ public sealed class ExternalAuthController(IOptions<GoogleAuthOptions> google, I
         return Challenge(new AuthenticationProperties { RedirectUri = Url.ActionLink(nameof(GoogleComplete)) }, GoogleDefaults.AuthenticationScheme);
     }
 
+    [SuccessMessage("Google sign-in completed successfully.")]
     [Authorize(AuthenticationSchemes = "External")]
     [HttpGet("google/complete")]
     [ProducesResponseType(StatusCodes.Status302Found)]

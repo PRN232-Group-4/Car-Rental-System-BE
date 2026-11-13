@@ -1,4 +1,5 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Car_Rental_System_BE.WebApi.Controllers;
@@ -14,6 +15,7 @@ public class HomeController : ControllerBase
         return Redirect("/swagger");
     }
 
+    [SuccessMessage("Service status retrieved successfully.")]
     [HttpGet("status")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public IActionResult GetStatus()

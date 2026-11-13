@@ -1,84 +1,45 @@
 # Kiến trúc
 
-API là modular monolith theo Clean Architecture: Web API gọi Application; Application chỉ biết Domain và các port; Infrastructure hiện thực EF Core/PostgreSQL, Redis, Brevo. Dependency đi vào trong, composition ở `Program.cs`.
-
-Từ 2026-10-25, truy vấn đọc thông thường dùng LINQ qua `Persistence/VehicleRentalDbContext` với no-tracking. Row ánh xạ bảng/view hiện có được gom trong `PersistenceRows.cs`; không thêm FK hoặc EF migration. SQL còn dùng cho ghi dữ liệu và kiểm tra/khóa trong transaction. Xem [ADR-012](decisions/ADR-012-entity-framework-read-queries.md) và [rà soát gộp file](file-consolidation-review.md).
-
-## Services và Repositories
+Backend là modular monolith theo Clean Architecture, giữ chiều dependency `Domain <- Application <- Infrastructure <- WebApi`. Nghiệp vụ được tổ chức theo `Features/<Module>` trong mỗi layer, tích hợp từ `refactor/features-layout` và giữ ORM/FK theo ADR-014. Xem [ADR-015](decisions/ADR-015-features-layout-with-ef.md).
 
 ```text
 src/
-├── VehicleRental.Domain/              # Quy tắc thuần, không phụ thuộc framework
-│   ├── Entities/                      # User, GeofenceZone
-│   ├── ValueObjects/                  # GeoPoint
-│   ├── Services/                      # StaffSpecialty, RouteGeometryService
-│   ├── Interfaces/                    # IUserRepository (chỉ dùng Domain types)
-│   ├── Availability/ Assignments/     # TimeRange, BookingStatusRules, AssignmentDomain
-│   └── Lifecycle/ Loyalty/            # RentalStateMachine, CancellationPolicy, LoyaltyDomainRules
-├── VehicleRental.Application/         # Use case + port
-│   ├── Services/                      # Use case chung (Account, Session, Payment, Operations, ...)
-│   ├── Interfaces/                    # Services/, Repositories/, External/ ports
-│   ├── DTOs/ Validators/              # Request/response, options, validation
-│   ├── Common/Errors/                 # BusinessRuleException, ConflictException, NotFoundException
-│   └── Assignments/ Availability/ Handovers/ Inspections/ Lifecycle/ Loyalty/
-│                                      # Feature folder: *Contracts.cs (port + DTO) + service
-├── VehicleRental.Infrastructure/      # Adapter cho PostgreSQL, Redis, provider ngoài
-│   ├── Persistence/                   # VehicleRentalDbContext, PersistenceRows
-│   ├── HostedServices/                # Migration, Redis ping, rental/subscription expiry, telemetry retention
-│   ├── Repositories/                  # Npgsql*Repository (query, mapping, transaction, lock)
-│   ├── Assignments/ Availability/ Lifecycle/   # Adapter theo feature
-│   └── Services/                      # Authentication/, Registration/, Payments/, Media/, Mapbox, email
-└── VehicleRental.WebApi/              # Host + HTTP
-    ├── Controllers/                   # HTTP, DTO mapping và authorization context
-    ├── Middlewares/                   # Authentication/, Requests/, Responses/ (helper, filter, envelope)
-    ├── Properties/                    # launchSettings.json
-    └── Program.cs                     # Composition root và DI
+├── VehicleRental.Domain/
+│   ├── Features/                    # Assignments, Availability, Billing, Loyalty, Maps, Rentals
+│   └── Entities/ ValueObjects/ Services/ Interfaces/
+├── VehicleRental.Application/
+│   ├── Features/<Module>/           # Use case, service/repository port, DTO của module
+│   └── Services/ Interfaces/ DTOs/ Validators/ Common/ Abstractions/
+├── VehicleRental.Infrastructure/
+│   ├── Features/<Module>/           # Repository và adapter theo nghiệp vụ
+│   ├── Persistence/Rows/            # Row mapping theo module
+│   ├── Persistence/                 # DbContext, DbLocks, transaction, timestamp
+│   ├── Repositories/ Services/      # Các thành phần dùng chung/còn lại
+│   ├── HostedServices/              # Migration, expiry, telemetry retention
+│   └── DependencyInjection.cs       # Đăng ký Infrastructure
+└── VehicleRental.WebApi/
+    ├── Features/<Module>/           # Controller/endpoint của module
+    ├── Controllers/ Middlewares/    # HTTP/auth/response dùng chung
+    ├── Extensions/                  # Composition và cấu hình host
+    └── Program.cs
+
+tests/
+├── VehicleRental.Domain.Tests/
+├── VehicleRental.Application.Tests/
+├── VehicleRental.Integration.Tests/
+└── VehicleRental.Architecture.Tests/
 ```
 
-Tất cả namespace dùng gốc `Car_Rental_System_BE.<Layer>.<Folder>`, ví dụ `Car_Rental_System_BE.Domain.Lifecycle`
-và `Car_Rental_System_BE.WebApi.Controllers`. Luồng chạy chi tiết xem [flow.md](flow.md).
+Các module Application gồm Assignments, Availability, Billing, Customers, Dashboard, Fleet, Handovers, Inspections, Loyalty, Maintenances, Maps, Organization, Ratings, Recovery, RentalPolicies, Rentals, Reports và Tracking. Namespace theo `Car_Rental_System_BE.<Layer>.Features.<Module>`; các kiểu dùng chung giữ namespace hiện có.
 
-Luồng gọi: `Controller → Application Service → Repository interface → EF Core query / Npgsql transaction → PostgreSQL`.
-Chiều tham chiếu compile-time vẫn đi vào trong: Domain độc lập; Application chỉ tham chiếu Domain;
-Infrastructure tham chiếu Application; WebApi tham chiếu Application/Infrastructure để composition.
+Controller gọi Application service, service gọi repository/provider port. Domain và Application không tham chiếu EF Core, Npgsql, HTTP hoặc Redis. Infrastructure hiện thực port bằng EF Core/PostgreSQL, Redis và các provider ngoài; WebApi đăng ký dependency ở composition root. Không dùng generic repository.
 
-- `AccountService`: đọc/cập nhật profile, kiểm tra mật khẩu hiện tại, lưu hash mới rồi thu hồi session.
-- `SessionService`: đăng nhập, sign-in sau OAuth, refresh và logout. Controller chỉ đọc/ghi cookie.
-- `StaffService`: kiểm tra specialty/license, hash mật khẩu và thu hồi session khi đổi thông tin/quyền,
-  deactivate hoặc gán department/facility.
-- `PaymentService`: checkout, mua gói, xác nhận hủy với provider, xác minh webhook và điều phối
-  transaction invoice/subscription. Gateway options được map tại composition root.
-- `MediaService`: upload và cập nhật avatar; `UserService`: các thao tác user được gọi từ OAuth.
-- `RegistrationService`/`PasswordResetService`: điều phối OTP qua `IWorkflowStateStore`, email,
-  user/account repository và `IRefreshTokenStore`; Application không biết Redis/Npgsql/HTTP framework.
-- `OperationsService`: entry point cho catalog, rental, dispatch, subscription, maintenance, rating
-  và dashboard; các query SQL nằm tại `NpgsqlOperationsRepository`.
+Đọc và ghi dữ liệu đều qua `VehicleRentalDbContext`/EF Core. `Persistence/Rows` giữ mapping schema SQL hiện có, default, generated column và FK. SQL runtime chỉ còn primitive khóa PostgreSQL/đồng hồ DB trong `DbLocks` và DDL/file migration; không dùng EF Migrations. Các migration immutable được định danh bằng tên file đầy đủ và kiểm checksum.
 
-Controller không inject Repository hoặc implementation Redis. Interface repository nằm trong namespace
-`Car_Rental_System_BE.Application.Interfaces.Repositories`; riêng `IUserRepository` dùng
-`Car_Rental_System_BE.Domain.Interfaces` vì port chỉ sử dụng Domain entity và kiểu cơ bản. Implementation SQL dùng
-`Car_Rental_System_BE.Infrastructure.Repositories`. Không dùng generic repository.
+Quyết toán rental dùng một transaction với thứ tự advisory lock, khóa rental, rồi khóa subscription. Writer hoàn tiền, hóa đơn, ledger giờ gói và loyalty dùng cùng connection/transaction qua `AmbientTransactionScope`, nên lỗi ở bất kỳ bước nào rollback toàn bộ. `subscription_hour_ledger` bảo đảm một rental không bị trừ giờ gói hai lần. Hóa đơn supplementary thu được bằng cash hoặc PayOS theo cùng quy tắc phí sau trả xe.
 
-Interface service nằm trong `Application.Interfaces.Services`, provider/cache/token ports trong
-`Application.Interfaces.External`. Request/response DTO đã tách khỏi Controller sang `Application.DTOs`;
-DataAnnotations giữ nguyên tên property, validation và JSON schema. `StaffValidator` giữ quy tắc license;
-`Domain.Services.StaffSpecialty` giữ quy tắc specialty/driver. Không tạo thêm nghiệp vụ/value object giả
-để lấp thư mục. Các thành phần JWT, cookie, OAuth và response filter thuộc `WebApi.Middlewares`.
+Schema có FK vật lý; Application vẫn xác minh logical reference để trả lỗi nghiệp vụ. PostgreSQL giữ trigger, exclusion constraint và lock chống trùng lịch; không di chuyển invariant ra khỏi transaction chỉ để đổi cách tổ chức thư mục.
 
-Access token là JWT trong cookie HttpOnly; refresh token được lưu dạng hash tại Redis qua
-`IRefreshTokenStore`. Refresh đối chiếu authorization version và thu hồi token mới nếu quyền đã đổi.
-Các adapter Redis/Brevo/Cloudinary/PayOS và JWT issuer được đăng ký ở `Program.cs`.
+Access token là JWT trong cookie HttpOnly, refresh token chỉ lưu hash trong Redis. Mỗi request/refresh đối chiếu authorization version để thu hồi phiên khi thay đổi tài khoản/quyền/mật khẩu. OTP/password và dữ liệu provider được quản lý sau các Application port.
 
-Schema PostgreSQL không có FK theo chủ đích. Repository transaction hóa thao tác nhiều bảng; use case phải kiểm tra logical ID trước ghi. Khi có aggregate Rental, dùng transaction và lock/constraint thích hợp để chống double booking.
-
-## Phạm vi còn lại
-
-Việc thêm Services/Repositories chưa hoàn tất mọi yêu cầu của Clean Architecture:
-`IOperationsRepository` vẫn gom nhiều nhóm nghiệp vụ; Domain vẫn chỉ có User record.
-Các quy tắc rental lifecycle, inspection, giá, refund và logical reference đang đọc dữ liệu dưới
-database lock vẫn ở repository transaction để giữ hành vi và chống race. Chuyển chúng sang Domain/use case
-cần thiết kế aggregate và transaction boundary tiếp theo, không chỉ dời validation ra ngoài transaction.
-
-`ArchitectureTests` kiểm tra chiều dependency và constructor Controller; `ApplicationServiceTests`
-kiểm tra use case với persistence/provider ports trong bộ nhớ; regression hiện có vẫn kiểm tra query
-và transaction thật trên PostgreSQL riêng.
+Bộ test Domain/Application kiểm tra quy tắc và orchestration; Integration tạo PostgreSQL dùng một lần, áp toàn bộ migration rồi kiểm API, tiền, rollback và concurrency. Architecture kiểm dependency ở mức signature/IL, privacy giữa các feature và giới hạn raw query. Catalog PostgreSQL phải khớp toàn bộ FK trong EF model.

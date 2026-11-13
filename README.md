@@ -4,11 +4,15 @@ ASP.NET Core 8 Web API theo Clean Architecture (Domain → Application → Infra
 
 ```text
 src/
-├── VehicleRental.Domain/          # Quy tắc nghiệp vụ thuần
-├── VehicleRental.Application/     # Use case, DTO, port
-├── VehicleRental.Infrastructure/  # PostgreSQL, Redis, payOS, Cloudinary, Brevo, Mapbox
-└── VehicleRental.WebApi/          # Controllers, middleware, Program.cs
-tests/VehicleRental.Tests/         # xUnit (một phần cần PostgreSQL local)
+├── VehicleRental.Domain/          # Features/<Module>: quy tắc nghiệp vụ thuần
+├── VehicleRental.Application/     # Features/<Module>: use case, DTO, port
+├── VehicleRental.Infrastructure/  # Features/<Module>: adapter; Persistence/Rows: EF mapping
+└── VehicleRental.WebApi/          # Features/<Module>: endpoint; Extensions: composition
+tests/
+├── VehicleRental.Domain.Tests/
+├── VehicleRental.Application.Tests/
+├── VehicleRental.Integration.Tests/  # PostgreSQL tạm qua TEST_DATABASE_ADMIN
+└── VehicleRental.Architecture.Tests/
 ```
 
 ## Chạy local
