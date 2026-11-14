@@ -53,7 +53,7 @@ public sealed class OperationalNotifications(
         {
             if (type == "pre_rental" && !isOk)
                 await sender.SendAsync(recipient, $"Xe của đơn thuê #{rentalId} không đạt kiểm tra",
-                    $"Xe của đơn thuê #{rentalId} không đạt kiểm tra trước thuê nên không thể bàn giao. Vui lòng đăng nhập Thong Dong để đổi sang xe khác (hủy đơn này và đặt xe khác) hoặc liên hệ cơ sở để được hỗ trợ đổi xe.", ct);
+                    $"Xe của đơn thuê #{rentalId} không đạt kiểm tra trước thuê nên không thể bàn giao. Đơn đã được hệ thống tự hủy, không tính phí hủy và hoàn lại toàn bộ số tiền đã thanh toán. Vui lòng đăng nhập Thong Dong để đặt xe khác.", ct);
             else
                 await sender.SendAsync(recipient, $"Kết quả kiểm tra xe của đơn thuê #{rentalId}",
                     $"Đơn thuê #{rentalId}: kiểm tra {(type == "pre_rental" ? "trước" : "sau")} thuê {(isOk ? "đạt" : "không đạt")}. Vui lòng đăng nhập Thong Dong để xem chi tiết.", ct);

@@ -142,7 +142,6 @@ public sealed class VehicleRentalDbContext(DbContextOptions<VehicleRentalDbConte
         Fk<ReportsRow, VehicleMaintenanceRow>(b, nameof(ReportsRow.MaintenanceId));
         Fk<ReportsRow, StaffsRow>(b, nameof(ReportsRow.ReporterStaffId));
         Fk<ReportsRow, VehiclesRow>(b, nameof(ReportsRow.VehicleId));
-        Fk<DriverShiftsRow, StaffsRow>(b, nameof(DriverShiftsRow.DriverStaffId));
         Fk<VehicleReplacementsRow, RentalsRow>(b, nameof(VehicleReplacementsRow.RentalId));
         Fk<VehicleReplacementsRow, ReportsRow>(b, nameof(VehicleReplacementsRow.ReportId));
         Fk<VehicleReplacementsRow, VehiclesRow>(b, nameof(VehicleReplacementsRow.OldVehicleId));

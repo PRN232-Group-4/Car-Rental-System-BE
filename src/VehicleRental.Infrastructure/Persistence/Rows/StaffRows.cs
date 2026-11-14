@@ -33,26 +33,6 @@ public sealed class StaffsRow
     public decimal? Rating { get; set; }
 }
 
-[Table("driver_shifts")]
-public sealed class DriverShiftsRow
-{
-    [Key]
-    [Column("id", TypeName = "integer")]
-    public int Id { get; set; }
-    [Column("driver_staff_id", TypeName = "integer")]
-    public int DriverStaffId { get; set; }
-    [Column("start_time", TypeName = "timestamp")]
-    public DateTime StartTime { get; set; }
-    [Column("end_time", TypeName = "timestamp")]
-    public DateTime EndTime { get; set; }
-    [Column("status", TypeName = "varchar(20)")]
-    public string Status { get; set; } = "scheduled";
-    [Column("created_by", TypeName = "varchar(255)")]
-    public string CreatedBy { get; set; } = null!;
-    [Column("modified_by", TypeName = "varchar(255)")]
-    public string ModifiedBy { get; set; } = null!;
-}
-
 [Table("staff_ratings")]
 public sealed class StaffRatingsRow
 {
