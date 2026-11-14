@@ -21,9 +21,9 @@ public sealed class NpgsqlDriverAvailability(NpgsqlDataSource dataSource, IOptio
             select s;
         if (window is not { } w) return await drivers.AnyAsync(ct);
 
-        var range = NpgsqlVehicleSearchRepository.Range(w.From, w.To.AddMinutes(options?.Value.DriverBufferMinutes ?? 60));
-        var fromTime = NpgsqlVehicleSearchRepository.Timestamp(w.From);
-        var to = NpgsqlVehicleSearchRepository.Timestamp(w.To.AddMinutes(options?.Value.DriverBufferMinutes ?? 60));
+        var range = Sql.Range(w.From, w.To.AddMinutes(options?.Value.DriverBufferMinutes ?? 60));
+        var fromTime = Sql.Ts(w.From);
+        var to = Sql.Ts(w.To.AddMinutes(options?.Value.DriverBufferMinutes ?? 60));
         var busy = from a in db.Set<VehicleAssignmentsRow>()
             join r in db.Set<RentalsRow>() on a.RentalId equals r.Id
             join h0 in db.Set<HourRentalDetailRow>() on r.Id equals h0.RentalId into hours

@@ -4,16 +4,15 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Features.Inspections;
-using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.Application.Features.Media;
 using Car_Rental_System_BE.Application.Features.Organization;
-using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 using Car_Rental_System_BE.Infrastructure.Features.Organization;
 using Car_Rental_System_BE.WebApi.Features.Inspections;
 using Car_Rental_System_BE.WebApi.Controllers;
-using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
-using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.WebApi.Common.Authentication;
+using Car_Rental_System_BE.WebApi.Common.Responses;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -23,6 +22,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Car_Rental_System_BE.Application.Features.Rentals;
+using Car_Rental_System_BE.Infrastructure.Features.Inspections;
 using Xunit;
 
 namespace VehicleRental.Tests;
@@ -215,7 +215,6 @@ public sealed class InspectionAssignmentTests(PostgresFixture db) : IClassFixtur
         builder.Services.AddAuthentication("assignment").AddScheme<AuthenticationSchemeOptions, TestAuthentication>("assignment", _ => { });
         builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
         builder.Services.AddSingleton<IInspectionAssignmentService>(Service);
-        builder.Services.AddSingleton<IOperationsService>(new OperationsService(new NpgsqlOperationsRepository(db.DataSource)));
         builder.Services.AddSingleton<IRentalBookingService>(new RentalBookingService(new NpgsqlRentalBookingRepository(db.DataSource)));
         // The vehicle endpoints moved to the Fleet slice; these tests never call them.
         builder.Services.AddSingleton(System.Reflection.DispatchProxy.Create<Car_Rental_System_BE.Application.Features.Fleet.IFleetService, UnusedMedia>());

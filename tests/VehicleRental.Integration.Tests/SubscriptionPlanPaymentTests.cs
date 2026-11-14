@@ -1,6 +1,6 @@
 using Car_Rental_System_BE.Application.Features.Billing;
 using Car_Rental_System_BE.Infrastructure.Features.Billing;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Features.Subscriptions;
 using Xunit;
 
 namespace VehicleRental.Tests;
@@ -8,7 +8,7 @@ namespace VehicleRental.Tests;
 public sealed class SubscriptionPlanPaymentTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
     private readonly NpgsqlPaymentRepository _payments = new(db.DataSource);
-    private readonly NpgsqlOperationsRepository _operations = new(db.DataSource);
+    private readonly NpgsqlSubscriptionRepository _subscriptions = new(db.DataSource);
 
     [Fact]
     public async Task Plan_checkout_creates_a_pending_payment_without_a_rental()
@@ -20,7 +20,7 @@ public sealed class SubscriptionPlanPaymentTests(PostgresFixture db) : IClassFix
 
         Assert.True(SubscriptionOrderCodes.IsSubscriptionOrder(checkout.OrderCode));
         Assert.Equal(250m, checkout.Amount);
-        Assert.Empty(await _operations.ListCustomerSubscriptionsAsync(email, CancellationToken.None));
+        Assert.Empty(await _subscriptions.ListCustomerSubscriptionsAsync(email, CancellationToken.None));
         Assert.Equal("pending", (await _payments.GetPlanPurchaseAsync(checkout.OrderCode, email, CancellationToken.None))!.Status);
     }
 
@@ -35,13 +35,15 @@ public sealed class SubscriptionPlanPaymentTests(PostgresFixture db) : IClassFix
 
         Assert.Equal("paid", completed.Status);
         Assert.Equal("paid", (await _payments.GetPlanPurchaseAsync(checkout.OrderCode, email, CancellationToken.None))!.Status);
-        var only = Assert.Single(await _operations.ListCustomerSubscriptionsAsync(email, CancellationToken.None));
+        var only = Assert.Single(await _subscriptions.ListCustomerSubscriptionsAsync(email, CancellationToken.None));
         Assert.Equal(plan, only.PlanId);
         Assert.Equal(40m, only.RemainingHours);
+        // The dates the dead test-only BuyPlanAsync helper used to assert are written by this path too.
+        Assert.Equal(30, (only.EndDate.DayNumber - only.StartDate.DayNumber));
 
         // PayOS may deliver the same webhook twice; the second must not create another subscription.
         await _payments.CompletePlanPurchaseAsync(checkout.OrderCode, 250m, "PAYOS-REF-1", CancellationToken.None);
-        Assert.Single(await _operations.ListCustomerSubscriptionsAsync(email, CancellationToken.None));
+        Assert.Single(await _subscriptions.ListCustomerSubscriptionsAsync(email, CancellationToken.None));
     }
 
     [Fact]
@@ -52,7 +54,7 @@ public sealed class SubscriptionPlanPaymentTests(PostgresFixture db) : IClassFix
         var checkout = await _payments.CreatePlanCheckoutAsync(plan, email, CancellationToken.None);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => _payments.CompletePlanPurchaseAsync(checkout.OrderCode, 1m, "PAYOS-REF-2", CancellationToken.None));
-        Assert.Empty(await _operations.ListCustomerSubscriptionsAsync(email, CancellationToken.None));
+        Assert.Empty(await _subscriptions.ListCustomerSubscriptionsAsync(email, CancellationToken.None));
     }
 
     [Fact]

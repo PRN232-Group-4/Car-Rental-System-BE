@@ -1,3 +1,4 @@
+using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Availability;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Domain.Features.Assignments;
@@ -192,4 +193,12 @@ public sealed class AssignmentService(
     }
 
 
+    public Task<OperationsPage<DriverScheduleEntry>> DriverScheduleAsync(int? driverId, DateTime from, DateTime to, OperationsPagination pagination, CancellationToken ct)
+    {
+        pagination.Validate();
+        if (to<=from) throw new ArgumentException("End time must be after start time.");
+        return repo.DriverScheduleAsync(driverId,Utc(from)!.Value,Utc(to)!.Value,pagination,ct);
+    }
+
+    private static DateTime? Utc(DateTime? value) => value is null ? null : DateTime.SpecifyKind(value.Value.Kind == DateTimeKind.Local ? value.Value.ToUniversalTime() : value.Value, DateTimeKind.Unspecified);
 }

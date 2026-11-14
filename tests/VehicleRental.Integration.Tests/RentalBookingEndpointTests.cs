@@ -3,8 +3,9 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Car_Rental_System_BE.WebApi.Controllers;
-using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
-using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.WebApi.Features.Rentals;
+using Car_Rental_System_BE.WebApi.Common.Authentication;
+using Car_Rental_System_BE.WebApi.Common.Responses;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -49,7 +50,7 @@ public sealed class RentalBookingEndpointTests(PostgresFixture db) : IClassFixtu
             .ConfigureApplicationPartManager(parts =>
             {
                 parts.ApplicationParts.Clear();
-                parts.ApplicationParts.Add(new AssemblyPart(typeof(OperationsController).Assembly));
+                parts.ApplicationParts.Add(new AssemblyPart(typeof(RentalStatusController).Assembly));
             });
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(options => options.OperationFilter<ApiSuccessResponseOperationFilter>());

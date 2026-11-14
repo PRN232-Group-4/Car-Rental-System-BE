@@ -5,12 +5,12 @@ using System.Security.Claims;
 using System.Text.Json;
 using Car_Rental_System_BE.Application.Features.Assignments;
 using Car_Rental_System_BE.Application.DTOs.Operations;
-using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Application.Features.Maintenances;
-using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.WebApi.Features.Rentals;
+using Car_Rental_System_BE.WebApi.Common.Authentication;
 using Car_Rental_System_BE.WebApi.Features.Assignments;
 using Car_Rental_System_BE.WebApi.Controllers;
-using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.WebApi.Common.Responses;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -100,8 +100,8 @@ public sealed class RentalAssignmentsApiContractTests
     [Fact]
     public void Deprecated_operations_assign_action_is_deleted_and_only_the_get_owns_that_template()
     {
-        Assert.Null(typeof(OperationsController).GetMethod("Assign"));
-        Assert.DoesNotContain(typeof(OperationsController).GetMethods(), method =>
+        Assert.Null(typeof(RentalStatusController).GetMethod("Assign"));
+        Assert.DoesNotContain(typeof(RentalStatusController).GetMethods(), method =>
             method.GetCustomAttributes<HttpMethodAttribute>().Any(attribute =>
                 attribute.Template == "rental/{id:int}/assignments" && attribute.HttpMethods.Contains("POST")));
 
@@ -169,6 +169,8 @@ public sealed class RentalAssignmentsApiContractTests
         public Task<IReadOnlyList<AssignableDriverItem>> ListAssignableDriversAsync(int rentalId, bool eligibleOnly, CancellationToken ct) => throw new NotSupportedException();
         public Task<IReadOnlyList<AssignableVehicleItem>> ListAssignableVehiclesAsync(int rentalId, CancellationToken ct) => throw new NotSupportedException();
 
+        public Task<OperationsPage<DriverScheduleEntry>> DriverScheduleAsync(int? driverId, DateTime from, DateTime to, OperationsPagination pagination, CancellationToken ct)
+            => throw new NotSupportedException();
     }
 
     [Theory]

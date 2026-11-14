@@ -1,5 +1,5 @@
+using Car_Rental_System_BE.Application.Features.Subscriptions;
 using Car_Rental_System_BE.Application.Interfaces.External;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -39,19 +39,19 @@ public sealed class SubscriptionExpiryHostedService(
     public async Task RunOnceAsync(CancellationToken ct)
     {
         using var scope = scopeFactory.CreateScope();
-        var operations = scope.ServiceProvider.GetRequiredService<IOperationsRepository>();
+        var subscriptions = scope.ServiceProvider.GetRequiredService<ISubscriptionRepository>();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
-        var expired = await operations.ExpireSubscriptionsAsync(today, ct);
+        var expired = await subscriptions.ExpireSubscriptionsAsync(today, ct);
         if (expired > 0) logger.LogInformation("Marked {Count} subscription(s) as expired.", expired);
 
         var emailSender = scope.ServiceProvider.GetRequiredService<IBrevoEmailSender>();
-        foreach (var subscription in await operations.ListSubscriptionsToRemindAsync(today, ReminderWindowDays, ct))
+        foreach (var subscription in await subscriptions.ListSubscriptionsToRemindAsync(today, ReminderWindowDays, ct))
         {
             try
             {
                 await emailSender.SendSubscriptionExpiryWarningAsync(subscription.Email, subscription.Name, subscription.EndDate, subscription.RemainingHours, ct);
-                await operations.MarkSubscriptionRemindedAsync(subscription.Id, ct);
+                await subscriptions.MarkSubscriptionRemindedAsync(subscription.Id, ct);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {

@@ -3,10 +3,11 @@ using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Application.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Features.Organization;
 using Car_Rental_System_BE.Infrastructure.Features.RentalPolicies;
+using Car_Rental_System_BE.Application.Features.RentalPolicies;
 using Xunit;
 
 namespace VehicleRental.Tests;
@@ -16,7 +17,6 @@ public sealed class FrontendFieldsIntegrationTests(PostgresFixture db) : IClassF
     [Fact]
     public async Task Catalog_metadata_and_facility_contact_round_trip_without_fabricated_defaults()
     {
-        var repo = new NpgsqlOperationsRepository(db.DataSource);
         var fleet = new NpgsqlFleetRepository(db.DataSource);
         var organization = new NpgsqlOrganizationRepository(db.DataSource);
         var facility = await organization.SaveFacilityAsync(null,"Contact branch","Address",default,"0901234567");
@@ -47,7 +47,6 @@ public sealed class FrontendFieldsIntegrationTests(PostgresFixture db) : IClassF
     [Fact]
     public async Task My_rental_list_and_detail_share_actions_contact_and_subscription_usage()
     {
-        var repo=new NpgsqlOperationsRepository(db.DataSource);
         var bookings=new NpgsqlRentalBookingRepository(db.DataSource);
         var organization=new NpgsqlOrganizationRepository(db.DataSource);
         var (customer,email)=await Seed.CustomerAsync(db.DataSource);
@@ -55,7 +54,7 @@ public sealed class FrontendFieldsIntegrationTests(PostgresFixture db) : IClassF
         var vehicle=await Seed.VehicleAsync(db.DataSource);
         await Seed.ScalarAsync(db.DataSource,"UPDATE vehicles SET facility_id=$2,license_plate='51A-99999' WHERE id=$1",vehicle,facility.Id);
         var plan=await Seed.PlanAsync(db.DataSource);
-        var subscription=await repo.BuyPlanAsync(email,plan,default);
+        var subscription=await Seed.SubscriptionAsync(db.DataSource,email,plan);
         var start=DateTime.SpecifyKind(DateTime.UtcNow.AddDays(2),DateTimeKind.Unspecified);
         var rental=await bookings.CreateRentalAsync(email,vehicle,null,"hourly",start,start.AddHours(3.5),true,subscription,false,default);
         var queries=new NpgsqlRentalQueries(db.DataSource,TimeProvider.System);

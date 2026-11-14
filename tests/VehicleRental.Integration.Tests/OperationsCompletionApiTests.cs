@@ -8,12 +8,11 @@ using Car_Rental_System_BE.Application.Features.Fleet;
 using Car_Rental_System_BE.Application.Features.Organization;
 using Car_Rental_System_BE.Application.Features.Ratings;
 using Car_Rental_System_BE.Application.Features.Reports;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
-using Car_Rental_System_BE.Application.Interfaces.Services;
-using Car_Rental_System_BE.Application.Services;
+using Car_Rental_System_BE.Application.Features.Media;
 using Car_Rental_System_BE.WebApi.Controllers;
-using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
-using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.WebApi.Features.Rentals;
+using Car_Rental_System_BE.WebApi.Common.Authentication;
+using Car_Rental_System_BE.WebApi.Common.Responses;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -23,6 +22,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Car_Rental_System_BE.Application.Features.Rentals;
+using Car_Rental_System_BE.Application.Features.Maintenances;
+using Car_Rental_System_BE.Application.Features.Assignments;
 using Xunit;
 
 namespace VehicleRental.Tests;
@@ -38,18 +39,17 @@ public sealed class OperationsCompletionApiTests : IAsyncLifetime
         builder.Services.AddProblemDetails();
         builder.Services.AddAuthentication("operations").AddScheme<AuthenticationSchemeOptions,TestAuthentication>("operations",_=>{});
         builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
-        builder.Services.AddSingleton(DispatchProxy.Create<IOperationsService,UnusedProxy>());
         builder.Services.AddSingleton(DispatchProxy.Create<IRentalBookingService,UnusedProxy>());
         // The vehicle endpoints moved to the Fleet slice: UnusedProxy already answers SearchVehiclesAsync.
         builder.Services.AddSingleton(DispatchProxy.Create<IFleetService,UnusedProxy>());
         // The departments and facilities endpoints moved to the Organization slice, so they resolve
         // IOrganizationService: the paged facility list is stubbed there now.
         builder.Services.AddSingleton(DispatchProxy.Create<IOrganizationService,OrganizationProxy>());
-        builder.Services.AddSingleton(DispatchProxy.Create<Car_Rental_System_BE.Application.Features.Assignments.IAssignmentService,UnusedProxy>());
-        builder.Services.AddSingleton(DispatchProxy.Create<Car_Rental_System_BE.Application.Features.Maintenances.IMaintenanceService,UnusedProxy>());
         builder.Services.AddSingleton(DispatchProxy.Create<IMediaService,UnusedProxy>());
-        builder.Services.AddSingleton(DispatchProxy.Create<IOperationsCompletionRepository,Repository>());
-        builder.Services.AddSingleton<IOperationsCompletionService,OperationsCompletionService>();
+        // The driver schedule now reads through the assignments slice and the maintenance queue through the
+        // maintenances slice; the shared name-dispatching proxy answers both.
+        builder.Services.AddSingleton(DispatchProxy.Create<Car_Rental_System_BE.Application.Features.Assignments.IAssignmentService,Repository>());
+        builder.Services.AddSingleton(DispatchProxy.Create<Car_Rental_System_BE.Application.Features.Maintenances.IMaintenanceService,Repository>());
         // The incident-report endpoints moved to the Reports slice: ReportsController resolves IReportService,
         // and the same name-dispatching proxy answers the two report methods it shares with the completion port.
         builder.Services.AddSingleton(DispatchProxy.Create<IReportRepository,Repository>());
@@ -58,7 +58,7 @@ public sealed class OperationsCompletionApiTests : IAsyncLifetime
         // IRatingService, whose five methods the shared proxy answers by name.
         builder.Services.AddSingleton(DispatchProxy.Create<IRatingRepository,Repository>());
         builder.Services.AddSingleton<IRatingService,RatingService>();
-        builder.Services.AddControllers(options=>options.Filters.Add<ApiSuccessResponseFilter>()).AddApplicationPart(typeof(OperationsController).Assembly);
+        builder.Services.AddControllers(options=>options.Filters.Add<ApiSuccessResponseFilter>()).AddApplicationPart(typeof(RentalStatusController).Assembly);
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(options=>options.OperationFilter<ApiSuccessResponseOperationFilter>());
         app=builder.Build(); app.UseApiResponseErrors(); app.UseSwagger(); app.UseAuthentication(); app.UseAuthorization(); app.MapControllers();

@@ -57,8 +57,8 @@ public sealed class NpgsqlVehicleSearchRepository(NpgsqlDataSource dataSource) :
         }
         if (query.Window is { } window)
         {
-            var bookingRange = Range(window.From, window.To.AddMinutes(bufferMinutes));
-            var maintenanceRange = Range(window.From, window.To);
+            var bookingRange = Sql.Range(window.From, window.To.AddMinutes(bufferMinutes));
+            var maintenanceRange = Sql.Range(window.From, window.To);
             matches = matches.Where(x => !db.Set<VehicleBookingsRow>().Any(b => b.VehicleId == x.Vehicle.Id && b.IsBlocking && b.Period!.Value.Overlaps(bookingRange))
                 && !db.Set<VVehicleMaintenanceBlocksRow>().Any(b => b.VehicleId == x.Vehicle.Id && b.BlockedRange.Overlaps(maintenanceRange)));
         }
@@ -142,7 +142,7 @@ public sealed class NpgsqlVehicleSearchRepository(NpgsqlDataSource dataSource) :
     public async Task<IReadOnlyList<BusySlot>> ListBusySlotsAsync(int vehicleId, TimeRange window, CancellationToken ct)
     {
         await using var db = VehicleRentalDbContext.Create(dataSource);
-        var range = Range(window.From, window.To);
+        var range = Sql.Range(window.From, window.To);
         var bookings = await db.Set<VehicleBookingsRow>()
             .Where(b => b.VehicleId == vehicleId && b.IsBlocking && b.Period!.Value.Overlaps(range))
             .OrderBy(b => b.StartsAt).Select(b => new { Start = b.StartsAt, End = b.Period!.Value.UpperBound }).ToListAsync(ct);
@@ -159,7 +159,7 @@ public sealed class NpgsqlVehicleSearchRepository(NpgsqlDataSource dataSource) :
     public async Task<IReadOnlyList<AffectedRental>> ListAffectedRentalsAsync(int vehicleId, DateTime nowUtc, CancellationToken ct)
     {
         await using var db = VehicleRentalDbContext.Create(dataSource);
-        var now = Timestamp(nowUtc);
+        var now = Sql.Ts(nowUtc);
         return await (from r in db.Set<RentalsRow>()
             join c in db.Set<CustomersRow>() on r.CustomerId equals c.Id
             join u in db.Set<UsersRow>() on c.UserId equals u.Id
@@ -175,7 +175,5 @@ public sealed class NpgsqlVehicleSearchRepository(NpgsqlDataSource dataSource) :
             select new AffectedRental(r.Id, u.Fullname ?? u.Email, start!.Value, end!.Value, r.Status)).ToListAsync(ct);
     }
 
-    internal static DateTime Timestamp(DateTime value) => DateTime.SpecifyKind(value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : value, DateTimeKind.Unspecified);
-    internal static NpgsqlRange<DateTime> Range(DateTime from, DateTime to) => new(Timestamp(from), true, Timestamp(to), false);
     private static string EscapeLike(string s) => s.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_");
 }

@@ -1,14 +1,13 @@
 using System.Data;
 using System.Data.Common;
+using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Assignments;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Domain.Features.Assignments;
-using Car_Rental_System_BE.Infrastructure.Features.Availability;
 using Npgsql;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 using NpgsqlTypes;
 using Microsoft.EntityFrameworkCore;
-using Car_Rental_System_BE.Infrastructure.Persistence;
 
 namespace Car_Rental_System_BE.Infrastructure.Features.Assignments;
 
@@ -276,7 +275,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
         DateTime windowStart, DateTime windowEnd, int bufferMinutes, int? excludeRentalId, CancellationToken ct)
     {
         await using var db = VehicleRentalDbContext.Create(dataSource);
-        var range = NpgsqlVehicleSearchRepository.Range(windowStart, windowEnd.AddMinutes(bufferMinutes));
+        var range = Sql.Range(windowStart, windowEnd.AddMinutes(bufferMinutes));
         return await (from st in db.Set<StaffsRow>().AsNoTracking()
             join u in db.Set<UsersRow>() on st.UserId equals u.Id
             where st.IsDriver
@@ -293,8 +292,8 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
         int bufferMinutes, int excludeVehicleId, CancellationToken ct)
     {
         await using var db = VehicleRentalDbContext.Create(dataSource);
-        var bookingRange = NpgsqlVehicleSearchRepository.Range(windowStart, windowEnd.AddMinutes(bufferMinutes));
-        var maintenanceRange = NpgsqlVehicleSearchRepository.Range(windowStart, windowEnd);
+        var bookingRange = Sql.Range(windowStart, windowEnd.AddMinutes(bufferMinutes));
+        var maintenanceRange = Sql.Range(windowStart, windowEnd);
         return await (from v in db.Set<VehiclesRow>().AsNoTracking()
             join t in db.Set<VehicleTypesRow>() on v.VehicleTypeId equals t.Id
             join f in db.Set<FacilitiesRow>() on v.FacilityId equals f.Id into facilities
@@ -345,26 +344,40 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
         return row == null ? (null, null) : (row.Name == "" ? null : row.Name, row.LicensePlate);
     }
 
-    private static IQueryable<RentalWindow> RentalWindows(VehicleRentalDbContext db) =>
-        from r in db.Set<RentalsRow>()
-        join h in db.Set<HourRentalDetailRow>() on r.Id equals h.RentalId into hourly
-        from h in hourly.DefaultIfEmpty()
-        join l in db.Set<LongtermRentalContractRow>() on r.Id equals l.RentalId into longterm
-        from l in longterm.DefaultIfEmpty()
-        select new RentalWindow
-        {
-            RentalId = r.Id, VehicleId = r.VehicleId, Status = r.Status,
-            Start = (DateTime?)h.StartTime ?? l.StartTime, End = (DateTime?)h.EndTime ?? l.EndTime,
-        };
-    private static readonly string[] ClosedRentalStatuses = ["completed", "cancelled", "expired"];
-
-    /// <summary>Đơn thuê kèm lịch thuê theo giờ/dài hạn, có thể ghép trong LINQ.</summary>
-    private sealed class RentalWindow
+    public async Task<OperationsPage<DriverScheduleEntry>> DriverScheduleAsync(int? driverId, DateTime from, DateTime to, OperationsPagination pagination, CancellationToken ct)
     {
-        public int RentalId { get; init; }
-        public int VehicleId { get; init; }
-        public string Status { get; init; } = "";
-        public DateTime? Start { get; init; }
-        public DateTime? End { get; init; }
+        from = DateTime.SpecifyKind(from, DateTimeKind.Unspecified);
+        to = DateTime.SpecifyKind(to, DateTimeKind.Unspecified);
+        await using var cn = await dataSource.OpenConnectionAsync(ct);
+        await using var tx = await cn.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, ct);
+        await using var db = VehicleRentalDbContext.Create(cn, tx);
+        var source = from assignment in db.Set<VehicleAssignmentsRow>()
+            join vehicle in db.Set<VehiclesRow>() on assignment.VehicleId equals vehicle.Id
+            join rental in db.Set<RentalsRow>() on assignment.RentalId equals rental.Id
+            join staff in db.Set<StaffsRow>() on assignment.DriverStaffId equals staff.Id
+            join user in db.Set<UsersRow>() on staff.UserId equals user.Id
+            from hourly in db.Set<HourRentalDetailRow>().Where(h => h.RentalId == rental.Id).DefaultIfEmpty()
+            from contract in db.Set<LongtermRentalContractRow>().Where(l => l.RentalId == rental.Id).DefaultIfEmpty()
+            let start = hourly.StartTime ?? contract.StartTime
+            let end = hourly.EndTime ?? contract.EndTime
+            where assignment.Status == "assigned" && rental.Status != "cancelled" && rental.Status != "completed" &&
+                rental.Status != "expired" && (driverId == null || assignment.DriverStaffId == driverId) && start < to && end > @from
+            select new { assignment.Id, assignment.RentalId, assignment.VehicleId, DriverStaffId = staff.Id,
+                DriverName = user.Fullname ?? user.Email, Start = start, End = end, RentalStatus = rental.Status,
+                VehicleName = (vehicle.Brand ?? "") + (vehicle.Brand != null && vehicle.Model != null ? " " : "") + (vehicle.Model ?? ""),
+                vehicle.LicensePlate, assignment.BufferMinutes };
+        var total = await source.CountAsync(ct);
+        var offset = ((long)pagination.Page - 1) * pagination.PageSize;
+        var rows = offset >= total ? [] : await source.OrderBy(row => row.Start).ThenBy(row => row.Id)
+            .Skip((int)offset).Take(pagination.PageSize).ToListAsync(ct);
+        var items = rows.Select(row => new DriverScheduleEntry(row.Id, row.RentalId, row.VehicleId,
+            row.DriverStaffId, row.DriverName, Utc(row.Start!.Value), Utc(row.End!.Value), row.RentalStatus,
+            row.VehicleName, row.LicensePlate, row.BufferMinutes)).ToList();
+        await tx.CommitAsync(ct);
+        return new(items, pagination.Page, pagination.PageSize, total);
     }
+
+    private static DateTime Utc(DateTime stamp) => DateTime.SpecifyKind(stamp, DateTimeKind.Utc);
+
+    private static readonly string[] ClosedRentalStatuses = ["completed", "cancelled", "expired"];
 }

@@ -33,6 +33,20 @@ internal static class Seed
     public static async Task<int> PlanAsync(NpgsqlDataSource db, bool active = true, decimal price = 100m, int durationDays = 30, decimal? includedHours = 100m)
         => (int)(await ScalarAsync(db, "INSERT INTO subscription_plans(name,price,duration_days,included_hours,is_active) VALUES('Plan',$1,$2,$3,$4) RETURNING id", price, durationDays, (object?)includedHours ?? DBNull.Value, active))!;
 
+    /// <summary>
+    /// Seeds one active subscription exactly as the PayOS webhook writes it (start today, end after the plan's
+    /// duration, remaining hours from the plan). The dead test-only <c>BuyPlanAsync</c> helper was the only
+    /// other writer of this row; plan purchase itself is Billing (<c>CompletePlanPurchaseAsync</c>).
+    /// </summary>
+    public static async Task<int> SubscriptionAsync(NpgsqlDataSource db, string email, int planId)
+        => (int)(await ScalarAsync(db, """
+            INSERT INTO customer_subscriptions(customer_id, plan_id, start_date, end_date, remaining_hours)
+            SELECT c.id, p.id, CURRENT_DATE, CURRENT_DATE + p.duration_days, p.included_hours
+            FROM customers c JOIN users u ON u.id = c.user_id, subscription_plans p
+            WHERE u.email = $1 AND p.id = $2
+            RETURNING id
+            """, email, planId))!;
+
     public static async Task<object?> ScalarAsync(NpgsqlDataSource db, string sql, params object?[] values)
     {
         await using var command = db.CreateCommand(sql);

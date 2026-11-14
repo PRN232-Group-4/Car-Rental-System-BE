@@ -2,16 +2,15 @@ using System.Reflection;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
-using Car_Rental_System_BE.Application.Interfaces.Services;
+using Car_Rental_System_BE.Application.Features.Media;
 using Car_Rental_System_BE.Application.Features.Rentals;
-using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Features.Loyalty;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 using Car_Rental_System_BE.WebApi.Controllers;
-using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
-using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.WebApi.Features.Rentals;
+using Car_Rental_System_BE.WebApi.Common.Authentication;
+using Car_Rental_System_BE.WebApi.Common.Responses;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -58,7 +57,7 @@ public sealed class DeprecatedRentalStatusEndpointTests(PostgresFixture db) : IC
         builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
 
         // The real composition, wired to the throwaway database instead of the production configuration.
-        builder.Services.AddSingleton<IOperationsService>(new OperationsService(new NpgsqlOperationsRepository(db.DataSource)));
+
         builder.Services.AddSingleton<IRentalBookingService>(new RentalBookingService(new NpgsqlRentalBookingRepository(db.DataSource)));
         // The vehicle endpoints moved to the Fleet slice; this suite never calls them.
         builder.Services.AddSingleton(DispatchProxy.Create<Car_Rental_System_BE.Application.Features.Fleet.IFleetService, UnusedMediaService>());
@@ -89,7 +88,7 @@ public sealed class DeprecatedRentalStatusEndpointTests(PostgresFixture db) : IC
             .ConfigureApplicationPartManager(parts =>
             {
                 parts.ApplicationParts.Clear();
-                parts.ApplicationParts.Add(new AssemblyPart(typeof(OperationsController).Assembly));
+                parts.ApplicationParts.Add(new AssemblyPart(typeof(RentalStatusController).Assembly));
             });
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(options => options.OperationFilter<ApiSuccessResponseOperationFilter>());

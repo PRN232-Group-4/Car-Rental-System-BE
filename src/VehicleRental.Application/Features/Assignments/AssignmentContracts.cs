@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Domain.Features.Availability;
 
 namespace Car_Rental_System_BE.Application.Features.Assignments;
@@ -146,6 +147,8 @@ public interface IAssignmentRepository
 
     Task<bool> VehicleExistsAndActiveAsync(int vehicleId, int requiredTypeId, CancellationToken ct);
 
+    /// <summary>The paged duty queue: one row per active assignment overlapping [from, to).</summary>
+    Task<OperationsPage<DriverScheduleEntry>> DriverScheduleAsync(int? driverId, DateTime from, DateTime to, OperationsPagination pagination, CancellationToken ct);
 }
 
 public interface IAssignmentService
@@ -155,4 +158,5 @@ public interface IAssignmentService
     Task<IReadOnlyList<AssignmentResponse>> GetAssignmentsAsync(int rentalId, CancellationToken ct);
     Task<IReadOnlyList<AssignableDriverItem>> ListAssignableDriversAsync(int rentalId, bool eligibleOnly, CancellationToken ct);
     Task<IReadOnlyList<AssignableVehicleItem>> ListAssignableVehiclesAsync(int rentalId, CancellationToken ct);
+    Task<OperationsPage<DriverScheduleEntry>> DriverScheduleAsync(int? driverId, DateTime from, DateTime to, OperationsPagination pagination, CancellationToken ct);
 }

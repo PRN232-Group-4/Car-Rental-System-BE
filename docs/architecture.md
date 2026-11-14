@@ -6,20 +6,20 @@ Backend là modular monolith theo Clean Architecture, giữ chiều dependency `
 src/
 ├── VehicleRental.Domain/
 │   ├── Features/                    # Assignments, Availability, Billing, Loyalty, Maps, Rentals
-│   └── Entities/ ValueObjects/ Services/ Interfaces/
+│   └── ValueObjects/ Interfaces/
 ├── VehicleRental.Application/
 │   ├── Features/<Module>/           # Use case, service/repository port, DTO của module
-│   └── Services/ Interfaces/ DTOs/ Validators/ Common/ Abstractions/
+│   └── Abstractions/ Common/ DTOs/ Interfaces/
 ├── VehicleRental.Infrastructure/
 │   ├── Features/<Module>/           # Repository và adapter theo nghiệp vụ
-│   ├── Persistence/Rows/            # Row mapping theo module
-│   ├── Persistence/                 # DbContext, DbLocks, transaction, timestamp
-│   ├── Repositories/ Services/      # Các thành phần dùng chung/còn lại
+│   ├── Persistence/                 # DbContext, Rows/, DbLocks, helper đọc/ghi dùng chung
+│   ├── Services/Registration/       # BrevoOptions + BrevoEmailSender + OtpEmailTemplate (dùng bởi hai slice)
 │   ├── HostedServices/              # Migration, expiry, telemetry retention
 │   └── DependencyInjection.cs       # Đăng ký Infrastructure
 └── VehicleRental.WebApi/
     ├── Features/<Module>/           # Controller/endpoint của module
-    ├── Controllers/ Middlewares/    # HTTP/auth/response dùng chung
+    ├── Common/                      # Authentication/ Requests/ Responses/ dùng chung
+    ├── Controllers/                 # Chỉ trang chủ
     ├── Extensions/                  # Composition và cấu hình host
     └── Program.cs
 
@@ -29,6 +29,8 @@ tests/
 ├── VehicleRental.Integration.Tests/
 └── VehicleRental.Architecture.Tests/
 ```
+
+Không còn thư mục theo tầng kiểu cũ (`Application/Services`, `Application/Interfaces/Repositories`, `Application/Validators`, `Domain/Entities`, `Domain/Services`, `Infrastructure/Repositories`, `WebApi/Middlewares`). `LegacyLayoutTests` chặn type mới trong các namespace đó; allowlist còn đúng bốn mục (`WebApi.Controllers.HomeController` và ba type của `Infrastructure.Services.Registration`) và chỉ được thu hẹp.
 
 Các module Application gồm Assignments, Availability, Billing, Customers, Dashboard, Fleet, Handovers, Inspections, Loyalty, Maintenances, Maps, Organization, Ratings, Recovery, RentalPolicies, Rentals, Reports và Tracking. Namespace theo `Car_Rental_System_BE.<Layer>.Features.<Module>`; các kiểu dùng chung giữ namespace hiện có.
 
@@ -42,4 +44,4 @@ Schema có FK vật lý; Application vẫn xác minh logical reference để tr�
 
 Access token là JWT trong cookie HttpOnly, refresh token chỉ lưu hash trong Redis. Mỗi request/refresh đối chiếu authorization version để thu hồi phiên khi thay đổi tài khoản/quyền/mật khẩu. OTP/password và dữ liệu provider được quản lý sau các Application port.
 
-Bộ test Domain/Application kiểm tra quy tắc và orchestration; Integration tạo PostgreSQL dùng một lần, áp toàn bộ migration rồi kiểm API, tiền, rollback và concurrency. Architecture kiểm dependency ở mức signature/IL, privacy giữa các feature và giới hạn raw query. Catalog PostgreSQL phải khớp toàn bộ FK trong EF model.
+Bộ test Domain/Application kiểm tra quy tắc và orchestration; Integration tạo PostgreSQL dùng một lần, áp toàn bộ migration rồi kiểm API, tiền, rollback và concurrency. Architecture kiểm dependency ở mức signature/IL, privacy giữa các feature, các thư mục tầng kiểu cũ đã bỏ và giới hạn raw query. Catalog PostgreSQL phải khớp toàn bộ FK trong EF model.

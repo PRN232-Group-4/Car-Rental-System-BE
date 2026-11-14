@@ -2,11 +2,11 @@ using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Features.Rentals;
-using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.WebApi.Common.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Car_Rental_System_BE.Domain.Features.Rentals;
-using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.WebApi.Common.Responses;
 
 namespace Car_Rental_System_BE.WebApi.Features.Rentals;
 

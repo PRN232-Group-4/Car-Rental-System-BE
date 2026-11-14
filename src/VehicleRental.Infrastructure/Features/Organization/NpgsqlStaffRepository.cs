@@ -2,8 +2,7 @@ using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Organization;
-using Car_Rental_System_BE.Domain.Services;
-using Car_Rental_System_BE.Application.Validators;
+using Car_Rental_System_BE.Domain.Features.Organization;
 using Npgsql;
 
 namespace Car_Rental_System_BE.Infrastructure.Features.Organization;
@@ -62,7 +61,7 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(connection, transaction);
-        await db.AdvisoryLockAsync(724232001L, ct);
+        await db.DispatcherLockAsync(ct);
         if (await db.LockByKeyAsync<UsersRow>(command.UserId, ct) is not { IsActive: true }) throw new StaffNotFoundException();
         if (await db.Set<StaffsRow>().AnyAsync(staff => staff.UserId == command.UserId, ct))
             throw new StaffConflictException("Tài khoản đã có hồ sơ nhân viên. Hãy mở hồ sơ để cập nhật.");

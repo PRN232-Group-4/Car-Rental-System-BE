@@ -1,9 +1,9 @@
 using Car_Rental_System_BE.Application.DTOs.Options;
 using Car_Rental_System_BE.Application.Features.Maps;
 using Car_Rental_System_BE.Application.Features.Tracking;
-using Car_Rental_System_BE.Domain.Entities;
 using Car_Rental_System_BE.Domain.Features.Maps;
 using Car_Rental_System_BE.Domain.ValueObjects;
+using Car_Rental_System_BE.Domain.Features.Tracking;
 using System.Security.Cryptography;
 using System.Text;
 using Xunit;

@@ -1,47 +1,38 @@
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Features.Subscriptions;
 using Xunit;
 
 namespace VehicleRental.Tests;
 
 public sealed class SubscriptionPlanTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
-    private readonly NpgsqlOperationsRepository _operations = new(db.DataSource);
+    private readonly NpgsqlSubscriptionRepository _subscriptions = new(db.DataSource);
 
     [Fact]
     public async Task Save_plan_creates_then_updates()
     {
-        var created = await _operations.SavePlanAsync(null, new(0, "Basic", null, 100m, 30, 50m, true), CancellationToken.None);
+        var created = await _subscriptions.SavePlanAsync(null, new(0, "Basic", null, 100m, 30, 50m, true), CancellationToken.None);
         Assert.True(created.Id > 0);
 
-        var updated = await _operations.SavePlanAsync(created.Id, new(0, "Basic+", "more", 200m, 60, 80m, true), CancellationToken.None);
+        var updated = await _subscriptions.SavePlanAsync(created.Id, new(0, "Basic+", "more", 200m, 60, 80m, true), CancellationToken.None);
 
         Assert.Equal("Basic+", updated.Name);
         Assert.Equal(200m, updated.Price);
         Assert.Equal(60, updated.DurationDays);
     }
 
+    /// <summary>
+    /// The purchase guard this test used to assert lived on the deleted test-only <c>BuyPlanAsync</c>. The live
+    /// path behind plan purchase (PayOS checkout) asserts the same thing in
+    /// <see cref="SubscriptionPlanPaymentTests.An_inactive_plan_cannot_be_purchased"/>.
+    /// </summary>
     [Fact]
-    public async Task Inactive_plan_is_hidden_and_cannot_be_purchased()
+    public async Task Inactive_plan_is_hidden()
     {
-        var (_, email) = await Seed.CustomerAsync(db.DataSource);
         var plan = await Seed.PlanAsync(db.DataSource, active: false);
 
-        var listed = await _operations.ListPlansAsync(true, CancellationToken.None);
+        var listed = await _subscriptions.ListPlansAsync(true, CancellationToken.None);
 
         Assert.DoesNotContain(listed, item => item.Id == plan);
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => _operations.BuyPlanAsync(email, plan, CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task Buying_an_active_plan_sets_date_range_and_hours()
-    {
-        var (_, email) = await Seed.CustomerAsync(db.DataSource);
-        var plan = await Seed.PlanAsync(db.DataSource, active: true, durationDays: 30, includedHours: 100m);
-
-        var subscriptionId = await _operations.BuyPlanAsync(email, plan, CancellationToken.None);
-
-        Assert.Equal(100m, (decimal)(await Seed.ScalarAsync(db.DataSource, "SELECT remaining_hours FROM customer_subscriptions WHERE id=$1", subscriptionId))!);
-        Assert.Equal(30, await Seed.CountAsync(db.DataSource, "SELECT (end_date - start_date) FROM customer_subscriptions WHERE id=$1", subscriptionId));
     }
 
     [Fact]
@@ -49,9 +40,9 @@ public sealed class SubscriptionPlanTests(PostgresFixture db) : IClassFixture<Po
     {
         var plan = await Seed.PlanAsync(db.DataSource);
 
-        await _operations.DeletePlanAsync(plan, CancellationToken.None);
+        await _subscriptions.DeletePlanAsync(plan, CancellationToken.None);
 
-        Assert.Null(await _operations.GetPlanAsync(plan, CancellationToken.None));
+        Assert.Null(await _subscriptions.GetPlanAsync(plan, CancellationToken.None));
     }
 
     [Fact]
@@ -59,11 +50,11 @@ public sealed class SubscriptionPlanTests(PostgresFixture db) : IClassFixture<Po
     {
         var (_, email) = await Seed.CustomerAsync(db.DataSource);
         var plan = await Seed.PlanAsync(db.DataSource);
-        await _operations.BuyPlanAsync(email, plan, CancellationToken.None);
+        await Seed.SubscriptionAsync(db.DataSource, email, plan);
 
-        await _operations.DeletePlanAsync(plan, CancellationToken.None);
+        await _subscriptions.DeletePlanAsync(plan, CancellationToken.None);
 
-        var stored = await _operations.GetPlanAsync(plan, CancellationToken.None);
+        var stored = await _subscriptions.GetPlanAsync(plan, CancellationToken.None);
         Assert.NotNull(stored);
         Assert.False(stored!.IsActive);
     }
@@ -71,7 +62,7 @@ public sealed class SubscriptionPlanTests(PostgresFixture db) : IClassFixture<Po
     [Fact]
     public async Task Deleting_a_missing_plan_throws()
     {
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => _operations.DeletePlanAsync(999999, CancellationToken.None));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => _subscriptions.DeletePlanAsync(999999, CancellationToken.None));
     }
 
     [Fact]
@@ -79,9 +70,9 @@ public sealed class SubscriptionPlanTests(PostgresFixture db) : IClassFixture<Po
     {
         var (_, email) = await Seed.CustomerAsync(db.DataSource);
         var plan = await Seed.PlanAsync(db.DataSource, active: true, durationDays: 30, includedHours: 100m);
-        var subscriptionId = await _operations.BuyPlanAsync(email, plan, CancellationToken.None);
+        var subscriptionId = await Seed.SubscriptionAsync(db.DataSource, email, plan);
 
-        var mine = await _operations.ListCustomerSubscriptionsAsync(email, CancellationToken.None);
+        var mine = await _subscriptions.ListCustomerSubscriptionsAsync(email, CancellationToken.None);
 
         var only = Assert.Single(mine);
         Assert.Equal(subscriptionId, only.Id);
@@ -97,8 +88,8 @@ public sealed class SubscriptionPlanTests(PostgresFixture db) : IClassFixture<Po
         var (_, buyer) = await Seed.CustomerAsync(db.DataSource);
         var (_, other) = await Seed.CustomerAsync(db.DataSource);
         var plan = await Seed.PlanAsync(db.DataSource, active: true);
-        await _operations.BuyPlanAsync(buyer, plan, CancellationToken.None);
+        await Seed.SubscriptionAsync(db.DataSource, buyer, plan);
 
-        Assert.Empty(await _operations.ListCustomerSubscriptionsAsync(other, CancellationToken.None));
+        Assert.Empty(await _subscriptions.ListCustomerSubscriptionsAsync(other, CancellationToken.None));
     }
 }

@@ -967,8 +967,8 @@ Không tự đặt `Content-Type` khi gửi FormData; trình duyệt cần tạo
 
 Nguồn chính:
 
-- [Controllers](../src/VehicleRental.WebApi/Controllers/), [Program.cs](../src/VehicleRental.WebApi/Program.cs), [AuthorizationPolicies.cs](../src/VehicleRental.WebApi/Middlewares/Authentication/AuthorizationPolicies.cs).
-- [Success response filter](../src/VehicleRental.WebApi/Middlewares/Responses/ApiSuccessResponseFilter.cs), [Swagger response filter](../src/VehicleRental.WebApi/Middlewares/Responses/ApiSuccessResponseOperationFilter.cs).
+- [Controllers/Features](../src/VehicleRental.WebApi/Features/), [Program.cs](../src/VehicleRental.WebApi/Program.cs), [AuthorizationPolicies.cs](../src/VehicleRental.WebApi/Common/Authentication/AuthorizationPolicies.cs).
+- [Success response filter](../src/VehicleRental.WebApi/Common/Responses/ApiSuccessResponseFilter.cs), [Swagger response filter](../src/VehicleRental.WebApi/Common/Responses/ApiSuccessResponseOperationFilter.cs).
 - [Operations schemas](../src/VehicleRental.Application/DTOs/Operations/OperationsDtos.cs), [recovery schemas](../src/VehicleRental.Application/DTOs/Operations/RecoveryDtos.cs), [payment schemas](../src/VehicleRental.Application/Billing/BillingContracts.cs), [staff schemas](../src/VehicleRental.Application/DTOs/Organization/StaffDtos.cs).
 - [Vehicle CRUD](vehicle-crud.md), [rental contract](rental-contract-api.md), [staff authorization](staff-authorization.md), [operational recovery](operational-recovery.md), [specs](../specs/README.md).
 

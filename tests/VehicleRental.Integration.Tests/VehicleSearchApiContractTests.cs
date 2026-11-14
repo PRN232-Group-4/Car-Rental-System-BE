@@ -3,7 +3,7 @@ using Car_Rental_System_BE.Application.Features.Availability;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.WebApi.Features.Availability;
 using Car_Rental_System_BE.Domain.Features.Availability;
-using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.WebApi.Common.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;

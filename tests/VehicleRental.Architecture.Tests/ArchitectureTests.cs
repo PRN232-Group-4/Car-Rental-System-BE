@@ -34,12 +34,10 @@ public sealed class ArchitectureTests
     /// </summary>
     private static readonly string[] KnownViolations =
     [
-        // WebApi middleware/ service reaches into an Infrastructure DTO: TokenOptions lives in
-        // Infrastructure.Services.Authentication. Debt from the JWT/refresh-token split.
-        "Car_Rental_System_BE.WebApi.Middlewares.Authentication.JwtTokenService -> Car_Rental_System_BE.Infrastructure.Services.Authentication.TokenOptions",
         // Repository port declared in the Domain instead of the Application layer, implemented by
         // Infrastructure. Debt from the pre-refactor layout (see AGENTS.md "Application: Interfaces/").
-        "Car_Rental_System_BE.Domain.Interfaces.IUserRepository -> Car_Rental_System_BE.Infrastructure.Repositories.NpgsqlUserRepository",
+        // Both ends moved into the Identity slice; the violation is the same one, only renamed.
+        "Car_Rental_System_BE.Domain.Features.Identity.IUserRepository -> Car_Rental_System_BE.Infrastructure.Features.Identity.NpgsqlUserRepository",
 
         // ---------------------------------------------------------------------------------------
         // pre-existing, newly visible after the rules stopped depending on namespaces (Task A1)
@@ -53,10 +51,10 @@ public sealed class ArchitectureTests
         // pre-existing, newly visible at IL level (Task C1)
         // ---------------------------------------------------------------------------------------
         // Empty by audit, not by omission. Reading method bodies adds 7 WebApi -> Infrastructure edges the
-        // signature collector could not see (five constructed in WebApi.Extensions, one call in Program,
-        // both of them the composition root this rule exempts, and the JwtTokenService entry listed above).
-        // No controller, middleware or any other WebApi type gains a violation once IL is read.
-        // Keep this group empty rather than filling it with anything but a proven violation.
+        // signature collector could not see (five constructed in WebApi.Extensions, one call in Program, both of
+        // them the composition root this rule exempts). No controller, middleware or any other WebApi type gains
+        // a violation once IL is read. Keep this group empty rather than filling it with anything but a proven
+        // violation.
     ];
 
     private readonly ITestOutputHelper _output;

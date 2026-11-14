@@ -1,9 +1,8 @@
-using Car_Rental_System_BE.WebApi.Controllers;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
-using Car_Rental_System_BE.Application.Services;
-using Car_Rental_System_BE.Domain.Entities;
-using Car_Rental_System_BE.Domain.Interfaces;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.WebApi.Features.Identity;
+using Car_Rental_System_BE.Application.Features.Identity;
+using Car_Rental_System_BE.Application.Features.Notifications;
+using Car_Rental_System_BE.Domain.Features.Identity;
+using Car_Rental_System_BE.Infrastructure.Features.Identity;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
@@ -55,6 +54,7 @@ public sealed class LegacyPersistenceArchitectureTests
         {
             var dependencies = type.GetConstructors().SelectMany(ctor => ctor.GetParameters());
             Assert.DoesNotContain(dependencies, parameter =>
+                IsRepositoryPort(parameter.ParameterType) ||
                 parameter.ParameterType.Namespace?.StartsWith("Car_Rental_System_BE.Application.Interfaces.Repositories") == true ||
                 parameter.ParameterType.Namespace?.StartsWith("Car_Rental_System_BE.Domain.Interfaces") == true ||
                 parameter.ParameterType.Namespace?.StartsWith("Car_Rental_System_BE.Infrastructure") == true);
@@ -64,16 +64,27 @@ public sealed class LegacyPersistenceArchitectureTests
     [Fact]
     public void Services_do_not_implement_repository_interfaces()
     {
+        // Both sides are matched by shape rather than by folder: the ports and the services now live inside
+        // Features slices, so a namespace identifies neither. Scanning the whole Application assembly for
+        // services keeps the rule stronger than the namespace-scoped version it replaces.
+        //
+        // The one port shape cannot name is IOperationalNotificationRecipients: it is a lookup port, not an
+        // I*Repository, and it used to be reached by its Application.Interfaces.Repositories folder, which no
+        // longer holds a type. It is listed by name so the rule covers exactly the ports it covered before.
         var repositories = typeof(IAccountRepository).Assembly.GetTypes()
-            .Where(type => type.IsInterface && type.Namespace == typeof(IAccountRepository).Namespace)
-            .Concat(typeof(IUserRepository).Assembly.GetTypes().Where(type =>
-                type.IsInterface && type.Namespace == typeof(IUserRepository).Namespace)).ToHashSet();
-        var services = typeof(AccountService).Assembly.GetTypes()
-            .Where(type => type.Namespace == typeof(AccountService).Namespace);
+            .Where(type => type.IsInterface &&
+                           (IsRepositoryPort(type) || type == typeof(IOperationalNotificationRecipients)))
+            .Concat(typeof(IUserRepository).Assembly.GetTypes().Where(IsRepositoryPort))
+            .ToHashSet();
+        var services = typeof(AccountService).Assembly.GetTypes();
         foreach (var service in services)
             Assert.DoesNotContain(service.GetInterfaces(), repositories.Contains);
         Assert.Contains(typeof(IAccountRepository), typeof(NpgsqlAccountRepository).GetInterfaces());
     }
+
+    /// <summary>A repository port keeps its role wherever it lives: <c>I*Repository</c> in Application or Domain.</summary>
+    private static bool IsRepositoryPort(Type type) =>
+        type.IsInterface && type.Name.StartsWith('I') && type.Name.EndsWith("Repository", StringComparison.Ordinal);
 
     private static bool IsExternalDependency(AssemblyName name) =>
         name.Name is "Npgsql" or "StackExchange.Redis" or "CloudinaryDotNet" ||

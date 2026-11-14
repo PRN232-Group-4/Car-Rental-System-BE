@@ -41,11 +41,14 @@ public sealed class ForeignKeySchemaTests(PostgresFixture fixture, ITestOutputHe
     [Fact]
     public async Task Foreign_key_migration_can_run_again_without_duplicate_constraints()
     {
+        // 0035 dropped driver_shifts, so 0034 is replayed against the pre-0035 schema it was written for.
+        await ExecuteAsync(CreateDriverShiftsSql);
+        await ExecuteAsync(await MigrationSqlAsync());
         var before = await ReadForeignKeysAsync();
-        await using var command = fixture.DataSource.CreateCommand(await MigrationSqlAsync());
-        await command.ExecuteNonQueryAsync();
+        await ExecuteAsync(await MigrationSqlAsync());
         Assert.Equal(before.OrderBy(fk => fk.Reference).ToArray(),
             (await ReadForeignKeysAsync()).OrderBy(fk => fk.Reference).ToArray());
+        await ExecuteAsync("DROP TABLE driver_shifts");
     }
 
     [Fact]
@@ -54,6 +57,7 @@ public sealed class ForeignKeySchemaTests(PostgresFixture fixture, ITestOutputHe
         await using var connection = await fixture.DataSource.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
         // This class owns its throwaway DB. Roll back the simulated legacy schema/data at the end.
+        await ExecuteAsync(CreateDriverShiftsSql);
         await ExecuteAsync("ALTER TABLE customers DROP CONSTRAINT fk_customers_user_id");
         await ExecuteAsync("INSERT INTO customers(user_id) VALUES(2147483647)");
         await ExecuteAsync(await MigrationSqlAsync());
@@ -85,6 +89,16 @@ public sealed class ForeignKeySchemaTests(PostgresFixture fixture, ITestOutputHe
 
     private static Task<string> MigrationSqlAsync() => File.ReadAllTextAsync(
         Path.Combine(AppContext.BaseDirectory, "db", "migrations", "0034_foreign_keys.sql"));
+
+    // 0035 drops driver_shifts; 0034 still carries the foreign key for it, so the replay restores the table first.
+    private const string CreateDriverShiftsSql =
+        "CREATE TABLE driver_shifts (id serial PRIMARY KEY, driver_staff_id integer NOT NULL)";
+
+    private async Task ExecuteAsync(string sql)
+    {
+        await using var command = fixture.DataSource.CreateCommand(sql);
+        await command.ExecuteNonQueryAsync();
+    }
 
     private async Task<List<ForeignKey>> ReadForeignKeysAsync()
     {

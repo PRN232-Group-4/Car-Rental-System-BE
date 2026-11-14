@@ -1,11 +1,9 @@
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Features.Billing;
 using Car_Rental_System_BE.Application.Interfaces.External;
-using Car_Rental_System_BE.Application.Services;
-using Car_Rental_System_BE.Application.Services.Exceptions;
 using Car_Rental_System_BE.Infrastructure.Features.Billing;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 using Xunit;
 
 namespace VehicleRental.Tests;

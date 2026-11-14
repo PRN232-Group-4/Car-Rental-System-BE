@@ -1,13 +1,9 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using Car_Rental_System_BE.Application.Common.Errors;
-using Car_Rental_System_BE.Application.DTOs.Accounts;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
-using Car_Rental_System_BE.Application.Interfaces.Services;
-using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.WebApi.Controllers;
-using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
-using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.WebApi.Common.Authentication;
+using Car_Rental_System_BE.WebApi.Common.Responses;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -16,6 +12,8 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
+using Car_Rental_System_BE.Application.Features.Identity;
+using Car_Rental_System_BE.WebApi.Features.Identity;
 
 namespace VehicleRental.Tests;
 

@@ -1,12 +1,12 @@
 using Car_Rental_System_BE.Application.Features.Availability;
 using Car_Rental_System_BE.Application.Features.Maps;
 using Car_Rental_System_BE.Application.DTOs.Options;
-using Car_Rental_System_BE.Infrastructure.Services.Authentication;
-using Car_Rental_System_BE.Infrastructure.Services.Media;
-using Car_Rental_System_BE.Infrastructure.Services.Payments;
+using Car_Rental_System_BE.Infrastructure.Features.Identity;
 using Car_Rental_System_BE.Infrastructure.Services.Registration;
-using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
-using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.Infrastructure.Features.Media;
+using Car_Rental_System_BE.Infrastructure.Features.Billing;
+using Car_Rental_System_BE.WebApi.Common.Authentication;
+using Car_Rental_System_BE.WebApi.Common.Responses;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
@@ -14,6 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Npgsql;
+using Car_Rental_System_BE.Application.Features.Identity;
 
 namespace Car_Rental_System_BE.WebApi.Extensions;
 

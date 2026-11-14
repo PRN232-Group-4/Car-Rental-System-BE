@@ -1,6 +1,7 @@
 using Car_Rental_System_BE.Application.Features.Assignments;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Features.Assignments;
 using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Features.Inspections;
@@ -8,14 +9,14 @@ using Car_Rental_System_BE.Infrastructure.Features.Maintenances;
 using Car_Rental_System_BE.Infrastructure.Features.Recovery;
 using Car_Rental_System_BE.Infrastructure.Features.Reports;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 using Xunit;
 
 namespace VehicleRental.Tests;
 
 public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
-    private readonly NpgsqlOperationsRepository store = new(db.DataSource);
+    private readonly RentalLifecycleService lifecycle = Scenarios.Lifecycle(db.DataSource);
     private readonly NpgsqlRentalBookingRepository bookings = new(db.DataSource);
     private readonly NpgsqlInspectionRecordRepository inspections = new(db.DataSource);
     private readonly NpgsqlRecoveryRepository recovery = new(db.DataSource);
@@ -67,7 +68,7 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
     }
 
     [Fact]
-    public async Task Failed_inspection_keeps_pending_and_blocks_vehicle_without_maintenance_or_money()
+    public async Task Failed_inspection_keeps_rental_pending_blocks_vehicle_and_opens_one_maintenance_ticket()
     {
         var scenario = await Scenarios.CreateDirectRentalAsync(db.DataSource);
         var inspector = await StaffAsync();
@@ -76,14 +77,19 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         var rental = (await bookings.GetRentalAsync(scenario.RentalId,default))!;
         Assert.Equal("pending",rental.Status);
         Assert.Equal("maintenance",(await fleet.GetVehicleAsync(rental.VehicleId,default))!.Status);
-        Assert.Empty(await maintenanceStore.ListMaintenanceAsync(rental.VehicleId,null,default));
+        var ticket=Assert.Single(await maintenanceStore.ListMaintenanceAsync(rental.VehicleId,null,default));
+        Assert.Equal("open",ticket.Status);
+        Assert.Null(ticket.AssignedStaffId);
+        Assert.Equal(rental.Id,await Seed.ScalarAsync(db.DataSource,"SELECT rental_id FROM vehicle_maintenance WHERE id=$1",ticket.Id));
         Assert.Equal(0,await Seed.CountAsync(db.DataSource,"SELECT COUNT(*) FROM payments WHERE rental_id=$1",rental.Id));
         // FR-036 permits approval before payment/inspection; approval must not bypass unsafe handover.
-        var confirmed=await store.ChangeRentalStatusAsync(rental.Id,"pre_inspection",default);
-        Assert.Equal("pre_inspection",confirmed.Status);
+        var confirmed=await lifecycle.ConfirmAsync(rental.Id,Scenarios.StaffActor,default);
+        Assert.Equal("pre_inspection",confirmed.ToStatus);
         Assert.IsType<DateTime>(await Seed.ScalarAsync(db.DataSource,"SELECT confirmed_at FROM rentals WHERE id=$1",rental.Id));
         Assert.Equal(0,await Seed.CountAsync(db.DataSource,"SELECT COUNT(*) FROM rental_orders WHERE rental_id=$1",rental.Id));
-        await Assert.ThrowsAsync<InvalidOperationException>(()=>store.ChangeRentalStatusAsync(rental.Id,"renting",default));
+        // The failed pre-rental inspection blocks handover; the lifecycle reports it with its documented code.
+        var blocked=await Assert.ThrowsAsync<ConflictException>(()=>lifecycle.StartAsync(rental.Id,Scenarios.StaffActor,default));
+        Assert.Equal("PRE_INSPECTION_REQUIRED",blocked.Code);
         Assert.Equal("maintenance",(await fleet.GetVehicleAsync(rental.VehicleId,default))!.Status);
         var candidate=await ReplacementAsync(rental.VehicleId);
         await inspections.InspectReplacementAsync(rental.Id,candidate,inspector,true,null,null,null,null,default);
@@ -100,13 +106,18 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         var oldDriver=await StaffAsync(driver:true);
         var newDriver=await StaffAsync(driver:true);
         var inspector=await StaffAsync(technician:true);
-        await store.ChangeRentalStatusAsync(rental.Id,"pre_inspection",default);
+        await lifecycle.ConfirmAsync(rental.Id,Scenarios.StaffActor,default);
         await inspections.AddInspectionAsync(rental.Id,inspector,"pre_rental",true,null,null,null,null,default);
+        // This rental really does carry a driver, so the schedule must say so: the lifecycle refuses to hand over a
+        // self-drive rental that already has an assigned driver (ASSIGNMENT_REQUIRED). The declaration runs after the
+        // physical inspection because its trigger inserts a driver_default pre-rental row when none exists.
+        await Seed.ScalarAsync(db.DataSource,"UPDATE hour_rental_detail SET has_driver=true WHERE rental_id=$1",rental.Id);
         await AssignAsync(rental.Id,oldDriver);
-        var unpaid=await Assert.ThrowsAsync<ConflictException>(()=>store.ChangeRentalStatusAsync(rental.Id,"renting",default));
+        await AssignAsync(rental.Id,oldDriver);
+        var unpaid=await Assert.ThrowsAsync<ConflictException>(()=>lifecycle.StartAsync(rental.Id,Scenarios.StaffActor,default));
         Assert.Equal("PAYMENT_REQUIRED",unpaid.Code);
         await Scenarios.CompleteInvoiceAsync(db.DataSource,scenario.InvoiceId,scenario.InvoiceAmount);
-        await store.ChangeRentalStatusAsync(rental.Id,"renting",default);
+        await lifecycle.StartAsync(rental.Id,Scenarios.StaffActor,default);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>reports.CreateReportAsync(rental.Id,newDriver,true,"breakdown","Engine stopped",null,default));
         var report=await reports.CreateReportAsync(rental.Id,oldDriver,true,"breakdown","Engine stopped",null,default);
         var wrong=await ReplacementAsync(rental.VehicleId,7);
@@ -131,10 +142,17 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         Assert.Equal("maintenance",(await fleet.GetVehicleAsync(rental.VehicleId,default))!.Status);
         await maintenanceStore.SaveMaintenanceAsync(maintenance.Id,maintenance with { Status="completed",IsSafe=true },default);
         Assert.Equal("available",(await fleet.GetVehicleAsync(rental.VehicleId,default))!.Status);
-        await Assert.ThrowsAsync<InvalidOperationException>(()=>store.ChangeRentalStatusAsync(rental.Id,"post_inspection",default));
+        // FR-018: return only records returned_at, so the post-rental inspection is required at complete instead.
+        await lifecycle.ReturnAsync(rental.Id,null,Scenarios.StaffActor,default);
+        var unverified=await Assert.ThrowsAsync<ConflictException>(()=>lifecycle.CompleteAsync(rental.Id,Scenarios.StaffActor,default));
+        Assert.Equal("POST_INSPECTION_REQUIRED",unverified.Code);
         await inspections.AddInspectionAsync(rental.Id,inspector,"post_rental",false,null,null,"New damage",null,default);
         Assert.Single(await maintenanceStore.ListMaintenanceAsync(rental.VehicleId,null,default));
-        Assert.Empty(await maintenanceStore.ListMaintenanceAsync(candidate,null,default));
+        // The failed post-rental inspection opens exactly one open ticket for the vehicle it inspected, assigned to
+        // the inspector because they hold the Maintenance role.
+        var postInspection=Assert.Single(await maintenanceStore.ListMaintenanceAsync(candidate,"open",default));
+        Assert.Equal(inspector,postInspection.AssignedStaffId);
+        Assert.Equal(rental.Id,await Seed.ScalarAsync(db.DataSource,"SELECT rental_id FROM vehicle_maintenance WHERE id=$1",postInspection.Id));
         var damage=await reports.CreateReportAsync(rental.Id,inspector,false,"damage","New damage",null,default);
         Assert.Equal(candidate,damage.VehicleId);
         Assert.Equal("open",damage.Status);

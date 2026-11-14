@@ -1,13 +1,14 @@
 using Car_Rental_System_BE.WebApi.Controllers;
 using Car_Rental_System_BE.WebApi.Features.RentalPolicies;
-using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
-using Car_Rental_System_BE.WebApi.Middlewares.Responses;
-using Car_Rental_System_BE.Application.DTOs.Accounts;
+using Car_Rental_System_BE.WebApi.Features.Rentals;
+using Car_Rental_System_BE.WebApi.Common.Authentication;
+using Car_Rental_System_BE.WebApi.Common.Responses;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Fleet;
 using Car_Rental_System_BE.Application.Features.Organization;
 using Car_Rental_System_BE.Application.Features.Billing;
-using Car_Rental_System_BE.Infrastructure.Services.Payments;
+using Car_Rental_System_BE.Application.Features.Subscriptions;
+using Car_Rental_System_BE.Infrastructure.Features.Billing;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Reflection;
@@ -22,6 +23,7 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Car_Rental_System_BE.Application.Features.Identity;
 
 namespace VehicleRental.Tests;
 
@@ -93,13 +95,13 @@ public sealed class UnitTests
     {
         // "Assign" was the deprecated POST /api/rental/{id}/assignments action. It no longer exists: driver
         // assignment is owned by RentalAssignmentsController, which this matrix does not cover. The three
-        // policy actions moved to RentalPoliciesController and DriverSchedule stayed behind, so each endpoint
-        // is looked up on the controller that actually owns it now.
+        // policy actions moved to RentalPoliciesController and the driver schedule to DriverScheduleController,
+        // so each endpoint is looked up on the controller that actually owns it now.
         var endpoints = new[]
         {
             (Controller: typeof(RentalPoliciesController), Action: "Policies"),
             (Controller: typeof(RentalPoliciesController), Action: "AddPolicy"),
-            (Controller: typeof(OperationsController), Action: "DriverSchedule")
+            (Controller: typeof(Car_Rental_System_BE.WebApi.Features.Assignments.DriverScheduleController), Action: "DriverSchedule")
         };
 
         foreach (var (controller, endpoint) in endpoints)
@@ -110,14 +112,14 @@ public sealed class UnitTests
             Assert.NotNull(authorization);
             Assert.NotNull(authorization!.Policy);
             var options = new AuthorizationOptions();
-            Car_Rental_System_BE.WebApi.Middlewares.Authentication.AuthorizationPolicies.Configure(options);
+            Car_Rental_System_BE.WebApi.Common.Authentication.AuthorizationPolicies.Configure(options);
             var policy = options.GetPolicy(authorization.Policy!);
             var roles = Assert.Single(policy!.Requirements.OfType<Microsoft.AspNetCore.Authorization.Infrastructure.RolesAuthorizationRequirement>()).AllowedRoles;
             Assert.Contains("Manager", roles);
             Assert.Contains("Admin", roles);
         }
 
-        Assert.Null(typeof(OperationsController).GetMethod("EditPolicy", BindingFlags.Instance | BindingFlags.Public));
+        Assert.Null(typeof(RentalStatusController).GetMethod("EditPolicy", BindingFlags.Instance | BindingFlags.Public));
     }
 
     [Fact]

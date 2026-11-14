@@ -1,5 +1,5 @@
-using Car_Rental_System_BE.Application.DTOs.Operations;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Application.Features.Navigation;
+using Car_Rental_System_BE.Infrastructure.Features.Navigation;
 using Xunit;
 
 namespace VehicleRental.Tests;

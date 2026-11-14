@@ -1,6 +1,7 @@
+using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Features.Billing;
 using Car_Rental_System_BE.Infrastructure.Features.Inspections;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 using Xunit;
 
 namespace VehicleRental.Tests;
@@ -8,7 +9,6 @@ namespace VehicleRental.Tests;
 public sealed class PaymentTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
     private readonly NpgsqlPaymentRepository _payments = new(db.DataSource);
-    private readonly NpgsqlOperationsRepository _operations = new(db.DataSource);
     private readonly NpgsqlInspectionRecordRepository _inspections = new(db.DataSource);
 
     [Fact]
@@ -69,7 +69,7 @@ public sealed class PaymentTests(PostgresFixture db) : IClassFixture<PostgresFix
         var staff = (int)(await Seed.ScalarAsync(db.DataSource, "INSERT INTO staffs(user_id) VALUES($1) RETURNING id", user))!;
 
         await _inspections.AddInspectionAsync(scenario.RentalId, staff, "pre_rental", true, null, null, null, null, CancellationToken.None);
-        await _operations.ChangeRentalStatusAsync(scenario.RentalId, "renting", CancellationToken.None);
+        await Scenarios.Lifecycle(db.DataSource).StartAsync(scenario.RentalId, Scenarios.StaffActor, CancellationToken.None);
         await _inspections.AddInspectionAsync(scenario.RentalId, staff, "post_rental", true, null, null, null, null, CancellationToken.None);
 
         Assert.Equal(0, await Seed.CountAsync(db.DataSource, "SELECT COUNT(*) FROM payments WHERE rental_id=$1 AND type='refund'", scenario.RentalId));

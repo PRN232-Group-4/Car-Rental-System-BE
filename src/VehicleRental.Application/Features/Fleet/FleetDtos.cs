@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using Car_Rental_System_BE.Application.Validators;
 
 namespace Car_Rental_System_BE.Application.Features.Fleet;
 

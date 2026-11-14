@@ -3,17 +3,15 @@ using System.Reflection;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using Car_Rental_System_BE.Application.DTOs.Accounts;
 using Car_Rental_System_BE.Application.Features.Inspections;
-using Car_Rental_System_BE.Application.Interfaces.Services;
-using Car_Rental_System_BE.Application.Services;
+using Car_Rental_System_BE.Application.Features.Media;
 using Car_Rental_System_BE.Application.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Features.Fleet;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 using Car_Rental_System_BE.WebApi.Features.Inspections;
 using Car_Rental_System_BE.WebApi.Controllers;
-using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
-using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.WebApi.Common.Authentication;
+using Car_Rental_System_BE.WebApi.Common.Responses;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -23,6 +21,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Car_Rental_System_BE.Infrastructure.Features.Identity;
+using Car_Rental_System_BE.Application.Features.Identity;
+using Car_Rental_System_BE.Infrastructure.Features.Inspections;
 
 namespace VehicleRental.Tests;
 
@@ -61,6 +62,18 @@ public sealed class OperationalDirectoryTests(PostgresFixture db):IClassFixture<
         Assert.Equal(expected,all.Items.Single(x=>x.Id==vehicle).MaintenanceTechnicianEmails);
         await Seed.ScalarAsync(db.DataSource,"UPDATE vehicle_maintenance SET status='completed',is_safe=true WHERE vehicle_id=$1",vehicle);
         Assert.Empty((await repository.GetVehicleAsync(vehicle,default))!.MaintenanceTechnicianEmails);
+    }
+
+    [Fact]
+    public async Task Creating_a_vehicle_requires_a_facility()
+    {
+        await using var host=await HostAsync();using var client=Client(host);
+        var request=Request(HttpMethod.Post,"/api/vehicles","Admin");
+        request.Content=JsonContent.Create(new{vehicleTypeId=1,status="available",brand="Toyota"});
+        using var response=await client.SendAsync(request);
+        using var json=await Envelope(response,400);
+        Assert.Contains(json.RootElement.GetProperty("error").GetProperty("errors").EnumerateObject(),
+            field=>field.Name.Equals("FacilityId",StringComparison.OrdinalIgnoreCase));
     }
 
     [Theory]
@@ -170,7 +183,6 @@ public sealed class OperationalDirectoryTests(PostgresFixture db):IClassFixture<
         builder.Services.AddProblemDetails();builder.Services.AddAuthentication("directory").AddScheme<AuthenticationSchemeOptions,TestAuthentication>("directory",_=>{});
         builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
         builder.Services.AddSingleton<IInspectionDirectoryService>(new InspectionDirectoryService(new NpgsqlInspectionDirectoryRepository(db.DataSource)));
-        builder.Services.AddSingleton<IOperationsService>(new OperationsService(new NpgsqlOperationsRepository(db.DataSource)));
         // The vehicle endpoints moved to the Fleet slice, so they resolve IFleetService: the directory test
         // reads /api/vehicle/{id} and /api/vehicles through it.
         builder.Services.AddSingleton<IFleetService>(new FleetService(new NpgsqlFleetRepository(db.DataSource)));

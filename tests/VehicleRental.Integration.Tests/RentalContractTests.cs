@@ -1,6 +1,6 @@
 using Car_Rental_System_BE.Application.Common.Errors;
+using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
-using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
 namespace VehicleRental.Tests;
@@ -10,7 +10,6 @@ public sealed class RentalContractTests(PostgresFixture db) : IClassFixture<Post
     [Fact]
     public async Task Longterm_contract_roundtrips_is_immutable_and_blocks_overlapping_booking()
     {
-        var store = new NpgsqlOperationsRepository(db.DataSource);
         var editing = new NpgsqlRentalEditingRepository(db.DataSource);
         var bookings = new NpgsqlRentalBookingRepository(db.DataSource);
         var (_, email) = await Seed.CustomerAsync(db.DataSource);
@@ -34,7 +33,6 @@ public sealed class RentalContractTests(PostgresFixture db) : IClassFixture<Post
     [Fact]
     public async Task Contract_rejects_hourly_missing_rental_invalid_url_and_dates()
     {
-        var store = new NpgsqlOperationsRepository(db.DataSource);
         var editing = new NpgsqlRentalEditingRepository(db.DataSource);
         var bookings = new NpgsqlRentalBookingRepository(db.DataSource);
         var rental = await Scenarios.CreateDirectRentalAsync(db.DataSource);
@@ -49,6 +47,10 @@ public sealed class RentalContractTests(PostgresFixture db) : IClassFixture<Post
         Assert.Equal(20m, detail.VatPrice);
         Assert.Equal(40m, detail.DepositPrice);
         Assert.False(detail.HasDriver);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => store.ChangeRentalStatusAsync(detail.Id, "renting", default));
+        // The retired legacy repository refused this with InvalidOperationException("Invalid rental state
+        // transition."); the lifecycle refuses the same transition (pending -> renting) with the documented code.
+        var illegal = await Assert.ThrowsAsync<ConflictException>(() =>
+            Scenarios.Lifecycle(db.DataSource).StartAsync(detail.Id, Scenarios.StaffActor, default));
+        Assert.Equal("ILLEGAL_TRANSITION", illegal.Code);
     }
 }

@@ -1,10 +1,9 @@
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Domain.Features.Availability;
 using Car_Rental_System_BE.Infrastructure.Features.Availability;
-using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -33,13 +32,13 @@ public sealed class NpgsqlRentalEditingRepository(NpgsqlDataSource dataSource) :
         await using var db = VehicleRentalDbContext.Create(cn, tx);
         try
         {
-            await LockOperationsAsync(db, ct);
+            await db.DispatcherLockAsync(ct);
             var existingVehicle = await db.Set<RentalsRow>().Where(r => r.Id == id).Select(r => (int?)r.VehicleId).FirstOrDefaultAsync(ct);
             if (existingVehicle is not int vehicleId)
                 throw new NotFoundException("RENTAL_NOT_FOUND", "Rental was not found.");
             foreach (var vehicle in new[] { vehicleId, command.VehicleId }.Distinct().Order())
                 await VehicleLock.AcquireAsync(cn, tx, vehicle, ct);
-            var rental = await ReadRentalAsync(db, id, ct);
+            var rental = await RentalReads.ReadLockedAsync(db, id, ct);
             if (rental.VehicleId != vehicleId)
                 throw new ConflictException("RENTAL_CHANGED", "The vehicle changed while editing. Reload the rental and retry.");
             var startedAt = await db.Set<RentalsRow>().Where(r => r.Id == id).Select(r => r.StartedAt).FirstOrDefaultAsync(ct);
@@ -135,7 +134,7 @@ public sealed class NpgsqlRentalEditingRepository(NpgsqlDataSource dataSource) :
                 await db.Set<InvoicesRow>().Where(i => i.RentalId == id && i.Kind == "rental" && i.Status == "unpaid").ExecuteUpdateAsync(s => s
                     .SetProperty(i => i.Amount, price.Total + price.Deposit)
                     .SetProperty(i => i.VatAmount, price.Vat), ct);
-            var result = await ReadRentalAsync(db, id, ct);
+            var result = await RentalReads.ReadLockedAsync(db, id, ct);
             await tx.CommitAsync(ct);
             return result;
         }
@@ -165,8 +164,8 @@ public sealed class NpgsqlRentalEditingRepository(NpgsqlDataSource dataSource) :
         await using var cn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await cn.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(cn, tx);
-        await LockOperationsAsync(db, ct);
-        var rental = await ReadRentalAsync(db, id, ct);
+        await db.DispatcherLockAsync(ct);
+        var rental = await RentalReads.ReadLockedAsync(db, id, ct);
         if (rental.RentalType != "longterm")
             throw new InvalidOperationException("Only long-term rentals have a contract.");
         if (rental.ContractLink == contractLink && rental.SignedAt == signedAt) return rental;
@@ -178,32 +177,4 @@ public sealed class NpgsqlRentalEditingRepository(NpgsqlDataSource dataSource) :
         await tx.CommitAsync(ct);
         return rental with { ContractLink = contractLink, SignedAt = signedAt };
     }
-
-    // Bản sao riêng của các hàm hỗ trợ trong repository vận hành, giống hệt bản gốc khi bỏ qua khoảng trắng: phần
-    // thân chuyển sang giữ đúng SQL và đúng khóa mà không phải mở rộng bề mặt của kiểu cũ. Không gian tên tách
-    // biệt với khóa xe/phân công.
-    private static Task LockOperationsAsync(VehicleRentalDbContext db, CancellationToken ct)
-        => db.AdvisoryLockAsync(724232001L, ct);
-
-    private static async Task<Rental> ReadRentalAsync(VehicleRentalDbContext db, int id, CancellationToken ct)
-    {
-        if (await db.LockByKeyAsync<RentalsRow>(id, ct) is null) throw new KeyNotFoundException("Rental was not found.");
-        return await RentalQuery(db, db.Set<RentalsRow>().Where(r => r.Id == id)).FirstAsync(ct);
-    }
-
-    private static IQueryable<Rental> RentalQuery(VehicleRentalDbContext db, IQueryable<RentalsRow> rentals) =>
-        from r in rentals.AsNoTracking()
-        join h in db.Set<HourRentalDetailRow>() on r.Id equals h.RentalId into hourly
-        from h in hourly.DefaultIfEmpty()
-        join l in db.Set<LongtermRentalContractRow>() on r.Id equals l.RentalId into longterm
-        from l in longterm.DefaultIfEmpty()
-        select new Rental(r.Id, r.CustomerId, r.VehicleId, r.RentalType, r.Status, r.IsSubscription,
-            r.VatPrice, r.DepositPrice, r.OvertimePrice, r.TotalPrice,
-            (DateTime?)h.StartTime ?? l.StartTime, (DateTime?)h.EndTime ?? l.EndTime,
-            h.HourlyPriceSnapshot, l.MonthlyPriceSnapshot, (bool?)h.HasDriver ?? (bool?)l.HasDriver ?? false,
-            l.ContractLink == "/api/rentals/" + r.Id + "/contract/document"
-                ? "/api/rental/" + r.Id + "/contract/document" : l.ContractLink, l.SignedAt,
-            db.Set<RentalOrdersRow>().Where(o => o.RentalId == r.Id).Select(o => (int?)o.Id).FirstOrDefault(),
-            db.Set<InspectionsRow>().Any(i => i.RentalId == r.Id && i.VehicleId == r.VehicleId && i.InspectionType == "pre_rental" && i.IsOk == true),
-            db.Set<InspectionsRow>().Any(i => i.RentalId == r.Id && i.VehicleId == r.VehicleId && i.InspectionType == "post_rental"));
 }

@@ -1,6 +1,6 @@
-using Car_Rental_System_BE.Application.DTOs.Accounts;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 using Xunit;
+using Car_Rental_System_BE.Infrastructure.Features.Audit;
 
 namespace VehicleRental.Tests;
 

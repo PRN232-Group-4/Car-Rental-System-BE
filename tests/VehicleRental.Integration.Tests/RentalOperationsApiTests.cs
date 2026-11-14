@@ -6,8 +6,8 @@ using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Handovers;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.WebApi.Features.Rentals;
-using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
-using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.WebApi.Common.Authentication;
+using Car_Rental_System_BE.WebApi.Common.Responses;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
@@ -140,7 +140,6 @@ public sealed class RentalOperationsApiTests : IAsyncLifetime
     [InlineData(null, 401)]
     [InlineData("Customer", 403)]
     [InlineData("Staff", 403)]
-    [InlineData("Maintenance", 403)]
     [InlineData("Driver", 403)]
     public async Task Operational_routes_enforce_roles(string? role, int code)
     {
@@ -154,6 +153,23 @@ public sealed class RentalOperationsApiTests : IAsyncLifetime
             using var json = await Envelope(response, code);
         }
         Assert.Equal(0, _repository.Calls);
+        Assert.Equal(0, _editing.Calls);
+    }
+
+    [Fact]
+    public async Task Maintenance_reads_the_rental_list_and_nothing_else()
+    {
+        using var list = await Send(HttpMethod.Get, "/api/rentals", "Maintenance");
+        using var json = await Envelope(list, 200);
+        Assert.Single(json.RootElement.GetProperty("data").GetProperty("items").EnumerateArray());
+        foreach (var (method, path) in new[] {
+            (HttpMethod.Get, "/api/handovers"),
+            (HttpMethod.Post, "/api/handover/7/confirm"),
+            (HttpMethod.Put, "/api/rental/7") })
+        {
+            using var response = await Send(method, path, "Maintenance", method == HttpMethod.Put ? ValidEdit : null);
+            using var denied = await Envelope(response, 403);
+        }
         Assert.Equal(0, _editing.Calls);
     }
 
