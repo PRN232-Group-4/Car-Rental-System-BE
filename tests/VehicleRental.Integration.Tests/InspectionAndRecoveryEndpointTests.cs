@@ -8,7 +8,7 @@ using Car_Rental_System_BE.Application.Features.Inspections;
 using Car_Rental_System_BE.Application.Features.Recovery;
 using Car_Rental_System_BE.Infrastructure.Features.Inspections;
 using Car_Rental_System_BE.Infrastructure.Features.Recovery;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 using Car_Rental_System_BE.WebApi.Controllers;
 using Car_Rental_System_BE.WebApi.Features.Rentals;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;

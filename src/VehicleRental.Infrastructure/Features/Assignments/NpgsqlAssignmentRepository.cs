@@ -5,10 +5,9 @@ using Car_Rental_System_BE.Application.Features.Assignments;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Domain.Features.Assignments;
 using Npgsql;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 using NpgsqlTypes;
 using Microsoft.EntityFrameworkCore;
-using Car_Rental_System_BE.Infrastructure.Persistence;
 
 namespace Car_Rental_System_BE.Infrastructure.Features.Assignments;
 

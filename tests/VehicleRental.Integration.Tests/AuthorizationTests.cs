@@ -16,7 +16,7 @@ using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Inspections;
 using Car_Rental_System_BE.Application.Features.Organization;
-using Car_Rental_System_BE.Infrastructure.Services.Authentication;
+using Car_Rental_System_BE.Infrastructure.Features.Identity;
 using System.IdentityModel.Tokens.Jwt;
 using System.Reflection;
 using System.Security.Claims;

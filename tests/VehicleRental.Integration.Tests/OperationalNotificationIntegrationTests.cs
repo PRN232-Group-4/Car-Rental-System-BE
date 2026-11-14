@@ -5,7 +5,7 @@ using Car_Rental_System_BE.Infrastructure.Features.Customers;
 using Car_Rental_System_BE.Infrastructure.Features.Notifications;
 using Car_Rental_System_BE.Infrastructure.Features.Reports;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 

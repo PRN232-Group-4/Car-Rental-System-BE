@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using StackExchange.Redis;
 using Car_Rental_System_BE.Application.Features.Identity;
-using Car_Rental_System_BE.Infrastructure.Services.Authentication;
+using Car_Rental_System_BE.Infrastructure.Features.Identity;
 
 namespace Car_Rental_System_BE.Infrastructure.Features.Identity;
 

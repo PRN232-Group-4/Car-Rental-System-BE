@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.8" />
     <PackageReference Include="CloudinaryDotNet" Version="1.27.4" />
     <PackageReference Include="Npgsql" Version="8.0.5" />
     <PackageReference Include="StackExchange.Redis" Version="2.8.16" />

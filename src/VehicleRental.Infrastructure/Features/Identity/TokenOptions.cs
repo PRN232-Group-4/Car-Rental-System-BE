@@ -1,4 +1,4 @@
-namespace Car_Rental_System_BE.Infrastructure.Services.Authentication;
+namespace Car_Rental_System_BE.Infrastructure.Features.Identity;
 
 public sealed class TokenOptions
 {

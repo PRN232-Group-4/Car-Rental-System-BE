@@ -8,7 +8,7 @@ using System.Text.Json;
 using System.Net.Http.Json;
 using Microsoft.Extensions.Options;
 
-namespace Car_Rental_System_BE.Infrastructure.Services.Payments;
+namespace Car_Rental_System_BE.Infrastructure.Features.Billing;
 
 public sealed class PayOsOptions
 {

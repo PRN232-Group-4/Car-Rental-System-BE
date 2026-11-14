@@ -5,7 +5,6 @@ using Car_Rental_System_BE.Application.Features.Billing;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Npgsql;
 using Car_Rental_System_BE.Domain.Features.Billing;
-using Car_Rental_System_BE.Infrastructure.Repositories;
 
 namespace Car_Rental_System_BE.Infrastructure.Features.Billing;
 

@@ -1,7 +1,7 @@
 using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
-namespace Car_Rental_System_BE.Infrastructure.Repositories;
+namespace Car_Rental_System_BE.Infrastructure.Persistence;
 
 /// <summary>Điều kiện tự lái: GPLX đã duyệt, đúng hạng được phép, còn hiệu lực tới max(hôm nay, ngày kết thúc).</summary>
 internal static class CustomerLicenseEligibility

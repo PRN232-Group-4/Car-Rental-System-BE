@@ -3,7 +3,7 @@ using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
-namespace Car_Rental_System_BE.Infrastructure.Repositories;
+namespace Car_Rental_System_BE.Infrastructure.Persistence;
 
 /// <summary>Các thao tác ghi khi duyệt dùng chung, chỉ được gọi sau khi bên gọi đã khóa và kiểm tra đơn thuê.</summary>
 internal static class RentalApprovalWriter

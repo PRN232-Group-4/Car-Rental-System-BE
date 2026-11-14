@@ -1,7 +1,7 @@
 using Car_Rental_System_BE.WebApi.Controllers;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.Features.Organization;
-using Car_Rental_System_BE.Infrastructure.Services.Authentication;
+using Car_Rental_System_BE.Infrastructure.Features.Identity;
 using System.Reflection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -10,7 +10,6 @@ using StackExchange.Redis;
 using Xunit;
 using Car_Rental_System_BE.Application.Features.Identity;
 using Car_Rental_System_BE.WebApi.Features.Identity;
-using Car_Rental_System_BE.Infrastructure.Features.Identity;
 
 namespace VehicleRental.Tests;
 

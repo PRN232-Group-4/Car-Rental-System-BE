@@ -2,7 +2,7 @@ using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
-namespace Car_Rental_System_BE.Infrastructure.Repositories;
+namespace Car_Rental_System_BE.Infrastructure.Persistence;
 
 /// <summary>Tạo đơn thuê chính thức đã thanh toán bên trong transaction đơn thuê/thanh toán của bên gọi.</summary>
 internal static class RentalOrderWriter

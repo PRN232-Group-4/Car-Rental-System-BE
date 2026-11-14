@@ -7,7 +7,7 @@ using Car_Rental_System_BE.Application.Features.Inspections;
 using Car_Rental_System_BE.Application.Features.Media;
 using Car_Rental_System_BE.Application.Features.Organization;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
-using Car_Rental_System_BE.Infrastructure.Repositories;
+using Car_Rental_System_BE.Infrastructure.Persistence;
 using Car_Rental_System_BE.Infrastructure.Features.Organization;
 using Car_Rental_System_BE.WebApi.Features.Inspections;
 using Car_Rental_System_BE.WebApi.Controllers;
