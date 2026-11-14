@@ -20,7 +20,7 @@ graph TD
 | Domain | Quy tắc nghiệp vụ thuần, không phụ thuộc gì | `RentalStateMachine`, `CancellationPolicy`, `OvertimeCalculator`, `SettlementCalculator`, `BookingStatusRules`, `TimeRange`, `LoyaltyDomainRules` |
 | Application | Điều phối use case, định nghĩa port (interface) | `RentalLifecycleService`, `AssignmentService`, `PaymentService`, `SessionService`, `Interfaces/*` |
 | Infrastructure | Hiện thực port | `Npgsql*Repository`, `VehicleRentalDbContext`, `RedisRefreshTokenStore`, `PayOsPaymentGateway`, `CloudinaryImageStorage`, `BrevoEmailSender`, `MapboxClient` |
-| WebApi | Host, DI, HTTP | `Program.cs`, `Controllers/*`, `Middlewares/*` |
+| WebApi | Host, DI, HTTP | `Program.cs`, `Features/<Module>/*Controller`, `Common/Responses/*`, `Common/Authentication/*` |
 
 Persistence: repository nhận `NpgsqlDataSource` (singleton). Mỗi method tự tạo `VehicleRentalDbContext.Create(...)`, đọc bằng LINQ no-tracking. Ghi và kiểm tra trong transaction thì dùng SQL thuần (`FOR UPDATE`, `pg_advisory_xact_lock`). Schema không dùng EF Migrations: `DatabaseMigrationHostedService` chạy các script trong `db/migrations` và lưu checksum.
 
