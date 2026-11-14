@@ -164,22 +164,6 @@ public sealed class AssignmentServiceTests
         Assert.Equal(20, result.Assignment.VehicleId);
     }
 
-    [Fact]
-    public async Task SaveDriverShift_passes_through_to_the_assignment_repository_and_list_reads_it_back()
-    {
-        var service = CreateService();
-
-        var shift = await service.SaveDriverShiftAsync(null, 5, FixedNow, FixedNow.AddHours(4), false, "manager@test.local", CancellationToken.None);
-        Assert.Equal("scheduled", shift.Status);
-
-        var listed = Assert.Single(await service.ListDriverShiftsAsync(5, FixedNow, FixedNow.AddHours(4), CancellationToken.None));
-        Assert.Equal(shift, listed);
-
-        var cancelled = await service.SaveDriverShiftAsync(shift.Id, 5, FixedNow, FixedNow.AddHours(4), true, "manager@test.local", CancellationToken.None);
-        Assert.Equal("cancelled", cancelled.Status);
-        Assert.Equal(5, _repo.LastListedDriverId);
-    }
-
     private sealed class StubAssignmentRepo : IAssignmentRepository
     {
         public RentalScheduleInfo? Schedule { get; set; }
@@ -214,23 +198,6 @@ public sealed class AssignmentServiceTests
 
         public Task<bool> VehicleExistsAndActiveAsync(int vehicleId, int requiredTypeId, CancellationToken ct) =>
             Task.FromResult(VehicleValidAndSameType);
-
-        public List<DriverShift> Shifts { get; } = [];
-        public int? LastListedDriverId { get; private set; }
-
-        public Task<DriverShift> SaveDriverShiftAsync(int? id, int driverId, DateTime start, DateTime end, bool cancelled, string actor, CancellationToken ct)
-        {
-            var shift = new DriverShift(id ?? 1, driverId, start, end, cancelled ? "cancelled" : "scheduled");
-            Shifts.RemoveAll(x => x.Id == shift.Id);
-            Shifts.Add(shift);
-            return Task.FromResult(shift);
-        }
-
-        public Task<IReadOnlyList<DriverShift>> ListDriverShiftsAsync(int? driverId, DateTime from, DateTime to, CancellationToken ct)
-        {
-            LastListedDriverId = driverId;
-            return Task.FromResult<IReadOnlyList<DriverShift>>(Shifts.Where(x => driverId == null || x.DriverStaffId == driverId).ToList());
-        }
 
         public Task<OperationsPage<DriverScheduleEntry>> DriverScheduleAsync(int? driverId, DateTime from, DateTime to, OperationsPagination pagination, CancellationToken ct)
             => Task.FromResult(new OperationsPage<DriverScheduleEntry>([], pagination.Page, pagination.PageSize, 0));

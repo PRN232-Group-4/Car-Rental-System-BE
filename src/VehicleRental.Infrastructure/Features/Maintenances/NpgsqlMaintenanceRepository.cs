@@ -8,8 +8,9 @@ namespace Car_Rental_System_BE.Infrastructure.Features.Maintenances;
 
 public sealed class NpgsqlMaintenanceRepository(NpgsqlDataSource dataSource) : IMaintenanceRepository
 {
-    // Maintenance moved here with its own slice. It keeps taking the same transaction-scoped dispatcher lock the
-    // operations repository takes: maintenance writes guard cross-table vehicle availability invariants.
+    // Bảo trì được chuyển sang đây cùng slice riêng của nó. Vẫn lấy cùng khóa điều phối trong phạm vi
+    // transaction như repository vận hành: các thao tác ghi bảo trì bảo vệ bất biến về tình trạng trống của xe
+    // giữa nhiều bảng.
     private static Task LockOperationsAsync(VehicleRentalDbContext db, CancellationToken ct)
         => db.AdvisoryLockAsync(724232001L, ct);
 

@@ -55,7 +55,7 @@ public sealed class StaffController(IStaffService staff) : ControllerBase
         catch (OrganizationReferenceNotFoundException exception) { return Problem(exception.Message, statusCode: StatusCodes.Status400BadRequest); }
     }
 
-    /// <summary>Create an employee profile for an existing active account without replacing its identity, password or specialty.</summary>
+    /// <summary>Tạo hồ sơ nhân viên cho một tài khoản đang hoạt động có sẵn, không thay danh tính, mật khẩu hay chuyên môn.</summary>
     [OperationDescription("Admin only. Select an active existing user by userId; creates only the employee profile and adds the Staff marker, preserves existing roles, password, email and account identity. isDriver is derived from the stored Driver role; a driver license number and expiry are required only for Driver. Non-driver license metadata is not stored. Positive department/facility references must exist. Missing/inactive account returns 404; duplicate employee profile returns 409. HTTP and Application validate IDs; invalid license returns 400 validation. Account sessions are revoked after profile creation.")]
     [SuccessMessage("Employee profile created for the selected account successfully.")]
     [HttpPost("from-user")]

@@ -3,9 +3,9 @@ using Car_Rental_System_BE.Application.DTOs.Operations;
 namespace Car_Rental_System_BE.Application.Features.Rentals;
 
 /// <summary>
-/// Rental booking and rental reads: creating the request with its price snapshot and payment deadline, the flat
-/// rental by id, and the same read narrowed to what the caller is allowed to see. These members used to sit on
-/// <c>IOperationsRepository</c>/<c>IOperationsService</c> with the rest of the operations work.
+/// Đặt xe và đọc đơn thuê: tạo yêu cầu kèm ảnh chụp giá và hạn thanh toán, đọc đơn thuê phẳng theo id, và cùng
+/// phép đọc đó nhưng thu hẹp theo những gì bên gọi được phép xem. Các thành viên này từng nằm trên
+/// <c>IOperationsRepository</c>/<c>IOperationsService</c> cùng phần còn lại của nghiệp vụ vận hành.
 /// </summary>
 public interface IRentalBookingRepository
 {

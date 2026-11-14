@@ -7,22 +7,22 @@ using Npgsql;
 namespace Car_Rental_System_BE.Infrastructure.Features.Inspections;
 
 /// <summary>
-/// Inspection evidence storage: the two commands that insert an <c>inspections</c> row, one for the rental's
-/// own vehicle and one for a candidate replacement. The members came from <c>NpgsqlOperationsRepository</c>
-/// with their SQL unchanged; the dispatcher lock, the transaction and the FOR UPDATE clause travelled with them.
+/// Lưu bằng chứng kiểm tra xe: hai lệnh chèn dòng <c>inspections</c>, một cho chính xe của đơn và một cho xe
+/// thay thế ứng viên. Các thành viên này lấy từ <c>NpgsqlOperationsRepository</c> với SQL giữ nguyên; khóa điều
+/// phối, transaction và mệnh đề FOR UPDATE cũng đi theo.
 /// </summary>
 public sealed class NpgsqlInspectionRecordRepository(NpgsqlDataSource dataSource) : IInspectionRecordRepository
 {
-    // One transaction-scoped dispatcher lock protects cross-table availability invariants. An inspection can
-    // flip a vehicle to maintenance and can move a rental's status, so inspections keep taking the same lock the
-    // operations and maintenance repositories take.
+    // Một khóa điều phối trong phạm vi transaction bảo vệ các bất biến về tình trạng trống giữa nhiều bảng. Kiểm
+    // tra xe có thể chuyển xe sang bảo trì và đổi trạng thái đơn thuê, nên vẫn lấy cùng khóa mà repository vận
+    // hành và bảo trì dùng.
     private static Task LockOperationsAsync(VehicleRentalDbContext db, CancellationToken ct)
         => db.AdvisoryLockAsync(724232001L, ct);
 
-    // Inspections keeps its own copy of the locked rental read the legacy operations repository holds privately:
-    // the moved body must keep its exact SQL, and reusing that helper would mean widening the legacy
-    // repository's surface for one slice. Same call the Reports, Customers and Fleet slices made. It is the
-    // identical statement, so the two copies lock the same row.
+    // Inspections giữ bản sao riêng của phép đọc đơn thuê có khóa mà repository vận hành cũ giữ kín: phần thân
+    // chuyển sang phải giữ đúng SQL, và dùng lại hàm hỗ trợ đó nghĩa là phải mở rộng bề mặt của repository cũ
+    // chỉ vì một slice. Các slice Reports, Customers và Fleet cũng làm như vậy. Đây là cùng một câu lệnh, nên
+    // hai bản sao khóa cùng một dòng.
     private static async Task<Rental> ReadRentalAsync(VehicleRentalDbContext db, int id, CancellationToken ct)
     {
         if (await db.LockByKeyAsync<RentalsRow>(id, ct) is null) throw new KeyNotFoundException("Rental was not found.");
@@ -100,7 +100,11 @@ public sealed class NpgsqlInspectionRecordRepository(NpgsqlDataSource dataSource
             FuelBatteryLevel = fuel, DamageNotes = notes, ImgUrls = images, InspectedAt = Sql.Ts(inspectedAt),
         };
         await db.InsertAsync(row, ct);
-        if (!ok) await SetVehicleStatusAsync(db, vehicle, "maintenance", ct);
+        if (!ok)
+        {
+            await SetVehicleStatusAsync(db, vehicle, "maintenance", ct);
+            await OpenFailedInspectionMaintenanceAsync(db, row, ct);
+        }
         if (replacementVehicle is null &&
             ((type == "pre_rental" && ok && rental.Status == "pending") ||
              (type == "post_rental" && rental.Status == "renting")))
@@ -144,11 +148,51 @@ public sealed class NpgsqlInspectionRecordRepository(NpgsqlDataSource dataSource
         (from s in db.Set<StaffsRow>() join u in db.Set<UsersRow>() on s.UserId equals u.Id
          where s.Id == staffId && u.IsActive select s.Id).AnyAsync(ct);
 
+    /// <summary>
+    /// Kiểm tra không đạt sẽ đưa xe vào bảo trì, và chỉ hoàn tất phiếu bảo trì với kết quả an toàn mới trả xe về. Mở
+    /// phiếu đó ngay tại đây để xe xuất hiện trong việc bảo trì, thay vì bị chặn mà không có gì để đóng. Phiếu giao
+    /// cho kỹ thuật viên được phân công kiểm tra này, nếu không thì cho người lập biên bản khi họ là kỹ thuật viên
+    /// Maintenance; còn lại Quản lý sẽ giao. Hoàn tất phiếu với kết quả an toàn thì xe đặt lại được.
+    /// </summary>
+    private static async Task OpenFailedInspectionMaintenanceAsync(VehicleRentalDbContext db, InspectionsRow inspection, CancellationToken ct)
+    {
+        var vehicleId = inspection.VehicleId;
+        if (await db.Set<VehicleMaintenanceRow>().AnyAsync(m => m.VehicleId == vehicleId
+                && ((m.Status ?? "open") == "open" || m.Status == "scheduled" || m.Status == "in_progress"), ct))
+            return; // đã có phiếu chưa xong cho xe này
+        var facilityId = await db.Set<VehiclesRow>().Where(v => v.Id == vehicleId).Select(v => v.FacilityId).FirstOrDefaultAsync(ct);
+        // Ưu tiên kỹ thuật viên được phân công kiểm tra này; nếu không có thì lấy người lập biên bản khi họ là kỹ thuật viên.
+        var assignedTechnician = await db.Set<InspectionAssignmentsRow>()
+            .Where(a => a.RentalId == inspection.RentalId && a.VehicleId == vehicleId && a.InspectionType == inspection.InspectionType)
+            .Select(a => (int?)a.TechnicianStaffId).FirstOrDefaultAsync(ct);
+        int? technician = null;
+        foreach (var candidate in new[] { assignedTechnician, inspection.StaffId })
+        {
+            if (candidate is not int staffId) continue;
+            if (await (from s in db.Set<StaffsRow>()
+                    join u in db.Set<UsersRow>() on s.UserId equals u.Id
+                    join ur in db.Set<UserRolesRow>() on u.Id equals ur.UserId
+                    join r in db.Set<RolesRow>() on ur.RoleId equals r.Id
+                    where s.Id == staffId && u.IsActive && r.Name == "Maintenance" select s.Id).AnyAsync(ct))
+            { technician = staffId; break; }
+        }
+        var stage = inspection.InspectionType == "pre_rental" ? "trước" : "sau";
+        var notes = string.IsNullOrWhiteSpace(inspection.DamageNotes) ? "Không có ghi chú hư hỏng." : inspection.DamageNotes.Trim();
+        var description = $"Tự tạo từ biên bản kiểm tra {stage} thuê #{inspection.Id} (đơn #{inspection.RentalId}) không đạt. {notes}";
+        await db.InsertAsync(new VehicleMaintenanceRow
+        {
+            VehicleId = vehicleId, FacilityId = facilityId, RentalId = inspection.RentalId, InspectionId = inspection.Id,
+            AssignedStaffId = technician, Status = "open",
+            MaintenanceType = $"Sửa chữa sau kiểm tra {stage} thuê không đạt",
+            Description = description.Length > 255 ? description[..255] : description,
+        }, ct);
+    }
+
     private static Task SetVehicleStatusAsync(VehicleRentalDbContext db, int vehicleId, string status, CancellationToken ct) =>
         db.Set<VehiclesRow>().Where(v => v.Id == vehicleId).ExecuteUpdateAsync(s => s.SetProperty(v => v.Status, status), ct);
     private static readonly string[] ClosedRentalStatuses = ["completed", "cancelled", "expired"];
 
-    /// <summary>Rental with its hourly/long-term schedule, composable in LINQ.</summary>
+    /// <summary>Đơn thuê kèm lịch thuê theo giờ/dài hạn, có thể ghép trong LINQ.</summary>
     private sealed class RentalWindow
     {
         public int RentalId { get; init; }

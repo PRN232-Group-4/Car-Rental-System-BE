@@ -27,8 +27,8 @@ public sealed class RoleService(IRoleRepository repository) : IRoleService
         ArgumentNullException.ThrowIfNull(request);
         if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Length > 255)
             throw new ArgumentException("Role name must contain 1 to 255 characters.");
-        // Role names become individual claims; a comma would be interpreted as multiple
-        // roles by AuthorizeAttribute.Roles if this name were reused in a policy later.
+        // Tên vai trò trở thành từng claim riêng; nếu sau này dùng lại tên này trong policy, dấu
+        // phẩy sẽ bị AuthorizeAttribute.Roles hiểu là nhiều vai trò.
         if (request.Name.Contains(',')) throw new ArgumentException("Role name cannot contain a comma.");
         return request.Name.Trim();
     }

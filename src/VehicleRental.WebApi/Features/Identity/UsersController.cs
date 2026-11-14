@@ -15,7 +15,7 @@ namespace Car_Rental_System_BE.WebApi.Features.Identity;
 [ProducesResponseType(StatusCodes.Status403Forbidden)]
 public sealed class UsersController(IUserAdministrationService users) : ControllerBase
 {
-    /// <summary>Admin account directory. page defaults to 1; pageSize defaults to 20, range 1–100.</summary>
+    /// <summary>Danh mục tài khoản cho Admin. page mặc định là 1; pageSize mặc định là 20, trong khoảng 1–100.</summary>
     [OperationDescription(" Pagination for list operations defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Invalid values return 400 at HTTP and Application boundaries. data contains items/page/pageSize/totalCount, totalCount is after filters; out-of-range pages retain the count with empty items.", DocumentsPaginationParameters = true)]
     [OperationDescription(" Admin only. Users include full roles and nullable customerId/staffId links. Account and role changes invalidate sessions and retain audit. The last active administrator is protected.")]
     [SuccessMessage("Users retrieved successfully.")]

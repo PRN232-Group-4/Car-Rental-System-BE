@@ -16,7 +16,7 @@ namespace Car_Rental_System_BE.WebApi.Features.Maintenances;
 [Route("api")]
 public sealed class MaintenanceController(IMaintenanceService maintenance) : ControllerBase
 {
-    /// <summary>List maintenance with optional createdAt range [from,to); page=1/pageSize=20, maximum 100.</summary>
+    /// <summary>Liệt kê phiếu bảo trì với khoảng createdAt tùy chọn [from,to); page=1/pageSize=20, tối đa 100.</summary>
     [OperationDescription(" Pagination for list operations defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Invalid values return 400 at HTTP and Application boundaries. data contains items/page/pageSize/totalCount, totalCount is after filters; out-of-range pages retain the count with empty items.", DocumentsPaginationParameters = true)]
     [SuccessMessage("maintenance list retrieved successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Maintenance)] [HttpGet("maintenance")]

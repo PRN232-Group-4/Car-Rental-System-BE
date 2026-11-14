@@ -7,10 +7,11 @@ using Npgsql;
 namespace Car_Rental_System_BE.Infrastructure.Features.Ratings;
 
 /// <summary>
-/// Staff rating storage: the customer's upsert, the flat per-staff list, the paged queue, moderation and the
-/// management reply, plus the moderation-history row that records each status change. The members came from
-/// <c>NpgsqlOperationsRepository</c> (rate, list) and <c>NpgsqlOperationsCompletionRepository</c> (queue,
-/// moderate, reply) with their SQL unchanged; the transactions travelled with them.
+/// Lưu trữ đánh giá nhân viên: upsert của khách, danh sách phẳng theo nhân viên, hàng đợi phân trang, kiểm
+/// duyệt và phản hồi của quản lý, cùng dòng lịch sử kiểm duyệt ghi lại mỗi lần đổi trạng thái. Các thành
+/// viên lấy từ <c>NpgsqlOperationsRepository</c> (đánh giá, danh sách) và
+/// <c>NpgsqlOperationsCompletionRepository</c> (hàng đợi, kiểm duyệt, phản hồi) với SQL giữ nguyên; các
+/// transaction cũng đi theo.
 /// </summary>
 public sealed class NpgsqlRatingRepository(NpgsqlDataSource dataSource) : IRatingRepository
 {
@@ -26,7 +27,7 @@ public sealed class NpgsqlRatingRepository(NpgsqlDataSource dataSource) : IRatin
             !await db.Set<InspectionsRow>().AnyAsync(x => x.RentalId == rentalId && x.StaffId == staffId, ct))
             throw new KeyNotFoundException("Staff was not involved in this rental.");
 
-        // ON CONFLICT (rental_id, staff_id) DO UPDATE: update first, insert otherwise, retry the update on a lost race.
+        // ON CONFLICT (rental_id, staff_id) DO UPDATE: cập nhật trước, nếu không có thì chèn, và thử cập nhật lại nếu thua tranh chấp.
         if (await UpdateRatingAsync(db, rentalId, staffId, rating, comment, ct) == 0 &&
             !await db.TryInsertAsync(new StaffRatingsRow { RentalId = rentalId, StaffId = staffId, Rating = rating, Comment = comment }, ct))
             await UpdateRatingAsync(db, rentalId, staffId, rating, comment, ct);

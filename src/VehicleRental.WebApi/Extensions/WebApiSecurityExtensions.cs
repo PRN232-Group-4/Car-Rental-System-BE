@@ -18,9 +18,9 @@ using Car_Rental_System_BE.Application.Features.Identity;
 namespace Car_Rental_System_BE.WebApi.Extensions;
 
 /// <summary>
-/// Authentication, authorization and rate limiting. These registrations have to run after
-/// <see cref="ApplicationExtensions.AddApplication"/> and <c>AddInfrastructure</c>: the JWT bearer events resolve
-/// the token store and the account service, and the authentication rate limits read the registration options.
+/// Xác thực, phân quyền và giới hạn tần suất. Các đăng ký này phải chạy sau <see
+/// cref="ApplicationExtensions.AddApplication"/> và <c>AddInfrastructure</c>: các sự kiện JWT bearer lấy token
+/// store và account service, còn giới hạn tần suất xác thực đọc options đăng ký.
 /// </summary>
 public static class WebApiSecurityExtensions
 {

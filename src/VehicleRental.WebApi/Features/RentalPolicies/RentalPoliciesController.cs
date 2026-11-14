@@ -9,10 +9,10 @@ using Microsoft.AspNetCore.Mvc;
 namespace Car_Rental_System_BE.WebApi.Features.RentalPolicies;
 
 /// <summary>
-/// Rental policy versions over HTTP: the paged list, creation and the active-status switch. The actions used to
-/// sit on <c>OperationsController</c> (Policies, AddPolicy, SetPolicyStatus); route, verb, policy, route
-/// constraints, status codes, request and response shapes, success messages and swagger descriptions travelled
-/// with them unchanged.
+/// Các phiên bản chính sách thuê qua HTTP: danh sách phân trang, tạo mới, đổi trạng thái áp dụng và xóa. Các
+/// action từng nằm trên <c>OperationsController</c> (Policies, AddPolicy, SetPolicyStatus); route, verb,
+/// policy, ràng buộc route, mã trạng thái, dạng request/response, thông điệp thành công và mô tả swagger giữ
+/// nguyên khi chuyển sang.
 /// </summary>
 [ApiController]
 [Route("api")]
@@ -62,4 +62,18 @@ public sealed class RentalPoliciesController(IRentalPolicyService policies) : Co
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public Task<RentalPolicy> SetPolicyStatus([FromRoute, Range(1, int.MaxValue)] int id, PolicyStatusRequest request, CancellationToken ct) =>
         policies.SetPolicyStatusAsync(id, request.IsActive!.Value, ct);
+
+    [OperationSummary("Delete a rental policy version (Admin/Manager).")]
+    [OperationDescription("Deletes the version only when no rental references it (rentalCount=0); otherwise responds 409 RENTAL_POLICY_IN_USE and the version should be deactivated instead.")]
+    [SuccessMessage("Rental policy deleted successfully.")]
+    [Authorize(Policy = AuthorizationPolicies.Management)]
+    [HttpDelete("rental-policy/{id:int}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> DeletePolicy([FromRoute, Range(1, int.MaxValue)] int id, CancellationToken ct)
+    {
+        await policies.DeletePolicyAsync(id, ct);
+        return NoContent();
+    }
 }

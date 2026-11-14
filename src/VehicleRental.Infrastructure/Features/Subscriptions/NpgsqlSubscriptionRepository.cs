@@ -25,7 +25,7 @@ public sealed class NpgsqlSubscriptionRepository(NpgsqlDataSource dataSource) : 
         await using var cn=await dataSource.OpenConnectionAsync(ct);
         await using var tx=await cn.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(cn, tx);
-        // Plans referenced by subscriptions or payments (FK restricted) are retired instead of deleted.
+        // Gói đã được gói thuê bao hoặc thanh toán tham chiếu (khóa ngoại chặn) thì ngừng dùng thay vì xóa.
         var used = await db.Set<CustomerSubscriptionsRow>().AnyAsync(x => x.PlanId == id, ct)
             || await db.Set<PaymentsRow>().AnyAsync(x => x.PlanId == id, ct);
         var plans = db.Set<SubscriptionPlansRow>().Where(x => x.Id == id);

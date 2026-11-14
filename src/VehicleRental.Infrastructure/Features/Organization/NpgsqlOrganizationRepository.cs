@@ -76,13 +76,26 @@ public sealed class NpgsqlOrganizationRepository(NpgsqlDataSource dataSource) : 
     }
     private async Task DeleteAsync(string table,int id,CancellationToken ct)
     {
-        await using var db = VehicleRentalDbContext.Create(dataSource);
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(connection, transaction);
         int deleted;
         try
         {
-            deleted = table == "facilities"
-                ? await db.Set<FacilitiesRow>().Where(f => f.Id == id).ExecuteDeleteAsync(ct)
-                : await db.Set<DepartmentsRow>().Where(d => d.Id == id).ExecuteDeleteAsync(ct);
+            if (table == "facilities")
+            {
+                // Xóa chi nhánh sẽ xóa những gì thuộc về nó (vùng địa lý và sự kiện của chúng xóa dây chuyền) và
+                // gỡ liên kết nhân viên, xe và phiếu bảo trì, để đơn thuê, hóa đơn và thanh toán vẫn nguyên vẹn.
+                await db.Set<GeofencesRow>().Where(g => g.FacilityId == id).ExecuteDeleteAsync(ct);
+                await db.Set<StaffsRow>().Where(s => s.FacilityId == id).ExecuteUpdateAsync(s => s.SetProperty(x => x.FacilityId, (int?)null), ct);
+                await db.Set<VehiclesRow>().Where(v => v.FacilityId == id).ExecuteUpdateAsync(s => s.SetProperty(x => x.FacilityId, (int?)null), ct);
+                await db.Set<VehicleMaintenanceRow>().Where(m => m.FacilityId == id).ExecuteUpdateAsync(s => s.SetProperty(x => x.FacilityId, (int?)null), ct);
+                deleted = await db.Set<FacilitiesRow>().Where(f => f.Id == id).ExecuteDeleteAsync(ct);
+            }
+            else
+            {
+                deleted = await db.Set<DepartmentsRow>().Where(d => d.Id == id).ExecuteDeleteAsync(ct);
+            }
         }
         catch (Exception ex) when (ex.SqlState() == PostgresErrorCodes.ForeignKeyViolation)
         {
@@ -90,5 +103,6 @@ public sealed class NpgsqlOrganizationRepository(NpgsqlDataSource dataSource) : 
                 "Bản ghi đang được tham chiếu bởi dữ liệu khác nên không thể xóa.");
         }
         if(deleted!=1)throw new KeyNotFoundException();
+        await transaction.CommitAsync(ct);
     }
 }

@@ -72,17 +72,16 @@ public sealed class AssignmentScheduleAndMaintenanceQueueTests(PostgresFixture d
         var scenario=await Scenarios.CreateDirectRentalAsync(db.DataSource);
         var rental=(await store.GetRentalAsync(scenario.RentalId,default))!;
         var driver=await Staff(driver:true);
-        await assignments.SaveDriverShiftAsync(null,driver,rental.StartTime!.Value,rental.EndTime!.Value,false,"manager@test.local",default);
         await inspectionsStore.AddInspectionAsync(rental.Id,driver,"pre_rental",true,null,null,null,null,default);
         // Same row the deleted lax AssignAsync wrote; the assignment is only this schedule read's precondition.
         await Seed.ScalarAsync(db.DataSource,"INSERT INTO vehicle_assignments(rental_id,vehicle_id,driver_staff_id,status,assigned_by) SELECT id,vehicle_id,$2,'assigned',$3 FROM rentals WHERE id=$1",rental.Id,driver,"manager@test.local");
-        var page=await Assignments.DriverScheduleAsync(driver,rental.StartTime.Value,rental.EndTime.Value,new(){PageSize=1},default);
+        var page=await Assignments.DriverScheduleAsync(driver,rental.StartTime!.Value,rental.EndTime!.Value,new(){PageSize=1},default);
         var item=Assert.Single(page.Items);
         Assert.Equal(1,page.TotalCount);
         Assert.Equal(driver,item.DriverStaffId);
         Assert.Equal(rental.Id,item.RentalId);
         Assert.NotNull(item.VehicleName);
-        var empty=await Assignments.DriverScheduleAsync(driver,rental.StartTime.Value,rental.EndTime.Value,new(){Page=int.MaxValue,PageSize=100},default);
+        var empty=await Assignments.DriverScheduleAsync(driver,rental.StartTime!.Value,rental.EndTime!.Value,new(){Page=int.MaxValue,PageSize=100},default);
         Assert.Empty(empty.Items);Assert.Equal(1,empty.TotalCount);
     }
 

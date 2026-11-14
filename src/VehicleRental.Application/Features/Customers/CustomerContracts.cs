@@ -13,9 +13,9 @@ public interface ICustomerService
 }
 
 /// <summary>
-/// Driver licenses are the customer's own records, so the Customers slice owns the storage port too: the
-/// directory (one row on <c>customers</c>) and the independently reviewed licenses
-/// (<c>customer_license_records</c>) are read and written by the same slice.
+/// GPLX là hồ sơ của chính khách hàng, nên slice Customers sở hữu luôn cổng lưu trữ: danh bạ (một dòng
+/// trong <c>customers</c>) và các GPLX được duyệt độc lập (<c>customer_license_records</c>) đều do cùng
+/// slice đọc và ghi.
 /// </summary>
 public interface ICustomerLicenseRepository
 {

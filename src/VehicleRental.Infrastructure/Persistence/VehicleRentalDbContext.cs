@@ -6,8 +6,8 @@ using Npgsql;
 namespace Car_Rental_System_BE.Infrastructure.Persistence;
 
 /// <summary>
-/// Read/write mappings for the existing SQL-managed schema. Contexts can enlist in an existing
-/// Npgsql transaction so EF operations share its snapshot and PostgreSQL locks.
+/// Ánh xạ đọc/ghi cho schema hiện có do SQL quản lý. Context có thể tham gia một transaction Npgsql
+/// sẵn có để các thao tác EF dùng chung snapshot và khóa PostgreSQL của nó.
 /// </summary>
 public sealed class VehicleRentalDbContext(DbContextOptions<VehicleRentalDbContext> options) : DbContext(options)
 {
@@ -29,7 +29,7 @@ public sealed class VehicleRentalDbContext(DbContextOptions<VehicleRentalDbConte
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Rows are grouped in one file and explicitly mapped, without navigation properties; FKs are declared below.
+        // Các row được gom trong một file và ánh xạ tường minh, không có navigation property; khóa ngoại khai báo ở bên dưới.
         foreach (var type in typeof(VehicleRentalDbContext).Assembly.GetTypes()
                      .Where(t => t.Namespace == typeof(VehicleRentalDbContext).Namespace &&
                                  t.GetCustomAttribute<TableAttribute>() is not null))
@@ -41,9 +41,9 @@ public sealed class VehicleRentalDbContext(DbContextOptions<VehicleRentalDbConte
         ConfigureForeignKeys(modelBuilder);
     }
 
-    // Timestamp columns whose SQL default is evaluated by PostgreSQL. EF omits them from INSERT while the CLR
-    // value is default(DateTime), so the database clock is used exactly as when the column was left out.
-    // Constant defaults (status strings, TRUE flags, buffer minutes, empty arrays) are CLR initializers on the rows.
+    // Các cột timestamp có giá trị mặc định SQL do PostgreSQL tính. EF bỏ chúng khỏi lệnh INSERT khi giá trị CLR là
+    // default(DateTime), nên dùng đồng hồ database y như khi bỏ trống cột. Các mặc định hằng số (chuỗi trạng thái,
+    // cờ TRUE, số phút buffer, mảng rỗng) là giá trị khởi tạo CLR trên row.
     private static readonly Dictionary<string, string> DatabaseTimestampDefaults = new()
     {
         ["created_at"] = "now()", ["status_changed_at"] = "now()", ["issued_at"] = "now()",
@@ -71,13 +71,13 @@ public sealed class VehicleRentalDbContext(DbContextOptions<VehicleRentalDbConte
                     property.SetDefaultValueSql(sql);
             }
 
-            // Natural/shared primary keys (vehicle_id, rental_id, device id) are supplied by the caller, never identity.
+            // Khóa chính tự nhiên/dùng chung (vehicle_id, rental_id, id thiết bị) do bên gọi cung cấp, không bao giờ là identity.
             var key = entity.FindPrimaryKey();
             if (key is { Properties.Count: 1 } && key.Properties[0].GetColumnName() != "id")
                 key.Properties[0].ValueGenerated = Microsoft.EntityFrameworkCore.Metadata.ValueGenerated.Never;
         }
 
-        // STORED generated tsrange columns: never written by EF.
+        // Cột tsrange sinh STORED: EF không bao giờ ghi.
         foreach (var period in new[] { b.Entity<VehicleAssignmentsRow>().Property(x => x.Period), b.Entity<VehicleBookingsRow>().Property(x => x.Period) })
         {
             period.ValueGeneratedOnAddOrUpdate();
@@ -87,8 +87,9 @@ public sealed class VehicleRentalDbContext(DbContextOptions<VehicleRentalDbConte
     }
 
     /// <summary>
-    /// Mirrors the FK constraints from db/migrations (0013, 0017, 0034). No navigation properties:
-    /// EF uses these only to order SaveChanges and to document relations; the database performs ON DELETE.
+    /// Phản chiếu các ràng buộc khóa ngoại trong db/migrations (0013, 0017, 0034). Không có navigation
+    /// property: EF chỉ dùng chúng để sắp thứ tự SaveChanges và ghi lại quan hệ; database thực hiện ON
+    /// DELETE.
     /// </summary>
     private static void ConfigureForeignKeys(ModelBuilder b)
     {
@@ -142,7 +143,6 @@ public sealed class VehicleRentalDbContext(DbContextOptions<VehicleRentalDbConte
         Fk<ReportsRow, VehicleMaintenanceRow>(b, nameof(ReportsRow.MaintenanceId));
         Fk<ReportsRow, StaffsRow>(b, nameof(ReportsRow.ReporterStaffId));
         Fk<ReportsRow, VehiclesRow>(b, nameof(ReportsRow.VehicleId));
-        Fk<DriverShiftsRow, StaffsRow>(b, nameof(DriverShiftsRow.DriverStaffId));
         Fk<VehicleReplacementsRow, RentalsRow>(b, nameof(VehicleReplacementsRow.RentalId));
         Fk<VehicleReplacementsRow, ReportsRow>(b, nameof(VehicleReplacementsRow.ReportId));
         Fk<VehicleReplacementsRow, VehiclesRow>(b, nameof(VehicleReplacementsRow.OldVehicleId));
@@ -184,7 +184,7 @@ public sealed class VehicleRentalDbContext(DbContextOptions<VehicleRentalDbConte
         Fk<RentalContractDocumentsRow, RentalsRow>(b, nameof(RentalContractDocumentsRow.RentalId));
     }
 
-    // Shadow-free FK on an existing scalar column; NoAction keeps EF from cascading tracked rows itself.
+    // Khóa ngoại không cần shadow property trên một cột scalar có sẵn; NoAction để EF không tự xóa dây chuyền các row đang theo dõi.
     private static void Fk<TChild, TParent>(ModelBuilder b, string column) where TChild : class where TParent : class =>
         b.Entity<TChild>().HasOne<TParent>().WithMany().HasForeignKey(column).OnDelete(DeleteBehavior.NoAction);
 }

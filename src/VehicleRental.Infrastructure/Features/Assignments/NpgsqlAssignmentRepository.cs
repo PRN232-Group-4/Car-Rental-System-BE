@@ -93,12 +93,12 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
 
         try
         {
-            // Lock vehicle (1001)
+            // Khóa xe (1001)
             await VehicleLock.AcquireAsync(connection, tx, rental.VehicleId, ct);
             await RequireCurrentScheduleAsync(db, rental, ct);
             await RequireLicenseAsync(db, rental, rental.VehicleId, ct);
 
-            // Lock driver (1002) if provided
+            // Khóa tài xế (1002) nếu có
             if (driverStaffId is not null)
             {
                 await DriverLock.AcquireAsync(tx, driverStaffId.Value, ct);
@@ -185,7 +185,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
 
         try
         {
-            // Lock both vehicles in ascending ID order to prevent deadlocks
+            // Khóa cả hai xe theo thứ tự ID tăng dần để tránh deadlock
             var firstId = Math.Min(rental.VehicleId, newVehicleId);
             var secondId = Math.Max(rental.VehicleId, newVehicleId);
             await VehicleLock.AcquireAsync(connection, tx, firstId, ct);
@@ -204,22 +204,22 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
                 await DriverLock.AcquireAsync(tx, newDriverStaffId.Value, ct);
             }
 
-            // 1. Update rentals.vehicle_id -> triggers BE-10 sync_booking to migrate booking to new vehicle
+            // 1. Cập nhật rentals.vehicle_id -> kích hoạt trigger BE-10 sync_booking để chuyển lịch đặt sang xe mới
             await db.Set<RentalsRow>().Where(r => r.Id == rental.RentalId)
                 .ExecuteUpdateAsync(s => s.SetProperty(r => r.VehicleId, newVehicleId), ct);
 
-            // 2. Close old assignment if exists
+            // 2. Đóng phân công cũ nếu có
             if (currentAssignmentId is not null) await CloseAssignmentAsync(db, currentAssignmentId.Value, startsAt, ct);
 
-            // 3. Insert new assignment
+            // 3. Thêm phân công mới
             var inserted = await InsertAssignmentAsync(db, rental.RentalId, newVehicleId, newDriverStaffId, reason, note,
                 currentAssignmentId, startsAt, endsAt, bufferMinutes, assignedByEmail, ct);
 
-            // 4. Handle incident on old vehicle (breakdown / accident)
+            // 4. Xử lý sự cố trên xe cũ (hỏng xe / tai nạn)
             int? maintenanceId = null;
             if (AssignmentReason.IsIncident(reason))
             {
-                // Mark old vehicle as maintenance
+                // Đánh dấu xe cũ đang bảo trì
                 await db.Set<VehiclesRow>().Where(v => v.Id == rental.VehicleId)
                     .ExecuteUpdateAsync(s => s.SetProperty(v => v.Status, "maintenance"), ct);
                 maintenanceId = await OpenIncidentMaintenanceAsync(db, rental.VehicleId, rental.FacilityId, rental.RentalId, note ?? reason, ct);
@@ -317,8 +317,8 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
 
     private static async Task RequireCurrentScheduleAsync(VehicleRentalDbContext db, RentalScheduleInfo expected, CancellationToken ct)
     {
-        // The Application snapshot can predate an edit that was waiting on the same vehicle lock.
-        // Read again after taking that lock and keep the rental row locked until assignment commit.
+        // Ảnh chụp ở tầng Application có thể cũ hơn một lần chỉnh sửa đang chờ cùng khóa xe. Đọc
+        // lại sau khi đã lấy khóa đó và giữ khóa dòng đơn thuê tới khi commit phân công.
         if (await db.LockByKeyAsync<RentalsRow>(expected.RentalId, ct) is null)
             throw new NotFoundException("RENTAL_NOT_FOUND", "Rental was not found.");
         var current = await (from r in db.Set<RentalsRow>()
@@ -344,82 +344,6 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
             .Select(v => new { Name = v.Brand == null ? (v.Model ?? "") : v.Model == null ? v.Brand : v.Brand + " " + v.Model, v.LicensePlate })
             .FirstOrDefaultAsync(ct);
         return row == null ? (null, null) : (row.Name == "" ? null : row.Name, row.LicensePlate);
-    }
-
-    // Shifts moved here with the assignment slice. They keep taking the same transaction-scoped dispatcher
-    // lock the operations repository takes: shifts guard cross-table availability invariants.
-    private static Task LockOperationsAsync(VehicleRentalDbContext db, CancellationToken ct)
-        => db.AdvisoryLockAsync(724232001L, ct);
-
-    public async Task<DriverShift> SaveDriverShiftAsync(int? id, int driver, DateTime start, DateTime end,
-        bool cancelled, string actor, CancellationToken ct)
-    {
-        if (end <= start) throw new ArgumentException("Shift end must be after start.");
-        var shiftStart = Sql.Ts(start);
-        var shiftEnd = Sql.Ts(end);
-        await using var cn = await dataSource.OpenConnectionAsync(ct);
-        await using var tx = await cn.BeginTransactionAsync(ct);
-        await using var db = VehicleRentalDbContext.Create(cn, tx);
-        await LockOperationsAsync(db, ct);
-        var today = await db.DatabaseTodayAsync(ct);
-        var through = DateOnly.FromDateTime(shiftEnd) > today ? DateOnly.FromDateTime(shiftEnd) : today;
-        if (!await (from s in db.Set<StaffsRow>() join u in db.Set<UsersRow>() on s.UserId equals u.Id
-                where s.Id == driver && s.IsDriver && u.IsActive && s.LicenseExpiryDate >= through select s.Id).AnyAsync(ct))
-            throw new InvalidOperationException("An active qualified driver with a valid license is required.");
-        int? previousDriver = null;
-        if (id is not null)
-        {
-            var previous = await db.LockByKeyAsync<DriverShiftsRow>(id.Value, ct) ?? throw new KeyNotFoundException("Shift was not found.");
-            previousDriver = previous.DriverStaffId;
-        }
-        if (!cancelled && await db.Set<DriverShiftsRow>().AnyAsync(x => x.DriverStaffId == driver && x.Status == "scheduled"
-                && x.StartTime < shiftEnd && x.EndTime > shiftStart && (id == null || x.Id != id), ct))
-            throw new InvalidOperationException("Driver shifts cannot overlap.");
-        var status = cancelled ? "cancelled" : "scheduled";
-        int shiftId;
-        if (id is null)
-        {
-            var row = new DriverShiftsRow
-            {
-                DriverStaffId = driver, StartTime = shiftStart, EndTime = shiftEnd, Status = status, CreatedBy = actor, ModifiedBy = actor,
-            };
-            await db.InsertAsync(row, ct);
-            shiftId = row.Id;
-        }
-        else
-        {
-            await db.Set<DriverShiftsRow>().Where(x => x.Id == id).ExecuteUpdateAsync(s => s
-                .SetProperty(x => x.DriverStaffId, driver)
-                .SetProperty(x => x.StartTime, shiftStart)
-                .SetProperty(x => x.EndTime, shiftEnd)
-                .SetProperty(x => x.Status, status)
-                .SetProperty(x => x.ModifiedBy, actor), ct);
-            shiftId = id.Value;
-        }
-        // Editing/cancelling a shift must not strand an existing future or active assignment.
-        var utcNow = await db.DatabaseUtcNowAsync(ct);
-        if (await (from a in db.Set<VehicleAssignmentsRow>()
-                join w in RentalWindows(db) on a.RentalId equals w.RentalId
-                where (a.DriverStaffId == driver || (previousDriver != null && a.DriverStaffId == previousDriver)) && a.Status == "assigned"
-                    && !ClosedRentalStatuses.Contains(w.Status) && w.End > utcNow
-                    && !db.Set<DriverShiftsRow>().Any(ds => ds.DriverStaffId == a.DriverStaffId && ds.Status == "scheduled"
-                        && ds.StartTime <= (w.Start != null && w.Start > utcNow ? w.Start : utcNow) && ds.EndTime >= w.End)
-                select a.Id).AnyAsync(ct))
-            throw new InvalidOperationException("Reassign affected rentals before changing this shift.");
-        await tx.CommitAsync(ct);
-        return new(shiftId, driver, start, end, status);
-    }
-
-    public async Task<IReadOnlyList<DriverShift>> ListDriverShiftsAsync(int? driver, DateTime from, DateTime to, CancellationToken ct)
-    {
-        from = Car_Rental_System_BE.Infrastructure.Features.Availability.NpgsqlVehicleSearchRepository.Timestamp(from);
-        to = Car_Rental_System_BE.Infrastructure.Features.Availability.NpgsqlVehicleSearchRepository.Timestamp(to);
-        if (to <= from) throw new ArgumentException("End must be after start.");
-        await using var db = VehicleRentalDbContext.Create(dataSource);
-        return await db.Set<DriverShiftsRow>().AsNoTracking()
-            .Where(x => (driver == null || x.DriverStaffId == driver) && x.StartTime < to && x.EndTime > from)
-            .OrderBy(x => x.StartTime).ThenBy(x => x.Id)
-            .Select(x => new DriverShift(x.Id, x.DriverStaffId, x.StartTime, x.EndTime, x.Status)).ToListAsync(ct);
     }
 
     public async Task<OperationsPage<DriverScheduleEntry>> DriverScheduleAsync(int? driverId, DateTime from, DateTime to, OperationsPagination pagination, CancellationToken ct)
@@ -470,7 +394,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
         };
     private static readonly string[] ClosedRentalStatuses = ["completed", "cancelled", "expired"];
 
-    /// <summary>Rental with its hourly/long-term schedule, composable in LINQ.</summary>
+    /// <summary>Đơn thuê kèm lịch thuê theo giờ/dài hạn, có thể ghép trong LINQ.</summary>
     private sealed class RentalWindow
     {
         public int RentalId { get; init; }

@@ -32,13 +32,13 @@ using Car_Rental_System_BE.Application.Features.Audit;
 namespace Car_Rental_System_BE.WebApi.Extensions;
 
 /// <summary>
-/// Application-layer registrations: the use-case services, the workflows and the options objects those
-/// services consume as plain values.
+/// Đăng ký tầng Application: các service use case, các workflow và các đối tượng options mà các
+/// service đó dùng như giá trị thuần.
 /// </summary>
 /// <remarks>
-/// This lives in WebApi rather than in the Application project because two of the registrations are WebApi
-/// adapters (<see cref="JwtTokenService"/> and <see cref="HttpAuditRequestContext"/>), which the Application
-/// project cannot reference without inverting the dependency chain.
+/// Phần này nằm trong WebApi thay vì project Application vì hai đăng ký là adapter của WebApi (<see
+/// cref="JwtTokenService"/> và <see cref="HttpAuditRequestContext"/>), mà project Application không thể tham
+/// chiếu nếu không đảo chiều chuỗi phụ thuộc.
 /// </remarks>
 public static class ApplicationExtensions
 {

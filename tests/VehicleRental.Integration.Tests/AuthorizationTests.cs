@@ -176,13 +176,6 @@ public sealed class AuthorizationTests
     public async Task Maintenance_endpoints_enforce_the_policies_they_moved_with(string action, string role, bool allowed) =>
         Assert.Equal(allowed, await AuthorizeEndpoint<MaintenanceController>(action, Principal(role, 7)));
 
-    [Theory]
-    [InlineData("CreateShift", "Manager", true)]
-    [InlineData("UpdateShift", "Driver", false)]
-    [InlineData("CreateShift", "CustomerService", false)]
-    public async Task Dispatch_endpoints_enforce_roles(string action, string role, bool allowed) =>
-        Assert.Equal(allowed, await AuthorizeEndpoint<DriverShiftsController>(action, Principal(role, 7)));
-
     /// <summary>
     /// The candidate check of a replacement moved to InspectionRecordsController; it keeps the Inspection
     /// policy, so a policy left behind on DispatchController cannot pass this matrix.

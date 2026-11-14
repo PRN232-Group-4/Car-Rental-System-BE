@@ -42,9 +42,6 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         return id;
     }
 
-    private Task<DriverShift> ShiftAsync(int driver, Rental rental)
-        => assignments.SaveDriverShiftAsync(null,driver,rental.StartTime!.Value,rental.EndTime!.Value,false,Manager,default);
-
     /// <summary>
     /// Seeds exactly the one row the deleted lax <c>IOperationsService.AssignAsync</c> wrote (it took the
     /// dispatcher lock, replaced any active assignment and inserted this row, nothing else). The surviving
@@ -99,40 +96,6 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
     }
 
     [Fact]
-    public async Task New_driver_shift_ignores_unrelated_self_drive_assignments()
-    {
-        var scenario = await Scenarios.CreateDirectRentalAsync(db.DataSource);
-        var rental = (await bookings.GetRentalAsync(scenario.RentalId, default))!;
-        var inspector = await StaffAsync();
-        await inspections.AddInspectionAsync(rental.Id, inspector, "pre_rental", true, null, null, null, null, default);
-        await AssignAsync(rental.Id, null);
-        var driver = await StaffAsync(driver: true);
-
-        var shift = await ShiftAsync(driver, rental);
-
-        Assert.Equal(driver, shift.DriverStaffId);
-        Assert.Equal("scheduled", shift.Status);
-        Assert.Equal(1, await Seed.CountAsync(db.DataSource,
-            "SELECT count(*) FROM vehicle_assignments WHERE rental_id=$1 AND driver_staff_id IS NULL AND status='assigned'", rental.Id));
-    }
-
-    [Fact]
-    public async Task Shifts_reject_overlap_outside_duty_and_cancellation_of_assigned_trip()
-    {
-        var scenario=await Scenarios.CreateDirectRentalAsync(db.DataSource);
-        var rental=(await bookings.GetRentalAsync(scenario.RentalId,default))!;
-        var driver=await StaffAsync(driver:true);
-        await inspections.AddInspectionAsync(rental.Id,driver,"pre_rental",true,null,null,null,null,default);
-        var shift=await ShiftAsync(driver,rental);
-        var overlap=await Assert.ThrowsAsync<InvalidOperationException>(()=>ShiftAsync(driver,rental));
-        Assert.Equal("Driver shifts cannot overlap.",overlap.Message);
-        await AssignAsync(rental.Id,driver);
-        var stranded=await Assert.ThrowsAsync<InvalidOperationException>(()=>assignments.SaveDriverShiftAsync(shift.Id,driver,shift.StartTime,shift.EndTime,true,Manager,default));
-        Assert.Equal("Reassign affected rentals before changing this shift.",stranded.Message);
-        Assert.Equal("scheduled",(await assignments.ListDriverShiftsAsync(driver,shift.StartTime,shift.EndTime,default)).Single().Status);
-    }
-
-    [Fact]
     public async Task Breakdown_requires_owner_manager_maintenance_same_seats_new_driver_and_preserves_prices()
     {
         var scenario=await Scenarios.CreateDirectRentalAsync(db.DataSource);
@@ -140,8 +103,6 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         var oldDriver=await StaffAsync(driver:true);
         var newDriver=await StaffAsync(driver:true);
         var inspector=await StaffAsync(technician:true);
-        await ShiftAsync(oldDriver,rental);
-        await ShiftAsync(newDriver,rental);
         await lifecycle.ConfirmAsync(rental.Id,Scenarios.StaffActor,default);
         await inspections.AddInspectionAsync(rental.Id,inspector,"pre_rental",true,null,null,null,null,default);
         // This rental really does carry a driver, so the schedule must say so: the lifecycle refuses to hand over a

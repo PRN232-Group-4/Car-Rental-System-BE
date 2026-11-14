@@ -39,9 +39,9 @@ public sealed record RentalSettlementDto(
 );
 
 /// <summary>
-/// Phase 2 / D-1: everything <c>CompleteAsync</c> decides before it writes anything - the money of the
-/// settlement, already calculated. <see cref="IRentalLifecycleRepository.SettleCompletionAsync"/> applies it
-/// atomically and only re-derives what needs a row lock (the package hours still left on the subscription).
+/// Phase 2 / D-1: mọi thứ <c>CompleteAsync</c> quyết định trước khi ghi bất cứ gì - số tiền quyết toán, đã
+/// được tính sẵn. <see cref="IRentalLifecycleRepository.SettleCompletionAsync"/> áp dụng nguyên tử và chỉ
+/// tính lại phần cần khóa dòng (số giờ gói thuê bao còn lại).
 /// </summary>
 public sealed record SettlementPlan(
     DateTime CompletedAt,
@@ -56,24 +56,24 @@ public sealed record SettlementPlan(
     decimal VatRate,
     decimal DepositHeld,
     decimal DepositDeducted,
-    // Direct rentals only: the part of the overtime the deposit could not cover, billed as an 'overtime' invoice.
+    // Chỉ áp dụng cho đơn thuê trực tiếp: phần phí quá giờ mà tiền cọc không đủ bù, được lập thành hóa đơn 'overtime'.
     decimal Shortfall,
     decimal RefundAmount,
-    // Invoice the refund is booked against (the rental invoice of a direct rental).
+    // Hóa đơn mà khoản hoàn tiền được ghi nhận vào (hóa đơn thuê của đơn thuê trực tiếp).
     int? RefundInvoiceId,
     DateTime InvoiceDueAt,
-    // Prices the rental ends the settlement with (rent + VAT, overtime included).
+    // Giá mà đơn thuê dùng khi kết thúc quyết toán (tiền thuê + VAT, đã gồm phí quá giờ).
     decimal NewVatPrice,
     decimal NewTotalPrice,
-    // Base for the loyalty award. NULL means the completion awards no points (subscription rentals).
+    // Mốc tính điểm thành viên. NULL nghĩa là lần hoàn tất này không cộng điểm (đơn thuê theo gói).
     decimal? LoyaltyBasisAmount,
     bool DamageReviewRequired
 );
 
 /// <summary>
-/// The outward ports the settlement calls from inside its own transaction. They are handed to the
-/// repository so the refund, the invoice, the package hours and the loyalty points join that transaction
-/// instead of committing on their own connections (Phase 2 / D-5).
+/// Các cổng ra ngoài mà quyết toán gọi từ bên trong transaction của chính nó. Chúng được đưa cho
+/// repository để khoản hoàn tiền, hóa đơn, giờ gói và điểm thành viên tham gia cùng transaction đó thay
+/// vì tự commit trên kết nối riêng (Phase 2 / D-5).
 /// </summary>
 public sealed record SettlementParticipants(
     IRentalPaymentGate PaymentGate,
@@ -248,9 +248,9 @@ public sealed record RentalStatusChangedEvent(
 public interface IRentalLifecycleRepository
 {
     /// <summary>
-    /// Plain read of one rental. It takes NO lock: the name used to be GetAsync, which was a lie.
-    /// Locks are taken only inside <see cref="SettleCompletionAsync"/> (rental first, subscription second)
-    /// and inside the other UpdateTo* methods, which re-check the state in their own transaction.
+    /// Đọc thường một đơn thuê. KHÔNG khóa gì cả: tên cũ là GetAsync, gây hiểu nhầm. Khóa chỉ được lấy bên
+    /// trong <see cref="SettleCompletionAsync"/> (đơn thuê trước, gói thuê bao sau) và bên trong các hàm
+    /// UpdateTo* khác, vốn kiểm tra lại trạng thái trong transaction của riêng chúng.
     /// </summary>
     Task<RentalLifecycleEntity?> GetAsync(int rentalId, CancellationToken ct);
     Task<bool> HasPassingPreInspectionAsync(int rentalId, CancellationToken ct);
@@ -262,10 +262,10 @@ public interface IRentalLifecycleRepository
     Task UpdateToRentingAsync(int rentalId, int vehicleId, DateTime startedAt, ActorContext actor, CancellationToken ct);
     Task UpdateToPostInspectionAsync(int rentalId, DateTime returnedAt, ActorContext actor, CancellationToken ct);
     /// <summary>
-    /// Phase 2 / D-1: the whole completion in ONE transaction, always in this lock order:
-    /// advisory lock(rentalId) -> rentals FOR UPDATE -> state re-check -> customer_subscriptions FOR UPDATE.
-    /// Refund, invoice, package hours and loyalty points are written through <paramref name="participants"/>
-    /// on the same connection and transaction, so any failure rolls the entire completion back.
+    /// Phase 2 / D-1: toàn bộ việc hoàn tất trong MỘT transaction, luôn theo thứ tự khóa: advisory
+    /// lock(rentalId) -> rentals FOR UPDATE -> kiểm tra lại trạng thái -> customer_subscriptions FOR UPDATE.
+    /// Hoàn tiền, hóa đơn, giờ gói và điểm thành viên được ghi qua <paramref name="participants"/> trên cùng
+    /// kết nối và transaction, nên lỗi ở bất kỳ đâu sẽ hoàn tác toàn bộ việc hoàn tất.
     /// </summary>
     Task<RentalSettlementDto> SettleCompletionAsync(
         int rentalId, SettlementPlan plan, SettlementParticipants participants, ActorContext actor, CancellationToken ct);
@@ -296,15 +296,15 @@ public interface IInvoiceGateway
     Task<int> CreateOvertimeInvoiceAsync(int rentalId, decimal amount, decimal vatAmount, DateTime dueAt, CancellationToken ct);
 
     /// <summary>
-    /// Phase 2 / D2: a subscription rental that runs past its remaining package hours is billed for the
-    /// excess on its own invoice. One per rental (ux_invoices_rental_supplementary).
+    /// Phase 2 / D2: đơn thuê theo gói chạy quá số giờ gói còn lại thì phần vượt được tính trên một hóa
+    /// đơn riêng. Mỗi đơn thuê một hóa đơn (ux_invoices_rental_supplementary).
     /// </summary>
     Task<int> CreateSupplementaryInvoiceAsync(int rentalId, decimal amount, decimal vatAmount, DateTime dueAt, CancellationToken ct);
 }
 
 public interface ISubscriptionUsage
 {
-    /// <summary>Package hours are fractional (NUMERIC(10,2)), so the amount taken is fractional too.</summary>
+    /// <summary>Giờ gói là số thập phân (NUMERIC(10,2)), nên số giờ bị trừ cũng là số thập phân.</summary>
     Task DeductRemainingHoursAsync(int subscriptionId, decimal hours, CancellationToken ct);
 }
 

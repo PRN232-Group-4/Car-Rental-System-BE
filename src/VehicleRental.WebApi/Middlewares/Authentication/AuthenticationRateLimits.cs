@@ -14,7 +14,7 @@ public static class AuthenticationRateLimits
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
         options.AddPolicy("authentication", context => RateLimitPartition.GetFixedWindowLimiter(
             $"{context.GetEndpoint()?.DisplayName}:{context.Connection.RemoteIpAddress}", _ => Window(settings)));
-        // Sending and confirming a password change share one IP budget.
+        // Gửi và xác nhận đổi mật khẩu dùng chung một hạn mức theo IP.
         options.AddPolicy("password-change", context => RateLimitPartition.GetFixedWindowLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => Window(settings)));
         options.OnRejected = async (context, ct) =>

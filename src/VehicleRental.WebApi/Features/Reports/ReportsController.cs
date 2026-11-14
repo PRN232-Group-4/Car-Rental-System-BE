@@ -12,17 +12,17 @@ using Microsoft.AspNetCore.Mvc;
 namespace Car_Rental_System_BE.WebApi.Features.Reports;
 
 /// <summary>
-/// Incident reports: filing one, the management queue, resolving a damage report, the two report status
-/// commands and turning a report into a maintenance job. These five actions used to sit on
-/// <c>DispatchController</c>; route, verb, policy, route constraints, status codes, request and response
-/// shapes, success messages and swagger descriptions travelled with them unchanged.
+/// Báo cáo sự cố: gửi báo cáo, hàng đợi của quản lý, giải quyết báo cáo hư hỏng, hai lệnh đổi trạng thái
+/// báo cáo và chuyển báo cáo thành phiếu bảo trì. Năm action này từng nằm trên
+/// <c>DispatchController</c>; route, verb, policy, ràng buộc route, mã trạng thái, dạng
+/// request/response, thông điệp thành công và mô tả swagger giữ nguyên khi chuyển sang.
 /// </summary>
 /// <remarks>
-/// The actions keep their own <c>[Authorize]</c> attributes instead of one class-level policy: the two reading
-/// and filing actions are role lists while the three management actions use the Management policy, and ASP.NET
-/// Core ANDs class-level and action-level metadata. The three class-level <c>ProducesResponseType</c> entries are
-/// repeated here because DispatchController declared 400/403/404 for every action it owned, and dropping them
-/// would silently shrink the documented contract of the five moved operations.
+/// Các action giữ thuộc tính <c>[Authorize]</c> riêng thay vì một policy cấp class: hai action đọc và gửi báo cáo
+/// dùng danh sách vai trò, còn ba action quản lý dùng policy Management, và ASP.NET Core kết hợp metadata cấp
+/// class với cấp action bằng AND. Ba mục <c>ProducesResponseType</c> cấp class được lặp lại ở đây vì
+/// DispatchController khai báo 400/403/404 cho mọi action nó sở hữu, và bỏ chúng sẽ âm thầm thu hẹp hợp đồng đã
+/// ghi tài liệu của năm thao tác đã chuyển.
 /// </remarks>
 [ApiController]
 [Route("api")]
@@ -31,7 +31,7 @@ namespace Car_Rental_System_BE.WebApi.Features.Reports;
 [ProducesResponseType(StatusCodes.Status404NotFound)]
 public sealed class ReportsController(IRentalBookingService bookings, IReportService reports, IMaintenanceService maintenanceService) : ControllerBase
 {
-    /// <summary>Staff reports damage separately from inspection; Driver reports only their assigned trip; Customer reports their own rental.</summary>
+    /// <summary>Nhân viên báo hư hỏng tách biệt với biên bản kiểm tra; tài xế chỉ báo cho chuyến được giao; khách báo cho đơn thuê của chính mình.</summary>
     [SuccessMessage("Incident report submitted for manager review.")]
     [Authorize(Roles="Admin,Manager,Staff,Maintenance,CustomerService,Driver,Customer")]
     [HttpPost("rental/{id:int}/reports")]
@@ -55,7 +55,7 @@ public sealed class ReportsController(IRentalBookingService bookings, IReportSer
         return Created($"/api/report/{report.Id}",report);
     }
 
-    /// <summary>Manager/Admin reviews incident reports; other staff see their own reports.</summary>
+    /// <summary>Manager/Admin xem xét báo cáo sự cố; nhân viên khác thấy báo cáo của chính mình.</summary>
     [OperationDescription(" Pagination for list operations defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Invalid values return 400 at HTTP and Application boundaries. data contains items/page/pageSize/totalCount, totalCount is after filters; out-of-range pages retain the count with empty items.", DocumentsPaginationParameters = true)]
     [SuccessMessage("Incident reports retrieved successfully.")]
     [Authorize(Roles="Admin,Manager,Staff,Maintenance,CustomerService,Driver")]
@@ -68,7 +68,7 @@ public sealed class ReportsController(IRentalBookingService bookings, IReportSer
         return Ok(await reports.ReportsAsync(staff,rentalId,status,pagination,ct));
     }
 
-    /// <summary>Manager/Admin assigns a report to an active Maintenance technician.</summary>
+    /// <summary>Manager/Admin giao báo cáo cho một kỹ thuật viên Maintenance đang hoạt động.</summary>
     [SuccessMessage("Maintenance technician assigned to the report successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Management)]
     [HttpPost("report/{id:int}/maintenance")]
@@ -79,7 +79,7 @@ public sealed class ReportsController(IRentalBookingService bookings, IReportSer
         return Created($"/api/maintenance/{maintenance.Id}",maintenance);
     }
 
-    /// <summary>Manager/Admin closes reviewed damage reports; breakdowns close through replacement.</summary>
+    /// <summary>Manager/Admin đóng báo cáo hư hỏng đã xem xét; báo cáo hỏng xe được đóng qua luồng thay xe.</summary>
     [SuccessMessage("Damage report resolved successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Management)]
     [HttpPost("report/{id:int}/resolve")]
@@ -90,7 +90,7 @@ public sealed class ReportsController(IRentalBookingService bookings, IReportSer
         return NoContent();
     }
 
-    /// <summary>Admin/Manager accepts an open report or rejects an unassigned report with a reason.</summary>
+    /// <summary>Admin/Manager tiếp nhận báo cáo đang mở hoặc từ chối báo cáo chưa giao, kèm lý do.</summary>
     [SuccessMessage("Incident report status updated successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPatch("report/{id:int}/status")]
     [ProducesResponseType<IncidentReport>(StatusCodes.Status200OK)]

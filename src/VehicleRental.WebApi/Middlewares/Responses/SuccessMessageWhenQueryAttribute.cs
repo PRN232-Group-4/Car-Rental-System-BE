@@ -3,12 +3,12 @@ using Microsoft.AspNetCore.Http;
 namespace Car_Rental_System_BE.WebApi.Middlewares.Responses;
 
 /// <summary>
-/// The wording a successful response from this action carries when the request selects one specific variant
-/// of the operation with a query parameter, e.g. the post-rental phase of an inspection endpoint.
+/// Câu chữ mà phản hồi thành công của action này mang khi request chọn một biến thể cụ thể của operation
+/// bằng tham số query, ví dụ giai đoạn sau thuê của endpoint kiểm tra xe.
 /// </summary>
 /// <remarks>
-/// Takes precedence over <see cref="SuccessMessageAttribute"/>, which keeps documenting the default variant.
-/// The match is exact: the parameter must carry this single value.
+/// Được ưu tiên hơn <see cref="SuccessMessageAttribute"/>, attribute này vẫn ghi tài liệu cho biến thể mặc
+/// định. So khớp chính xác: tham số phải mang đúng một giá trị này.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = true)]
 public sealed class SuccessMessageWhenQueryAttribute(string parameterName, string value, string message) : Attribute

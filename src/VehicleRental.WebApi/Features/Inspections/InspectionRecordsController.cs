@@ -8,16 +8,15 @@ using Microsoft.AspNetCore.Mvc;
 namespace Car_Rental_System_BE.WebApi.Features.Inspections;
 
 /// <summary>
-/// Inspection evidence over HTTP: the pre-rental and post-rental check of the rental's own vehicle and the
-/// candidate check of a replacement vehicle before dispatch. The actions used to sit on
-/// <c>OperationsController</c> (Pre, Post) and <c>DispatchController</c> (InspectReplacement); route, verb,
-/// policy, route constraints, status codes, request and response shapes, success messages and swagger
-/// descriptions travelled with them unchanged.
+/// Bằng chứng kiểm tra xe qua HTTP: kiểm tra trước và sau thuê cho chính xe của đơn, và kiểm tra xe thay
+/// thế ứng viên trước khi điều phối. Các action từng nằm trên <c>OperationsController</c> (Pre, Post) và
+/// <c>DispatchController</c> (InspectReplacement); route, verb, policy, ràng buộc route, mã trạng thái,
+/// dạng request/response, thông điệp thành công và mô tả swagger giữ nguyên khi chuyển sang.
 /// </summary>
 /// <remarks>
-/// A controller of its own rather than a second action set on <c>InspectionsController</c>: that type carries a
-/// class-level role list for the inspection assignment features, and ASP.NET Core ANDs class-level with
-/// action-level policy metadata, so the three actions below would silently lose the reach they had.
+/// Controller riêng thay vì thêm một nhóm action thứ hai vào <c>InspectionsController</c>: kiểu đó mang danh
+/// sách vai trò ở cấp class cho các tính năng phân công kiểm tra, và ASP.NET Core kết hợp metadata policy cấp
+/// class với cấp action bằng AND, nên ba action bên dưới sẽ âm thầm mất phạm vi truy cập vốn có.
 /// </remarks>
 [ApiController]
 [Route("api")]
@@ -28,7 +27,7 @@ public sealed class InspectionRecordsController(IInspectionRecordService inspect
     [SuccessMessage("Post-rental inspection recorded successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Inspection)] [HttpPost("rental/{id:int}/inspections/post")] public Task<IActionResult> Post(int id,InspectionRequest x,CancellationToken ct)=>Inspect(id,x,"post_rental",ct);
 
-    /// <summary>Inspection staff checks a candidate replacement before Manager dispatches it.</summary>
+    /// <summary>Nhân viên kiểm tra xe kiểm tra xe thay thế ứng viên trước khi Manager điều phối.</summary>
     [SuccessMessage("Replacement vehicle inspection recorded successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Inspection)]
     [HttpPost("rental/{id:int}/replacement-inspection/{vehicleId:int}")]

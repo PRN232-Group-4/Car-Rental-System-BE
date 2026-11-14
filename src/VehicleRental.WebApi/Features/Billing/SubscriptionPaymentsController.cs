@@ -8,9 +8,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace Car_Rental_System_BE.WebApi.Features.Billing;
 
 /// <summary>
-/// The subscription-plan purchase half of the former PaymentsController. Routes, verbs, policies and response
-/// contracts are byte-identical to PaymentsController.cs:19-155. Scope() is not duplicated here: it is used
-/// only by the three FinancialRead invoice reads, which now live in InvoicesController.
+/// Nửa mua gói thuê bao của PaymentsController trước đây. Route, verb, policy và hợp đồng phản hồi giống hệt
+/// PaymentsController.cs:19-155. Scope() không được sao chép sang đây: nó chỉ dùng cho ba phép đọc hóa đơn
+/// FinancialRead, giờ nằm trong InvoicesController.
 /// </summary>
 [ApiController]
 [Route("api")]
@@ -27,7 +27,7 @@ public sealed class SubscriptionPaymentsController(IPaymentService payments) : C
         catch (PaymentWorkflowException error) { return Problem(error.Message, statusCode: error.StatusCode); }
     }
 
-    // Polled by the FE after PayOS returns, to know when the webhook has activated the subscription.
+    // FE gọi lặp lại sau khi PayOS trả về, để biết khi nào webhook đã kích hoạt gói thuê bao.
     [SuccessMessage("Subscription purchase retrieved successfully.")]
     [Authorize(Policy = AuthorizationPolicies.Customer)]
     [HttpGet("subscription-plans/purchase/{orderCode:long}")]

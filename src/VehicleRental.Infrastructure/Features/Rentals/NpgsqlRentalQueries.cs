@@ -57,14 +57,15 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
             from i in invoices.DefaultIfEmpty()
             orderby x.Rental.Id descending
             select new { Window = x, Vehicle = v, Category = t.Type, Facility = f, Invoice = i,
-                OrderId = db.Set<RentalOrdersRow>().Where(o => o.RentalId == x.Rental.Id).Select(o => (int?)o.Id).FirstOrDefault() })
+                OrderId = db.Set<RentalOrdersRow>().Where(o => o.RentalId == x.Rental.Id).Select(o => (int?)o.Id).FirstOrDefault(),
+                LatestPreCheckOk = db.Set<InspectionsRow>().Where(c => c.RentalId == x.Rental.Id && c.VehicleId == x.Rental.VehicleId && c.InspectionType == "pre_rental").OrderByDescending(c => c.Id).Select(c => c.IsOk).FirstOrDefault() })
             .Skip((int)offset).Take(pageSize).ToListAsync(ct);
         var items = rows.Select(x => new CustomerRentalSummary(x.Window.Rental.Id, x.Window.Rental.Status,
             x.Window.Rental.RentalType, x.Window.Rental.IsSubscription, x.Vehicle.Id, x.Vehicle.Brand ?? "Unknown",
             x.Vehicle.Model ?? "Unknown", x.Vehicle.MainImgUrl, x.Window.Start!.Value, x.Window.End!.Value,
             x.Window.Rental.TotalPrice, x.Window.Rental.CreatedAt, x.OrderId, x.Vehicle.LicensePlate, x.Category,
             x.Window.Rental.Status is "pending" or "pre_inspection",
-            NextAction(x.Window.Rental.Status, x.Window.Rental.ConfirmedAt != null, x.Invoice?.Status, x.Window.Rental.IsSubscription),
+            NextAction(x.Window.Rental.Status, x.Window.Rental.ConfirmedAt != null, x.Invoice?.Status, x.Window.Rental.IsSubscription, x.LatestPreCheckOk == false),
             x.Facility == null ? null : new CustomerFacilityDto(x.Facility.Id, x.Facility.Name, x.Facility.Phone),
             SubscriptionHours(x.Window), x.Window.Rental.ExpireAt)).ToList();
         return new(items, total, page, pageSize);
@@ -81,7 +82,8 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
             from i in invoices.DefaultIfEmpty()
             where x.Rental.Id == rentalId && x.Rental.CustomerId == customerId
             select new { Window = x, Vehicle = v, Facility = f, Invoice = i,
-                OrderId = db.Set<RentalOrdersRow>().Where(o => o.RentalId == rentalId).Select(o => (int?)o.Id).FirstOrDefault() }).FirstOrDefaultAsync(ct);
+                OrderId = db.Set<RentalOrdersRow>().Where(o => o.RentalId == rentalId).Select(o => (int?)o.Id).FirstOrDefault(),
+                LatestPreCheckOk = db.Set<InspectionsRow>().Where(c => c.RentalId == x.Rental.Id && c.VehicleId == x.Rental.VehicleId && c.InspectionType == "pre_rental").OrderByDescending(c => c.Id).Select(c => c.IsOk).FirstOrDefault() }).FirstOrDefaultAsync(ct);
         if (row == null) return null;
         var r = row.Window.Rental;
         var price = new CustomerPriceDto(r.TotalPrice - r.VatPrice, r.VatPrice, r.DepositPrice, r.OvertimePrice, r.TotalPrice);
@@ -107,7 +109,7 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
             row.Facility == null ? null : new CustomerFacilityDto(row.Facility.Id, row.Facility.Name, row.Facility.Phone),
             row.Window.Start!.Value, row.Window.End!.Value, row.Window.HasDriver,
             new CustomerPickupDto("Facility", row.Facility?.Name), driver, price, invoice, inspections, settlement, timeline,
-            canCancel, cancellation, NextAction(r.Status, r.ConfirmedAt != null, invoice?.Status, r.IsSubscription),
+            canCancel, cancellation, NextAction(r.Status, r.ConfirmedAt != null, invoice?.Status, r.IsSubscription, row.LatestPreCheckOk == false),
             row.OrderId, SubscriptionHours(row.Window), r.ExpireAt);
     }
 
@@ -116,8 +118,11 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
     private static CustomerInvoiceDto? Invoice(InvoicesRow? invoice) => invoice == null ? null
         : new CustomerInvoiceDto(invoice.Id, invoice.InvoiceNumber, invoice.Status, invoice.Amount);
 
-    private static string? NextAction(string status, bool confirmed, string? invoiceStatus, bool subscription) => status switch
+    // LatestPreCheckOk là lần kiểm tra trước thuê mới nhất của xe hiện tại. Nếu không đạt thì chặn bàn giao cho tới khi nhân viên đổi xe (cờ tự mất với xe mới) hoặc khách hủy
+    // và đặt xe khác.
+    private static string? NextAction(string status, bool confirmed, string? invoiceStatus, bool subscription, bool vehicleFailedCheck = false) => status switch
     {
+        "pending" or "pre_inspection" or "cancelled" when vehicleFailedCheck => "VEHICLE_CHANGE_REQUIRED",
         "pending" => "WAITING_CONFIRMATION",
         "pre_inspection" when !confirmed => "WAITING_CONFIRMATION",
         "pre_inspection" when invoiceStatus != "paid" && !subscription => "PAYMENT_REQUIRED",

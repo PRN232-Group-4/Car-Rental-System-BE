@@ -4,16 +4,16 @@ using Car_Rental_System_BE.Application.Interfaces.External;
 namespace Car_Rental_System_BE.Application.Features.Customers;
 
 /// <summary>
-/// The customer's own driver license: what the customer reads and resubmits, and what staff reviews.
-/// It sat in <c>OperationsService</c> together with the rental and vehicle work; the rules below are the
-/// same ones, moved unchanged.
+/// GPLX của chính khách hàng: những gì khách xem và nộp lại, và những gì nhân viên duyệt. Phần này từng
+/// nằm trong <c>OperationsService</c> cùng nghiệp vụ đơn thuê và xe; các quy tắc bên dưới giữ nguyên khi
+/// chuyển sang.
 /// </summary>
 public sealed class CustomerLicenseService(ICustomerLicenseRepository repository, IOperationalNotifications? notifications = null) : ICustomerLicenseService
 {
     public async Task<CustomerLicense?> GetLicenseAsync(string email, CancellationToken ct)
     {
         var license = await repository.GetLicenseAsync(email, ct);
-        // Registration creates a customer with a legacy pending default before any license is submitted.
+        // Đăng ký tạo khách hàng với trạng thái mặc định cũ là pending trước khi nộp bất kỳ GPLX nào.
         return license is not null && string.IsNullOrWhiteSpace(license.Number)
             ? license with { Status = "none" }
             : license;

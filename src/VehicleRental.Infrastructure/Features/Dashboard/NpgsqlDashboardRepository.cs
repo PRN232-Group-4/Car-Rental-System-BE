@@ -91,7 +91,7 @@ public sealed class NpgsqlDashboardRepository(NpgsqlDataSource dataSource) : IDa
         var pageEnd = firstDay.AddDays(Math.Min(query.PageSize, total - (int)offset));
         var pageFrom = firstDay > fromTime ? firstDay : fromTime;
         var pageTo = pageEnd < toTime ? pageEnd : toTime;
-        // Aggregate in PostgreSQL before materializing: at most pageSize days per category.
+        // Tổng hợp trong PostgreSQL trước khi đưa về bộ nhớ: tối đa pageSize ngày cho mỗi nhóm.
         var revenue = await Revenues(db, query).Where(r => r.IssuedAt >= pageFrom && r.IssuedAt < pageTo)
             .GroupBy(r => new { Day = r.IssuedAt.Date, r.Category })
             .Select(g => new { g.Key.Day, g.Key.Category, Total = g.Sum(r => r.Amount) }).ToListAsync(ct);

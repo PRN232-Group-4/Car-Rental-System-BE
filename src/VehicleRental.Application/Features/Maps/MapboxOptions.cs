@@ -9,7 +9,7 @@ public sealed class MapboxOptions
     public string AccessToken { get; init; } = "";
     public bool Enabled { get; init; }
     public string DrivingProfile { get; init; } = "driving";
-    // Drop-off alerts can persist geocoded coordinates. Requires eligible Mapbox billing.
+    // Cảnh báo trả xe có thể lưu tọa độ đã geocode. Yêu cầu gói thanh toán Mapbox đủ điều kiện.
     public bool PermanentGeocoding { get; init; } = true;
 
     [Range(100, 50000)]

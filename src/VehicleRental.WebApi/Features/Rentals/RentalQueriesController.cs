@@ -17,7 +17,7 @@ public sealed class RentalQueriesController(
 ) : ControllerBase
 {
     /// <summary>
-    /// Lists rentals placed by the currently authenticated customer, filterable by tab (upcoming, ongoing, completed, cancelled).
+    /// Liệt kê các đơn thuê do khách hàng đang đăng nhập đặt, lọc theo tab (upcoming, ongoing, completed, cancelled).
     /// </summary>
     [OperationDescription("Pagination defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Invalid pagination returns 400. data contains items/page/pageSize/totalCount with the count after filtering and before pagination. Results are ordered by rental ID descending; out-of-range pages return empty items.", DocumentsPaginationParameters = true)]
     [OperationDescription(" Each item includes nullable orderId for the official paid rental order; id remains the booking request ID. Omit status (and tab for mine) to include all lifecycle states, including completed and cancelled.")]
@@ -46,7 +46,7 @@ public sealed class RentalQueriesController(
     }
 
     /// <summary>
-    /// Retrieves full customer-facing rental detail including vehicle, driver, pricing, inspections and timeline.
+    /// Lấy đầy đủ chi tiết đơn thuê hiển thị cho khách, gồm xe, tài xế, giá, biên bản kiểm tra và dòng thời gian.
     /// </summary>
     [OperationDescription("Rental detail includes status, audit timeline/history and nullable top-level orderId. id (or rental.id) remains the booking request ID; only a persisted official order supplies orderId. A cancelled rental remains cancelled even if a historical paid order exists.")]
     [SuccessMessage("Your rental details retrieved successfully.")]
@@ -74,13 +74,14 @@ public sealed class RentalQueriesController(
     }
 
     /// <summary>
-    /// Lists operational rentals with search and status filters for staff/management.
+    /// Liệt kê đơn thuê vận hành với bộ lọc tìm kiếm và trạng thái cho nhân viên/quản lý.
     /// </summary>
     [OperationDescription("Pagination defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Invalid pagination returns 400. data contains items/page/pageSize/totalCount with the count after filtering and before pagination. Results are ordered by rental ID descending; out-of-range pages return empty items.", DocumentsPaginationParameters = true)]
     [OperationDescription(" Each item includes nullable orderId for the official paid rental order; id remains the booking request ID. Omit status (and tab for mine) to include all lifecycle states, including completed and cancelled.")]
     [OperationDescription(" status=overdue filters renting rentals with no returned_at and end time before the server clock, before count/pagination. status=expired is a valid lifecycle filter (FR-042). Summaries expose isOverdue; lifecycle status remains renting so return remains valid. Newest id first, defaults page=1/pageSize=20, maximum 100.")]
     [SuccessMessage("Rentals retrieved successfully.")]
-    [Authorize(Policy = AuthorizationPolicies.CustomerService)]
+    // Maintenance cũng đọc danh sách này: kỹ thuật viên chọn các đơn đang chờ kiểm tra trước/sau thuê từ đây.
+    [Authorize(Roles = "Admin,Manager,CustomerService,Maintenance")]
     [HttpGet("")]
     [ProducesResponseType(typeof(PagedResult<OperationalRentalSummary>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -102,7 +103,7 @@ public sealed class RentalQueriesController(
     }
 
     /// <summary>
-    /// Retrieves comprehensive operational details for a rental, including settlement and history audit ledger.
+    /// Lấy đầy đủ chi tiết vận hành của đơn thuê, gồm quyết toán và sổ kiểm toán lịch sử.
     /// </summary>
     [OperationDescription("Rental detail includes status, audit timeline/history and nullable top-level orderId. id (or rental.id) remains the booking request ID; only a persisted official order supplies orderId. A cancelled rental remains cancelled even if a historical paid order exists.")]
     [SuccessMessage("Rental details retrieved successfully.")]
@@ -124,7 +125,7 @@ public sealed class RentalQueriesController(
     }
 
     /// <summary>
-    /// Lists active rentals currently overdue (past scheduled end time) and any next conflicting bookings.
+    /// Liệt kê các đơn thuê đang hoạt động đã quá hạn (quá giờ kết thúc dự kiến) và lượt đặt kế tiếp bị xung đột nếu có.
     /// </summary>
     [SuccessMessage("Overdue rentals retrieved successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]

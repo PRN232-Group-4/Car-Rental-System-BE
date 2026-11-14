@@ -22,11 +22,11 @@ public sealed class RentalPaymentGateAdapter(NpgsqlDataSource dataSource) : IRen
     }
 
     /// <summary>
-    /// Phase 2 / D2: restricted to the <c>rental</c> kind. This id is only ever used for refunds, and a
-    /// subscription rental now also carries a <c>supplementary</c> invoice; the old "prefer kind='rental', else
-    /// anything" ordering would have handed that one out as the primary invoice. Today this is unreachable
-    /// (<see cref="GetDepositHeldAsync"/> returns 0 for subscription rentals, so no deposit refund is ever raised
-    /// for them), so this closes a latent hole rather than fixing a live bug.
+    /// Phase 2 / D2: chỉ lấy loại <c>rental</c>. Id này chỉ dùng cho hoàn tiền, và đơn thuê theo gói giờ còn có
+    /// thêm hóa đơn <c>supplementary</c>; thứ tự cũ "ưu tiên kind='rental', nếu không thì lấy bất kỳ" sẽ trả hóa
+    /// đơn đó về làm hóa đơn chính. Hiện tại trường hợp này không xảy ra (<see cref="GetDepositHeldAsync"/> trả 0
+    /// cho đơn thuê theo gói, nên không bao giờ phát sinh hoàn cọc cho chúng), nên đây là bịt một lỗ hổng tiềm ẩn
+    /// chứ không phải sửa lỗi đang xảy ra.
     /// </summary>
     public async Task<int?> GetPrimaryInvoiceIdAsync(int rentalId, CancellationToken ct)
     {
@@ -50,9 +50,9 @@ public sealed class RentalPaymentGateAdapter(NpgsqlDataSource dataSource) : IRen
     }
 
     /// <summary>
-    /// Phase 2 / D-5 + D-6: the ONLY way a refund is recorded. Inside a settlement the ambient transaction is
-    /// joined and nothing is committed here (the settlement commits); outside one (cancellation) the method opens
-    /// its own transaction around the very same guarded insert. There is no second anti-duplicate mechanism.
+    /// Phase 2 / D-5 + D-6: cách DUY NHẤT để ghi nhận một khoản hoàn tiền. Bên trong quyết toán thì nhập vào
+    /// transaction dùng chung và không commit gì ở đây (quyết toán sẽ commit); bên ngoài (hủy đơn) thì hàm tự mở
+    /// transaction bao quanh đúng lệnh insert có chặn đó. Không có cơ chế chống trùng thứ hai.
     /// </summary>
     public async Task<int> CreateRefundPaymentAsync(
         int rentalId,
@@ -101,7 +101,7 @@ public sealed class InvoiceGatewayAdapter(NpgsqlDataSource dataSource, TimeProvi
         CancellationToken ct)
         => CreateExcessInvoiceAsync(rentalId, amount, vatAmount, dueAt, InvoiceKinds.Overtime, "OT", ct);
 
-    /// <summary>Phase 2 / D2: the excess overtime of a subscription rental, billed on its own invoice.</summary>
+    /// <summary>Phase 2 / D2: phần quá giờ vượt gói của đơn thuê theo gói, tính trên hóa đơn riêng.</summary>
     public Task<int> CreateSupplementaryInvoiceAsync(
         int rentalId,
         decimal amount,
@@ -113,19 +113,19 @@ public sealed class InvoiceGatewayAdapter(NpgsqlDataSource dataSource, TimeProvi
     private async Task<int> CreateExcessInvoiceAsync(
         int rentalId, decimal amount, decimal vatAmount, DateTime dueAt, string kind, string numberSuffix, CancellationToken ct)
     {
-        // invoices.amount is the TOTAL the customer must pay, VAT included; invoices.vat_amount is a breakdown
-        // component INSIDE that total, exactly like a rental invoice (CreateInvoiceForRentalAsync writes
-        // amount = total_price + deposit_price, where total_price already contains VAT). The collection paths
-        // (ConfirmCashAsync, CompleteInvoiceAsync, ReserveInvoiceCheckoutAsync) charge invoices.amount only.
+        // invoices.amount là TỔNG số khách phải trả, đã gồm VAT; invoices.vat_amount là thành phần chi tiết
+        // NẰM TRONG tổng đó, giống hệt hóa đơn thuê (CreateInvoiceForRentalAsync ghi amount = total_price +
+        // deposit_price, trong đó total_price đã gồm VAT). Các luồng thu tiền (ConfirmCashAsync,
+        // CompleteInvoiceAsync, ReserveInvoiceCheckoutAsync) chỉ thu invoices.amount.
         //
-        // Therefore EVERY caller passes a VAT-inclusive total here. The two callers reach that differently and
-        // must not be conflated: the direct-rental overtime path passes plan.Shortfall, which is already
-        // VAT-inclusive, while the subscription path passes a genuinely pre-VAT excess and adds its VAT first.
-        // Adding VAT inside this method double-charged the direct-rental path (measured: 200,000 + 20,000 VAT
-        // was written as 240,000 against 220,000 owed).
+        // Vì vậy MỌI bên gọi đều truyền vào đây tổng đã gồm VAT. Hai bên gọi tính ra tổng đó theo cách khác
+        // nhau và không được nhầm lẫn: luồng quá giờ của đơn thuê trực tiếp truyền plan.Shortfall, vốn đã gồm
+        // VAT, còn luồng gói thuê bao truyền phần vượt chưa có VAT và tự cộng VAT trước. Cộng VAT bên trong
+        // hàm này từng khiến luồng thuê trực tiếp bị tính VAT hai lần (đo được: 200.000 + 20.000 VAT bị ghi
+        // thành 240.000 trong khi chỉ nợ 220.000).
 
-        // Inside the settlement the invoice must be written on the settlement's connection and transaction,
-        // otherwise a later failure would leave an invoice behind for a rental that never completed.
+        // Bên trong quyết toán, hóa đơn phải được ghi trên kết nối và transaction của quyết toán, nếu không
+        // một lỗi sau đó sẽ để lại hóa đơn cho một đơn thuê chưa bao giờ hoàn tất.
         var ambient = AmbientTransactionScope.Current;
         await using var db = ambient is null ? VehicleRentalDbContext.Create(dataSource)
             : VehicleRentalDbContext.Create(ambient.Connection, ambient.Transaction);
@@ -152,8 +152,8 @@ public sealed class SubscriptionUsageAdapter(NpgsqlDataSource dataSource) : ISub
     {
         if (subscriptionId <= 0 || hours <= 0) return;
 
-        // Phase 2 / D-2: the deduction runs inside the settlement transaction, right after the per-rental
-        // ledger row that makes a second deduction of the same rental impossible.
+        // Phase 2 / D-2: việc trừ giờ chạy bên trong transaction quyết toán, ngay sau dòng sổ cái theo
+        // đơn thuê, dòng này khiến không thể trừ lần hai cho cùng một đơn.
         var ambient = AmbientTransactionScope.Current;
         await using var db = ambient is null ? VehicleRentalDbContext.Create(dataSource)
             : VehicleRentalDbContext.Create(ambient.Connection, ambient.Transaction);
@@ -170,11 +170,11 @@ public sealed class LoyaltyAwardAdapter(
     private readonly LoyaltyOptions _options = options ?? new LoyaltyOptions();
 
     /// <summary>
-    /// Phase 2 / D-5, deliberate behaviour change: this method no longer swallows failures. It used to catch
-    /// every exception and only log it, which is why a loyalty failure silently produced "completed without
-    /// points". It now propagates, so the settlement that called it rolls back and the rental is NOT completed
-    /// without the points the customer earned. Inside a settlement the points are written on the settlement's own
-    /// connection and transaction, so they cannot survive a later rollback either.
+    /// Phase 2 / D-5, cố ý đổi hành vi: hàm này không còn nuốt lỗi. Trước đây nó bắt mọi exception và chỉ ghi
+    /// log, nên lỗi điểm thành viên âm thầm dẫn tới "hoàn tất mà không có điểm". Giờ lỗi được ném ra, nên lần
+    /// quyết toán gọi nó sẽ hoàn tác và đơn thuê KHÔNG được hoàn tất khi thiếu điểm khách đã kiếm được. Bên trong
+    /// quyết toán, điểm được ghi trên chính kết nối và transaction của quyết toán, nên cũng không thể còn lại sau
+    /// một lần hoàn tác về sau.
     /// </summary>
     public async Task AwardPointsAsync(int customerId, int rentalId, decimal basisAmount, CancellationToken ct)
     {

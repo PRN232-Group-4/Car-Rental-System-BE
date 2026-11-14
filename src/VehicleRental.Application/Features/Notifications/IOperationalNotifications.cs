@@ -1,6 +1,6 @@
 namespace Car_Rental_System_BE.Application.Features.Notifications;
 
-/// <summary>Post-commit, best-effort notifications. Implementations must never fail the completed operation.</summary>
+/// <summary>Thông báo sau commit, theo kiểu cố gắng hết mức. Implementation không bao giờ được làm thất bại thao tác đã hoàn tất.</summary>
 public interface IOperationalNotifications
 {
     Task LicenseReviewedAsync(int customerId, string status);

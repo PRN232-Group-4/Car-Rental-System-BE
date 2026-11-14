@@ -35,7 +35,7 @@ public sealed class MapboxClient(HttpClient http, IOptions<MapboxOptions> option
 
     public async Task<IReadOnlyList<PlaceSearchResult>> SearchPlacesAsync(string query, double? lat, double? lng, double? radiusMeters, CancellationToken ct)
     {
-        // Search Box POI coverage excludes Vietnam; use v6 address search explicitly.
+        // Phạm vi POI của Search Box không bao gồm Việt Nam; dùng rõ ràng tìm kiếm địa chỉ v6.
         var proximity = lat.HasValue && lng.HasValue ? $"&proximity={Point(lat.Value, lng.Value)}" : "";
         using var doc = await GetAsync($"search/geocode/v6/forward?q={Uri.EscapeDataString(query)}&limit=10&autocomplete=false&country=vn&language=vi{proximity}", ct);
         var results = ReadResponse(() => ReadPlaces(doc.RootElement));
@@ -127,7 +127,7 @@ public sealed class MapboxClient(HttpClient http, IOptions<MapboxOptions> option
             throw new BusinessRuleException("MAP_NOT_CONFIGURED", "Dịch vụ bản đồ chưa được cấu hình.", 503);
         try
         {
-            // Fixed host; tokens must never be forwarded to a configurable origin.
+            // Host cố định; token không bao giờ được chuyển tới một origin có thể cấu hình.
             using var response = await http.GetAsync($"https://api.mapbox.com/{path}&access_token={Uri.EscapeDataString(_options.AccessToken.Trim())}", ct);
             if (!response.IsSuccessStatusCode)
             {
@@ -139,7 +139,7 @@ public sealed class MapboxClient(HttpClient http, IOptions<MapboxOptions> option
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException)
         {
-            // Do not log exception/URI: HttpClient exceptions may contain access_token.
+            // Không ghi log exception/URI: exception của HttpClient có thể chứa access_token.
             logger.LogWarning("Mapbox request failed ({FailureType}).", ex.GetType().Name);
             throw new BusinessRuleException("MAP_PROVIDER_UNAVAILABLE", "Dịch vụ Mapbox tạm thời không khả dụng. Vui lòng thử lại.", 503);
         }

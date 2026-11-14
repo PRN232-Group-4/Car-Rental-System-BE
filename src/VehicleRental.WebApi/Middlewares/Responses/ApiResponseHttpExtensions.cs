@@ -6,7 +6,7 @@ namespace Car_Rental_System_BE.WebApi.Middlewares.Responses;
 
 public static class ApiResponseHttpExtensions
 {
-    /// <summary>Covers failures outside MVC, including authorization and routing.</summary>
+    /// <summary>Xử lý các lỗi xảy ra ngoài MVC, kể cả phân quyền và định tuyến.</summary>
     public static IApplicationBuilder UseApiResponseErrors(this IApplicationBuilder app)
     {
         app.UseExceptionHandler(new ExceptionHandlerOptions

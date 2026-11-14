@@ -47,7 +47,6 @@ public sealed class DriverAssignmentTests(PostgresFixture db) : IClassFixture<Po
 
         await _inspections.AddInspectionAsync(rental.RentalId, driverId, "pre_rental", true, null, null, null, null, CancellationToken.None);
         var booked = (await _bookings.GetRentalAsync(rental.RentalId, default))!;
-        await _assignments.SaveDriverShiftAsync(null,driverId,booked.StartTime!.Value,booked.EndTime!.Value,false,assignedBy,default);
         await service.AssignDriverAsync(new(rental.RentalId, driverId, "initial", null, assignedBy), CancellationToken.None);
 
         // The unpaged duplicate query is gone: the paged queue the API serves is the one schedule read left.

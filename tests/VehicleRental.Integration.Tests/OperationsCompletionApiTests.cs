@@ -45,7 +45,6 @@ public sealed class OperationsCompletionApiTests : IAsyncLifetime
         // The departments and facilities endpoints moved to the Organization slice, so they resolve
         // IOrganizationService: the paged facility list is stubbed there now.
         builder.Services.AddSingleton(DispatchProxy.Create<IOrganizationService,OrganizationProxy>());
-
         builder.Services.AddSingleton(DispatchProxy.Create<IMediaService,UnusedProxy>());
         // The driver schedule now reads through the assignments slice and the maintenance queue through the
         // maintenances slice; the shared name-dispatching proxy answers both.

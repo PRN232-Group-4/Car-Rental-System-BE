@@ -77,9 +77,9 @@ public sealed class NpgsqlRoleRepository(NpgsqlDataSource dataSource) : IRoleRep
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(connection, transaction);
-        // Match account administration lock ordering. Table locks additionally serialize
-        // legacy staff/registration writers that do not acquire the admin advisory lock.
-        // No users rows are updated/locked here: assigned role renames are rejected.
+        // Khớp thứ tự khóa của quản trị tài khoản. Khóa bảng còn tuần tự hóa các luồng ghi nhân
+        // viên/đăng ký cũ không lấy advisory lock quản trị. Không cập nhật/khóa dòng users nào ở
+        // đây: đổi tên vai trò đang được gán sẽ bị từ chối.
         await db.AdvisoryLockAsync(724232001L, ct);
         await db.AdvisoryLockAsync(379123220L, ct);
         await db.LockTablesAsync("SHARE ROW EXCLUSIVE", ct, typeof(RolesRow), typeof(UserRolesRow));

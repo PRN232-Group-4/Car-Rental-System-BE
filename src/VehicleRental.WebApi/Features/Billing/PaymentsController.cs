@@ -9,12 +9,11 @@ using Microsoft.AspNetCore.Mvc;
 namespace Car_Rental_System_BE.WebApi.Features.Billing;
 
 /// <summary>
-/// Payments, refunds, checkout cancellation and the PayOS webhook. The invoice endpoints
-/// (cash confirmation, checkout, invoice reads, invoice creation) moved to InvoicesController and the
-/// subscription-plan purchase pair moved to SubscriptionPaymentsController; every route template is
-/// unchanged. CancelCheckout and Webhook stay here on purpose: both dispatch across the invoice and
-/// subscription halves (PaymentService.CancelCheckoutAsync / HandleWebhookAsync), so neither slice may
-/// own them alone.
+/// Thanh toán, hoàn tiền, hủy checkout và webhook PayOS. Các endpoint hóa đơn (xác nhận tiền mặt,
+/// checkout, đọc hóa đơn, tạo hóa đơn) đã chuyển sang InvoicesController và cặp mua gói thuê bao
+/// chuyển sang SubscriptionPaymentsController; mọi route template giữ nguyên. CancelCheckout và
+/// Webhook cố ý ở lại đây: cả hai đều phân luồng qua nửa hóa đơn và nửa gói thuê bao
+/// (PaymentService.CancelCheckoutAsync / HandleWebhookAsync), nên không slice nào được sở hữu riêng.
 /// </summary>
 [ApiController]
 [Route("api")]
@@ -33,7 +32,7 @@ public sealed class PaymentsController(IPaymentService payments) : ControllerBas
         catch (PaymentWorkflowException error) { return Problem(error.Message, statusCode: error.StatusCode); }
     }
 
-    // PayOS calls this endpoint directly; it is intentionally anonymous but signature-verified.
+    // PayOS gọi trực tiếp endpoint này; cố ý cho phép ẩn danh nhưng có xác minh chữ ký.
     [SuccessMessage("Payment webhook processed successfully.")]
     [AllowAnonymous]
     [HttpPost("payments/webhooks/payos")]
@@ -60,7 +59,7 @@ public sealed class PaymentsController(IPaymentService payments) : ControllerBas
     public async Task<IActionResult> Refund(int paymentId, RefundRequest request, CancellationToken ct)
     {
         var result = await payments.RequestRefundAsync(paymentId, request.Amount, ct);
-        // The request is persisted first. A future PayOS payout worker will submit this row once payout keys are available.
+        // Yêu cầu được lưu trước. Một worker chi trả PayOS sau này sẽ gửi dòng này đi khi có key chi trả.
         return Accepted(result);
     }
 

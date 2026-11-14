@@ -7,22 +7,22 @@ using Npgsql;
 namespace Car_Rental_System_BE.Infrastructure.Features.Recovery;
 
 /// <summary>
-/// Vehicle recovery storage: the one command that swaps a rental's vehicle, moves the assignment, records the
-/// replacement and resolves the breakdown report. The member came from <c>NpgsqlOperationsRepository</c> with
-/// its SQL unchanged; the dispatcher lock, the transaction and the FOR UPDATE clause travelled with it.
+/// Lưu trữ khôi phục chuyến bằng xe thay thế: lệnh duy nhất đổi xe của đơn thuê, chuyển phân công, ghi nhận
+/// lần thay xe và giải quyết báo cáo hỏng xe. Thành viên này lấy từ <c>NpgsqlOperationsRepository</c> với SQL
+/// giữ nguyên; khóa điều phối, transaction và mệnh đề FOR UPDATE cũng đi theo.
 /// </summary>
 public sealed class NpgsqlRecoveryRepository(NpgsqlDataSource dataSource) : IRecoveryRepository
 {
-    // One transaction-scoped dispatcher lock protects cross-table availability invariants. Recovery takes a
-    // candidate vehicle, moves an assignment and can flip the old vehicle back to available, so it keeps taking
-    // the same lock the operations and maintenance repositories take.
+    // Một khóa điều phối trong phạm vi transaction bảo vệ các bất biến về tình trạng trống giữa nhiều bảng.
+    // Khôi phục chuyến lấy một xe ứng viên, chuyển phân công và có thể trả xe cũ về sẵn sàng, nên vẫn lấy cùng
+    // khóa mà repository vận hành và bảo trì dùng.
     private static Task LockOperationsAsync(VehicleRentalDbContext db, CancellationToken ct)
         => db.AdvisoryLockAsync(724232001L, ct);
 
-    // Recovery keeps its own copy of the locked rental read the legacy operations repository holds privately:
-    // the moved body must keep its exact SQL, and reusing that helper would mean widening the legacy
-    // repository's surface for one slice. Same call the Reports, Inspections, Customers and Fleet slices made.
-    // It is the identical statement, so the two copies lock the same row.
+    // Recovery giữ bản sao riêng của phép đọc đơn thuê có khóa mà repository vận hành cũ giữ kín: phần thân
+    // chuyển sang phải giữ đúng SQL, và dùng lại hàm hỗ trợ đó nghĩa là phải mở rộng bề mặt của repository cũ
+    // chỉ vì một slice. Các slice Reports, Inspections, Customers và Fleet cũng làm như vậy. Đây là cùng một
+    // câu lệnh, nên hai bản sao khóa cùng một dòng.
     private static async Task<Rental> ReadRentalAsync(VehicleRentalDbContext db, int id, CancellationToken ct)
     {
         if (await db.LockByKeyAsync<RentalsRow>(id, ct) is null) throw new KeyNotFoundException("Rental was not found.");
@@ -52,9 +52,8 @@ public sealed class NpgsqlRecoveryRepository(NpgsqlDataSource dataSource) : IRec
         var through = DateOnly.FromDateTime(end) > today ? DateOnly.FromDateTime(end) : today;
         var qualified = await (from s in db.Set<StaffsRow>() join u in db.Set<UsersRow>() on s.UserId equals u.Id
             where s.Id == driver && s.IsDriver && u.IsActive && s.LicenseExpiryDate >= through
-                && db.Set<DriverShiftsRow>().Any(ds => ds.DriverStaffId == s.Id && ds.Status == "scheduled" && ds.StartTime <= start && ds.EndTime >= end)
             select s.Id).AnyAsync(ct);
-        if (!qualified) throw new InvalidOperationException("Driver must be qualified and on duty for the entire assignment.");
+        if (!qualified) throw new InvalidOperationException("Driver must be an active driver with a license valid for the entire assignment.");
         var conflict = await (from a in db.Set<VehicleAssignmentsRow>()
             join w in RentalWindows(db) on a.RentalId equals w.RentalId
             where a.DriverStaffId == driver && a.RentalId != rental && a.Status == "assigned"
@@ -128,7 +127,7 @@ public sealed class NpgsqlRecoveryRepository(NpgsqlDataSource dataSource) : IRec
         else if (await HourlyRentalRequiresDriverAsync(db, rentalId, ct))
             throw new InvalidOperationException("A driver is required for this rental.");
         var status = rental.Status == "pending" ? "pre_inspection" : rental.Status;
-        // Deliberately preserve all rental price snapshots and invoice/payment amounts.
+        // Cố ý giữ nguyên mọi ảnh chụp giá của đơn thuê và số tiền hóa đơn/thanh toán.
         await db.Set<RentalsRow>().Where(r => r.Id == rentalId).ExecuteUpdateAsync(s => s
             .SetProperty(r => r.VehicleId, vehicle)
             .SetProperty(r => r.Status, status), ct);
@@ -195,7 +194,7 @@ public sealed class NpgsqlRecoveryRepository(NpgsqlDataSource dataSource) : IRec
         db.Set<HourRentalDetailRow>().AnyAsync(h => h.RentalId == rentalId && h.HasDriver, ct);
     private static readonly string[] ClosedRentalStatuses = ["completed", "cancelled", "expired"];
 
-    /// <summary>Rental with its hourly/long-term schedule, composable in LINQ.</summary>
+    /// <summary>Đơn thuê kèm lịch thuê theo giờ/dài hạn, có thể ghép trong LINQ.</summary>
     private sealed class RentalWindow
     {
         public int RentalId { get; init; }

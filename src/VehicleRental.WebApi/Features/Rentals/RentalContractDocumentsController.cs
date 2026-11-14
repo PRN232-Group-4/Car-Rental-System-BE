@@ -19,9 +19,10 @@ public sealed class SignedContractUploadForm
 [Authorize(Roles = "Customer,Admin,Manager,CustomerService")]
 public sealed class RentalContractDocumentsController(IRentalContractDocumentService documents) : ControllerBase
 {
-    /// <summary>Rental owner or operations uploads the signed long-term contract before handover.</summary>
-    [OperationDescription("Rental owner or Admin/Manager/CustomerService only. Upload multipart file and signedAt UTC for pending/pre_inspection long-term rental; PDF/JPEG/PNG/WebP, matching MIME/extension/signature, non-empty and <=10 MiB. Non-future signing date required. Replacement is atomic until rental starts; other customer gets 404 and other role gets 403. Evidence is private PostgreSQL storage; legacy URLs do not satisfy handover. Download returns binary attachment with no-store and nosniff; errors retain the JSON six-field envelope.")]
+    /// <summary>Chỉ nhân viên vận hành (Admin/Manager/CustomerService) được tải hợp đồng dài hạn đã ký lên; khách hàng chỉ được xem.</summary>
+    [OperationDescription("Upload: Admin/Manager/CustomerService only (customers get 403). Download: rental owner or Admin/Manager/CustomerService. Upload multipart file and signedAt UTC for pending/pre_inspection long-term rental; PDF/JPEG/PNG/WebP, matching MIME/extension/signature, non-empty and <=10 MiB. Non-future signing date required. Replacement is atomic until rental starts; other customer gets 404 and other role gets 403. Evidence is private PostgreSQL storage; legacy URLs do not satisfy handover. Download returns binary attachment with no-store and nosniff; errors retain the JSON six-field envelope.")]
     [SuccessMessage("Signed rental contract uploaded successfully.")]
+    [Authorize(Roles = "Admin,Manager,CustomerService")]
     [HttpPost("upload")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(ContractUploadValidator.MaxBytes + 1024 * 1024)]
@@ -40,7 +41,7 @@ public sealed class RentalContractDocumentsController(IRentalContractDocumentSer
         return Ok(await documents.UploadAsync(id, content, form.File.FileName, form.File.ContentType, form.SignedAt.Value, Actor(), ct));
     }
 
-    /// <summary>Download private signed contract; ownership or operations role required.</summary>
+    /// <summary>Tải xuống hợp đồng đã ký (riêng tư); cần là chủ đơn hoặc có vai trò vận hành.</summary>
     [OperationDescription("Rental owner or Admin/Manager/CustomerService only. Upload multipart file and signedAt UTC for pending/pre_inspection long-term rental; PDF/JPEG/PNG/WebP, matching MIME/extension/signature, non-empty and <=10 MiB. Non-future signing date required. Replacement is atomic until rental starts; other customer gets 404 and other role gets 403. Evidence is private PostgreSQL storage; legacy URLs do not satisfy handover. Download returns binary attachment with no-store and nosniff; errors retain the JSON six-field envelope.")]
     [BinaryAttachmentResponse("Private signed contract binary attachment (no JSON envelope).", "application/pdf", "image/jpeg", "image/png", "image/webp")]
     [HttpGet("document")]

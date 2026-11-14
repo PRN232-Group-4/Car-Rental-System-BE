@@ -45,7 +45,7 @@ public sealed class MediaController(IMediaService media) : ControllerBase
         return Ok(image);
     }
 
-    /// <summary>Admin or Manager uploads a driver's license image before creating or updating staff.</summary>
+    /// <summary>Admin hoặc Manager tải ảnh GPLX của tài xế lên trước khi tạo hoặc cập nhật nhân viên.</summary>
     [SuccessMessage("Staff driver license image uploaded successfully.")]
     [Authorize(Policy = AuthorizationPolicies.Management)]
     [HttpPost("staff-license")]
@@ -55,7 +55,7 @@ public sealed class MediaController(IMediaService media) : ControllerBase
     public async Task<IActionResult> UploadStaffLicense(IFormFile? file, CancellationToken ct) =>
         await UploadEvidence(file, 5 * 1024 * 1024, media.UploadStaffLicenseAsync, ct);
 
-    /// <summary>Admin, Manager or Maintenance with a staff profile uploads inspection evidence.</summary>
+    /// <summary>Admin, Manager hoặc Maintenance có hồ sơ nhân viên tải ảnh bằng chứng kiểm tra xe lên.</summary>
     [SuccessMessage("Inspection image uploaded successfully.")]
     [Authorize(Policy = AuthorizationPolicies.Inspection)]
     [HttpPost("inspection")]
@@ -65,7 +65,7 @@ public sealed class MediaController(IMediaService media) : ControllerBase
     public async Task<IActionResult> UploadInspectionImage(IFormFile? file, CancellationToken ct) =>
         await UploadEvidence(file, 10 * 1024 * 1024, media.UploadInspectionImageAsync, ct);
 
-    /// <summary>Staff uploads an image to include in a rental incident report.</summary>
+    /// <summary>Nhân viên tải ảnh lên để đính kèm báo cáo sự cố của đơn thuê.</summary>
     [SuccessMessage("Incident report image uploaded successfully.")]
     [Authorize(Roles = "Admin,Manager,Staff,Maintenance,CustomerService,Driver")]
     [HttpPost("report")]

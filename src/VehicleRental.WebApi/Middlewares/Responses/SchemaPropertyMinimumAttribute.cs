@@ -1,8 +1,8 @@
 namespace Car_Rental_System_BE.WebApi.Middlewares.Responses;
 
 /// <summary>
-/// Documents the lower bound of one property in a named request schema the action consumes, instead of
-/// repeating the whole schema description on the action.
+/// Ghi tài liệu cận dưới của một property trong schema request có tên mà action dùng, thay vì lặp lại
+/// toàn bộ mô tả schema trên action.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = true)]
 public sealed class SchemaPropertyMinimumAttribute(string schemaId, string propertyName, int minimum) : Attribute

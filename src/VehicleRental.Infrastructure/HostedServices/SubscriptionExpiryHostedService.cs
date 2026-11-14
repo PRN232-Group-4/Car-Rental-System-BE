@@ -7,10 +7,10 @@ using Microsoft.Extensions.Logging;
 namespace Car_Rental_System_BE.Infrastructure.HostedServices;
 
 /// <summary>
-/// FR-025 maintenance job: expires subscriptions whose end_date has passed and warns customers
-/// shortly before expiry. All dates are UTC-based (<see cref="DateTime.UtcNow"/>); the DB is
-/// compared against that explicit date rather than the server timezone. Each tick is idempotent:
-/// the expiry UPDATE only matches status='active', and reminder_sent_at gates the warning email.
+/// Tác vụ bảo trì FR-025: cho hết hạn các gói thuê bao đã qua end_date và nhắc khách ngay trước khi
+/// hết hạn. Mọi ngày đều theo UTC (<see cref="DateTime.UtcNow"/>); database được so với ngày tường
+/// minh đó thay vì múi giờ của server. Mỗi lần chạy đều lũy đẳng: lệnh UPDATE hết hạn chỉ khớp
+/// status='active', và reminder_sent_at chặn email nhắc gửi lại.
 /// </summary>
 public sealed class SubscriptionExpiryHostedService(
     IServiceScopeFactory scopeFactory,

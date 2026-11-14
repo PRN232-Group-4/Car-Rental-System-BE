@@ -20,7 +20,7 @@ public sealed class NpgsqlFleetRepository(NpgsqlDataSource dataSource) : IFleetR
         await using var cn=await dataSource.OpenConnectionAsync(ct);
         await using var tx=await cn.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(cn, tx);
-        // FKs restrict the delete; report a business conflict instead of a constraint error.
+        // Khóa ngoại chặn việc xóa; báo xung đột nghiệp vụ thay vì lỗi ràng buộc.
         if(await db.Set<VehiclesRow>().AnyAsync(v => v.VehicleTypeId == id, ct))
             throw new ConflictException("VEHICLE_TYPE_IN_USE", "Loại phương tiện đang được dùng cho xe trong đội. Hãy chuyển các xe sang loại khác trước khi xóa.");
         if(await db.Set<RentalPoliciesRow>().AnyAsync(p => p.VehicleTypeId == id, ct))
@@ -288,17 +288,17 @@ public sealed class NpgsqlFleetRepository(NpgsqlDataSource dataSource) : IFleetR
             battery, chargingType, chargingHours, range, batteryType, images) : null;
     }
 
-    // Fleet keeps its own copy of the dispatcher lock: the advisory key is transaction scoped and
-    // shared by every writer that touches vehicle availability, so the lock and its key stay as they
-    // were under the legacy operations repository.
-    // One transaction-scoped dispatcher lock protects cross-table availability invariants.
-    // Booking, inspections, shifts, incidents, maintenance and replacements share this lock.
+    // Fleet giữ bản sao riêng của khóa điều phối: advisory key nằm trong phạm vi transaction và dùng
+    // chung cho mọi luồng ghi đụng tới tình trạng trống của xe, nên khóa và key giữ nguyên như dưới
+    // repository vận hành cũ. Một khóa điều phối trong phạm vi transaction bảo vệ các bất biến về
+    // tình trạng trống giữa nhiều bảng. Đặt xe, kiểm tra xe, sự cố, bảo trì và thay xe dùng chung
+    // khóa này.
     private static Task LockOperationsAsync(VehicleRentalDbContext db, CancellationToken ct)
         => db.AdvisoryLockAsync(724232001L, ct);
     private static async Task UpsertDetailAsync<T>(VehicleRentalDbContext db, T row, CancellationToken ct) where T : class
     {
-        // The vehicle row is locked (or new) in this transaction, so find-then-write replaces ON CONFLICT(vehicle_id).
-        // An UPDATE that matches no row is not a PostgreSQL error, so the transaction stays usable for the INSERT.
+        // Dòng xe đã bị khóa (hoặc là xe mới) trong transaction này, nên tìm-rồi-ghi thay cho ON CONFLICT(vehicle_id).
+        // UPDATE không khớp dòng nào không phải lỗi PostgreSQL, nên transaction vẫn dùng được cho lệnh INSERT.
         db.Update(row);
         try { await db.SaveChangesAsync(ct); }
         catch (DbUpdateConcurrencyException)
