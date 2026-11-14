@@ -2,7 +2,6 @@ using Car_Rental_System_BE.Application.Features.Billing;
 using Car_Rental_System_BE.Application.DTOs.Options;
 using Car_Rental_System_BE.Application.Features.Organization;
 using Car_Rental_System_BE.Application.Interfaces.External;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Services.Exceptions;
 using Car_Rental_System_BE.Application.Features.Identity;
 using Car_Rental_System_BE.Domain.Entities;

@@ -6,7 +6,6 @@ using System.Text.Json;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Organization;
 using Car_Rental_System_BE.Application.Interfaces.External;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Features.Media;
 using Car_Rental_System_BE.Application.Features.Maintenances;
 using Car_Rental_System_BE.Application.Validators;

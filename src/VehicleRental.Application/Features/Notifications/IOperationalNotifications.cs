@@ -1,4 +1,4 @@
-namespace Car_Rental_System_BE.Application.Interfaces.External;
+namespace Car_Rental_System_BE.Application.Features.Notifications;
 
 /// <summary>Post-commit, best-effort notifications. Implementations must never fail the completed operation.</summary>
 public interface IOperationalNotifications

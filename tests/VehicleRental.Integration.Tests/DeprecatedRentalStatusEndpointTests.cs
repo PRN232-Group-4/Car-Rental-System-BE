@@ -2,7 +2,6 @@ using System.Reflection;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Features.Media;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;

@@ -1,6 +1,5 @@
 using Car_Rental_System_BE.WebApi.Features.Identity;
 using Car_Rental_System_BE.Application.Features.Identity;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Domain.Features.Identity;
 using Car_Rental_System_BE.Infrastructure.Features.Identity;
 using System.Reflection;

@@ -1,10 +1,9 @@
-using Car_Rental_System_BE.Application.Interfaces.External;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Application.Features.Notifications;
 using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
-namespace Car_Rental_System_BE.Infrastructure.Repositories;
+namespace Car_Rental_System_BE.Infrastructure.Features.Notifications;
 
 public sealed class NpgsqlOperationalNotificationRecipients(NpgsqlDataSource dataSource) : IOperationalNotificationRecipients
 {

@@ -1,8 +1,9 @@
 using System.Net.Http.Json;
-using Car_Rental_System_BE.Application.Interfaces.External;
+using Car_Rental_System_BE.Application.Features.Notifications;
+using Car_Rental_System_BE.Infrastructure.Services.Registration;
 using Microsoft.Extensions.Options;
 
-namespace Car_Rental_System_BE.Infrastructure.Services.Registration;
+namespace Car_Rental_System_BE.Infrastructure.Features.Notifications;
 
 public sealed class BrevoOperationalEmailSender(HttpClient client, IOptions<BrevoOptions> options) : IOperationalEmailSender
 {

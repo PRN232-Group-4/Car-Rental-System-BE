@@ -1,7 +1,6 @@
 using Car_Rental_System_BE.WebApi.Controllers;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.Features.Organization;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Infrastructure.Services.Authentication;
 using System.Reflection;
 using Microsoft.AspNetCore.Http;
