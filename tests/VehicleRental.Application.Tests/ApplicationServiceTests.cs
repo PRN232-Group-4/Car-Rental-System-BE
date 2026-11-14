@@ -6,9 +6,9 @@ using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Application.Services.Exceptions;
-using Car_Rental_System_BE.Application.Services.Security;
+using Car_Rental_System_BE.Application.Features.Identity;
 using Car_Rental_System_BE.Domain.Entities;
-using Car_Rental_System_BE.Domain.Interfaces;
+using Car_Rental_System_BE.Domain.Features.Identity;
 using System.Reflection;
 using Xunit;
 

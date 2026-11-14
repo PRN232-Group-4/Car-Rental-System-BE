@@ -31,6 +31,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Car_Rental_System_BE.Application.Features.Identity;
 
 namespace VehicleRental.Tests;
 

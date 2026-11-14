@@ -26,6 +26,7 @@ using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Car_Rental_System_BE.Application.Features.Identity;
 
 namespace Car_Rental_System_BE.WebApi.Extensions;
 

@@ -39,7 +39,8 @@ public sealed class ArchitectureTests
         "Car_Rental_System_BE.WebApi.Middlewares.Authentication.JwtTokenService -> Car_Rental_System_BE.Infrastructure.Services.Authentication.TokenOptions",
         // Repository port declared in the Domain instead of the Application layer, implemented by
         // Infrastructure. Debt from the pre-refactor layout (see AGENTS.md "Application: Interfaces/").
-        "Car_Rental_System_BE.Domain.Interfaces.IUserRepository -> Car_Rental_System_BE.Infrastructure.Repositories.NpgsqlUserRepository",
+        // Both ends moved into the Identity slice; the violation is the same one, only renamed.
+        "Car_Rental_System_BE.Domain.Features.Identity.IUserRepository -> Car_Rental_System_BE.Infrastructure.Features.Identity.NpgsqlUserRepository",
 
         // ---------------------------------------------------------------------------------------
         // pre-existing, newly visible after the rules stopped depending on namespaces (Task A1)

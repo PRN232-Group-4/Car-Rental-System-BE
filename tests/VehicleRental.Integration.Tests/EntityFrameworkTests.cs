@@ -5,6 +5,8 @@ using Car_Rental_System_BE.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Xunit;
+using Car_Rental_System_BE.Infrastructure.Features.Identity;
+using Car_Rental_System_BE.Domain.Features.Identity;
 
 namespace VehicleRental.Tests;
 

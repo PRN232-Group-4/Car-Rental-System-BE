@@ -4,6 +4,7 @@ using Car_Rental_System_BE.Infrastructure.Services.Registration;
 using Car_Rental_System_BE.Application.Services.Exceptions;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Car_Rental_System_BE.Application.Features.Identity;
 
 namespace VehicleRental.Tests;
 

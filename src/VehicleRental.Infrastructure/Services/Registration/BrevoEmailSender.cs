@@ -3,6 +3,7 @@ using Car_Rental_System_BE.Application.Services.Exceptions;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using Car_Rental_System_BE.Application.Features.Identity;
 
 namespace Car_Rental_System_BE.Infrastructure.Services.Registration;
 

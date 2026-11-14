@@ -15,6 +15,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
+using Car_Rental_System_BE.Application.Features.Identity;
 
 namespace Car_Rental_System_BE.WebApi.Extensions;
 

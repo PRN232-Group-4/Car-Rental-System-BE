@@ -2,8 +2,8 @@ using Car_Rental_System_BE.Application.DTOs.Registration;
 using Car_Rental_System_BE.Application.Features.Customers;
 using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Application.Interfaces.Services;
-using Car_Rental_System_BE.Domain.Interfaces;
 using Car_Rental_System_BE.Application.Validators;
+using Car_Rental_System_BE.Domain.Features.Identity;
 
 namespace Car_Rental_System_BE.Application.Services;
 

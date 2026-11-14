@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Xunit;
+using Car_Rental_System_BE.Application.Features.Identity;
 
 namespace VehicleRental.Tests;
 

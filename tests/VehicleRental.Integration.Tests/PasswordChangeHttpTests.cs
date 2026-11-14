@@ -17,6 +17,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Car_Rental_System_BE.Application.Features.Identity;
+using Car_Rental_System_BE.WebApi.Features.Identity;
 
 namespace VehicleRental.Tests;
 

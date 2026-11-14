@@ -11,6 +11,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using Xunit;
+using Car_Rental_System_BE.Application.Features.Identity;
+using Car_Rental_System_BE.WebApi.Features.Identity;
+using Car_Rental_System_BE.Infrastructure.Features.Identity;
 
 namespace VehicleRental.Tests;
 
@@ -33,7 +36,7 @@ public sealed class RefreshAuthorizationTests
             ["Staff", "CustomerService"], AuthorizationVersion: currentVersion);
         var controller = new SessionController(new SessionService(accounts, store,
             new JwtTokenService(Options.Create(new JwtOptions { SigningKey = new string('x', 64) }), Options.Create(new TokenOptions())),
-            new WorkflowMemory(), new Car_Rental_System_BE.Application.DTOs.Options.RegistrationOptions()))
+            new WorkflowMemory(), new Car_Rental_System_BE.Application.Features.Identity.RegistrationOptions()))
         { ControllerContext = new() { HttpContext = new DefaultHttpContext() } };
         controller.Request.Headers.Cookie = $"refresh_token={issued.Token}";
         var result = await controller.Refresh(default);

@@ -18,7 +18,7 @@ using Car_Rental_System_BE.Application.Features.RentalPolicies;
 using Car_Rental_System_BE.Application.Features.Reports;
 using Car_Rental_System_BE.Application.Features.Subscriptions;
 using Car_Rental_System_BE.Application.Features.Tracking;
-using Car_Rental_System_BE.Domain.Interfaces;
+using Car_Rental_System_BE.Domain.Features.Identity;
 using Car_Rental_System_BE.Infrastructure.Features.Assignments;
 using Car_Rental_System_BE.Infrastructure.Features.Availability;
 using Car_Rental_System_BE.Infrastructure.Features.Billing;
@@ -51,6 +51,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using StackExchange.Redis;
+using Car_Rental_System_BE.Infrastructure.Features.Identity;
+using Car_Rental_System_BE.Application.Features.Identity;
 
 namespace Car_Rental_System_BE.Infrastructure;
 
