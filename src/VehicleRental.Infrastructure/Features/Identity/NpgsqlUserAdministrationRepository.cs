@@ -1,11 +1,10 @@
 using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
-using Car_Rental_System_BE.Application.DTOs.Accounts;
 using Car_Rental_System_BE.Application.Interfaces.External;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
 using Npgsql;
+using Car_Rental_System_BE.Application.Features.Identity;
 
-namespace Car_Rental_System_BE.Infrastructure.Repositories;
+namespace Car_Rental_System_BE.Infrastructure.Features.Identity;
 
 public sealed class NpgsqlUserAdministrationRepository(NpgsqlDataSource dataSource, IAuditRequestContext? auditContext = null) : IUserAdministrationRepository
 {

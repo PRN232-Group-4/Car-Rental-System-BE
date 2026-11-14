@@ -1,8 +1,5 @@
-using Car_Rental_System_BE.Application.DTOs.Accounts;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
-using Car_Rental_System_BE.Application.Interfaces.Services;
 
-namespace Car_Rental_System_BE.Application.Services;
+namespace Car_Rental_System_BE.Application.Features.Identity;
 
 public sealed class RoleService(IRoleRepository repository) : IRoleService
 {

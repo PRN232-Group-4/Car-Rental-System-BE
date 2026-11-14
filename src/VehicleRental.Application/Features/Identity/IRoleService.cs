@@ -1,6 +1,5 @@
-using Car_Rental_System_BE.Application.DTOs.Accounts;
 
-namespace Car_Rental_System_BE.Application.Interfaces.Services;
+namespace Car_Rental_System_BE.Application.Features.Identity;
 
 public interface IRoleService
 {

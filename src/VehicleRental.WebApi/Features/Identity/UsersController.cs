@@ -1,13 +1,11 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
-using Car_Rental_System_BE.Application.DTOs.Accounts;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
-using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Car_Rental_System_BE.Application.Features.Identity;
 
-namespace Car_Rental_System_BE.WebApi.Controllers;
+namespace Car_Rental_System_BE.WebApi.Features.Identity;
 
 [ApiController]
 [Route("api/users")]
