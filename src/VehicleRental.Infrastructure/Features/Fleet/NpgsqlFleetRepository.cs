@@ -111,7 +111,7 @@ public sealed class NpgsqlFleetRepository(NpgsqlDataSource dataSource) : IFleetR
         if (v.FacilityId is not null && !await db.Set<FacilitiesRow>().AnyAsync(f => f.Id == v.FacilityId, ct))
             throw new ArgumentException("Facility was not found.");
         var features = v.Features.ToArray();
-        var licenseTypes = Car_Rental_System_BE.Application.Validators.LicenseTypesAttribute.Normalize(v.AllowedLicenseTypes).ToArray();
+        var licenseTypes = LicenseTypesAttribute.Normalize(v.AllowedLicenseTypes).ToArray();
         int vehicleId;
         if (id is null)
         {

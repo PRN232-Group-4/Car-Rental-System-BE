@@ -1,8 +1,6 @@
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.DTOs.Options;
 using Car_Rental_System_BE.Application.Features.Maps;
-using Car_Rental_System_BE.Domain.Entities;
-using Car_Rental_System_BE.Domain.Services;
 using Car_Rental_System_BE.Domain.ValueObjects;
 using System.Security.Cryptography;
 using System.Text;

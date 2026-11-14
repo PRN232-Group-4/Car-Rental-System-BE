@@ -1,6 +1,6 @@
 
 
-namespace Car_Rental_System_BE.Application.Services.Exceptions;
+namespace Car_Rental_System_BE.Application.Features.Billing;
 
 public sealed class PaymentProviderNotConfiguredException : Exception
 {

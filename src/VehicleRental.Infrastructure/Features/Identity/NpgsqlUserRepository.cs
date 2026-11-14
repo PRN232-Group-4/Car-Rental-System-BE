@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Car_Rental_System_BE.Infrastructure.Persistence;
-using Car_Rental_System_BE.Domain.Entities;
 using Npgsql;
 using Car_Rental_System_BE.Domain.Features.Identity;
 

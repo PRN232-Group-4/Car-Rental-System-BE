@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.RegularExpressions;
 
-namespace Car_Rental_System_BE.Application.Validators;
+namespace Car_Rental_System_BE.Application.Features.Fleet;
 
 public sealed class LicenseTypesAttribute : ValidationAttribute
 {

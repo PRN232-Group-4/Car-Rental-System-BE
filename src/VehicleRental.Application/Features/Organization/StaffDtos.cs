@@ -1,5 +1,4 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
-using Car_Rental_System_BE.Application.Validators;
 using System.ComponentModel.DataAnnotations;
 using Car_Rental_System_BE.Application.Features.Identity;
 

@@ -1,6 +1,5 @@
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.Features.Billing;
-using Car_Rental_System_BE.Application.Services.Exceptions;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;

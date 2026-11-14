@@ -4,7 +4,7 @@ using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
-namespace Car_Rental_System_BE.Infrastructure.Repositories;
+namespace Car_Rental_System_BE.Infrastructure.Features.Inspections;
 
 public sealed class NpgsqlInspectionDirectoryRepository(NpgsqlDataSource dataSource) : IInspectionDirectoryRepository
 {

@@ -1,7 +1,6 @@
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.Features.Ratings;
 using Car_Rental_System_BE.Application.DTOs.Operations;
-using Car_Rental_System_BE.Domain.Entities;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;

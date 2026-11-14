@@ -1,4 +1,3 @@
-using Car_Rental_System_BE.Domain.Entities;
 
 namespace Car_Rental_System_BE.Domain.Features.Identity;
 

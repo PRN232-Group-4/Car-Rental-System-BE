@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Car_Rental_System_BE.Application.Features.Customers;
 
-namespace Car_Rental_System_BE.WebApi.Middlewares.Requests;
+namespace Car_Rental_System_BE.WebApi.Features.Customers;
 
 /// <summary>HTTP-only file binding; Application receives stream and business values.</summary>
 public sealed class LicenseUploadForm

@@ -1,8 +1,8 @@
 using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Car_Rental_System_BE.Application.Features.Tracking;
-using Car_Rental_System_BE.Domain.Entities;
 using Car_Rental_System_BE.Domain.ValueObjects;
+using Car_Rental_System_BE.Domain.Features.Tracking;
 using Npgsql;
 using System.Data;
 

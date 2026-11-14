@@ -22,6 +22,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Car_Rental_System_BE.Application.Features.Rentals;
+using Car_Rental_System_BE.Infrastructure.Features.Inspections;
 using Xunit;
 
 namespace VehicleRental.Tests;

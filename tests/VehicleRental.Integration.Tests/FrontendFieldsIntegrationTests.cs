@@ -7,6 +7,7 @@ using Car_Rental_System_BE.Infrastructure.Repositories;
 using Car_Rental_System_BE.Infrastructure.Features.Fleet;
 using Car_Rental_System_BE.Infrastructure.Features.Organization;
 using Car_Rental_System_BE.Infrastructure.Features.RentalPolicies;
+using Car_Rental_System_BE.Application.Features.RentalPolicies;
 using Xunit;
 
 namespace VehicleRental.Tests;

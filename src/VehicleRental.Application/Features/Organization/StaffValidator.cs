@@ -1,4 +1,4 @@
-namespace Car_Rental_System_BE.Application.Validators;
+namespace Car_Rental_System_BE.Application.Features.Organization;
 
 public static class StaffValidator
 {

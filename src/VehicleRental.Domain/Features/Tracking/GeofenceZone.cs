@@ -1,6 +1,6 @@
 using Car_Rental_System_BE.Domain.ValueObjects;
 
-namespace Car_Rental_System_BE.Domain.Entities;
+namespace Car_Rental_System_BE.Domain.Features.Tracking;
 
 public sealed record GeofenceZone(
     int Id,

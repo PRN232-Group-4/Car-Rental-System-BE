@@ -1,7 +1,7 @@
 using Car_Rental_System_BE.Application.Features.Customers;
 using System.ComponentModel.DataAnnotations;
 
-namespace Car_Rental_System_BE.Application.Validators;
+namespace Car_Rental_System_BE.Application.Features.Customers;
 
 public static class CustomerLicenseValidator
 {

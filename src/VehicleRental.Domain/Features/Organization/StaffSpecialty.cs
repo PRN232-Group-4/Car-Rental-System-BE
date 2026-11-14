@@ -1,4 +1,4 @@
-namespace Car_Rental_System_BE.Domain.Services;
+namespace Car_Rental_System_BE.Domain.Features.Organization;
 
 public static class StaffSpecialty
 {

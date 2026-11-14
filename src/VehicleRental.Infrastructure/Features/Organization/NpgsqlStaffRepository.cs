@@ -2,8 +2,7 @@ using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Organization;
-using Car_Rental_System_BE.Domain.Services;
-using Car_Rental_System_BE.Application.Validators;
+using Car_Rental_System_BE.Domain.Features.Organization;
 using Npgsql;
 
 namespace Car_Rental_System_BE.Infrastructure.Features.Organization;

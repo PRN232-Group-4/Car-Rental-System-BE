@@ -1,5 +1,6 @@
 using Car_Rental_System_BE.WebApi.Features.Identity;
 using Car_Rental_System_BE.Application.Features.Identity;
+using Car_Rental_System_BE.Application.Features.Notifications;
 using Car_Rental_System_BE.Domain.Features.Identity;
 using Car_Rental_System_BE.Infrastructure.Features.Identity;
 using System.Reflection;
@@ -66,10 +67,13 @@ public sealed class LegacyPersistenceArchitectureTests
         // Both sides are matched by shape rather than by folder: the ports and the services now live inside
         // Features slices, so a namespace identifies neither. Scanning the whole Application assembly for
         // services keeps the rule stronger than the namespace-scoped version it replaces.
+        //
+        // The one port shape cannot name is IOperationalNotificationRecipients: it is a lookup port, not an
+        // I*Repository, and it used to be reached by its Application.Interfaces.Repositories folder, which no
+        // longer holds a type. It is listed by name so the rule covers exactly the ports it covered before.
         var repositories = typeof(IAccountRepository).Assembly.GetTypes()
             .Where(type => type.IsInterface &&
-                           (IsRepositoryPort(type) ||
-                            type.Namespace == "Car_Rental_System_BE.Application.Interfaces.Repositories"))
+                           (IsRepositoryPort(type) || type == typeof(IOperationalNotificationRecipients)))
             .Concat(typeof(IUserRepository).Assembly.GetTypes().Where(IsRepositoryPort))
             .ToHashSet();
         var services = typeof(AccountService).Assembly.GetTypes();

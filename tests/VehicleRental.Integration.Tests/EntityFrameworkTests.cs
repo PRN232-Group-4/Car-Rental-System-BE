@@ -1,5 +1,4 @@
 using System.Reflection;
-using Car_Rental_System_BE.Domain.Entities;
 using Car_Rental_System_BE.Infrastructure.Persistence;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;

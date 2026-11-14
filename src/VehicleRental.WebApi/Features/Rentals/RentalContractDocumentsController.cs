@@ -2,7 +2,6 @@ using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Rentals;
-using Car_Rental_System_BE.Application.Validators;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

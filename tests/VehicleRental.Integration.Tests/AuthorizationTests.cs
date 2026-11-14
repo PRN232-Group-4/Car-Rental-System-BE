@@ -16,8 +16,6 @@ using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Inspections;
 using Car_Rental_System_BE.Application.Features.Organization;
-using Car_Rental_System_BE.Domain.Entities;
-using Car_Rental_System_BE.Domain.Services;
 using Car_Rental_System_BE.Infrastructure.Services.Authentication;
 using System.IdentityModel.Tokens.Jwt;
 using System.Reflection;
@@ -29,6 +27,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
 using Car_Rental_System_BE.Application.Features.Identity;
+using Car_Rental_System_BE.Domain.Features.Organization;
+using Car_Rental_System_BE.Application.Features.Assignments;
 
 namespace VehicleRental.Tests;
 

@@ -1,5 +1,4 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
-using Car_Rental_System_BE.Domain.Entities;
 using System.Globalization;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
