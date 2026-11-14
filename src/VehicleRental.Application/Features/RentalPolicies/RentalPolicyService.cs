@@ -26,6 +26,13 @@ public sealed class RentalPolicyService(IRentalPolicyRepository repository) : IR
             ?? throw new KeyNotFoundException("Rental policy was not found.");
     }
 
+    public async Task DeletePolicyAsync(int id, CancellationToken ct)
+    {
+        if (id <= 0) throw new ArgumentOutOfRangeException(nameof(id), "Policy ID must be positive.");
+        if (!await repository.DeletePolicyAsync(id, ct))
+            throw new KeyNotFoundException("Rental policy was not found.");
+    }
+
     public Task<RentalPolicyPage> ListPoliciesAsync(int page, int pageSize, CancellationToken ct)
     {
         RentalPolicyValidator.ValidatePagination(page, pageSize);
