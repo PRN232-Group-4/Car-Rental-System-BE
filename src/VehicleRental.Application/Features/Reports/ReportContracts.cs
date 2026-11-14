@@ -3,9 +3,9 @@ using Car_Rental_System_BE.Application.DTOs.Operations;
 namespace Car_Rental_System_BE.Application.Features.Reports;
 
 /// <summary>
-/// The incident report lives on <c>reports</c>, keeps the damage/breakdown rules, and is read twice: once as a
-/// flat list for the user who filed it and once as the paged management queue with history. Both reading
-/// shapes and the two status commands below belong to the same row, so they share one port.
+/// Báo cáo sự cố nằm trong <c>reports</c>, giữ các quy tắc về hư hỏng/hỏng xe, và được đọc theo hai cách: danh
+/// sách phẳng cho người đã gửi báo cáo, và hàng đợi phân trang kèm lịch sử cho quản lý. Cả hai cách đọc và hai
+/// lệnh đổi trạng thái bên dưới đều thuộc cùng một dòng, nên dùng chung một cổng.
 /// </summary>
 public interface IReportRepository
 {

@@ -4,8 +4,8 @@ using Car_Rental_System_BE.Application.Interfaces.External;
 namespace Car_Rental_System_BE.Application.Features.Recovery;
 
 /// <summary>
-/// Vehicle recovery: one command, moved from <c>OperationsService</c> unchanged, including the two
-/// notifications it sends and their order.
+/// Khôi phục chuyến bằng xe thay thế: một lệnh duy nhất, chuyển nguyên vẹn từ
+/// <c>OperationsService</c>, kể cả hai thông báo nó gửi và thứ tự gửi.
 /// </summary>
 public sealed class RecoveryService(IRecoveryRepository repository, IOperationalNotifications? notifications = null) : IRecoveryService
 {

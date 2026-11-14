@@ -37,7 +37,7 @@ public sealed class NpgsqlCustomerLicenseRepository(NpgsqlDataSource dataSource)
     private static CustomerLicense ToLicense(CustomerLicensesRow row) =>
         new(row.Number, row.Type, row.IssueDate, row.ExpiryDate, row.ImageUrl, row.Status) { Id = row.Id };
 
-    /// <summary>Preserves a legacy (customers.*) license as a customer_licenses row; ON CONFLICT DO NOTHING semantics.</summary>
+    /// <summary>Giữ GPLX kiểu cũ (customers.*) thành một dòng customer_licenses; theo ngữ nghĩa ON CONFLICT DO NOTHING.</summary>
     private static async Task PreserveLegacyLicenseAsync(VehicleRentalDbContext db, int customerId, CancellationToken ct)
     {
         var legacy = await db.Set<CustomerLicenseRecordsRow>().AsNoTracking()
@@ -58,14 +58,14 @@ public sealed class NpgsqlCustomerLicenseRepository(NpgsqlDataSource dataSource)
         var customerId = await (from c in db.Set<CustomersRow>() join u in db.Set<UsersRow>() on c.UserId equals u.Id
             where u.Email == email select (int?)c.Id).FirstOrDefaultAsync(ct);
         if (customerId is null || await db.LockByKeyAsync<CustomersRow>(customerId.Value, ct) is null) throw new KeyNotFoundException();
-        // Preserve an older legacy license before switching the compatibility projection.
+        // Giữ lại GPLX kiểu cũ trước khi đổi phép chiếu tương thích.
         await PreserveLegacyLicenseAsync(db, customerId.Value, ct);
         var number = x.Number!.Trim();
         var type = x.Type!.Trim().ToUpperInvariant();
         CustomerLicense result;
         try
         {
-            // The customer row lock serializes license writes, so find-then-write replaces ON CONFLICT(customer_id,number).
+            // Khóa dòng khách hàng tuần tự hóa việc ghi GPLX, nên tìm-rồi-ghi thay cho ON CONFLICT(customer_id,number).
             var targetId = x.Id ?? await db.Set<CustomerLicensesRow>()
                 .Where(l => l.CustomerId == customerId && l.Number == number).Select(l => (int?)l.Id).FirstOrDefaultAsync(ct);
             if (targetId is null)
@@ -111,7 +111,7 @@ public sealed class NpgsqlCustomerLicenseRepository(NpgsqlDataSource dataSource)
             ?? throw new KeyNotFoundException("License was not found for this customer.");
         await db.Set<CustomerLicensesRow>().Where(l => l.Id == target).ExecuteUpdateAsync(s => s.SetProperty(l => l.Status, status), ct);
         var result = ToLicense(await db.Set<CustomerLicensesRow>().AsNoTracking().SingleAsync(l => l.Id == target, ct));
-        // Reviewing another license must not switch the customer's selected edit record.
+        // Duyệt một GPLX khác không được làm đổi bản ghi đang chọn để chỉnh sửa của khách.
         await db.Set<CustomersRow>().Where(c => c.Id == customerId && c.LicenseNumber!.Trim() == result.Number)
             .ExecuteUpdateAsync(s => s.SetProperty(c => c.LicenseStatus, status), ct);
         await tx.CommitAsync(ct);

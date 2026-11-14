@@ -13,10 +13,6 @@ public sealed class AssignmentOptions
     public bool LicenseClassRulesEnabled { get; init; } = false;
 }
 
-/// <summary>
-/// A driver's duty shift. Moved here with the shift behaviour itself: the operations slice no longer owns shifts.
-/// </summary>
-
 public sealed record DriverAssignmentCommand(
     int RentalId,
     int? DriverStaffId,

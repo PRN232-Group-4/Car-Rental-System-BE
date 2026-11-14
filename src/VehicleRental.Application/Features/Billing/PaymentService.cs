@@ -38,7 +38,7 @@ public sealed class PaymentService(IPaymentRepository repository, IPaymentGatewa
         return refund;
     }
 
-    // Subscription-plan read side, not invoicing. Moves with the Subscriptions module extraction.
+    // Phía đọc gói thuê bao, không phải hóa đơn. Sẽ chuyển đi khi tách module Subscriptions.
     public Task<PlanPurchaseStatus?> GetPlanPurchaseAsync(long orderCode, string email, CancellationToken ct) =>
         repository.GetPlanPurchaseAsync(orderCode, email, ct);
 
@@ -68,11 +68,11 @@ public sealed class PaymentService(IPaymentRepository repository, IPaymentGatewa
         return await gateway.CreateCheckoutAsync(new(checkout.OrderCode, checkout.Amount, description[..Math.Min(25, description.Length)], returnUrl, options.CancelUrl), ct);
     }
 
-    // CROSS-HALF: cancellation serves BOTH an invoice order code and a subscription order code, so it
-    // cannot move to either slice alone. It travels with the subscription extraction.
+    // DÙNG CHUNG HAI NỬA: thao tác hủy phục vụ cả mã đơn hóa đơn lẫn mã đơn gói thuê bao, nên không
+    // thể chuyển riêng sang nửa nào. Nó đi cùng đợt tách subscriptions.
     public async Task<CheckoutCancellation> CancelCheckoutAsync(long orderCode, string email, CancellationToken ct)
     {
-        // Verify the provider state before accepting the browser's cancellation request.
+        // Xác minh trạng thái ở nhà cung cấp thanh toán trước khi chấp nhận yêu cầu hủy từ trình duyệt.
         var providerStatus = await gateway.GetPaymentStatusAsync(orderCode, ct);
         if (providerStatus is null) throw new PaymentWorkflowException("Không tra được trạng thái liên kết thanh toán trên payOS.", 404);
         if (providerStatus == "PAID") throw new PaymentWorkflowException("Giao dịch đã thanh toán thành công.", 409);
@@ -85,9 +85,9 @@ public sealed class PaymentService(IPaymentRepository repository, IPaymentGatewa
         return new(orderCode, "cancelled");
     }
 
-    // CROSS-HALF: the provider webhook is one endpoint that dispatches across the invoice and subscription
-    // halves by order code. That is why it stays with the Payments controller today and why the subscription
-    // extraction must take it as a whole instead of splitting it.
+    // DÙNG CHUNG HAI NỬA: webhook của nhà cung cấp là một endpoint duy nhất, phân luồng sang nửa hóa đơn
+    // hoặc nửa gói thuê bao theo mã đơn. Vì vậy hôm nay nó nằm ở Payments controller, và đợt tách
+    // subscriptions phải mang nó đi nguyên khối thay vì chia nhỏ.
     public async Task HandleWebhookAsync(PayOsWebhook webhook, string code, bool success, CancellationToken ct)
     {
         if (!gateway.VerifyWebhook(webhook)) throw new PaymentWorkflowException("Invalid PayOS signature.", 400);

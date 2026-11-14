@@ -12,7 +12,7 @@ public static class CustomerLicenseValidator
             throw new ArgumentException("License image URL is required and must be valid.");
     }
 
-    // Upload checks metadata before storage; SaveLicenseAsync checks the resulting URL too.
+    // Upload kiểm tra metadata trước khi lưu; SaveLicenseAsync kiểm tra cả URL kết quả.
     public static void ValidateDetails(CustomerLicense license)
     {
         if (license.Id < 1) throw new ArgumentException("LicenseId must be positive.");

@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Car_Rental_System_BE.Infrastructure.Persistence;
 
-// Persistence rows mirror the existing SQL-managed schema. No navigation properties or FK conventions.
+// Các row lưu trữ phản chiếu schema hiện có do SQL quản lý. Không có navigation property hay quy ước khóa ngoại.
 [Table("users")]
 public sealed class UsersRow
 {

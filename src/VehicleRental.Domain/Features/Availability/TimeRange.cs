@@ -1,6 +1,6 @@
 namespace Car_Rental_System_BE.Domain.Features.Availability;
 
-/// <summary>Half-open UTC interval <c>[From, To)</c>. Values are plain instants; callers pass UTC.</summary>
+/// <summary>Khoảng UTC nửa mở <c>[From, To)</c>. Giá trị là thời điểm thuần; bên gọi truyền UTC.</summary>
 public readonly record struct TimeRange
 {
     public DateTime From { get; }
@@ -15,16 +15,17 @@ public readonly record struct TimeRange
 
     public TimeSpan Duration => To - From;
 
-    /// <summary>Half-open overlap: ranges that merely touch do not overlap.</summary>
+    /// <summary>Chồng lấn nửa mở: hai khoảng chỉ chạm nhau thì không tính là chồng lấn.</summary>
     public bool Overlaps(TimeRange other) => From < other.To && other.From < To;
 
-    /// <summary>Extends the end by <paramref name="buffer"/> (the turnaround gap after a rental).</summary>
+    /// <summary>Kéo dài điểm kết thúc thêm <paramref name="buffer"/> (khoảng nghỉ quay vòng sau một chuyến thuê).</summary>
     public TimeRange WithBuffer(TimeSpan buffer)
         => buffer < TimeSpan.Zero ? throw new ArgumentOutOfRangeException(nameof(buffer)) : new(From, To + buffer);
 
     /// <summary>
-    /// Symmetric conflict test between a stored rental and a requested window: either range, once extended by
-    /// the buffer, must not overlap the other. Two rentals closer than <paramref name="buffer"/> conflict.
+    /// Kiểm tra xung đột đối xứng giữa một đơn thuê đã lưu và khoảng thời gian được yêu cầu: mỗi khoảng, sau
+    /// khi cộng thêm buffer, không được chồng lấn khoảng kia. Hai đơn thuê cách nhau ít hơn <paramref
+    /// name="buffer"/> là xung đột.
     /// </summary>
     public bool ConflictsWith(TimeRange other, TimeSpan buffer) => WithBuffer(buffer).Overlaps(other) || other.WithBuffer(buffer).Overlaps(this);
 }

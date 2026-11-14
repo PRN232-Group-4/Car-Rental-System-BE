@@ -11,15 +11,14 @@ using Microsoft.AspNetCore.Mvc;
 namespace Car_Rental_System_BE.WebApi.Features.Ratings;
 
 /// <summary>
-/// Staff ratings: a customer rating a completed rental, the management queue, moderation and the management
-/// reply. These four actions used to sit on <c>OperationsController</c>; route, verb, policy, route constraints,
-/// status codes, request and response shapes, success messages and swagger descriptions travelled with them
-/// unchanged.
+/// Đánh giá nhân viên: khách đánh giá đơn thuê đã hoàn tất, hàng đợi của quản lý, kiểm duyệt và phản hồi của
+/// quản lý. Bốn action này từng nằm trên <c>OperationsController</c>; route, verb, policy, ràng buộc route, mã
+/// trạng thái, dạng request/response, thông điệp thành công và mô tả swagger giữ nguyên khi chuyển sang.
 /// </summary>
 /// <remarks>
-/// A controller of its own rather than part of another type: the rating action is the only one under the
-/// <c>Customer</c> policy while the other three are Management, and ASP.NET Core ANDs class-level with
-/// action-level policy metadata, so a class-level policy would demand a caller hold both.
+/// Controller riêng thay vì nằm trong kiểu khác: action đánh giá là action duy nhất dùng policy
+/// <c>Customer</c> trong khi ba action còn lại dùng Management, và ASP.NET Core kết hợp metadata policy
+/// cấp class với cấp action bằng AND, nên policy cấp class sẽ đòi bên gọi có cả hai.
 /// </remarks>
 [ApiController]
 [Route("api")]
@@ -48,7 +47,7 @@ public sealed class RatingsController(IRatingService ratings) : ControllerBase
     public Task<OperationsPage<StaffRating>> StaffRatings([Range(1,int.MaxValue)] int staffId, [FromQuery] OperationsPagination pagination, CancellationToken ct) =>
         ratings.RatingsAsync(staffId, pagination, ct);
 
-    /// <summary>Admin/Manager moderates a rating; reason and authenticated actor are retained.</summary>
+    /// <summary>Admin/Manager kiểm duyệt một đánh giá; lưu lại lý do và người thực hiện đã xác thực.</summary>
     [SuccessMessage("Staff rating moderation status updated successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPatch("rating/{id:int}")]
     [ProducesResponseType<StaffRating>(StatusCodes.Status200OK)]
@@ -57,7 +56,7 @@ public sealed class RatingsController(IRatingService ratings) : ControllerBase
     public Task<StaffRating> ModerateRating([Range(1,int.MaxValue)] int id, RatingModerationRequest request, CancellationToken ct)
         => ratings.ModerateRatingAsync(id,request,Email(),ct);
 
-    /// <summary>Admin/Manager publishes or replaces the management reply to a rating.</summary>
+    /// <summary>Admin/Manager đăng hoặc thay phản hồi của quản lý cho một đánh giá.</summary>
     [SuccessMessage("Management reply to staff rating saved successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPost("rating/{id:int}/reply")]
     [ProducesResponseType<StaffRating>(StatusCodes.Status200OK)]

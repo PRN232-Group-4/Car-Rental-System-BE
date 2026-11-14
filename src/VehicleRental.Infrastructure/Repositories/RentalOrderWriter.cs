@@ -4,7 +4,7 @@ using Npgsql;
 
 namespace Car_Rental_System_BE.Infrastructure.Repositories;
 
-/// <summary>Creates the formal paid order inside the caller's rental/payment transaction.</summary>
+/// <summary>Tạo đơn thuê chính thức đã thanh toán bên trong transaction đơn thuê/thanh toán của bên gọi.</summary>
 internal static class RentalOrderWriter
 {
     private static readonly string[] Closed = ["cancelled", "expired"];
@@ -28,7 +28,7 @@ internal static class RentalOrderWriter
                 select new { p.Id, p.Amount, p.Method, p.ReviewedBy }).FirstOrDefaultAsync(ct);
         if (!rental.IsSubscription && payment is null) return null;
 
-        // ON CONFLICT(rental_id) DO NOTHING: a concurrent writer may create the order first.
+        // ON CONFLICT(rental_id) DO NOTHING: một luồng ghi đồng thời có thể tạo đơn chính thức trước.
         await db.TryInsertAsync(new RentalOrdersRow
         {
             RentalId = rental.Id,

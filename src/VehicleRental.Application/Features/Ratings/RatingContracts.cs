@@ -3,9 +3,9 @@ using Car_Rental_System_BE.Application.DTOs.Operations;
 namespace Car_Rental_System_BE.Application.Features.Ratings;
 
 /// <summary>
-/// A staff rating is written once by the customer of a completed rental and then read, moderated and replied to
-/// by management. The two write paths and the paged queue all target the same <c>staff_ratings</c> row, so they
-/// share one port instead of living half in the operations repository and half in the completion repository.
+/// Đánh giá nhân viên được khách của đơn thuê đã hoàn tất viết một lần, sau đó quản lý đọc, kiểm duyệt và phản
+/// hồi. Hai luồng ghi và hàng đợi phân trang đều nhắm vào cùng dòng <c>staff_ratings</c>, nên dùng chung một
+/// cổng thay vì nằm một nửa ở repository vận hành và một nửa ở repository hoàn tất.
 /// </summary>
 public interface IRatingRepository
 {

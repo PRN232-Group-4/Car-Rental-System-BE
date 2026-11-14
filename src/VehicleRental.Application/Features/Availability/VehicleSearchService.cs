@@ -3,7 +3,7 @@ using Car_Rental_System_BE.Domain.Features.Availability;
 
 namespace Car_Rental_System_BE.Application.Features.Availability;
 
-/// <summary>Use cases of FR-010: public search, availability, busy slots, active policy, affected rentals.</summary>
+/// <summary>Các use case của FR-010: tìm kiếm công khai, tình trạng trống, khung giờ bận, chính sách đang áp dụng, đơn thuê bị ảnh hưởng.</summary>
 public sealed class VehicleSearchService(
     IVehicleSearchRepository repository,
     IVehicleAvailabilityService availability,

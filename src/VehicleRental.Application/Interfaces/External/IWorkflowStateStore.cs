@@ -4,6 +4,6 @@ public interface IWorkflowStateStore
 {
     Task<string?> GetAsync(string key, CancellationToken ct);
     Task<TimeSpan?> GetTimeToLiveAsync(string key, CancellationToken ct);
-    // Atomically create/replace/delete only when the current value matches expected (null means absent).
+    // Tạo/thay/xóa một cách nguyên tử, chỉ khi giá trị hiện tại khớp giá trị mong đợi (null nghĩa là chưa có).
     Task<bool> CompareExchangeAsync(string key, string? expected, string? replacement, TimeSpan expiry, CancellationToken ct);
 }

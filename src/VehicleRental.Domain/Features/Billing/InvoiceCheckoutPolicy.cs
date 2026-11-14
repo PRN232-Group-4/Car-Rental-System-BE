@@ -1,9 +1,9 @@
 namespace Car_Rental_System_BE.Domain.Features.Billing;
 
 /// <summary>
-/// The invoice kinds the settlement can raise. <c>rental</c> is the direct-rental invoice, <c>overtime</c>
-/// is the post-return charge for a direct rental and <c>supplementary</c> is the D2 charge for overtime
-/// that the remaining package hours of a subscription rental could not cover.
+/// Các loại hóa đơn mà quyết toán có thể phát sinh. <c>rental</c> là hóa đơn thuê trực tiếp,
+/// <c>overtime</c> là phí phát sinh sau khi trả xe của đơn thuê trực tiếp, và <c>supplementary</c> là phí
+/// D2 cho phần quá giờ mà số giờ gói còn lại của đơn thuê theo gói không đủ bù.
 /// </summary>
 public static class InvoiceKinds
 {

@@ -6,7 +6,7 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace Car_Rental_System_BE.WebApi.Middlewares.Responses;
 
-/// <summary>Swagger reads properties; MVC validates record constructor parameters.</summary>
+/// <summary>Swagger đọc property; MVC kiểm tra hợp lệ tham số constructor của record.</summary>
 public sealed class PasswordRequestSchemaFilter : ISchemaFilter
 {
     public void Apply(OpenApiSchema schema, SchemaFilterContext context)

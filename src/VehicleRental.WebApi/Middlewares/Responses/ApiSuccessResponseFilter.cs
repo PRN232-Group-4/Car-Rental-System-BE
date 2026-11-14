@@ -11,7 +11,7 @@ using System.Text.RegularExpressions;
 namespace Car_Rental_System_BE.WebApi.Middlewares.Responses;
 
 /// <summary>
-/// Normalizes controller successes and errors, including automatic validation results.
+/// Chuẩn hóa kết quả thành công và lỗi của controller, kể cả kết quả kiểm tra hợp lệ tự động.
 /// </summary>
 public sealed class ApiSuccessResponseFilter : IAsyncAlwaysRunResultFilter
 {
@@ -20,8 +20,8 @@ public sealed class ApiSuccessResponseFilter : IAsyncAlwaysRunResultFilter
         var statusCode = GetStatusCode(context.Result, context.HttpContext.Response.StatusCode);
         if (statusCode >= 400)
         {
-            // Keep Challenge/Forbid results intact so their authentication handlers still run.
-            // Empty authentication responses are normalized by status-code pages afterwards.
+            // Giữ nguyên kết quả Challenge/Forbid để các handler xác thực của chúng vẫn chạy. Phản
+            // hồi xác thực rỗng sẽ được status-code pages chuẩn hóa sau.
             switch (context.Result)
             {
                 case ObjectResult result when result.Value is not ApiResponse:
@@ -51,9 +51,9 @@ public sealed class ApiSuccessResponseFilter : IAsyncAlwaysRunResultFilter
         {
             case ObjectResult objectResult when objectResult.Value is not ApiResponse:
                 objectResult.Value = ApiResponse.Create(objectResult.Value, message, statusCode);
-                // The envelope now replaces the action's value, so the declared action type no
-                // longer matches. Leaving it set makes typed actions (e.g. Task<VehiclePage>)
-                // fail with InvalidCastException while serializing the response.
+                // Lớp bọc giờ thay thế giá trị của action, nên kiểu action đã khai báo không còn
+                // khớp. Nếu để nguyên, các action có kiểu (ví dụ Task<VehiclePage>) sẽ lỗi
+                // InvalidCastException khi serialize phản hồi.
                 objectResult.DeclaredType = null;
                 break;
             case JsonResult jsonResult when jsonResult.Value is not ApiResponse:
@@ -83,12 +83,12 @@ public sealed class ApiSuccessResponseFilter : IAsyncAlwaysRunResultFilter
         if (context.ActionDescriptor is not ControllerActionDescriptor action)
             return "Request completed successfully.";
 
-        // A synthesised descriptor without a method has no declared wording, so it keeps the generated one.
+        // Descriptor tổng hợp không có method thì không có câu chữ khai báo, nên giữ câu chữ được sinh ra.
         if (action.MethodInfo is { } method &&
             Wording.GetOrAdd(method, DiscoverWording).For(context.HttpContext.Request) is { } declared)
             return declared;
 
-        // Actions that declare no wording keep the message derived from their name, verb and status code.
+        // Action không khai báo câu chữ thì giữ thông điệp suy ra từ tên, verb và mã trạng thái.
         var operation = Regex.Replace(action.ActionName, "([a-z])([A-Z])", "$1 $2").ToLowerInvariant();
         return statusCode switch
         {
@@ -102,8 +102,8 @@ public sealed class ApiSuccessResponseFilter : IAsyncAlwaysRunResultFilter
     }
 
     /// <summary>
-    /// Attributes are immutable per action method, and this runs on every successful response, so the
-    /// declaration is read once per action.
+    /// Attribute không đổi theo từng method action, và đoạn này chạy trên mọi phản hồi thành công,
+    /// nên phần khai báo chỉ được đọc một lần cho mỗi action.
     /// </summary>
     private static ActionWording DiscoverWording(MethodInfo method) => new(
         method.GetCustomAttributes<SuccessMessageAttribute>(inherit: true).Select(attribute => attribute.Message).FirstOrDefault(),
@@ -111,7 +111,7 @@ public sealed class ApiSuccessResponseFilter : IAsyncAlwaysRunResultFilter
 
     private static readonly ConcurrentDictionary<MethodInfo, ActionWording> Wording = new();
 
-    /// <summary>The wording an action declares for itself; null when it declares none.</summary>
+    /// <summary>Câu chữ mà action tự khai báo; null khi không khai báo.</summary>
     private sealed class ActionWording(string? message, SuccessMessageWhenQueryAttribute[] whenQuery)
     {
         public string? For(HttpRequest request) => whenQuery.FirstOrDefault(attribute => attribute.Matches(request))?.Message ?? message;

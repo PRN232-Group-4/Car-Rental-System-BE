@@ -9,10 +9,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace Car_Rental_System_BE.WebApi.Features.Rentals;
 
 /// <summary>
-/// Rental booking and rental reads over HTTP: the two booking verbs and the flat rental detail. The actions used
-/// to sit on <c>OperationsController</c> (Hourly, Longterm, Rental); route, verb, policy, route constraints,
-/// status codes, request and response shapes, success messages and swagger descriptions travelled with them
-/// unchanged.
+/// Đặt xe và đọc đơn thuê qua HTTP: hai verb đặt xe và chi tiết đơn thuê phẳng. Các action từng nằm trên
+/// <c>OperationsController</c> (Hourly, Longterm, Rental); route, verb, policy, ràng buộc route, mã trạng thái,
+/// dạng request/response, thông điệp thành công và mô tả swagger giữ nguyên khi chuyển sang.
 /// </summary>
 [ApiController]
 [Route("api")]

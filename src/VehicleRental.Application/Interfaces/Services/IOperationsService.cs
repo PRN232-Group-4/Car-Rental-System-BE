@@ -5,11 +5,11 @@ namespace Car_Rental_System_BE.Application.Interfaces.Services;
 public interface IOperationsService
 {
     /// <summary>
-    /// Legacy second implementation of the rental state machine. It is no longer reachable over HTTP:
-    /// <c>POST /api/rental/{id}/status/{status}</c> delegates to
-    /// <see cref="Car_Rental_System_BE.Application.Features.Rentals.IRentalLifecycleService"/> instead, which is the single
-    /// implementation and the only one that writes rental_status_history and runs the completion settlement.
-    /// Kept only because several integration tests still call it directly; scheduled for removal.
+    /// Bản cài đặt thứ hai (cũ) của máy trạng thái đơn thuê. Không còn truy cập được qua HTTP: <c>POST
+    /// /api/rental/{id}/status/{status}</c> chuyển sang <see
+    /// cref="Car_Rental_System_BE.Application.Features.Rentals.IRentalLifecycleService"/>, là bản cài đặt duy nhất và cũng
+    /// là nơi duy nhất ghi rental_status_history và chạy quyết toán hoàn tất. Chỉ giữ lại vì một số integration test còn
+    /// gọi trực tiếp; sẽ bị xóa.
     /// </summary>
     Task<Rental> ChangeRentalStatusAsync(int id, string status, CancellationToken ct);
     Task<IReadOnlyList<SubscriptionPlan>> ListPlansAsync(bool activeOnly, CancellationToken ct);

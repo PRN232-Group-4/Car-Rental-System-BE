@@ -3,8 +3,9 @@ using Car_Rental_System_BE.Application.Common.Errors;
 namespace Car_Rental_System_BE.Application.Features.Dashboard;
 
 /// <summary>
-/// Turns the request filter into the validated query pair (period and adjacent previous period) the repository
-/// reads, and wraps every paged answer in <see cref="DashboardPage{T}"/> so each entry carries its period.
+/// Chuyển bộ lọc của request thành cặp truy vấn đã kiểm tra hợp lệ (kỳ hiện tại và kỳ liền trước) để
+/// repository đọc, và bọc mọi kết quả phân trang trong <see cref="DashboardPage{T}"/> để mỗi mục mang theo kỳ
+/// của nó.
 /// </summary>
 public sealed class DashboardService(IDashboardRepository repository, TimeProvider? timeProvider = null) : IDashboardService
 {

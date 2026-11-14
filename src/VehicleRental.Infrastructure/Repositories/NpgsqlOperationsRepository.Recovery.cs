@@ -7,8 +7,8 @@ namespace Car_Rental_System_BE.Infrastructure.Repositories;
 
 public sealed partial class NpgsqlOperationsRepository
 {
-    // One transaction-scoped dispatcher lock protects cross-table availability invariants.
-    // Booking, inspections, shifts, incidents, maintenance and replacements share this lock.
+    // Một khóa điều phối trong phạm vi transaction bảo vệ các bất biến về tình trạng trống giữa
+    // nhiều bảng. Đặt xe, kiểm tra xe, sự cố, bảo trì và thay xe dùng chung khóa này.
     private static Task LockOperationsAsync(VehicleRentalDbContext db, CancellationToken ct)
         => db.AdvisoryLockAsync(724232001L, ct);
 
@@ -139,7 +139,7 @@ public sealed partial class NpgsqlOperationsRepository
         db.Set<HourRentalDetailRow>().AnyAsync(h => h.RentalId == rentalId && h.HasDriver, ct);
     private static readonly string[] ClosedRentalStatuses = ["completed", "cancelled", "expired"];
 
-    /// <summary>Rental with its hourly/long-term schedule, composable in LINQ.</summary>
+    /// <summary>Đơn thuê kèm lịch thuê theo giờ/dài hạn, có thể ghép trong LINQ.</summary>
     private sealed class RentalWindow
     {
         public int RentalId { get; init; }

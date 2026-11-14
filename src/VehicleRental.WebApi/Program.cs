@@ -4,13 +4,13 @@ using Car_Rental_System_BE.WebApi.Extensions;
 var builder = WebApplication.CreateBuilder(args);
 builder.AddWebApiLogging();
 
-// Registration order is part of the contract: the last registration of a service type wins and
-// IEnumerable<T> resolves in registration order. AddWebApi registers the options tree and MVC first,
-// infrastructure after it, application services after that, and the auth/rate-limit wiring last because
-// its JWT events resolve the application services registered above.
+// Thứ tự đăng ký là một phần của hợp đồng: lần đăng ký cuối cho một kiểu service sẽ thắng và
+// IEnumerable<T> trả về theo thứ tự đăng ký. AddWebApi đăng ký cây options và MVC trước, sau đó là
+// infrastructure, rồi các service application, và cuối cùng là phần xác thực/giới hạn tần suất vì các
+// sự kiện JWT của nó dùng các service application đã đăng ký ở trên.
 builder.Services.AddWebApi(builder.Configuration);
-// Infrastructure owns the Npgsql data source, the Redis connection, hosted services
-// and every repository/adapter registration. Program.cs only composes it.
+// Infrastructure sở hữu nguồn dữ liệu Npgsql, kết nối Redis, các hosted service và mọi đăng ký
+// repository/adapter. Program.cs chỉ ghép chúng lại.
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApplication(builder.Configuration);
 builder.Services.AddWebApiSecurity(builder.Configuration);
@@ -22,7 +22,7 @@ app.UseWebApi();
 app.Run();
 
 /// <summary>
-/// Exposes the implicit entry-point type to <c>WebApplicationFactory&lt;Program&gt;</c> so the composition
-/// smoke test can boot this exact host. The type carries no members.
+/// Mở kiểu entry-point ngầm định cho <c>WebApplicationFactory&lt;Program&gt;</c> để smoke test cấu hình có
+/// thể khởi động đúng host này. Kiểu này không có thành viên nào.
 /// </summary>
 public partial class Program { }

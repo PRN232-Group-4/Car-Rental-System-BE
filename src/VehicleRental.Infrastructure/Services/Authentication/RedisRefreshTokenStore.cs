@@ -16,8 +16,8 @@ public sealed class TokenOptions
 }
 
 /// <summary>
-/// Stores only a SHA-256 digest of each refresh-token secret. The token itself is sent once,
-/// in an HttpOnly cookie, and is replaced whenever it is used.
+/// Chỉ lưu bản băm SHA-256 của mỗi bí mật refresh token. Bản thân token chỉ được gửi một lần trong
+/// cookie HttpOnly và được thay mới mỗi khi dùng.
 /// </summary>
 public sealed class RedisRefreshTokenStore(IConnectionMultiplexer redis, Microsoft.Extensions.Options.IOptions<TokenOptions> options) : IRefreshTokenStore
 {
@@ -32,7 +32,7 @@ public sealed class RedisRefreshTokenStore(IConnectionMultiplexer redis, Microso
     {
         if (!TryParse(token, out var sessionId, out var secret)) return null;
 
-        // GETDEL makes a refresh token single-use, including when two refresh requests race.
+        // GETDEL khiến refresh token chỉ dùng được một lần, kể cả khi hai request làm mới tranh chấp nhau.
         var value = await _cache.StringGetDeleteAsync(TokenKey(sessionId));
         if (!value.HasValue) return null;
 

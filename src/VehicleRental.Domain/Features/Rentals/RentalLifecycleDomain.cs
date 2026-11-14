@@ -93,7 +93,7 @@ public static class RentalStateMachine
 
     public static TransitionOutcome Evaluate(RentalStatus current, RentalTrigger trigger)
     {
-        // 1. Idempotent re-invocation check: is current already the target of this trigger?
+        // 1. Kiểm tra gọi lại lũy đẳng: trạng thái hiện tại đã là đích của trigger này chưa?
         var isAlreadyTarget = (current, trigger) switch
         {
             (RentalStatus.PreInspection, RentalTrigger.Confirm) => true,
@@ -110,7 +110,7 @@ public static class RentalStateMachine
             return new TransitionOutcome.AlreadyInState(current);
         }
 
-        // 2. Normal forward transitions
+        // 2. Các chuyển tiếp xuôi bình thường
         var validNext = (current, trigger) switch
         {
             (RentalStatus.Pending, RentalTrigger.Confirm) => RentalStatus.PreInspection,
@@ -235,7 +235,7 @@ public static class CancellationPolicy
                 );
             }
 
-            // Less than 24h (including a delayed pickup): the existing late cancellation policy applies.
+            // Dưới 24 giờ (kể cả nhận xe trễ): áp dụng chính sách hủy muộn hiện có.
             var fee = MoneyRounding.RoundVnd(rentAndVat * (lateFeePercent / 100m));
             var refund = Math.Max(0m, paidAmount - fee);
             return new CancellationPreview(
@@ -258,7 +258,7 @@ public static class CancellationPolicy
             );
         }
 
-        // Staff actor:
+        // Bên thực hiện là nhân viên:
         if (currentStatus != RentalStatus.Pending && currentStatus != RentalStatus.PreInspection)
         {
             return new CancellationPreview(
@@ -281,7 +281,7 @@ public static class CancellationPolicy
             );
         }
 
-        // Customer requested cancellation via staff without fee waiver:
+        // Khách yêu cầu hủy qua nhân viên và không được miễn phí:
         var remaining = startTime - now;
         if (remaining >= TimeSpan.FromHours(freeHoursBeforeStart))
         {
@@ -336,9 +336,9 @@ public static class SettlementCalculator
 }
 
 /// <summary>
-/// Phase 2 / D2: how the overtime of a subscription rental is split between the package and money.
-/// <see cref="HoursCharged"/> is taken out of the remaining package hours; <see cref="ExcessHours"/> is
-/// what the package could not cover and must be billed on a supplementary invoice.
+/// Phase 2 / D2: cách chia phần quá giờ của đơn thuê theo gói giữa giờ gói và tiền. <see
+/// cref="HoursCharged"/> được trừ vào số giờ gói còn lại; <see cref="ExcessHours"/> là phần gói không
+/// đủ bù và phải tính trên hóa đơn bổ sung.
 /// </summary>
 public sealed record PackageHourAllocation(
     decimal HoursCharged,
@@ -349,8 +349,9 @@ public sealed record PackageHourAllocation(
 
 public static class PackageHourAllocator
 {
-    /// <param name="overtimeHours">Overtime hours of the rental (whole hours, see <see cref="OvertimeCalculator"/>).</param>
-    /// <param name="remainingPackageHours">Remaining hours of the subscription. NULL means the package has no limit.</param>
+    /// <param name="overtimeHours">Số giờ quá hạn của đơn thuê (tính tròn giờ, xem <see
+    /// cref="OvertimeCalculator"/>).</param> <param name="remainingPackageHours">Số giờ còn lại của gói thuê bao. NULL nghĩa
+    /// là gói không giới hạn.</param>
     public static PackageHourAllocation Allocate(
         int overtimeHours,
         decimal? remainingPackageHours,
@@ -364,8 +365,8 @@ public static class PackageHourAllocator
         if (overtimeFeeRate < 0) throw new ArgumentOutOfRangeException(nameof(overtimeFeeRate));
         if (vatRate < 0) throw new ArgumentOutOfRangeException(nameof(vatRate));
 
-        // The package pays for what it still has, the customer pays for the rest. Never more than the
-        // overtime itself, so a rental can never be charged twice for the same hour.
+        // Gói trả cho phần giờ nó còn, khách trả phần còn lại. Không bao giờ vượt quá chính số giờ
+        // quá hạn, nên một giờ không bao giờ bị tính tiền hai lần.
         var charged = remainingPackageHours is { } remaining ? Math.Min(overtimeHours, remaining) : overtimeHours;
         var excess = overtimeHours - charged;
         var amount = MoneyRounding.RoundVnd(excess * unitHourlyPrice * (1m + (overtimeFeeRate / 100m)));

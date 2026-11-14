@@ -6,9 +6,9 @@ using Car_Rental_System_BE.Application.Interfaces.External;
 namespace Car_Rental_System_BE.Application.Features.Inspections;
 
 /// <summary>
-/// Inspection recording: the staff inspection of the rental's own vehicle and the candidate check of a
-/// replacement. These two members sat in <c>OperationsService</c>; the rules below are the same ones, moved
-/// unchanged, including which of them notify and when.
+/// Ghi biên bản kiểm tra: nhân viên kiểm tra chính xe của đơn và kiểm tra xe thay thế ứng viên. Hai thành
+/// viên này từng nằm trong <c>OperationsService</c>; các quy tắc bên dưới giữ nguyên khi chuyển sang, kể cả
+/// việc cái nào gửi thông báo và khi nào.
 /// </summary>
 public sealed class InspectionRecordService(IInspectionRecordRepository repository, IOperationalNotifications? notifications = null, IRentalLifecycleService? lifecycle = null) : IInspectionRecordService
 {
@@ -17,8 +17,8 @@ public sealed class InspectionRecordService(IInspectionRecordRepository reposito
     public async Task<Inspection> AddInspectionAsync(int rentalId, int staffId, string type, bool isOk, decimal? odometer, decimal? fuel, string? notes, string? images, CancellationToken ct)
     {
         var inspection = await repository.AddInspectionAsync(rentalId, staffId, type, isOk, odometer, fuel, notes, images, ct);
-        // A vehicle that fails the pre-rental check cannot be handed over: the system cancels the rental, which waives
-        // the fee and refunds everything paid. The vehicle stays in maintenance (cancellation does not release it).
+        // Xe không đạt kiểm tra trước thuê thì không được bàn giao: hệ thống hủy đơn thuê, miễn phí hủy và hoàn lại
+        // toàn bộ số tiền đã thanh toán. Xe vẫn ở trạng thái bảo trì (việc hủy đơn không trả xe về sẵn sàng).
         if (inspection.Type == "pre_rental" && !isOk && lifecycle is not null)
         {
             try
@@ -28,14 +28,14 @@ public sealed class InspectionRecordService(IInspectionRecordRepository reposito
             }
             catch (ConflictException)
             {
-                // Already cancelled or no longer cancellable (e.g. a concurrent change); the inspection still stands.
+                // Đơn đã bị hủy hoặc không còn hủy được (ví dụ do thay đổi đồng thời); biên bản kiểm tra vẫn được giữ.
             }
         }
         if (notifications is not null) await notifications.InspectionRecordedAsync(rentalId, inspection.Type, isOk);
         return inspection;
     }
 
-    // A candidate check is only evidence about a vehicle that is not on the rental yet, so nobody is notified.
+    // Kiểm tra xe ứng viên chỉ là bằng chứng về một xe chưa gắn vào đơn, nên không gửi thông báo cho ai.
     public Task<Inspection> InspectReplacementAsync(int rentalId, int vehicleId, int staffId, bool isOk, decimal? odometer, decimal? fuel, string? notes, string? images, CancellationToken ct) =>
         repository.InspectReplacementAsync(rentalId, vehicleId, staffId, isOk, odometer, fuel, notes, images, ct);
 }

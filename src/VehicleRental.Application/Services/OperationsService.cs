@@ -8,12 +8,11 @@ namespace Car_Rental_System_BE.Application.Services;
 public sealed class OperationsService(IOperationsRepository repository, IOperationalNotifications? notifications = null) : IOperationsService
 {
     /// <summary>
-    /// Legacy second implementation of the rental state machine (delegates to
-    /// <see cref="IOperationsRepository.ChangeRentalStatusAsync"/>). It is no longer reachable over HTTP: the
-    /// deprecated <c>POST /api/rental/{id}/status/{status}</c> endpoint delegates to
-    /// <see cref="Car_Rental_System_BE.Application.Features.Rentals.IRentalLifecycleService"/> instead, which is the single
-    /// implementation, writes rental_status_history and runs the completion settlement. Kept because several
-    /// integration tests still call it directly; scheduled for removal.
+    /// Bản cài đặt thứ hai (cũ) của máy trạng thái đơn thuê (chuyển xuống <see
+    /// cref="IOperationsRepository.ChangeRentalStatusAsync"/>). Không còn truy cập được qua HTTP: endpoint đã ngừng dùng
+    /// <c>POST /api/rental/{id}/status/{status}</c> chuyển sang <see
+    /// cref="Car_Rental_System_BE.Application.Features.Rentals.IRentalLifecycleService"/>, là bản cài đặt duy nhất, ghi
+    /// rental_status_history và chạy quyết toán hoàn tất. Giữ lại vì một số integration test còn gọi trực tiếp; sẽ bị xóa.
     /// </summary>
     public async Task<Rental> ChangeRentalStatusAsync(int id, string status, CancellationToken ct)
     {

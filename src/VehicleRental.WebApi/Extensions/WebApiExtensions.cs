@@ -18,12 +18,12 @@ using Npgsql;
 namespace Car_Rental_System_BE.WebApi.Extensions;
 
 /// <summary>
-/// Presentation-layer composition: host logging, MVC/CORS/Swagger/problem-details, the options tree the API
-/// binds and the HTTP request pipeline. <c>Program.cs</c> only calls these methods.
+/// Cấu hình tầng trình bày: log của host, MVC/CORS/Swagger/problem-details, cây options mà API bind và
+/// pipeline HTTP. <c>Program.cs</c> chỉ gọi các hàm này.
 /// </summary>
 public static class WebApiExtensions
 {
-    /// <summary>Console logging: one line per entry, timestamped, no other providers.</summary>
+    /// <summary>Log ra console: mỗi mục một dòng, có dấu thời gian, không dùng provider nào khác.</summary>
     public static WebApplicationBuilder AddWebApiLogging(this WebApplicationBuilder builder)
     {
         builder.Logging.ClearProviders();
@@ -36,9 +36,9 @@ public static class WebApiExtensions
     }
 
     /// <summary>
-    /// Registers everything the API surface needs before the other layers register theirs: MVC with the
-    /// response envelope filter, the CORS policy used by the Next.js/Cloudflare frontend, Swagger generation,
-    /// problem details and every strongly typed options class bound from configuration.
+    /// Đăng ký mọi thứ bề mặt API cần trước khi các tầng khác đăng ký phần của chúng: MVC với filter bọc phản
+    /// hồi, policy CORS cho frontend Next.js/Cloudflare, sinh Swagger, problem details và mọi lớp options
+    /// kiểu mạnh được bind từ cấu hình.
     /// </summary>
     public static IServiceCollection AddWebApi(this IServiceCollection services, IConfiguration configuration)
     {
@@ -103,7 +103,7 @@ public static class WebApiExtensions
         services.Configure<ForwardedHeadersOptions>(options =>
         {
             options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedHost | ForwardedHeaders.XForwardedProto;
-            // Railway terminates TLS in its reverse proxy. The container is not publicly reachable directly.
+            // Railway kết thúc TLS ở reverse proxy. Container không truy cập công khai trực tiếp được.
             options.KnownNetworks.Clear();
             options.KnownProxies.Clear();
         });
@@ -112,8 +112,8 @@ public static class WebApiExtensions
     }
 
     /// <summary>
-    /// Registers the request pipeline and the endpoints. Middleware order is part of the contract: forwarded
-    /// headers must be applied before anything reads the host, and the response envelope must wrap controllers.
+    /// Đăng ký pipeline request và các endpoint. Thứ tự middleware là một phần của hợp đồng: forwarded header
+    /// phải được áp dụng trước khi bất cứ thứ gì đọc host, và lớp bọc phản hồi phải bao quanh controller.
     /// </summary>
     public static WebApplication UseWebApi(this WebApplication app)
     {
@@ -128,7 +128,7 @@ public static class WebApiExtensions
                     app.Logger.LogInformation("Swagger UI is available at {SwaggerUrl}", $"{address.TrimEnd('/')}/swagger");
         });
 
-        // Configure the HTTP request pipeline.
+        // Cấu hình pipeline HTTP request.
         // Phải truyền options từ DI: overload không tham số tạo ForwardedHeadersOptions mặc định
         // (không có XForwardedHost, chỉ tin loopback) nên X-Forwarded-Host của FE worker bị bỏ qua →
         // Request.Host = host nội bộ, làm redirect_uri của Google trỏ về domain BE.
@@ -147,7 +147,7 @@ public static class WebApiExtensions
         app.UseAuthentication();
         app.UseAuthorization();
 
-        // Route root / to Swagger UI
+        // Chuyển route gốc / sang Swagger UI
         app.MapGet("/", () => Results.Redirect(app.Environment.IsProduction() ? "/health" : "/swagger"));
         app.MapGet("/health", async (NpgsqlDataSource? dataSource, CancellationToken cancellationToken) =>
         {

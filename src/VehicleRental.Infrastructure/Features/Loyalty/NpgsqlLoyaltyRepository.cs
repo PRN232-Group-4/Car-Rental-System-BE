@@ -31,16 +31,16 @@ public sealed class NpgsqlLoyaltyRepository(NpgsqlDataSource dataSource, TimePro
     }
 
     /// <summary>
-    /// Phase 2 / D-4: the lifetime total <c>LoyaltyAwardAdapter.AwardPointsAsync</c> turns into a tier (and so into
-    /// a multiplier) is read inside the settlement transaction. It therefore has to run on the settlement's own
-    /// connection and transaction like every other participant of <see cref="AmbientTransactionScope"/>:
+    /// Phase 2 / D-4: tổng điểm trọn đời mà <c>LoyaltyAwardAdapter.AwardPointsAsync</c> quy ra hạng (và từ đó ra hệ
+    /// số nhân) được đọc bên trong transaction quyết toán. Vì vậy nó phải chạy trên chính kết nối và transaction
+    /// của quyết toán, như mọi thành phần tham gia khác của <see cref="AmbientTransactionScope"/>:
     /// <list type="bullet">
-    /// <item>a second pooled connection here would leave every settlement holding two connections, so a pool of N
-    /// can deadlock at exactly N simultaneous settlements;</item>
-    /// <item>the tier was computed from COMMITTED rows only, so it could not see the points this same settlement
-    /// had already written and the multiplier came from data one step behind.</item>
+    /// <item>dùng thêm một kết nối từ pool ở đây sẽ khiến mỗi lần quyết toán giữ hai kết nối, nên pool cỡ N có
+    /// thể deadlock đúng khi có N lần quyết toán cùng lúc;</item> <item>hạng từng được tính chỉ từ các dòng đã
+    /// COMMIT, nên không thấy điểm mà chính lần quyết toán này vừa ghi và hệ số nhân lấy từ dữ liệu chậm một
+    /// bước.</item>
     /// </list>
-    /// Outside a settlement (<see cref="AmbientTransactionScope.Current"/> is null) nothing changes.
+    /// Bên ngoài quyết toán (<see cref="AmbientTransactionScope.Current"/> là null) thì không có gì thay đổi.
     /// </summary>
     public async Task<int> GetLifetimeEarnedAsync(int customerId, CancellationToken ct)
     {
@@ -50,10 +50,10 @@ public sealed class NpgsqlLoyaltyRepository(NpgsqlDataSource dataSource, TimePro
     }
 
     /// <summary>
-    /// The read context for this repository: joined to the ambient settlement transaction when one is open on this
-    /// call chain, otherwise a context on its own pooled connection exactly as before. Disposing a context built
-    /// from the ambient connection does not close that connection or end its transaction (the context does not own
-    /// them); the settlement still commits.
+    /// Ngữ cảnh đọc của repository này: gắn vào transaction quyết toán đang mở trên chuỗi gọi này nếu có, nếu
+    /// không thì dùng ngữ cảnh trên kết nối riêng từ pool, đúng như trước. Hủy một context tạo từ kết nối dùng
+    /// chung không đóng kết nối đó hay kết thúc transaction của nó (context không sở hữu chúng); quyết toán vẫn
+    /// commit.
     /// </summary>
     private VehicleRentalDbContext CreateReadContext() =>
         AmbientTransactionScope.Current is { } ambient
@@ -93,7 +93,7 @@ public sealed class NpgsqlLoyaltyRepository(NpgsqlDataSource dataSource, TimePro
                 IdempotencyKey = idempotencyKey, CreatedBy = createdBy, CreatedAt = now,
             };
             await db.InsertAsync(row, ct);
-            // balance_after is computed by the BEFORE INSERT trigger; read the stored ledger row back.
+            // balance_after được trigger BEFORE INSERT tính; đọc lại dòng sổ cái đã lưu.
             return await db.Set<CustomerLoyaltyTransactionsRow>().Where(t => t.Id == row.Id).Select(TransactionProjection).SingleAsync(ct);
         }
         catch (Exception ex) when (ex.SqlState() == "23514")
@@ -130,7 +130,7 @@ public sealed class NpgsqlLoyaltyRepository(NpgsqlDataSource dataSource, TimePro
             CustomerId = customerId, RentalId = rentalId, Type = "earn", Points = points, Reason = reason,
             RefType = "rental", RefId = rentalId, CreatedBy = "system", CreatedAt = now,
         };
-        // ON CONFLICT (type, ref_type, ref_id) ... DO NOTHING: an already awarded rental returns null.
+        // ON CONFLICT (type, ref_type, ref_id) ... DO NOTHING: đơn thuê đã được cộng điểm thì trả về null.
         return await db.TryInsertAsync(row, ct) ? (int)row.Id : null;
     }
 }

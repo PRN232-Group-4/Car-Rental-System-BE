@@ -49,7 +49,7 @@ public sealed class PasswordChangeService(IWorkflowStateStore cache, IAccountRep
             throw new PasswordChangeException("Vui lòng nhập mã OTP gồm 6 chữ số.", "otp");
         var account = await VerifyCurrentAsync(email, currentPassword, ct);
         var key = Prefix + account.Email;
-        // Compare-and-exchange preserves attempt counts and single use across concurrent requests.
+        // So sánh-và-hoán đổi giữ đúng số lần thử và chỉ dùng một lần giữa các request đồng thời.
         for (var retry = 0; retry < 10; retry++)
         {
             var value = await cache.GetAsync(key, ct);

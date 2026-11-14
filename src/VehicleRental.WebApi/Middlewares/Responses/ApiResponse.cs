@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.WebUtilities;
 
 namespace Car_Rental_System_BE.WebApi.Middlewares.Responses;
 
-/// <summary>The JSON contract shared by successful and failed API responses.</summary>
+/// <summary>Hợp đồng JSON dùng chung cho phản hồi API thành công và thất bại.</summary>
 public sealed record ApiResponse(
     [property: JsonPropertyName("code")] int Code,
     [property: JsonPropertyName("status")] string Status,
