@@ -25,7 +25,7 @@ public sealed class NpgsqlRentalContractDocumentRepository(NpgsqlDataSource data
         if (rental.Status is not ("pending" or "pre_inspection"))
             throw new ConflictException("CONTRACT_UPLOAD_CLOSED", "Contract can only be uploaded before the rental starts.");
 
-        // The rental row lock serializes uploads for this rental, so read-then-write replaces ON CONFLICT DO UPDATE.
+        // Khóa dòng đơn thuê tuần tự hóa việc tải lên cho đơn này, nên đọc-rồi-ghi thay cho ON CONFLICT DO UPDATE.
         var signed = Sql.Ts(signedAt);
         var uploadedAt = await db.DatabaseUtcNowAsync(ct);
         var updated = await db.Set<RentalContractDocumentsRow>().Where(d => d.RentalId == rentalId).ExecuteUpdateAsync(s => s

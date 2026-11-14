@@ -16,7 +16,7 @@ namespace Car_Rental_System_BE.WebApi.Features.Maps;
 public sealed class MapController(IMapService mapService) : ControllerBase
 {
     /// <summary>
-    /// Forward Geocoding: converts a text address to geographical coordinates.
+    /// Geocoding xuôi: chuyển địa chỉ dạng chữ thành tọa độ địa lý.
     /// </summary>
     [OperationDescription("Mapbox provider. Missing configuration returns 503, upstream failures 502/503, no route 404. No simulated coordinates or ETA. Provider IDs are Mapbox IDs.")]
     [SuccessMessage("Address geocoded successfully.")]
@@ -32,7 +32,7 @@ public sealed class MapController(IMapService mapService) : ControllerBase
     }
 
     /// <summary>
-    /// Reverse Geocoding: converts geographical coordinates into a human-readable address.
+    /// Geocoding ngược: chuyển tọa độ địa lý thành địa chỉ dễ đọc.
     /// </summary>
     [OperationDescription("Mapbox provider. Missing configuration returns 503, upstream failures 502/503, no route 404. No simulated coordinates or ETA. Provider IDs are Mapbox IDs.")]
     [SuccessMessage("Coordinates reverse-geocoded successfully.")]
@@ -48,7 +48,7 @@ public sealed class MapController(IMapService mapService) : ControllerBase
     }
 
     /// <summary>
-    /// Searches Vietnamese addresses using Mapbox Geocoding v6 (up to 10 provider matches; no POI guarantee).
+    /// Tìm địa chỉ Việt Nam bằng Mapbox Geocoding v6 (tối đa 10 kết quả từ nhà cung cấp; không bảo đảm có POI).
     /// </summary>
     [OperationDescription("Mapbox provider. Missing configuration returns 503, upstream failures 502/503, no route 404. No simulated coordinates or ETA. Provider IDs are Mapbox IDs.")]
     [OperationDescription(" Vietnam address search via Geocoding v6, not POI search. Provider returns at most 10 matches; items/page/pageSize/totalCount paginate that match set, not the global catalog. Defaults page=1/pageSize=20; page>=1, pageSize 1..100. lat/lng must be supplied together; radius requires both and filters by meters.", DocumentsPaginationParameters = true)]
@@ -69,7 +69,7 @@ public sealed class MapController(IMapService mapService) : ControllerBase
     }
 
     /// <summary>
-    /// Calculates road distance and estimated duration using Mapbox Matrix API.
+    /// Tính khoảng cách đường bộ và thời gian ước tính bằng Mapbox Matrix API.
     /// </summary>
     [OperationDescription("Mapbox provider. Missing configuration returns 503, upstream failures 502/503, no route 404. No simulated coordinates or ETA. Provider IDs are Mapbox IDs.")]
     [SuccessMessage("Distance and ETA calculated successfully.")]
@@ -87,7 +87,7 @@ public sealed class MapController(IMapService mapService) : ControllerBase
     }
 
     /// <summary>
-    /// Computes driving route geometry and duration using Mapbox Directions API (precision-5 polyline).
+    /// Tính hình học tuyến đường lái xe và thời gian bằng Mapbox Directions API (polyline độ chính xác 5).
     /// </summary>
     [OperationDescription("Mapbox provider. Missing configuration returns 503, upstream failures 502/503, no route 404. No simulated coordinates or ETA. Provider IDs are Mapbox IDs.")]
     [SuccessMessage("Directions calculated successfully.")]

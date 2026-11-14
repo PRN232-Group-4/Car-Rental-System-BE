@@ -13,8 +13,8 @@ namespace Car_Rental_System_BE.Infrastructure.Features.Rentals;
 public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource) : IRentalLifecycleRepository
 {
     /// <summary>
-    /// Plain read of one rental - NO lock is taken here (Phase 2 / D-3: the old name GetAsync was a lie).
-    /// Callers that need to mutate must go through a method that locks inside its own transaction.
+    /// Đọc thường một đơn thuê - KHÔNG lấy khóa nào ở đây (Phase 2 / D-3: tên cũ GetAsync gây hiểu nhầm).
+    /// Bên gọi cần thay đổi dữ liệu phải đi qua hàm có khóa bên trong transaction của chính nó.
     /// </summary>
     public async Task<RentalLifecycleEntity?> GetAsync(int rentalId, CancellationToken ct)
     {
@@ -76,7 +76,7 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
             && l.Status == "approved" && l.ExpiryDate >= DateOnly.FromDateTime(DateTime.Today), ct);
     }
 
-    /// <summary>Per-rental advisory lock followed by the rental row lock, as before.</summary>
+    /// <summary>Advisory lock theo đơn thuê, sau đó khóa dòng đơn thuê, như trước.</summary>
     private static async Task<RentalsRow?> LockRentalAsync(VehicleRentalDbContext db, int rentalId, CancellationToken ct)
     {
         await db.AdvisoryLockAsync((long)rentalId, ct);
@@ -110,8 +110,8 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
         await using var tx = await conn.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(conn, tx);
 
-        // Dispatch mutations take this lock; newer assignments and vehicle swaps use VehicleLock.
-        // Acquire both before the rental row and recheck evidence inside this transaction.
+        // Các thao tác điều phối lấy khóa này; phân công mới và đổi xe dùng VehicleLock. Lấy cả hai
+        // trước khi khóa dòng đơn thuê và kiểm tra lại bằng chứng bên trong transaction này.
         await db.AdvisoryLockAsync(724232001L, ct);
         await VehicleLock.AcquireAsync(conn, tx, vehicleId, ct);
 
@@ -126,8 +126,8 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
         var started = Sql.Ts(startedAt);
         var schedule = await RequireStartEvidenceAsync(db, conn, tx, rental, vehicleId, started, ct);
 
-        // Evidence, payment and availability have passed while dispatch/vehicle/rental locks
-        // are held. Record self-drive handover without requiring a separate driver action.
+        // Bằng chứng, thanh toán và tình trạng trống đã đạt trong khi giữ khóa điều phối/xe/đơn
+        // thuê. Ghi nhận bàn giao xe tự lái mà không cần thao tác tài xế riêng.
         if (!schedule.HasDriver && !await db.Set<VehicleAssignmentsRow>().AnyAsync(a => a.RentalId == rentalId && a.Status == "assigned", ct))
         {
             var minimumEnd = started.AddTicks(10); // + interval '1 microsecond'
@@ -159,7 +159,7 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
     private static async Task<StartSchedule> RequireStartEvidenceAsync(VehicleRentalDbContext db, NpgsqlConnection conn, NpgsqlTransaction tx,
         RentalsRow rental, int vehicleId, DateTime startedAt, CancellationToken ct)
     {
-        // A separate statement takes the customer lock before the eligibility snapshot.
+        // Một câu lệnh riêng lấy khóa khách hàng trước khi chụp điều kiện đủ.
         if (await db.LockByKeyAsync<CustomersRow>(rental.CustomerId, ct, RowLock.Share) is null)
             throw new ConflictException("CUSTOMER_LICENSE_NOT_VALID", "Rental customer was not found.");
         var rentalId = rental.Id;
@@ -225,18 +225,18 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
     }
 
     /// <summary>
-    /// Phase 2 / D-1: the whole completion of one rental in ONE transaction and in a fixed lock order:
+    /// Phase 2 / D-1: toàn bộ việc hoàn tất một đơn thuê trong MỘT transaction và theo thứ tự khóa cố định:
     /// <list type="number">
-    /// <item>advisory lock on the rental id (same key every other lifecycle write uses);</item>
-    /// <item><c>rentals ... FOR UPDATE</c> - the rental is locked FIRST, so two concurrent settlements of the
-    /// same rental serialise here and the loser sees the winner's status below;</item>
-    /// <item>state re-check: the rental must still be <c>post_inspection</c>;</item>
-    /// <item><c>customer_subscriptions ... FOR UPDATE</c> - the subscription is locked SECOND, and only for a
-    /// subscription rental, which is the only case where its remaining hours are read for writing.</item>
+    /// <item>advisory lock theo id đơn thuê (cùng key mà mọi thao tác ghi vòng đời khác dùng);</item>
+    /// <item><c>rentals ... FOR UPDATE</c> - khóa đơn thuê TRƯỚC, nên hai lần quyết toán đồng thời của cùng
+    /// một đơn sẽ tuần tự tại đây và bên thua thấy trạng thái của bên thắng ở bước dưới;</item> <item>kiểm
+    /// tra lại trạng thái: đơn thuê vẫn phải là <c>post_inspection</c>;</item>
+    /// <item><c>customer_subscriptions ... FOR UPDATE</c> - khóa gói thuê bao SAU, và chỉ cho đơn thuê theo
+    /// gói, là trường hợp duy nhất đọc số giờ còn lại để ghi.</item>
     /// </list>
-    /// The mutation phase then runs refund, invoice, package hours and loyalty points through the ports on this
-    /// same connection and transaction (see <see cref="AmbientTransactionScope"/>): any failure anywhere rolls
-    /// the whole completion back, including money already written.
+    /// Sau đó bước thay đổi dữ liệu chạy hoàn tiền, hóa đơn, giờ gói và điểm thành viên qua các cổng trên cùng
+    /// kết nối và transaction này (xem <see cref="AmbientTransactionScope"/>): lỗi ở bất kỳ đâu sẽ hoàn tác
+    /// toàn bộ việc hoàn tất, kể cả tiền đã ghi.
     /// </summary>
     public async Task<RentalSettlementDto> SettleCompletionAsync(
         int rentalId, SettlementPlan plan, SettlementParticipants participants, ActorContext actor, CancellationToken ct)
@@ -336,7 +336,7 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
             .SetProperty(r => r.CancelReason, reason)
             .SetProperty(r => r.StatusChangedAt, now), ct);
 
-        // Release vehicle to available if not under maintenance
+        // Trả xe về sẵn sàng nếu không đang bảo trì
         await ReleaseVehicleAsync(db, vehicleId, ct);
 
         await InsertHistoryAsync(db, rentalId, null, "cancelled", actor, reason, ct);

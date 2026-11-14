@@ -84,8 +84,8 @@ public sealed class NpgsqlOrganizationRepository(NpgsqlDataSource dataSource) : 
         {
             if (table == "facilities")
             {
-                // Deleting a branch removes what belongs to it (geofences and their events cascade) and detaches
-                // staff, vehicles and maintenance records so rentals, invoices and payments stay intact.
+                // Xóa chi nhánh sẽ xóa những gì thuộc về nó (vùng địa lý và sự kiện của chúng xóa dây chuyền) và
+                // gỡ liên kết nhân viên, xe và phiếu bảo trì, để đơn thuê, hóa đơn và thanh toán vẫn nguyên vẹn.
                 await db.Set<GeofencesRow>().Where(g => g.FacilityId == id).ExecuteDeleteAsync(ct);
                 await db.Set<StaffsRow>().Where(s => s.FacilityId == id).ExecuteUpdateAsync(s => s.SetProperty(x => x.FacilityId, (int?)null), ct);
                 await db.Set<VehiclesRow>().Where(v => v.FacilityId == id).ExecuteUpdateAsync(s => s.SetProperty(x => x.FacilityId, (int?)null), ct);

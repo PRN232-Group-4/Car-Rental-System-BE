@@ -3,9 +3,9 @@ using Car_Rental_System_BE.Application.DTOs.Operations;
 namespace Car_Rental_System_BE.Application.Features.Inspections;
 
 /// <summary>
-/// Inspection evidence: the pre-rental and post-rental record for the rental's own vehicle, and the
-/// pre-rental check of a candidate replacement before dispatch. Both write the same <c>inspections</c> row
-/// through one private recorder, so they share one port.
+/// Bằng chứng kiểm tra xe: biên bản trước và sau thuê cho chính xe của đơn, và lần kiểm tra trước thuê của
+/// xe thay thế ứng viên trước khi điều phối. Cả hai ghi cùng một dòng <c>inspections</c> qua một hàm ghi
+/// riêng, nên dùng chung một cổng.
 /// </summary>
 public interface IInspectionRecordRepository
 {

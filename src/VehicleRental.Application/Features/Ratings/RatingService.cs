@@ -3,9 +3,9 @@ using Car_Rental_System_BE.Application.DTOs.Operations;
 namespace Car_Rental_System_BE.Application.Features.Ratings;
 
 /// <summary>
-/// Staff ratings: the customer's rating of a completed rental, the management queue, moderation and the
-/// management reply. The five members sat in <c>OperationsService</c> and <c>OperationsCompletionService</c>; the
-/// rules below are the same ones, moved unchanged.
+/// Đánh giá nhân viên: đánh giá của khách cho đơn thuê đã hoàn tất, hàng đợi của quản lý, kiểm duyệt và phản hồi
+/// của quản lý. Năm thành viên này từng nằm trong <c>OperationsService</c> và <c>OperationsCompletionService</c>;
+/// các quy tắc bên dưới giữ nguyên khi chuyển sang.
 /// </summary>
 public sealed class RatingService(IRatingRepository repository) : IRatingService
 {
@@ -38,8 +38,8 @@ public sealed class RatingService(IRatingRepository repository) : IRatingService
         return repository.ReplyRatingAsync(id, request.Text.Trim(), actor, ct);
     }
 
-    // Same guard the operations completion service holds; it stays a private copy here so this slice depends on
-    // nothing but its own port.
+    // Cùng điều kiện chặn mà service hoàn tất vận hành đang giữ; ở đây giữ một bản sao riêng để slice này chỉ
+    // phụ thuộc vào cổng của chính nó.
     private static void RequireText(string? value, int max, string name)
     {
         if (string.IsNullOrWhiteSpace(value) || value.Length > max) throw new ArgumentException($"{name} is required and must be at most {max} characters.");

@@ -9,10 +9,10 @@ using Microsoft.AspNetCore.Mvc;
 namespace Car_Rental_System_BE.WebApi.Features.RentalPolicies;
 
 /// <summary>
-/// Rental policy versions over HTTP: the paged list, creation and the active-status switch. The actions used to
-/// sit on <c>OperationsController</c> (Policies, AddPolicy, SetPolicyStatus); route, verb, policy, route
-/// constraints, status codes, request and response shapes, success messages and swagger descriptions travelled
-/// with them unchanged.
+/// Các phiên bản chính sách thuê qua HTTP: danh sách phân trang, tạo mới, đổi trạng thái áp dụng và xóa. Các
+/// action từng nằm trên <c>OperationsController</c> (Policies, AddPolicy, SetPolicyStatus); route, verb,
+/// policy, ràng buộc route, mã trạng thái, dạng request/response, thông điệp thành công và mô tả swagger giữ
+/// nguyên khi chuyển sang.
 /// </summary>
 [ApiController]
 [Route("api")]

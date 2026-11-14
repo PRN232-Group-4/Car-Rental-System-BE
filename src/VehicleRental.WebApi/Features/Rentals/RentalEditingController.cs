@@ -13,7 +13,7 @@ namespace Car_Rental_System_BE.WebApi.Features.Rentals;
 [Authorize(Policy = AuthorizationPolicies.CustomerService)]
 public sealed class RentalEditingController(IRentalEditingService editing) : ControllerBase
 {
-    /// <summary>Updates vehicle, schedule and driver preference before pickup, preserving financial and operational evidence.</summary>
+    /// <summary>Cập nhật xe, lịch thuê và lựa chọn tài xế trước khi nhận xe, giữ nguyên bằng chứng tài chính và vận hành.</summary>
     [OperationDescription("Admin/Manager/CustomerService only. Updates vehicleId/startTime/endTime/hasDriver before rental start (pending or pre_inspection, started_at null). Times must be UTC. Immutable customer/type/subscription/policy and server-computed prices cannot be supplied. Conflicting bookings, existing inspection/assignment, signed contracts and committed payments block changes with 409. Unpaid invoice and booking are updated in the same transaction.")]
     [SuccessMessage("Rental updated successfully.")]
     [HttpPut("~/api/rental/{id:int}")]

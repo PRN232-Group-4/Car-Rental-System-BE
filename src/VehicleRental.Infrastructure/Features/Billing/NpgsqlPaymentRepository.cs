@@ -29,7 +29,7 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
         await using var db = VehicleRentalDbContext.Create(cn, tx);
         var rentalId = await OwnedInvoices(db, invoiceId, email).Select(i => (int?)i.RentalId).FirstOrDefaultAsync(ct);
         if (rentalId is null) return null;
-        // Same financial lock order as rental editing. The marker commits before calling PayOS.
+        // Cùng thứ tự khóa tài chính như khi chỉnh sửa đơn thuê. Dấu đánh dấu được commit trước khi gọi PayOS.
         var rental = await db.LockByKeyAsync<RentalsRow>(rentalId.Value, ct);
         if (rental is null) return null;
         if (rental.Status == "cancelled")
@@ -81,7 +81,7 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
         await using var db = VehicleRentalDbContext.Create(cn, tx);
         var targetRental = await db.Set<InvoicesRow>().Where(i => i.Id == invoiceId).Select(i => (int?)i.RentalId).FirstOrDefaultAsync(ct)
             ?? throw new KeyNotFoundException();
-        // Same lock order as cash receipt, approval and checkout: rental, then invoice.
+        // Cùng thứ tự khóa như thu tiền mặt, duyệt và checkout: đơn thuê trước, rồi hóa đơn.
         var lockedRental = await db.LockByKeyAsync<RentalsRow>(targetRental, ct) ?? throw new KeyNotFoundException();
         var lockedRentalStatus = lockedRental.Status;
         var previous = await (from p in db.Set<PaymentsRow>() join i in db.Set<InvoicesRow>() on p.InvoiceId equals i.Id
@@ -122,10 +122,10 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
 
     /// <summary>
     /// FR-042: yêu cầu hoàn tiền cho hóa đơn thuê đã thu nhưng đơn đã hết hạn.
-    /// Phase 2 / D-6: this used to be a second anti-duplicate mechanism keyed on the invoice. It now defers to
-    /// <see cref="RentalRefundWriter"/>, the single guarded insert keyed on the rental, so "one refund per rental"
-    /// is enforced in exactly one place for both automatic refund paths. The caller already holds the rental
-    /// row lock (CompleteInvoiceAsync), so the guard cannot be raced.
+    /// Phase 2 / D-6: trước đây đây là cơ chế chống trùng thứ hai, tính theo hóa đơn. Giờ nó nhường cho <see
+    /// cref="RentalRefundWriter"/>, lệnh insert có chặn duy nhất tính theo đơn thuê, nên quy tắc "mỗi đơn thuê một
+    /// khoản hoàn" được thực thi đúng một chỗ cho cả hai luồng hoàn tiền tự động. Bên gọi đã giữ khóa dòng đơn
+    /// thuê (CompleteInvoiceAsync), nên không thể có tranh chấp.
     /// </summary>
     private static async Task RequestExpiryRefundAsync(VehicleRentalDbContext db, int invoiceId, CancellationToken ct)
     {
@@ -266,7 +266,7 @@ public sealed partial class NpgsqlPaymentRepository(NpgsqlDataSource dataSource)
         await using var db = VehicleRentalDbContext.Create(cn, tx);
         var payment = await db.LockByKeyAsync<PaymentsRow>(paymentId, ct);
         if (payment is not { IsSubscriptionPayment: true, PlanId: not null }) throw new KeyNotFoundException();
-        // PayOS may deliver the same webhook more than once; a paid row already produced its subscription.
+        // PayOS có thể gửi cùng một webhook nhiều lần; dòng đã thanh toán thì đã tạo gói thuê bao rồi.
         if (payment.Status == "paid") { await tx.CommitAsync(ct); return new(orderCode, "paid"); }
         if (amount != payment.Amount) throw new InvalidOperationException("Webhook amount does not match the subscription plan price.");
         var planId = payment.PlanId.Value;

@@ -5,7 +5,7 @@ namespace Car_Rental_System_BE.Domain.Features.Maps;
 public static class RouteGeometryService
 {
     /// <summary>
-    /// Decodes a precision-5 encoded polyline string into a list of GeoPoints.
+    /// Giải mã chuỗi polyline mã hóa độ chính xác 5 thành danh sách GeoPoint.
     /// </summary>
     public static IReadOnlyList<GeoPoint> DecodePolyline(string? encodedPolyline)
     {
@@ -54,7 +54,7 @@ public static class RouteGeometryService
     }
 
     /// <summary>
-    /// Calculates the minimum distance in meters from a point to a polyline route.
+    /// Tính khoảng cách nhỏ nhất (mét) từ một điểm tới tuyến đường polyline.
     /// </summary>
     public static double MinimumDistanceToRoute(GeoPoint point, IReadOnlyList<GeoPoint> route)
     {
@@ -75,11 +75,11 @@ public static class RouteGeometryService
     }
 
     /// <summary>
-    /// Computes the distance in meters from point P to line segment AB.
+    /// Tính khoảng cách (mét) từ điểm P tới đoạn thẳng AB.
     /// </summary>
     public static double DistanceToSegment(GeoPoint p, GeoPoint a, GeoPoint b)
     {
-        // Convert to local flat Cartesian coordinates with origin at A
+        // Đổi sang tọa độ Descartes phẳng cục bộ với gốc tại A
         const double MetersPerDegreeLat = 111132.954;
         double avgLatRad = ((a.Latitude + b.Latitude + p.Latitude) / 3.0) * Math.PI / 180.0;
         double metersPerDegreeLng = 111412.84 * Math.Cos(avgLatRad);
@@ -96,7 +96,7 @@ public static class RouteGeometryService
             return p.DistanceToMeters(a);
         }
 
-        // Projection factor t of P onto AB
+        // Hệ số chiếu t của P lên AB
         double t = (px * bx + py * by) / segLengthSq;
         t = Math.Clamp(t, 0.0, 1.0);
 
@@ -109,7 +109,7 @@ public static class RouteGeometryService
     }
 
     /// <summary>
-    /// Checks if a location has deviated beyond tolerance from the expected route.
+    /// Kiểm tra một vị trí có lệch khỏi tuyến đường dự kiến quá dung sai hay không.
     /// </summary>
     public static bool IsOffRoute(GeoPoint currentPoint, IReadOnlyList<GeoPoint> expectedRoute, double toleranceMeters, out double deviationMeters)
     {

@@ -53,13 +53,13 @@ using StackExchange.Redis;
 namespace Car_Rental_System_BE.Infrastructure;
 
 /// <summary>
-/// Infrastructure composition: data sources, caches, hosted services and adapter/repository registrations.
+/// Cấu hình tầng Infrastructure: nguồn dữ liệu, cache, hosted service và đăng ký adapter/repository.
 /// </summary>
 public static class DependencyInjection
 {
     /// <summary>
-    /// Registers everything the Infrastructure layer owns. The WebApi composition root only calls this;
-    /// it does not build data sources, connections or repositories itself.
+    /// Đăng ký mọi thứ tầng Infrastructure sở hữu. Composition root của WebApi chỉ gọi hàm này; nó
+    /// không tự tạo nguồn dữ liệu, kết nối hay repository.
     /// </summary>
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
@@ -101,7 +101,7 @@ public static class DependencyInjection
         services.AddHttpClient<IMapClient, MapboxClient>(client =>
         {
             client.Timeout = TimeSpan.FromSeconds(15);
-        }).RemoveAllLoggers(); // Provider query strings contain access_token.
+        }).RemoveAllLoggers(); // Query string gửi tới nhà cung cấp có chứa access_token.
         services.AddScoped<IUserRepository, NpgsqlUserRepository>();
         services.AddScoped<IAccountRepository, NpgsqlAccountRepository>();
         services.AddScoped<ICustomerRepository, NpgsqlCustomerRepository>();
@@ -155,8 +155,8 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// The host environment is not available through <see cref="IConfiguration"/> directly, so it is read from
-    /// the same keys the host builder uses. Returns false when nothing is configured (production default).
+    /// Môi trường host không lấy trực tiếp được qua <see cref="IConfiguration"/>, nên đọc từ cùng các key mà
+    /// host builder dùng. Trả về false khi chưa cấu hình gì (mặc định production).
     /// </summary>
     private static bool IsDevelopment(IConfiguration configuration)
     {

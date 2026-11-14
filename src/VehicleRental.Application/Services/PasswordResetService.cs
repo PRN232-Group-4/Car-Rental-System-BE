@@ -24,11 +24,11 @@ public sealed class PasswordResetService(
     {
         var email = emailInput.Trim().ToLowerInvariant();
         var account = await accounts.FindByEmailAsync(email, ct);
-        if (account is null) return; // Do not reveal whether an address has an account.
+        if (account is null) return; // Không tiết lộ địa chỉ email có tài khoản hay không.
         var key = Prefix + email;
         var value = await cache.GetAsync(key, ct);
         if (value is not null && JsonSerializer.Deserialize<PendingReset>(value!)!.ResendAfter > DateTimeOffset.UtcNow)
-            return; // Same response prevents enumeration and avoids OTP spam.
+            return; // Trả cùng một phản hồi để chống dò tài khoản và tránh spam OTP.
         var otp = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
         var pending = new PendingReset(HashOtp(otp), 0, DateTimeOffset.UtcNow.AddSeconds(_options.ResendCooldownSeconds));
         if (!await cache.CompareExchangeAsync(key, value, JsonSerializer.Serialize(pending), TimeSpan.FromMinutes(_options.OtpTtlMinutes), ct)) return;

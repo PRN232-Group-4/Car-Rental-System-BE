@@ -3,10 +3,10 @@ using Car_Rental_System_BE.Application.DTOs.Operations;
 namespace Car_Rental_System_BE.Application.Features.Recovery;
 
 /// <summary>
-/// Vehicle recovery: swapping the vehicle of a rental that is already running or still being prepared, with the
-/// same seat count, the original pricing preserved and a breakdown report closing the loop when the old vehicle
-/// broke down. This is the legacy operations replacement; <c>IAssignmentService.ReplaceVehicleAsync</c> is the
-/// dispatcher flow behind <c>/assignments/vehicle</c> and stays separate.
+/// Khôi phục chuyến bằng xe thay thế: đổi xe của một đơn đang chạy hoặc đang chuẩn bị, cùng số chỗ, giữ nguyên
+/// giá ban đầu, và đóng báo cáo hỏng xe khi xe cũ bị hỏng. Đây là luồng thay xe vận hành cũ;
+/// <c>IAssignmentService.ReplaceVehicleAsync</c> là luồng điều phối phía sau <c>/assignments/vehicle</c> và vẫn
+/// tách riêng.
 /// </summary>
 public interface IRecoveryRepository
 {

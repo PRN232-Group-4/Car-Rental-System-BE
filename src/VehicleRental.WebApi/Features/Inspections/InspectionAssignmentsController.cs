@@ -12,7 +12,7 @@ namespace Car_Rental_System_BE.WebApi.Features.Inspections;
 [Route("api/rental/{id:int}/inspection-assignment")]
 public sealed class InspectionAssignmentsController(IInspectionAssignmentService service) : ControllerBase
 {
-    /// <summary>Admin confirms technician dispatch and a passing pre/post-rental check together. Does not overwrite existing evidence.</summary>
+    /// <summary>Admin xác nhận cùng lúc việc giao kỹ thuật viên và kết quả kiểm tra trước/sau thuê đạt. Không ghi đè bằng chứng đã có.</summary>
     [OperationDescription("Admin only. POST checked requires active Maintenance technicianStaffId. approveRequest boolean defaults false; explicit true additionally approves pending/legacy unconfirmed requests into pre_inspection, writes confirmed_at and audit history atomically with dispatch and passing evidence. Existing evidence is never overwritten; only pending/pre_inspection before started_at. Authentication supplies confirmed_by. inspectionType=post_rental requires post_inspection and no existing post evidence; records passing post-rental evidence with independent assignment. approveRequest has no effect for post checks. No automatic completion, start or paid flag; standard paid/subscription order rules apply. Missing rental 404, invalid technician 400, locked stage/evidence 409.")]
     [SuccessMessage("Technician dispatch and passing pre-rental check confirmed successfully.")]
     [SuccessMessageWhenQuery("inspectionType", "post_rental", "Technician dispatch and passing post-rental check confirmed successfully.")]
@@ -28,7 +28,7 @@ public sealed class InspectionAssignmentsController(IInspectionAssignmentService
         await service.ConfirmCheckedAsync(id, request.TechnicianStaffId!.Value,
             User.FindFirstValue(ClaimTypes.Email) ?? throw new UnauthorizedAccessException(), ct, request.ApproveRequest, inspectionType);
 
-    /// <summary>Read the selected pre/post-rental technician assignment for the current vehicle.</summary>
+    /// <summary>Đọc phân công kỹ thuật viên kiểm tra trước/sau thuê đã chọn cho xe hiện tại.</summary>
     [OperationDescription("GET: Admin/Manager/CustomerService/Maintenance reads the persisted assignment for the current rental vehicle; data is null if unassigned. PUT: Admin/Manager only, technicianStaffId is required and positive. Target must be active Maintenance. Only pending/pre_inspection before pre-rental evidence; assignment does not replace inspection or change rental status. Missing rental returns 404, invalid technician 400, locked stage/evidence 409. Actor comes from authentication. Optional inspectionType=pre_rental (default) or post_rental is validated at HTTP and Application. Post assignment requires post_inspection, preserves pre-rental assignment and rejects existing post evidence.")]
     [SuccessMessage("Pre-rental inspection assignment retrieved successfully.")]
     [SuccessMessageWhenQuery("inspectionType", "post_rental", "Post-rental inspection technician assignment retrieved successfully.")]
@@ -42,7 +42,7 @@ public sealed class InspectionAssignmentsController(IInspectionAssignmentService
     public async Task<IActionResult> Get([Range(1,int.MaxValue)] int id, CancellationToken ct, [FromQuery, RegularExpression("^(pre_rental|post_rental)$")] string inspectionType = "pre_rental") =>
         Ok(await service.GetAsync(id, ct, inspectionType));
 
-    /// <summary>Admin/Manager assigns an active Maintenance technician before evidence for the selected inspection phase exists.</summary>
+    /// <summary>Admin/Manager giao một kỹ thuật viên Maintenance đang hoạt động trước khi có bằng chứng cho giai đoạn kiểm tra đã chọn.</summary>
     [OperationDescription("GET: Admin/Manager/CustomerService/Maintenance reads the persisted assignment for the current rental vehicle; data is null if unassigned. PUT: Admin/Manager only, technicianStaffId is required and positive. Target must be active Maintenance. Only pending/pre_inspection before pre-rental evidence; assignment does not replace inspection or change rental status. Missing rental returns 404, invalid technician 400, locked stage/evidence 409. Actor comes from authentication. Optional inspectionType=pre_rental (default) or post_rental is validated at HTTP and Application. Post assignment requires post_inspection, preserves pre-rental assignment and rejects existing post evidence.")]
     [SuccessMessage("Pre-rental inspection technician assigned successfully.")]
     [SuccessMessageWhenQuery("inspectionType", "post_rental", "Post-rental inspection technician assigned successfully.")]

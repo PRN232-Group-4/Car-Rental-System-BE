@@ -37,7 +37,7 @@ public sealed class RentalEditingService(IRentalEditingRepository repository) : 
         return repository.UpdateBeforePickupAsync(id, new(request.VehicleId.Value, start, end, request.HasDriver.Value), ct);
     }
 
-    // Same pass-through the operations service did: the repository owns the validation and the write.
+    // Chuyển thẳng xuống như service vận hành đã làm: repository đảm nhận việc kiểm tra hợp lệ và ghi dữ liệu.
     public Task<Rental> SaveRentalContractAsync(int id, string contractLink, DateTime signedAt, CancellationToken ct) =>
         repository.SaveRentalContractAsync(id, contractLink, signedAt, ct);
 }

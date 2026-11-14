@@ -10,15 +10,15 @@ using Microsoft.AspNetCore.Mvc;
 namespace Car_Rental_System_BE.WebApi.Features.Billing;
 
 /// <summary>
-/// The invoice half of the former PaymentsController. Routes, verbs, policies and response contracts are
-/// byte-identical to PaymentsController.cs:19-155; only the owning controller (and therefore the envelope
-/// message key, Invoices.*) changed.
+/// Nửa hóa đơn của PaymentsController trước đây. Route, verb, policy và hợp đồng phản hồi giống hệt
+/// PaymentsController.cs:19-155; chỉ controller sở hữu (và vì vậy key thông điệp bọc phản hồi,
+/// Invoices.*) là thay đổi.
 /// </summary>
 [ApiController]
 [Route("api")]
 public sealed class InvoicesController(IPaymentService payments) : ControllerBase
 {
-    /// <summary>Staff confirms actual cash receipt after rental approval; atomically issues the paid order.</summary>
+    /// <summary>Nhân viên xác nhận đã thực nhận tiền mặt sau khi duyệt đơn thuê; phát hành đơn chính thức đã thanh toán một cách nguyên tử.</summary>
     [OperationDescription("Admin/Manager/CustomerService confirms actual full cash receipt. Rental invoices require selected cash method and approval. FR-042: an expired rental is refused with 409 INVOICE_NOT_PAYABLE. Settled overtime invoices may use cash only before checkout_started_at; atomically records overtime ledger with reviewer audit and marks invoice paid without issuing a new order. No client amount or paid flag. Idempotent; conflicting online checkout returns 409.")]
     [SuccessMessage("Cash payment confirmed successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
@@ -31,7 +31,7 @@ public sealed class InvoicesController(IPaymentService payments) : ControllerBas
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public Task<PaymentResult> ConfirmCash([FromRoute, Range(1, int.MaxValue)] int invoiceId, CancellationToken ct) => payments.ConfirmCashAsync(invoiceId, Email(), ct);
 
-    /// <summary>Creates a PayOS checkout for an unpaid, settled overtime invoice; only provider verification marks paid.</summary>
+    /// <summary>Tạo checkout PayOS cho hóa đơn phí quá giờ chưa thanh toán đã quyết toán; chỉ xác minh từ nhà cung cấp mới đánh dấu đã thanh toán.</summary>
     [OperationDescription("Admin/Manager/CustomerService creates PayOS link only for an unpaid overtime invoice linked to a completed rental settlement. Rental and invoice locks serialize against cash receipt; reservation blocks cash even on provider failure. Provider signature and amount verification is required before paid. Does not accept customer identity, amount or paid status from client.")]
     [SuccessMessage("Overtime payment link created successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]

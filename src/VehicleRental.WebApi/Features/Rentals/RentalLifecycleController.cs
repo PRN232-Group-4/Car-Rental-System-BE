@@ -25,8 +25,8 @@ public sealed class RentalLifecycleController(
 ) : ControllerBase
 {
     /// <summary>
-    /// Confirms a pending rental and advances it to pre_inspection.
-    /// Staff approval opens checkout; payment is required later before handover for direct rentals.
+    /// Xác nhận một đơn thuê đang chờ và chuyển sang pre_inspection. Việc nhân viên duyệt mở bước
+    /// checkout; đơn thuê trực tiếp phải thanh toán trước khi bàn giao.
     /// </summary>
     [OperationDescription("Admin/Manager/CustomerService confirms a pending rental before payment, writes confirmed_at and advances to pre_inspection. An unpaid direct rental can be confirmed. Legacy pre_inspection without confirmed_at may be explicitly approved here; repeating an existing approval returns 409. Direct rental payment remains mandatory before handover. FR-042: an expired request cannot be confirmed and returns 409 ILLEGAL_TRANSITION; every other lifecycle action (start, return, complete, cancel) is refused on expired the same way.")]
     [SuccessMessage("Rental confirmed successfully.")]
@@ -46,8 +46,8 @@ public sealed class RentalLifecycleController(
     }
 
     /// <summary>
-    /// Starts a rental and advances it to renting.
-    /// Requires passing pre-rental inspection, valid assignment, and valid driver license for self-drive.
+    /// Bắt đầu đơn thuê và chuyển sang renting. Yêu cầu kiểm tra trước thuê đạt, phân công hợp lệ và GPLX
+    /// hợp lệ nếu tự lái.
     /// </summary>
     [SuccessMessage("Rental started successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
@@ -66,8 +66,7 @@ public sealed class RentalLifecycleController(
     }
 
     /// <summary>
-    /// Returns the vehicle and advances the rental to post_inspection.
-    /// Records the effective returned_at timestamp.
+    /// Nhận lại xe và chuyển đơn thuê sang post_inspection. Ghi nhận thời điểm returned_at thực tế.
     /// </summary>
     [SuccessMessage("Vehicle return recorded successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
@@ -86,8 +85,8 @@ public sealed class RentalLifecycleController(
     }
 
     /// <summary>
-    /// Completes the rental, calculates overtime and reconciles deposit/shortfall/refund in a single transaction.
-    /// Requires post-rental inspection recorded.
+    /// Hoàn tất đơn thuê, tính phí quá giờ và đối soát tiền cọc/khoản thiếu/hoàn tiền trong một transaction. Yêu
+    /// cầu đã có biên bản kiểm tra sau thuê.
     /// </summary>
     [SuccessMessage("Rental completed successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
@@ -106,7 +105,7 @@ public sealed class RentalLifecycleController(
     }
 
     /// <summary>
-    /// Cancels a rental according to cancellation policies (customer self-cancel or staff cancellation).
+    /// Hủy đơn thuê theo chính sách hủy (khách tự hủy hoặc nhân viên hủy).
     /// </summary>
     [OperationDescription("Authenticated rental owner or authorized operations staff. Customer and staff may cancel only pending/pre_inspection rentals, before renting; a delayed scheduled pickup does not by itself prohibit cancellation. Customer ownership is checked. Existing free-hours and late-fee policy determines fees/refunds; customer cannot waive fees. Preview and mutation use the same policy; current state is checked under a row lock before cancellation. Cancel requires reason. Errors use the shared six-field envelope.")]
     [SuccessMessage("Rental cancelled successfully.")]
@@ -127,7 +126,7 @@ public sealed class RentalLifecycleController(
     }
 
     /// <summary>
-    /// Previews cancellation eligibility, fees and refund amount for the rental.
+    /// Xem trước điều kiện hủy, phí hủy và số tiền hoàn của đơn thuê.
     /// </summary>
     [OperationDescription("Authenticated rental owner or authorized operations staff. Customer and staff may cancel only pending/pre_inspection rentals, before renting; a delayed scheduled pickup does not by itself prohibit cancellation. Customer ownership is checked. Existing free-hours and late-fee policy determines fees/refunds; customer cannot waive fees. Preview and mutation use the same policy; current state is checked under a row lock before cancellation. Cancel requires reason. Errors use the shared six-field envelope.")]
     [SuccessMessage("Rental cancellation preview retrieved successfully.")]

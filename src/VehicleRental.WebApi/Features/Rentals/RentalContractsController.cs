@@ -8,21 +8,21 @@ using Microsoft.AspNetCore.Mvc;
 namespace Car_Rental_System_BE.WebApi.Features.Rentals;
 
 /// <summary>
-/// Records the signature of a long-term contract on the rental. The action used to sit on
-/// <c>OperationsController</c> (SaveContract); route, verb, policy, route constraints, status codes, request and
-/// response shapes, success message and swagger description travelled with it unchanged.
+/// Ghi nhận chữ ký hợp đồng dài hạn trên đơn thuê. Action này từng nằm trên <c>OperationsController</c>
+/// (SaveContract); route, verb, policy, ràng buộc route, mã trạng thái, dạng request/response, thông điệp thành
+/// công và mô tả swagger giữ nguyên khi chuyển sang.
 /// </summary>
 /// <remarks>
-/// A controller of its own rather than an action on <c>RentalContractDocumentsController</c>: that type carries
-/// a class-level route prefix (<c>api/rental/{id}/contract</c>) and a class-level role list for the uploaded
-/// document, and ASP.NET Core ANDs class-level with action-level policy metadata. This route and its
-/// CustomerService policy stay exactly as they were.
+/// Controller riêng thay vì một action trên <c>RentalContractDocumentsController</c>: kiểu đó mang tiền tố
+/// route cấp class (<c>api/rental/{id}/contract</c>) và danh sách vai trò cấp class cho tài liệu tải lên, và
+/// ASP.NET Core kết hợp metadata policy cấp class với cấp action bằng AND. Route này và policy CustomerService
+/// của nó giữ nguyên.
 /// </remarks>
 [ApiController]
 [Route("api")]
 public sealed class RentalContractsController(IRentalEditingService editing) : ControllerBase
 {
-    /// <summary>Admin, Manager or CustomerService records signed long-term contract evidence.</summary>
+    /// <summary>Admin, Manager hoặc CustomerService ghi nhận bằng chứng hợp đồng dài hạn đã ký.</summary>
     [SuccessMessage("Signed long-term rental contract recorded successfully.")]
     [Authorize(Policy=AuthorizationPolicies.CustomerService)]
     [HttpPut("rental/{id:int}/contract")]

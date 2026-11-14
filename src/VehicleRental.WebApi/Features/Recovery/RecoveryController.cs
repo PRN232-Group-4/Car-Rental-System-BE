@@ -9,15 +9,15 @@ using Microsoft.AspNetCore.Mvc;
 namespace Car_Rental_System_BE.WebApi.Features.Recovery;
 
 /// <summary>
-/// Vehicle recovery over HTTP: the legacy replacement of a rental's vehicle. The action used to sit on
-/// <c>DispatchController</c>; route, verb, policy, route constraints, status codes, request and response
-/// shapes, success message and swagger description travelled with it unchanged.
+/// Khôi phục chuyến bằng xe thay thế qua HTTP: luồng thay xe cũ của đơn thuê. Action này từng nằm trên
+/// <c>DispatchController</c>; route, verb, policy, ràng buộc route, mã trạng thái, dạng
+/// request/response, thông điệp thành công và mô tả swagger giữ nguyên khi chuyển sang.
 /// </summary>
 [ApiController]
 [Route("api")]
 public sealed class RecoveryController(IRecoveryService recovery) : ControllerBase
 {
-    /// <summary>Manager/Admin replaces with the same seat count, preserving prices; ongoing trips require a breakdown report and a new driver.</summary>
+    /// <summary>Manager/Admin thay bằng xe cùng số chỗ, giữ nguyên giá; chuyến đang chạy cần có báo cáo hỏng xe và tài xế mới.</summary>
     [SuccessMessage("Replacement vehicle dispatched with original rental pricing preserved.")]
     [Authorize(Policy=AuthorizationPolicies.Management)]
     [HttpPost("rental/{id:int}/replacements")]

@@ -5,10 +5,10 @@ using Car_Rental_System_BE.Application.Interfaces.Services;
 namespace Car_Rental_System_BE.Application.Services;
 
 /// <summary>
-/// The paged driver schedule and paged maintenance queue. The incident-report members it used to hold moved to
-/// <see cref="Features.Reports.ReportService"/> (which is also why this service no longer takes
-/// <c>IOperationalNotifications</c>: only the report commands ever notified) and the staff-rating members moved
-/// to <see cref="Features.Ratings.RatingService"/>.
+/// Lịch chuyến tài xế phân trang và hàng đợi bảo trì phân trang. Các thành viên báo cáo sự cố từng nằm ở đây đã
+/// chuyển sang <see cref="Features.Reports.ReportService"/> (cũng vì vậy service này không còn nhận
+/// <c>IOperationalNotifications</c>: chỉ các lệnh báo cáo mới gửi thông báo), còn các thành viên đánh giá nhân
+/// viên chuyển sang <see cref="Features.Ratings.RatingService"/>.
 /// </summary>
 public sealed class OperationsCompletionService(IOperationsCompletionRepository repository) : IOperationsCompletionService
 {

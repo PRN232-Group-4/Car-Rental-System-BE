@@ -11,10 +11,10 @@ using Car_Rental_System_BE.Infrastructure.Persistence;
 namespace Car_Rental_System_BE.Infrastructure.Features.Rentals;
 
 /// <summary>
-/// Rental booking and rental reads. The members came from <c>NpgsqlOperationsRepository</c> with their SQL, their
-/// transaction and their rules unchanged: one transaction under the vehicle lock, subscription hour deduction,
-/// the self-drive licence check, the availability window, the price snapshot from the vehicle (hourly or monthly),
-/// the automatic policy pick, the VAT/deposit arithmetic, the detail row and the invoice.
+/// Đặt xe và đọc đơn thuê. Các thành viên lấy từ <c>NpgsqlOperationsRepository</c> với SQL, transaction và quy tắc
+/// giữ nguyên: một transaction dưới khóa xe, trừ giờ gói thuê bao, kiểm tra GPLX khi tự lái, khoảng thời gian
+/// trống, ảnh chụp giá từ xe (theo giờ hoặc theo tháng), tự chọn chính sách, tính VAT/tiền cọc, dòng chi tiết và
+/// hóa đơn.
 /// </summary>
 public sealed class NpgsqlRentalBookingRepository(NpgsqlDataSource dataSource, TimeProvider? timeProvider = null) : IRentalBookingRepository
 {
@@ -43,7 +43,7 @@ public sealed class NpgsqlRentalBookingRepository(NpgsqlDataSource dataSource, T
                     .ExecuteUpdateAsync(s => s.SetProperty(x => x.RemainingHours, x => x.RemainingHours - needed), ct);
         }
         if(!hasDriver){
-            // Lock customer so license submissions/reviews cannot race this authorization.
+            // Khóa khách hàng để việc nộp/duyệt GPLX không tranh chấp với lần cấp phép này.
             await db.LockByKeyAsync<CustomersRow>(cid, ct, RowLock.Share);
             if(!await CustomerLicenseEligibility.IsEligibleAsync(db, cid, vehicleId, end, ct))
                 throw new ConflictException("CUSTOMER_LICENSE_NOT_VALID", "Cần GPLX đã duyệt, đúng hạng xe và còn hạn đến hết chuyến thuê.");

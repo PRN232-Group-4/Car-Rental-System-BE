@@ -3,8 +3,8 @@ using Car_Rental_System_BE.Application.Features.Rentals;
 namespace Car_Rental_System_BE.Application.Features.Dashboard;
 
 /// <summary>
-/// Dashboard storage: the KPI snapshot, the daily revenue series and the three ranked reports, each read twice
-/// (the requested period and the adjacent previous one). Every query is scoped by facility and vehicle type.
+/// Lưu trữ dashboard: ảnh chụp KPI, chuỗi doanh thu theo ngày và ba báo cáo xếp hạng, mỗi thứ được đọc hai lần
+/// (kỳ được yêu cầu và kỳ liền trước). Mọi truy vấn đều lọc theo cơ sở và loại xe.
 /// </summary>
 public interface IDashboardRepository
 {

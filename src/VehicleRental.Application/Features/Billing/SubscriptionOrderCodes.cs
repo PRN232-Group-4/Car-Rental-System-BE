@@ -1,10 +1,10 @@
 namespace Car_Rental_System_BE.Application.Features.Billing;
 
 /// <summary>
-/// SUBSCRIPTIONS (intended future module). The order-code convention shared by the subscription-plan
-/// purchase flow and the provider webhook: an order code above <see cref="Base"/> is a plan purchase,
-/// anything below it is an invoice. It lives in Billing for now; the next phase moves it out together
-/// with the plan-purchase members of <see cref="IPaymentService"/> and the webhook dispatcher.
+/// SUBSCRIPTIONS (module dự kiến tách sau này). Quy ước mã đơn dùng chung cho luồng mua gói thuê bao
+/// và webhook của nhà cung cấp: mã đơn lớn hơn <see cref="Base"/> là mua gói, nhỏ hơn là hóa đơn. Tạm
+/// nằm trong Billing; giai đoạn sau sẽ tách ra cùng các thành viên mua gói của <see
+/// cref="IPaymentService"/> và bộ điều phối webhook.
 /// </summary>
 public static class SubscriptionOrderCodes
 {

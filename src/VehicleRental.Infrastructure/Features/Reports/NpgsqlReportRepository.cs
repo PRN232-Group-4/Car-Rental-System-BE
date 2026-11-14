@@ -7,24 +7,24 @@ using Npgsql;
 namespace Car_Rental_System_BE.Infrastructure.Features.Reports;
 
 /// <summary>
-/// Incident report storage: the two write commands that move a report through its status machine, the flat
-/// list and the paged management queue. The members came from <c>NpgsqlOperationsRepository</c> (create, list,
-/// resolve) and <c>NpgsqlOperationsCompletionRepository</c> (paged queue, status command) with their SQL
-/// unchanged; the dispatcher lock, the transactions and every FOR UPDATE clause travelled with them.
+/// Lưu trữ báo cáo sự cố: hai lệnh ghi đưa báo cáo đi qua máy trạng thái, danh sách phẳng và hàng đợi phân
+/// trang cho quản lý. Các thành viên lấy từ <c>NpgsqlOperationsRepository</c> (tạo, liệt kê, giải quyết) và
+/// <c>NpgsqlOperationsCompletionRepository</c> (hàng đợi phân trang, lệnh đổi trạng thái) với SQL giữ nguyên;
+/// khóa điều phối, transaction và mọi mệnh đề FOR UPDATE cũng đi theo.
 /// </summary>
 public sealed class NpgsqlReportRepository(NpgsqlDataSource dataSource) : IReportRepository
 {
-    // One transaction-scoped dispatcher lock protects cross-table availability invariants. A report can flip a
-    // vehicle to maintenance and maintenance completion can release it, so reports keep taking the same lock
-    // the operations and maintenance repositories take.
+    // Một khóa điều phối trong phạm vi transaction bảo vệ các bất biến về tình trạng trống giữa nhiều bảng.
+    // Báo cáo có thể chuyển xe sang bảo trì và việc hoàn tất bảo trì có thể trả xe về, nên báo cáo vẫn lấy
+    // cùng khóa mà repository vận hành và bảo trì dùng.
     private static Task LockOperationsAsync(VehicleRentalDbContext db, CancellationToken ct)
         => db.AdvisoryLockAsync(724232001L, ct);
 
-    // Reports keeps its own copy of the locked rental read the legacy operations repository holds privately: the
-    // moved body must keep its exact SQL, and reusing that helper would mean widening the legacy repository's
-    // surface for one slice. Same call the Customers and Fleet slices made for the one-line SQL helpers; here it
-    // also covers ReadRentalAsync/ReadRental, which the report create path shares with inspections and
-    // replacement recovery that stay behind. It is the identical statement, so the two copies lock the same row.
+    // Reports giữ bản sao riêng của phép đọc đơn thuê có khóa mà repository vận hành cũ giữ kín: phần thân
+    // chuyển sang phải giữ đúng SQL, và dùng lại hàm hỗ trợ đó nghĩa là phải mở rộng bề mặt của repository cũ
+    // chỉ vì một slice. Các slice Customers và Fleet cũng làm vậy với các hàm SQL một dòng; ở đây còn gồm cả
+    // ReadRentalAsync/ReadRental, mà luồng tạo báo cáo dùng chung với kiểm tra xe và khôi phục chuyến bằng xe
+    // thay thế còn ở lại. Đây là cùng một câu lệnh, nên hai bản sao khóa cùng một dòng.
     private static async Task<Rental> ReadRentalAsync(VehicleRentalDbContext db, int id, CancellationToken ct)
     {
         if (await db.LockByKeyAsync<RentalsRow>(id, ct) is null) throw new KeyNotFoundException("Rental was not found.");
@@ -76,7 +76,7 @@ public sealed class NpgsqlReportRepository(NpgsqlDataSource dataSource) : IRepor
         await using var db = VehicleRentalDbContext.Create(cn, tx);
         await LockOperationsAsync(db, ct);
         var now = await db.DatabaseNowAsync(ct);
-        // Breakdown reports are resolved by vehicle/driver recovery, never by bypassing it here.
+        // Báo cáo hỏng xe được giải quyết qua khôi phục xe/tài xế, không bao giờ bằng cách bỏ qua bước đó tại đây.
         if (await db.Set<ReportsRow>().Where(r => r.Id == id && r.Type == "damage" && OpenBreakdownStatuses.Contains(r.Status!)
                 && (r.MaintenanceId == null || db.Set<VehicleMaintenanceRow>().Any(m => m.Id == r.MaintenanceId && m.Status == "completed" && m.IsSafe == true)))
             .ExecuteUpdateAsync(s => s
@@ -141,7 +141,7 @@ public sealed class NpgsqlReportRepository(NpgsqlDataSource dataSource) : IRepor
         await using var cn=await dataSource.OpenConnectionAsync(ct);
         await using var tx=await cn.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(cn, tx);
-        // Same global lock as recovery/maintenance preserves their status checks.
+        // Cùng khóa toàn cục như khôi phục chuyến/bảo trì để giữ nguyên các kiểm tra trạng thái của chúng.
         await db.AdvisoryLockAsync(724232001L, ct);
         var report = await db.LockByKeyAsync<ReportsRow>(id, ct);
         if (report is not { ReporterStaffId: not null, Status: not null }) throw new KeyNotFoundException("Report was not found.");

@@ -84,7 +84,7 @@ public sealed class DatabaseMigrationHostedService(
         var deployedPath = Path.Combine(contentRootPath, relativePath);
         if (File.Exists(deployedPath)) return deployedPath;
 
-        // dotnet run uses src/VehicleRental.WebApi as ContentRoot; source SQL lives at repository root.
+        // dotnet run dùng src/VehicleRental.WebApi làm ContentRoot; file SQL nguồn nằm ở thư mục gốc repository.
         var developmentPath = Path.GetFullPath(Path.Combine(contentRootPath, "..", "..", relativePath));
         if (File.Exists(developmentPath)) return developmentPath;
 

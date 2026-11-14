@@ -7,7 +7,7 @@ namespace Car_Rental_System_BE.Application.Features.Availability;
 public sealed class AvailabilityOptions
 {
     public const string SectionName = "Availability";
-    /// <summary>Default of <c>vehicle_bookings.buffer_minutes</c> in migration 0011; checked against the database at startup.</summary>
+    /// <summary>Giá trị mặc định của <c>vehicle_bookings.buffer_minutes</c> trong migration 0011; được đối chiếu với database khi khởi động.</summary>
     public const int DefaultBufferMinutes = 60;
 
     [Range(0, 1440)] public int BufferMinutes { get; init; } = DefaultBufferMinutes;
@@ -62,10 +62,10 @@ public sealed record BusySlot(DateTime From, DateTime To, string Kind);
 public sealed record ActiveRentalPolicy(int Id, int? VehicleTypeId, string Name, decimal VatRate, decimal DepositPercentage, decimal OvertimeFeeRate);
 public sealed record AffectedRental(int RentalId, string? CustomerName, DateTime Start, DateTime End, string Status);
 
-/// <summary>Read side of FR-010. Implementations talk to PostgreSQL.</summary>
+/// <summary>Phía đọc của FR-010. Các implementation làm việc với PostgreSQL.</summary>
 public interface IVehicleSearchRepository
 {
-    /// <param name="driverAvailable">Evaluated once per request by <see cref="IDriverAvailability"/>; null when not requested.</param>
+    /// <param name="driverAvailable">Được tính một lần mỗi request bởi <see cref="IDriverAvailability"/>; null khi không được yêu cầu.</param>
     Task<VehicleSearchResult> SearchAsync(VehicleSearchQuery query, int bufferMinutes, bool? driverAvailable, CancellationToken ct);
     Task<ActiveRentalPolicy?> GetActivePolicyAsync(int vehicleTypeId, CancellationToken ct);
     Task<bool> VehicleExistsAsync(int vehicleId, CancellationToken ct);
@@ -73,20 +73,20 @@ public interface IVehicleSearchRepository
     Task<IReadOnlyList<AffectedRental>> ListAffectedRentalsAsync(int vehicleId, DateTime nowUtc, CancellationToken ct);
 }
 
-/// <summary>Single source of truth for "is this vehicle free in this window" (search, rental creation, vehicle swap).</summary>
+/// <summary>Nguồn sự thật duy nhất cho câu hỏi "xe này có trống trong khoảng thời gian này không" (tìm kiếm, tạo đơn thuê, đổi xe).</summary>
 public interface IVehicleAvailabilityService
 {
     Task<AvailabilityResult> CheckAsync(int vehicleId, TimeRange window, CancellationToken ct);
 
     /// <summary>
-    /// Re-checks inside the caller's transaction (after taking the vehicle lock) and throws
-    /// <c>VEHICLE_UNAVAILABLE</c> (409) or <c>VEHICLE_NOT_FOUND</c> (404).
+    /// Kiểm tra lại trong transaction của bên gọi (sau khi đã khóa xe) và ném
+    /// <c>VEHICLE_UNAVAILABLE</c> (409) hoặc <c>VEHICLE_NOT_FOUND</c> (404).
     /// </summary>
 }
 
-/// <summary>Port for driver availability. FR-014 and BE-33 (shifts, days off) plug into the same source.</summary>
+/// <summary>Cổng kiểm tra tài xế còn trống. FR-014 và BE-33 (lịch nghỉ) dùng chung nguồn này.</summary>
 public interface IDriverAvailability
 {
-    /// <summary>Is at least one qualified driver free during <paramref name="window"/> (or, with no window, valid as of <paramref name="nowUtc"/>)?</summary>
+    /// <summary>Có ít nhất một tài xế đủ điều kiện còn trống trong <paramref name="window"/> không (hoặc, nếu không có khoảng thời gian, còn hợp lệ tại <paramref name="nowUtc"/>)?</summary>
     Task<bool> AnyAvailableAsync(TimeRange? window, DateTime nowUtc, CancellationToken ct, int? facilityId = null);
 }

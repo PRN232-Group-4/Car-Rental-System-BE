@@ -7,7 +7,7 @@ public sealed class CustomerListQuery
     [StringLength(255)]
     public string? Search { get; init; }
     public bool? IsActive { get; init; }
-    /// <summary>Optional license filter: pending, approved, rejected, or none (no license number submitted).</summary>
+    /// <summary>Bộ lọc GPLX tùy chọn: pending, approved, rejected, hoặc none (chưa nộp số GPLX).</summary>
     [RegularExpression("^(pending|approved|rejected|none)$")]
     public string? LicenseStatus { get; init; }
     [Range(1, int.MaxValue)]

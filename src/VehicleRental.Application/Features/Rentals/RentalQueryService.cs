@@ -2,7 +2,7 @@ using Car_Rental_System_BE.Application.Common.Errors;
 
 namespace Car_Rental_System_BE.Application.Features.Rentals;
 
-/// <summary>Persistence port; HTTP controllers depend on IRentalQueries instead.</summary>
+/// <summary>Cổng lưu trữ; các HTTP controller phụ thuộc vào IRentalQueries thay vì cổng này.</summary>
 public interface IRentalQueryRepository
 {
     Task<PagedResult<CustomerRentalSummary>> ListMyRentalsAsync(int customerId, string? tab, int page, int pageSize, CancellationToken ct);

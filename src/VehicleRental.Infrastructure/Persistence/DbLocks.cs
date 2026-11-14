@@ -5,9 +5,9 @@ using Npgsql;
 namespace Car_Rental_System_BE.Infrastructure.Persistence;
 
 /// <summary>
-/// The only SQL text left in repositories: PostgreSQL lock primitives (advisory/row/table locks) and the database
-/// clock, which LINQ cannot express. Everything else (SELECT/INSERT/UPDATE/DELETE) goes through EF Core.
-/// All calls run on the context's current connection/transaction, so lock order and lifetime are unchanged.
+/// Đoạn SQL duy nhất còn lại trong repository: các primitive khóa của PostgreSQL (advisory/dòng/bảng) và đồng hồ
+/// database, những thứ LINQ không biểu diễn được. Mọi thứ khác (SELECT/INSERT/UPDATE/DELETE) đi qua EF Core. Mọi
+/// lệnh gọi chạy trên kết nối/transaction hiện tại của context, nên thứ tự và vòng đời khóa không đổi.
 /// </summary>
 public enum RowLock { Update, Share, KeyShare, UpdateNoWait }
 
@@ -21,7 +21,7 @@ public static class DbLocks
         _ => " FOR UPDATE",
     };
 
-    /// <summary>PostgreSQL error code of an exception from ExecuteUpdate/Delete (raw) or SaveChanges (wrapped).</summary>
+    /// <summary>Mã lỗi PostgreSQL của exception từ ExecuteUpdate/Delete (thô) hoặc SaveChanges (đã bọc).</summary>
     public static string? SqlState(this Exception exception) => exception.Postgres()?.SqlState;
 
     public static PostgresException? Postgres(this Exception exception) =>
@@ -33,7 +33,7 @@ public static class DbLocks
     public static Task AdvisoryLockAsync(this DbContext db, int category, int key, CancellationToken ct) =>
         db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock({category}, {key})", ct);
 
-    /// <summary>Locks the given tables (identifiers come from the EF model, never from input).</summary>
+    /// <summary>Khóa các bảng được chỉ định (định danh lấy từ EF model, không bao giờ từ dữ liệu nhập).</summary>
     public static Task LockTablesAsync(this DbContext db, string mode, CancellationToken ct, params Type[] rows)
     {
         var tables = string.Join(", ", rows.Select(r => Quote(TableOf(db, r))));
@@ -41,7 +41,7 @@ public static class DbLocks
         return db.Database.ExecuteSqlRawAsync(sql, ct);
     }
 
-    /// <summary><c>SELECT * FROM table WHERE id = ANY(ids) ORDER BY id FOR UPDATE</c> on the row's key column.</summary>
+    /// <summary><c>SELECT * FROM table WHERE id = ANY(ids) ORDER BY id FOR UPDATE</c> trên cột khóa của dòng.</summary>
     public static Task<List<T>> LockByKeysAsync<T>(this DbContext db, IEnumerable<int> keys, CancellationToken ct, RowLock mode = RowLock.Update) where T : class
     {
         var (table, key) = TableAndKey<T>(db);
@@ -54,7 +54,7 @@ public static class DbLocks
     public static async Task<T?> LockByKeyAsync<T>(this DbContext db, int key, CancellationToken ct, RowLock mode = RowLock.Update) where T : class =>
         (await db.LockByKeysAsync<T>([key], ct, mode)).SingleOrDefault();
 
-    /// <summary>Row-locks every row whose integer <paramref name="column"/> is in <paramref name="values"/>, in key order.</summary>
+    /// <summary>Khóa từng dòng có cột số nguyên <paramref name="column"/> nằm trong <paramref name="values"/>, theo thứ tự khóa.</summary>
     public static Task<List<T>> LockWhereAsync<T>(this DbContext db, string column, IEnumerable<int> values, CancellationToken ct, RowLock mode = RowLock.Update) where T : class
     {
         var (table, key) = TableAndKey<T>(db);
@@ -64,7 +64,7 @@ public static class DbLocks
             .AsNoTracking().ToListAsync(ct);
     }
 
-    /// <summary>PostgreSQL transaction clock as <c>timestamp</c>, identical to <c>now()</c> in the previous SQL.</summary>
+    /// <summary>Đồng hồ transaction của PostgreSQL dạng <c>timestamp</c>, giống hệt <c>now()</c> trong SQL trước đây.</summary>
     public static Task<DateTime> DatabaseNowAsync(this DbContext db, CancellationToken ct) =>
         db.Database.SqlQueryRaw<DateTime>("SELECT now()::timestamp AS \"Value\"").SingleAsync(ct);
 
@@ -75,8 +75,8 @@ public static class DbLocks
         db.Database.SqlQueryRaw<DateOnly>("SELECT CURRENT_DATE AS \"Value\"").SingleAsync(ct);
 
     /// <summary>
-    /// Inserts inside a savepoint and treats a unique violation as "already exists" (ON CONFLICT DO NOTHING),
-    /// keeping the surrounding transaction usable. Returns false when the row already existed.
+    /// Chèn bên trong một savepoint và coi vi phạm unique là "đã tồn tại" (ON CONFLICT DO NOTHING), giữ
+    /// transaction bao quanh vẫn dùng được. Trả về false khi dòng đã tồn tại.
     /// </summary>
     public static async Task<bool> TryInsertAsync<T>(this DbContext db, T row, CancellationToken ct) where T : class
     {

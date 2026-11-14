@@ -16,7 +16,7 @@ namespace Car_Rental_System_BE.WebApi.Features.Tracking;
 public sealed class DevicesController(ITrackingService trackingService) : ControllerBase
 {
     /// <summary>
-    /// Lists registered GPS tracking devices with pagination and optional filters.
+    /// Liệt kê thiết bị định vị GPS đã đăng ký, có phân trang và bộ lọc tùy chọn.
     /// </summary>
     [SuccessMessage("Tracking devices retrieved successfully.")]
     [HttpGet]
@@ -33,7 +33,7 @@ public sealed class DevicesController(ITrackingService trackingService) : Contro
     }
 
     /// <summary>
-    /// Registers a new GPS tracking device and returns its generated secret API key.
+    /// Đăng ký thiết bị định vị GPS mới và trả về API key bí mật được sinh ra.
     /// </summary>
     [SuccessMessage("Tracking device registered successfully.")]
     [HttpPost]
@@ -45,7 +45,7 @@ public sealed class DevicesController(ITrackingService trackingService) : Contro
     }
 
     /// <summary>
-    /// Retrieves details of a specific tracking device.
+    /// Lấy chi tiết một thiết bị định vị cụ thể.
     /// </summary>
     [SuccessMessage("Tracking device retrieved successfully.")]
     [HttpGet("~/api/device/{id}")]
@@ -59,7 +59,7 @@ public sealed class DevicesController(ITrackingService trackingService) : Contro
     }
 
     /// <summary>
-    /// Updates status or assigned vehicle for a tracking device.
+    /// Cập nhật trạng thái hoặc xe được gán cho thiết bị định vị.
     /// </summary>
     [SuccessMessage("Tracking device updated successfully.")]
     [HttpPut("~/api/device/{id}")]

@@ -15,7 +15,7 @@ namespace Car_Rental_System_BE.WebApi.Features.Tracking;
 public sealed class GeofencesController(ITrackingService trackingService) : ControllerBase
 {
     /// <summary>
-    /// Lists all defined geofence operational areas.
+    /// Liệt kê mọi vùng địa lý vận hành đã định nghĩa.
     /// </summary>
     [SuccessMessage("Geofences retrieved successfully.")]
     [HttpGet]
@@ -27,7 +27,7 @@ public sealed class GeofencesController(ITrackingService trackingService) : Cont
     }
 
     /// <summary>
-    /// Creates a new geofence zone (allowed operating zone, prohibited area, or facility boundary).
+    /// Tạo vùng địa lý mới (vùng được phép hoạt động, vùng cấm hoặc ranh giới cơ sở).
     /// </summary>
     [SuccessMessage("Geofence created successfully.")]
     [HttpPost]
@@ -39,7 +39,7 @@ public sealed class GeofencesController(ITrackingService trackingService) : Cont
     }
 
     /// <summary>
-    /// Lists paginated geofence enter and exit events.
+    /// Liệt kê phân trang các sự kiện vào và ra vùng địa lý.
     /// </summary>
     [SuccessMessage("Geofence events retrieved successfully.")]
     [HttpGet("events")]

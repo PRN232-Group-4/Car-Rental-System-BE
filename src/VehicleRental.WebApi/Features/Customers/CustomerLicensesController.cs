@@ -10,16 +10,15 @@ using Microsoft.AspNetCore.Mvc;
 namespace Car_Rental_System_BE.WebApi.Features.Customers;
 
 /// <summary>
-/// The customer's own driver license: reading it, submitting or resubmitting it, and the staff review that
-/// approves or rejects one record. These four actions used to sit on OperationsController; route, verb,
-/// policy, route constraints, status codes, request and response shapes and swagger descriptions travelled
-/// with them unchanged.
+/// GPLX của chính khách hàng: đọc, nộp hoặc nộp lại, và việc nhân viên duyệt hoặc từ chối một bản ghi. Bốn
+/// action này từng nằm trên OperationsController; route, verb, policy, ràng buộc route, mã trạng thái,
+/// dạng request/response và mô tả swagger giữ nguyên khi chuyển sang.
 /// </summary>
 /// <remarks>
-/// A controller of its own rather than part of <see cref="CustomersController"/>: that type carries a
-/// controller-level <c>CustomerService</c> policy for the staff directory, while these actions are split
-/// between the <c>Customer</c> and the <c>CustomerService</c> policies. Policy metadata combines with AND, so
-/// hosting a customer-facing action there would demand a caller holding both.
+/// Controller riêng thay vì nằm trong <see cref="CustomersController"/>: kiểu đó mang policy
+/// <c>CustomerService</c> ở cấp controller cho danh bạ nhân viên, còn các action này chia giữa policy
+/// <c>Customer</c> và <c>CustomerService</c>. Metadata policy kết hợp bằng AND, nên đặt một action dành cho
+/// khách ở đó sẽ đòi bên gọi có cả hai.
 /// </remarks>
 [ApiController]
 [Route("api")]
@@ -28,7 +27,7 @@ public sealed class CustomerLicensesController(ICustomerLicenseService store, IM
     [OperationDescription("Customer reads their own driver license with id and licenses containing all independently reviewed licenses. An existing customer with a null, empty or whitespace license number has status none, including legacy rows with a pending default. A submitted license retains pending, approved or rejected. Missing customer returns null; reading never changes stored data.")]
     [SuccessMessage("Driver license retrieved successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Customer)] [HttpGet("customer/license")] public async Task<IActionResult> License(CancellationToken ct) => Ok(await store.GetLicenseAsync(Email(),ct));
-    /// <summary>Customer uploads and resubmits their driver license for review.</summary>
+    /// <summary>Khách hàng tải lên và nộp lại GPLX để được duyệt.</summary>
     [OperationDescription("Customer submits their own driver license for review. Optional licenseId updates an owned record; omitted ID adds or upserts by number, preserving other licenses. Number, type, issueDate, expiryDate and image are all required. Multipart /customer/license requires a new file; JSON /customer/license/url requires a valid imageUrl. Missing values return 400 before upload or persistence. Issue date must not be after expiry and expiry must not be before today UTC. Successful submission resets status to pending.")]
     [SuccessMessage("Driver license saved successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Customer)]
@@ -45,7 +44,7 @@ public sealed class CustomerLicensesController(ICustomerLicenseService store, IM
         return Ok(await media.SaveCustomerLicenseAsync(Email(), request.ToModel(), content, request.File.FileName, ct));
     }
 
-    /// <summary>Customer submits an existing image URL using the previous JSON contract.</summary>
+    /// <summary>Khách hàng gửi URL ảnh có sẵn theo hợp đồng JSON cũ.</summary>
     [OperationDescription("Customer submits their own driver license for review. Optional licenseId updates an owned record; omitted ID adds or upserts by number, preserving other licenses. Number, type, issueDate, expiryDate and image are all required. Multipart /customer/license requires a new file; JSON /customer/license/url requires a valid imageUrl. Missing values return 400 before upload or persistence. Issue date must not be after expiry and expiry must not be before today UTC. Successful submission resets status to pending.")]
     [SuccessMessage("Driver license saved successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Customer)]
