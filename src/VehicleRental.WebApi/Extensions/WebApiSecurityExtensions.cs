@@ -3,8 +3,6 @@ using System.Text;
 using System.Threading.RateLimiting;
 using Car_Rental_System_BE.Application.DTOs.Options;
 using Car_Rental_System_BE.Application.Interfaces.External;
-using Car_Rental_System_BE.Application.Interfaces.Services;
-using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Infrastructure.Services.Registration;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;

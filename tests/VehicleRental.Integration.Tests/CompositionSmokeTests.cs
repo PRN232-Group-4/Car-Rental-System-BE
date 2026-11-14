@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Infrastructure.HostedServices;
 using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;

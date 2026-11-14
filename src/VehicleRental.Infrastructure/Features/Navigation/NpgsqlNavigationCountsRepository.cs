@@ -1,11 +1,10 @@
 using System.Data;
-using Car_Rental_System_BE.Application.DTOs.Operations;
-using Car_Rental_System_BE.Application.Interfaces.Repositories;
+using Car_Rental_System_BE.Application.Features.Navigation;
 using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
-namespace Car_Rental_System_BE.Infrastructure.Repositories;
+namespace Car_Rental_System_BE.Infrastructure.Features.Navigation;
 
 public sealed class NpgsqlNavigationCountsRepository(NpgsqlDataSource dataSource) : INavigationCountsRepository
 {

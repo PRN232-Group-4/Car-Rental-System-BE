@@ -1,4 +1,4 @@
-namespace Car_Rental_System_BE.Application.DTOs.Operations;
+namespace Car_Rental_System_BE.Application.Features.Navigation;
 
 public sealed record NavigationCounts(long Rentals, long Inspections, long Maintenance, long Reports, long Licenses)
 {

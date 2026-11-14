@@ -1,7 +1,6 @@
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.Features.Customers;
 using Car_Rental_System_BE.Application.Features.Media;
-using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.WebApi.Middlewares.Requests;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using System.Security.Claims;

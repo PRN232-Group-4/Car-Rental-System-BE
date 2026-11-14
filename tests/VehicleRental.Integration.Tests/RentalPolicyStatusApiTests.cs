@@ -5,7 +5,6 @@ using System.Text.Json;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.RentalPolicies;
 using Car_Rental_System_BE.Application.Features.Media;
-using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.WebApi.Controllers;
 using Car_Rental_System_BE.WebApi.Features.Rentals;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;

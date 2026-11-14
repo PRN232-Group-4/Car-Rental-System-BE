@@ -1,6 +1,4 @@
-using Car_Rental_System_BE.Application.DTOs.Operations;
-
-namespace Car_Rental_System_BE.Application.Interfaces.Repositories;
+namespace Car_Rental_System_BE.Application.Features.Navigation;
 
 public interface INavigationCountsRepository
 {
