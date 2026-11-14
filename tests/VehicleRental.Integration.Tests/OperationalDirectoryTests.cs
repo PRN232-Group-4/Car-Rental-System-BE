@@ -64,6 +64,18 @@ public sealed class OperationalDirectoryTests(PostgresFixture db):IClassFixture<
         Assert.Empty((await repository.GetVehicleAsync(vehicle,default))!.MaintenanceTechnicianEmails);
     }
 
+    [Fact]
+    public async Task Creating_a_vehicle_requires_a_facility()
+    {
+        await using var host=await HostAsync();using var client=Client(host);
+        var request=Request(HttpMethod.Post,"/api/vehicles","Admin");
+        request.Content=JsonContent.Create(new{vehicleTypeId=1,status="available",brand="Toyota"});
+        using var response=await client.SendAsync(request);
+        using var json=await Envelope(response,400);
+        Assert.Contains(json.RootElement.GetProperty("error").GetProperty("errors").EnumerateObject(),
+            field=>field.Name.Equals("FacilityId",StringComparison.OrdinalIgnoreCase));
+    }
+
     [Theory]
     [InlineData(null,false)] [InlineData("Customer",false)] [InlineData("Driver",false)]
     [InlineData("CustomerService",false)] [InlineData("Admin",true)] [InlineData("Manager",true)] [InlineData("Maintenance",true)]
