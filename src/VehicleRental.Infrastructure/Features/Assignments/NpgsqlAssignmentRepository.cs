@@ -92,12 +92,12 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
 
         try
         {
-            // Lock vehicle (1001)
+            // Khóa xe (1001)
             await VehicleLock.AcquireAsync(connection, tx, rental.VehicleId, ct);
             await RequireCurrentScheduleAsync(db, rental, ct);
             await RequireLicenseAsync(db, rental, rental.VehicleId, ct);
 
-            // Lock driver (1002) if provided
+            // Khóa tài xế (1002) nếu có
             if (driverStaffId is not null)
             {
                 await DriverLock.AcquireAsync(tx, driverStaffId.Value, ct);
@@ -184,7 +184,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
 
         try
         {
-            // Lock both vehicles in ascending ID order to prevent deadlocks
+            // Khóa cả hai xe theo thứ tự ID tăng dần để tránh deadlock
             var firstId = Math.Min(rental.VehicleId, newVehicleId);
             var secondId = Math.Max(rental.VehicleId, newVehicleId);
             await VehicleLock.AcquireAsync(connection, tx, firstId, ct);
@@ -203,22 +203,22 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
                 await DriverLock.AcquireAsync(tx, newDriverStaffId.Value, ct);
             }
 
-            // 1. Update rentals.vehicle_id -> triggers BE-10 sync_booking to migrate booking to new vehicle
+            // 1. Cập nhật rentals.vehicle_id -> kích hoạt trigger BE-10 sync_booking để chuyển lịch đặt sang xe mới
             await db.Set<RentalsRow>().Where(r => r.Id == rental.RentalId)
                 .ExecuteUpdateAsync(s => s.SetProperty(r => r.VehicleId, newVehicleId), ct);
 
-            // 2. Close old assignment if exists
+            // 2. Đóng phân công cũ nếu có
             if (currentAssignmentId is not null) await CloseAssignmentAsync(db, currentAssignmentId.Value, startsAt, ct);
 
-            // 3. Insert new assignment
+            // 3. Thêm phân công mới
             var inserted = await InsertAssignmentAsync(db, rental.RentalId, newVehicleId, newDriverStaffId, reason, note,
                 currentAssignmentId, startsAt, endsAt, bufferMinutes, assignedByEmail, ct);
 
-            // 4. Handle incident on old vehicle (breakdown / accident)
+            // 4. Xử lý sự cố trên xe cũ (hỏng xe / tai nạn)
             int? maintenanceId = null;
             if (AssignmentReason.IsIncident(reason))
             {
-                // Mark old vehicle as maintenance
+                // Đánh dấu xe cũ đang bảo trì
                 await db.Set<VehiclesRow>().Where(v => v.Id == rental.VehicleId)
                     .ExecuteUpdateAsync(s => s.SetProperty(v => v.Status, "maintenance"), ct);
                 maintenanceId = await OpenIncidentMaintenanceAsync(db, rental.VehicleId, rental.FacilityId, rental.RentalId, note ?? reason, ct);
@@ -316,8 +316,8 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
 
     private static async Task RequireCurrentScheduleAsync(VehicleRentalDbContext db, RentalScheduleInfo expected, CancellationToken ct)
     {
-        // The Application snapshot can predate an edit that was waiting on the same vehicle lock.
-        // Read again after taking that lock and keep the rental row locked until assignment commit.
+        // Ảnh chụp ở tầng Application có thể cũ hơn một lần chỉnh sửa đang chờ cùng khóa xe. Đọc
+        // lại sau khi đã lấy khóa đó và giữ khóa dòng đơn thuê tới khi commit phân công.
         if (await db.LockByKeyAsync<RentalsRow>(expected.RentalId, ct) is null)
             throw new NotFoundException("RENTAL_NOT_FOUND", "Rental was not found.");
         var current = await (from r in db.Set<RentalsRow>()
@@ -358,7 +358,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
         };
     private static readonly string[] ClosedRentalStatuses = ["completed", "cancelled", "expired"];
 
-    /// <summary>Rental with its hourly/long-term schedule, composable in LINQ.</summary>
+    /// <summary>Đơn thuê kèm lịch thuê theo giờ/dài hạn, có thể ghép trong LINQ.</summary>
     private sealed class RentalWindow
     {
         public int RentalId { get; init; }

@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Car_Rental_System_BE.Infrastructure.Repositories;
 
-/// <summary>Self-drive eligibility: an approved license of an allowed class, valid through max(today, end date).</summary>
+/// <summary>Điều kiện tự lái: GPLX đã duyệt, đúng hạng được phép, còn hiệu lực tới max(hôm nay, ngày kết thúc).</summary>
 internal static class CustomerLicenseEligibility
 {
     public static IQueryable<CustomerLicenseRecordsRow> EligibleLicenses(VehicleRentalDbContext db, int vehicleId, DateOnly validThrough) =>

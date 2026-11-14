@@ -5,7 +5,7 @@ using Npgsql;
 
 namespace Car_Rental_System_BE.Infrastructure.Repositories;
 
-/// <summary>Shared approval writes, called only after the caller locks and validates the rental.</summary>
+/// <summary>Các thao tác ghi khi duyệt dùng chung, chỉ được gọi sau khi bên gọi đã khóa và kiểm tra đơn thuê.</summary>
 internal static class RentalApprovalWriter
 {
     public static async Task WriteAsync(NpgsqlConnection cn, NpgsqlTransaction tx, int rentalId,

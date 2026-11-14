@@ -3,8 +3,8 @@ using Car_Rental_System_BE.Application.DTOs.Operations;
 namespace Car_Rental_System_BE.Application.Interfaces.Repositories;
 
 /// <summary>
-/// Storage for the two paged queues that are not a module of their own yet. The incident-report and staff-rating
-/// members moved to <c>Features.Reports</c> and <c>Features.Ratings</c>.
+/// Lưu trữ cho hai hàng đợi phân trang chưa thành module riêng. Các thành viên báo cáo sự cố và đánh giá nhân
+/// viên đã chuyển sang <c>Features.Reports</c> và <c>Features.Ratings</c>.
 /// </summary>
 public interface IOperationsCompletionRepository
 {

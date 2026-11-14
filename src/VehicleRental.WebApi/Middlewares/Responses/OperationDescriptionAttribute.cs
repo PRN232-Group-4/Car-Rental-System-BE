@@ -1,13 +1,13 @@
 namespace Car_Rental_System_BE.WebApi.Middlewares.Responses;
 
 /// <summary>
-/// One part of the Swagger operation description of this action. Several attributes on the same action are
-/// concatenated in declaration order, exactly as written (leading spaces included), so a multi-paragraph
-/// description is authored next to the action instead of being assembled from controller and action names.
+/// Một phần mô tả operation Swagger của action này. Nhiều attribute trên cùng action được nối theo thứ tự
+/// khai báo, đúng như đã viết (kể cả khoảng trắng đầu), để mô tả nhiều đoạn được viết ngay cạnh action
+/// thay vì ghép từ tên controller và action.
 /// </summary>
 /// <remarks>
-/// The text is the whole description of the action: the operation filter only appends the cross-cutting
-/// route-naming sentence after it.
+/// Văn bản là toàn bộ mô tả của action: filter operation chỉ nối thêm câu quy ước đặt tên route dùng
+/// chung sau nó.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = true)]
 public sealed class OperationDescriptionAttribute(string text) : Attribute
@@ -15,8 +15,8 @@ public sealed class OperationDescriptionAttribute(string text) : Attribute
     public string Text { get; } = text;
 
     /// <summary>
-    /// Also documents the pagination shape of this operation: every <c>page</c>/<c>pageSize</c> parameter is
-    /// given the documented minimum, default and maximum.
+    /// Đồng thời ghi tài liệu dạng phân trang của operation này: mọi tham số <c>page</c>/<c>pageSize</c>
+    /// được gán giá trị nhỏ nhất, mặc định và lớn nhất đã ghi tài liệu.
     /// </summary>
     public bool DocumentsPaginationParameters { get; init; }
 }

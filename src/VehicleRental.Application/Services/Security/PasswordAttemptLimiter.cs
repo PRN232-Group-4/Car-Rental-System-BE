@@ -5,7 +5,7 @@ using Car_Rental_System_BE.Application.Services.Exceptions;
 
 namespace Car_Rental_System_BE.Application.Services.Security;
 
-// Reserve before expensive password verification: concurrent requests cannot exceed the limit.
+// Giữ chỗ trước khi kiểm tra mật khẩu (tốn tài nguyên): các request đồng thời không thể vượt giới hạn.
 internal sealed class PasswordAttemptLimiter(IWorkflowStateStore cache, RegistrationOptions options)
 {
     internal sealed record Lease(string Key, string Value, int Attempts, DateTimeOffset ExpiresAt);
@@ -33,9 +33,9 @@ internal sealed class PasswordAttemptLimiter(IWorkflowStateStore cache, Registra
     public Task<bool> SucceedAsync(Lease lease, CancellationToken ct)
     {
         var remaining = lease.ExpiresAt - DateTimeOffset.UtcNow;
-        // An expired reservation no longer owns a counter. Do not delete a new window.
+        // Lượt giữ chỗ đã hết hạn không còn sở hữu bộ đếm. Không xóa một cửa sổ mới.
         if (remaining <= TimeSpan.Zero) return Task.FromResult(false);
-        // Do not erase a newer failure from a concurrent request.
+        // Không xóa lần thất bại mới hơn của một request đồng thời.
         return cache.CompareExchangeAsync(lease.Key, lease.Value, null, remaining, ct);
     }
 

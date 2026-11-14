@@ -3,7 +3,7 @@ using Car_Rental_System_BE.Application.Features.Customers;
 
 namespace Car_Rental_System_BE.WebApi.Middlewares.Requests;
 
-/// <summary>HTTP-only file binding; Application receives stream and business values.</summary>
+/// <summary>Bind file chỉ ở tầng HTTP; Application nhận stream và các giá trị nghiệp vụ.</summary>
 public sealed class LicenseUploadForm
 {
     [Required, StringLength(255)] public string Number { get; set; } = string.Empty;

@@ -14,8 +14,8 @@ namespace Car_Rental_System_BE.WebApi.Features.Tracking;
 public sealed class TrackingController(ITrackingService trackingService) : ControllerBase
 {
     /// <summary>
-    /// GPS device telemetry ingestion API (supports offline batching).
-    /// Authenticates via X-Device-Id and X-Device-Key headers.
+    /// API tiếp nhận dữ liệu đo xa từ thiết bị GPS (hỗ trợ gửi theo lô khi mất mạng). Xác thực qua
+    /// header X-Device-Id và X-Device-Key.
     /// </summary>
     [SuccessMessage("GPS telemetry coordinates ingested successfully.")]
     [HttpPost("ingest")]
@@ -43,7 +43,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     }
 
     /// <summary>
-    /// Retrieves the latest known position of a vehicle.
+    /// Lấy vị trí đã biết mới nhất của xe.
     /// </summary>
     [SuccessMessage("Vehicle last position retrieved successfully.")]
     [Authorize]
@@ -59,7 +59,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     }
 
     /// <summary>
-    /// Retrieves paginated historical GPS positions for a vehicle within an optional time range.
+    /// Lấy phân trang lịch sử vị trí GPS của xe trong khoảng thời gian tùy chọn.
     /// </summary>
     [SuccessMessage("Vehicle location history retrieved successfully.")]
     [Authorize]
@@ -78,7 +78,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     }
 
     /// <summary>
-    /// Searches for vehicles within a geographic radius, optionally computing Mapbox road distance and ETA.
+    /// Tìm xe trong bán kính địa lý, có thể tính khoảng cách đường bộ và ETA bằng Mapbox.
     /// </summary>
     [SuccessMessage("Nearby vehicles retrieved successfully.")]
     [Authorize]
@@ -98,7 +98,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     }
 
     /// <summary>
-    /// Reconstructs the traveled route, metrics, and GPS breadcrumbs for a rental.
+    /// Dựng lại tuyến đường đã đi, các chỉ số và vệt GPS của đơn thuê.
     /// </summary>
     [SuccessMessage("Rental route retrieved successfully.")]
     [Authorize]
@@ -118,7 +118,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     }
 
     /// <summary>
-    /// Verifies if a vehicle is returned at the designated facility and generates an alert if deviated.
+    /// Xác minh xe có được trả đúng cơ sở chỉ định không và tạo cảnh báo nếu sai lệch.
     /// </summary>
     [SuccessMessage("Drop-off location verification completed successfully.")]
     [Authorize]
@@ -145,7 +145,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     }
 
     /// <summary>
-    /// Manually triggers retention purge of GPS telemetry older than the specified retention days.
+    /// Kích hoạt thủ công việc xóa dữ liệu đo xa GPS cũ hơn số ngày lưu giữ đã chỉ định.
     /// </summary>
     [SuccessMessage("Expired GPS telemetry purged successfully.")]
     [Authorize(Policy = AuthorizationPolicies.Admin)]
@@ -158,7 +158,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     }
 
     /// <summary>
-    /// Retrieves paginated tracking alerts (e.g., route deviation, wrong return point, geofence violations).
+    /// Lấy phân trang các cảnh báo định vị (ví dụ lệch tuyến, trả sai điểm, vi phạm vùng địa lý).
     /// </summary>
     [SuccessMessage("Tracking alerts retrieved successfully.")]
     [Authorize(Policy = AuthorizationPolicies.Management)]
@@ -177,7 +177,7 @@ public sealed class TrackingController(ITrackingService trackingService) : Contr
     }
 
     /// <summary>
-    /// Marks a tracking alert as resolved by staff.
+    /// Nhân viên đánh dấu một cảnh báo định vị là đã xử lý.
     /// </summary>
     [SuccessMessage("Tracking alert resolved successfully.")]
     [Authorize(Policy = AuthorizationPolicies.Management)]

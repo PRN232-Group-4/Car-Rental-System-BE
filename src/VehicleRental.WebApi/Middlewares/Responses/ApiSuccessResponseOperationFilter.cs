@@ -7,18 +7,17 @@ using System.Reflection;
 namespace Car_Rental_System_BE.WebApi.Middlewares.Responses;
 
 /// <summary>
-/// Documents the JSON envelope applied to success and error responses at runtime, and applies the wording each
-/// action declares for itself through <see cref="OperationDescriptionAttribute"/>,
-/// <see cref="OperationSummaryAttribute"/>, <see cref="BinaryAttachmentResponseAttribute"/> and the parameter
-/// documentation attributes.
+/// Ghi tài liệu cho lớp bọc JSON áp dụng lên phản hồi thành công và lỗi lúc chạy, và áp câu chữ mà mỗi action
+/// tự khai báo qua <see cref="OperationDescriptionAttribute"/>, <see cref="OperationSummaryAttribute"/>, <see
+/// cref="BinaryAttachmentResponseAttribute"/> và các attribute ghi tài liệu tham số.
 /// </summary>
 /// <remarks>
-/// Nothing here compares controller or action names: the per-endpoint text travels with the action, so moving
-/// an action to another controller cannot drop or duplicate its documentation.
+/// Ở đây không so sánh tên controller hay action: văn bản của từng endpoint đi cùng action, nên chuyển action
+/// sang controller khác không làm mất hay lặp tài liệu của nó.
 /// </remarks>
 public sealed class ApiSuccessResponseOperationFilter : IOperationFilter
 {
-    /// <summary>Appended to every operation: the naming convention of the whole API.</summary>
+    /// <summary>Nối vào mọi operation: quy ước đặt tên của toàn bộ API.</summary>
     private const string RouteNamingNote =
         " Route naming uses plural collection resources and singular resources addressed by ID; creating an item targets the plural collection. Singleton resources and action names keep their own names.";
 
@@ -114,7 +113,7 @@ public sealed class ApiSuccessResponseOperationFilter : IOperationFilter
         }
     }
 
-    /// <summary>Documents the minimum, default and maximum of the pagination parameters of one operation.</summary>
+    /// <summary>Ghi tài liệu giá trị nhỏ nhất, mặc định và lớn nhất của tham số phân trang cho một operation.</summary>
     private static void DocumentPaginationParameters(OpenApiOperation operation)
     {
         foreach (var parameter in operation.Parameters.Where(p =>

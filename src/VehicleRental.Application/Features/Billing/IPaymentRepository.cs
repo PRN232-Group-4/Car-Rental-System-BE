@@ -4,7 +4,7 @@ public interface IPaymentRepository
 {
     Task<PaymentResult> ConfirmCashAsync(int invoiceId, string reviewer, CancellationToken ct);
     Task<InvoicePayment?> GetInvoiceForCustomerAsync(int invoiceId, string email, CancellationToken ct);
-    /// <summary>Reserves an owned unpaid invoice before checkout. Null email is the staff scope, restricted to completed, linked overtime settlements. Reservation blocks cash even if the provider fails.</summary>
+    /// <summary>Giữ chỗ hóa đơn chưa thanh toán của chính người dùng trước khi checkout. Email null là phạm vi nhân viên, chỉ cho phép quyết toán phụ phí quá giờ đã hoàn tất và có liên kết. Việc giữ chỗ chặn thu tiền mặt kể cả khi nhà cung cấp thanh toán lỗi.</summary>
     Task<InvoicePayment?> ReserveInvoiceCheckoutAsync(int invoiceId, string? email, CancellationToken ct);
     Task<IReadOnlyList<InvoiceSummary>> ListInvoicesAsync(string? email, CancellationToken ct);
     Task<InvoiceDetail?> GetInvoiceAsync(int invoiceId, string? email, CancellationToken ct);
@@ -14,7 +14,7 @@ public interface IPaymentRepository
     Task<PaymentResult> RequestRefundAsync(int paymentId, decimal amount, CancellationToken ct);
     Task<PaymentSummary> ReviewRefundAsync(int refundId, bool approve, string reviewer, CancellationToken ct);
 
-    // Subscription-plan purchase, not invoicing. Stays here until the Subscriptions module is extracted.
+    // Mua gói thuê bao, không phải lập hóa đơn. Giữ ở đây cho tới khi tách module Subscriptions.
     Task<PlanCheckout> CreatePlanCheckoutAsync(int planId, string email, CancellationToken ct);
     Task<PlanPurchaseStatus> CompletePlanPurchaseAsync(long orderCode, decimal amount, string providerReference, CancellationToken ct);
     Task<PlanPurchaseStatus?> GetPlanPurchaseAsync(long orderCode, string email, CancellationToken ct);

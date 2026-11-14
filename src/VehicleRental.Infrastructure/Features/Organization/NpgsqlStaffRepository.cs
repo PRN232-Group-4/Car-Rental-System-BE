@@ -72,7 +72,7 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
             where membership.UserId == command.UserId && role.Name == "Driver"
             select role.Id).AnyAsync(ct);
         StaffValidator.ValidateDriver(isDriver, command.LicenseNumber, command.LicenseExpiryDate, command.LicenseIssueDate);
-        // Existing account identity and roles are authoritative; no password or specialty replacement.
+        // Danh tính tài khoản và vai trò hiện có là chuẩn; không thay mật khẩu hay chuyên môn.
         var row = new StaffsRow
         {
             UserId = command.UserId, DepartmentId = command.DepartmentId, FacilityId = command.FacilityId, HiredDate = command.HiredDate,
@@ -169,7 +169,7 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(connection, transaction);
-        // Serialize profile creation and membership changes for this account.
+        // Tuần tự hóa việc tạo hồ sơ và thay đổi vai trò của tài khoản này.
         if (await db.LockByKeyAsync<UsersRow>(userId, ct) is not { IsActive: true }) throw new StaffNotFoundException();
 
         var names = new HashSet<string>(await (from membership in db.Set<UserRolesRow>()
@@ -186,7 +186,7 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
         if (!unitExists)
             throw new OrganizationReferenceNotFoundException(isFacility ? "Facility was not found." : "Department was not found.");
 
-        // The users row lock serializes this account, so update-or-insert replaces ON CONFLICT (user_id).
+        // Khóa dòng users tuần tự hóa tài khoản này, nên cập nhật-hoặc-chèn thay cho ON CONFLICT (user_id).
         var profile = db.Set<StaffsRow>().Where(s => s.UserId == userId);
         var updated = isFacility
             ? await profile.ExecuteUpdateAsync(s => s.SetProperty(x => x.FacilityId, unitId), ct)

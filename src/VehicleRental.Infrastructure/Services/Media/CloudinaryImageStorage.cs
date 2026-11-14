@@ -41,7 +41,7 @@ public sealed class CloudinaryImageStorage(IOptions<CloudinaryOptions> options) 
         catch (ImageStorageException) { throw; }
         catch (Exception)
         {
-            // Provider diagnostics can contain credentials or internal URLs; never propagate them.
+            // Thông tin chẩn đoán từ nhà cung cấp có thể chứa thông tin đăng nhập hoặc URL nội bộ; không bao giờ truyền ra ngoài.
             throw new ImageStorageException("Image upload failed.");
         }
     }

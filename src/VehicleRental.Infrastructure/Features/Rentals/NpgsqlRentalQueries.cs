@@ -118,8 +118,8 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
     private static CustomerInvoiceDto? Invoice(InvoicesRow? invoice) => invoice == null ? null
         : new CustomerInvoiceDto(invoice.Id, invoice.InvoiceNumber, invoice.Status, invoice.Amount);
 
-    // LatestPreCheckOk is the newest pre-rental check of the current vehicle. A failed one blocks handover until staff swap the vehicle (the flag clears with the new vehicle)
-    // or the customer cancels and books another one.
+    // LatestPreCheckOk là lần kiểm tra trước thuê mới nhất của xe hiện tại. Nếu không đạt thì chặn bàn giao cho tới khi nhân viên đổi xe (cờ tự mất với xe mới) hoặc khách hủy
+    // và đặt xe khác.
     private static string? NextAction(string status, bool confirmed, string? invoiceStatus, bool subscription, bool vehicleFailedCheck = false) => status switch
     {
         "pending" or "pre_inspection" or "cancelled" when vehicleFailedCheck => "VEHICLE_CHANGE_REQUIRED",

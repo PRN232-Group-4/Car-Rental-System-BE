@@ -4,7 +4,7 @@ using Npgsql;
 
 namespace Car_Rental_System_BE.Infrastructure.Features.Billing;
 
-/// <summary>Automatic refunds share a per-rental guard. The caller must hold the rental row lock.</summary>
+/// <summary>Các khoản hoàn tiền tự động dùng chung một chốt chặn theo đơn thuê. Bên gọi phải giữ khóa dòng đơn thuê.</summary>
 internal static class RentalRefundWriter
 {
     public static async Task<int?> EnsureRefundAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,

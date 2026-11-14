@@ -13,7 +13,7 @@ namespace Car_Rental_System_BE.WebApi.Features.Assignments;
 public sealed class RentalAssignmentsController(IAssignmentService assignmentService) : ControllerBase
 {
     /// <summary>
-    /// Assigns or replaces the driver for a rental.
+    /// Gán hoặc thay tài xế cho một đơn thuê.
     /// </summary>
     [SuccessMessage("Driver assigned successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
@@ -38,7 +38,7 @@ public sealed class RentalAssignmentsController(IAssignmentService assignmentSer
     }
 
     /// <summary>
-    /// Swaps the vehicle assigned to an active rental (e.g. breakdown, accident, customer request).
+    /// Đổi xe được gán cho một đơn thuê đang hoạt động (ví dụ hỏng xe, tai nạn, khách yêu cầu).
     /// </summary>
     [SuccessMessage("Vehicle replaced successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
@@ -64,7 +64,7 @@ public sealed class RentalAssignmentsController(IAssignmentService assignmentSer
     }
 
     /// <summary>
-    /// Gets the assignment history for a rental.
+    /// Lấy lịch sử phân công của một đơn thuê.
     /// </summary>
     [SuccessMessage("Rental assignments retrieved successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
@@ -79,7 +79,7 @@ public sealed class RentalAssignmentsController(IAssignmentService assignmentSer
     }
 
     /// <summary>
-    /// Gets eligible and ineligible driver candidates for a rental with reasons.
+    /// Lấy các tài xế ứng viên đủ và không đủ điều kiện cho một đơn thuê, kèm lý do.
     /// </summary>
     [SuccessMessage("Assignable drivers retrieved successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]
@@ -95,7 +95,7 @@ public sealed class RentalAssignmentsController(IAssignmentService assignmentSer
     }
 
     /// <summary>
-    /// Gets eligible replacement vehicles of the same vehicle type that are available for the remaining rental period.
+    /// Lấy các xe thay thế đủ điều kiện cùng loại xe và còn trống trong phần thời gian thuê còn lại.
     /// </summary>
     [SuccessMessage("Assignable vehicles retrieved successfully.")]
     [Authorize(Policy = AuthorizationPolicies.CustomerService)]

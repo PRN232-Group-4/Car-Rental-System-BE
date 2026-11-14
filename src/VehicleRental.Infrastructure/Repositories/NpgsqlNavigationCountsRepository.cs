@@ -12,7 +12,7 @@ public sealed class NpgsqlNavigationCountsRepository(NpgsqlDataSource dataSource
     public async Task<NavigationCounts> GetAsync(NavigationAccess access, CancellationToken ct)
     {
         await using var db = VehicleRentalDbContext.Create(dataSource);
-        // All counts retain the same snapshot even though EF sends separate aggregate queries.
+        // Mọi số đếm giữ cùng một snapshot dù EF gửi các truy vấn tổng hợp riêng lẻ.
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
         var pending = access.CustomerService
             ? await db.Set<RentalsRow>().LongCountAsync(r => r.Status == "pending", ct) : 0;

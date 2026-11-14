@@ -10,17 +10,17 @@ public interface IPaymentService
     Task<PaymentResult> RequestRefundAsync(int paymentId, decimal amount, CancellationToken ct);
     Task<PaymentSummary> ReviewRefundAsync(int refundId, bool approve, string reviewer, CancellationToken ct);
 
-    // SUBSCRIPTIONS (intended future module): the plan-purchase pair below is not invoicing. It stays on
-    // this single interface for now on purpose - four reflection-proxy tests assert on repository/service
-    // member names. The next phase lifts these out together with PurchasePlanAsync/GetPlanPurchaseAsync in
-    // PaymentService and the webhook dispatcher, which deliberately spans both halves.
+    // SUBSCRIPTIONS (module dự kiến tách sau này): cặp hàm mua gói dưới đây không thuộc phần hóa đơn. Cố ý
+    // tạm để chung interface này vì bốn test proxy phản chiếu kiểm tra tên thành viên của
+    // repository/service. Giai đoạn sau sẽ tách chúng cùng với PurchasePlanAsync/GetPlanPurchaseAsync
+    // trong PaymentService và bộ điều phối webhook, vốn cố ý trải trên cả hai nửa.
     Task<PlanPurchaseStatus?> GetPlanPurchaseAsync(long orderCode, string email, CancellationToken ct);
 
     Task<CheckoutResult> CheckoutAsync(int invoiceId, string email, CancellationToken ct);
     Task<CheckoutResult> CheckoutOvertimeForStaffAsync(int invoiceId, CancellationToken ct);
     Task<CheckoutResult> PurchasePlanAsync(int planId, string email, CancellationToken ct);
-    // CancelCheckoutAsync serves BOTH halves (invoice order codes and subscription order codes); it is
-    // part of the webhook dispatcher's boundary and moves with subscriptions in the next phase.
+    // CancelCheckoutAsync phục vụ CẢ HAI nửa (mã đơn hóa đơn và mã đơn gói thuê bao); nó thuộc ranh
+    // giới của bộ điều phối webhook và sẽ chuyển đi cùng subscriptions ở giai đoạn sau.
     Task<CheckoutCancellation> CancelCheckoutAsync(long orderCode, string email, CancellationToken ct);
     Task HandleWebhookAsync(PayOsWebhook webhook, string code, bool success, CancellationToken ct);
 }

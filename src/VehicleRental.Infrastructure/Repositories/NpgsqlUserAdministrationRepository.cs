@@ -61,8 +61,8 @@ public sealed class NpgsqlUserAdministrationRepository(NpgsqlDataSource dataSour
         {
             if (assigned && id == actorUserId)
                 throw new UserAdministrationException(409, "You cannot assign additional roles to yourself.");
-            // Resolve to the stored spelling before applying built-in invariants: e.g.
-            // a request for 'admin' must still run the last active Admin protection.
+            // Quy về đúng cách viết đã lưu trước khi áp dụng các bất biến dựng sẵn: ví dụ yêu cầu
+            // cho 'admin' vẫn phải chạy cơ chế bảo vệ Admin đang hoạt động cuối cùng.
             var requested = role;
             var stored = await db.Set<RolesRow>().Where(r => r.Name.ToLower() == requested.ToLower())
                 .Select(r => new { r.Id, r.Name }).FirstOrDefaultAsync(ct)
@@ -91,7 +91,7 @@ public sealed class NpgsqlUserAdministrationRepository(NpgsqlDataSource dataSour
                 var isDriver = assigned && role == "Driver";
                 await db.Set<StaffsRow>().Where(s => s.UserId == id).ExecuteUpdateAsync(s => s.SetProperty(x => x.IsDriver, isDriver), ct);
             }
-            // Also invalidate on idempotent retries, so a failed Redis call can be retried safely.
+            // Vô hiệu hóa cả khi gọi lại lũy đẳng, để lệnh Redis bị lỗi có thể thử lại an toàn.
             await BumpAuthorizationAsync(db, id, ct);
         }, ct);
 
@@ -108,10 +108,10 @@ public sealed class NpgsqlUserAdministrationRepository(NpgsqlDataSource dataSour
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(connection, transaction);
-        // Match the dispatcher lock before taking account locks: activation and driver-role
-        // changes must not race driver availability checks in an assignment transaction.
+        // Lấy khóa điều phối trước khi khóa tài khoản: việc kích hoạt và đổi vai trò tài xế không
+        // được tranh chấp với kiểm tra tài xế còn trống trong transaction phân công.
         await db.AdvisoryLockAsync(724232001L, ct);
-        // All administrator membership/status mutations acquire the same lock before row locks.
+        // Mọi thao tác đổi vai trò/trạng thái của quản trị viên đều lấy cùng khóa này trước khi khóa dòng.
         await db.AdvisoryLockAsync(379123220L, ct);
         if (!await ActiveAdmins(db).AnyAsync(u => u.Id == actorUserId, ct))
             throw new UserAdministrationException(403, "An active administrator is required.");

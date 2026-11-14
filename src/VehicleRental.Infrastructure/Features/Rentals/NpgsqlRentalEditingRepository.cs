@@ -11,11 +11,11 @@ using Npgsql;
 namespace Car_Rental_System_BE.Infrastructure.Features.Rentals;
 
 /// <summary>
-/// Rental editing before pick-up and the legacy contract recording. Both members came from
-/// <c>NpgsqlOperationsRepository</c> (its <c>.Editing.cs</c> partial): the rules, the SQL, the locks and the
-/// order they run in are unchanged - the dispatcher lock 724232001, the locked rental read, the edit rules
-/// against the current state, the invoice/payment boundary, the licence check, the subscription window, the
-/// policy/vehicle match, the availability window, the reprice and the recreation of the booking row.
+/// Chỉnh sửa đơn thuê trước khi nhận xe và ghi nhận hợp đồng kiểu cũ. Cả hai thành viên lấy từ
+/// <c>NpgsqlOperationsRepository</c> (phần partial <c>.Editing.cs</c>): quy tắc, SQL, khóa và thứ tự chạy
+/// giữ nguyên - khóa điều phối 724232001, đọc đơn thuê có khóa, quy tắc chỉnh sửa theo trạng thái hiện tại,
+/// ranh giới hóa đơn/thanh toán, kiểm tra GPLX, khoảng thời gian gói thuê bao, khớp chính sách/xe, khoảng
+/// thời gian trống, tính lại giá và tạo lại dòng đặt lịch.
 /// </summary>
 public sealed class NpgsqlRentalEditingRepository(NpgsqlDataSource dataSource) : IRentalEditingRepository
 {
@@ -56,9 +56,9 @@ public sealed class NpgsqlRentalEditingRepository(NpgsqlDataSource dataSource) :
             if (await db.Set<VehicleAssignmentsRow>().AnyAsync(a => a.RentalId == id && a.Status == "assigned", ct))
                 throw new ConflictException("RENTAL_HAS_ASSIGNMENT", "Resolve the active assignment through the assignment workflow before editing.");
 
-            // Lock invoices before checking payment attempts, matching payment finalization's financial boundary.
-            // Payment finalization locks both invoice and rental; NOWAIT avoids an inverse-row-lock
-            // deadlock if a payment has already locked the invoice and is waiting for this rental.
+            // Khóa hóa đơn trước khi kiểm tra các lần thanh toán, khớp với ranh giới tài chính của bước chốt
+            // thanh toán. Bước chốt thanh toán khóa cả hóa đơn và đơn thuê; NOWAIT tránh deadlock khóa dòng ngược
+            // chiều nếu một giao dịch thanh toán đã khóa hóa đơn và đang chờ đơn thuê này.
             var invoices = await db.LockWhereAsync<InvoicesRow>(nameof(InvoicesRow.RentalId), [id], ct, RowLock.UpdateNoWait);
             if (invoices.Any(i => i.Status != "unpaid" || i.Kind != "rental" || i.CheckoutStartedAt is not null))
                 throw new ConflictException("RENTAL_FINANCIALLY_COMMITTED", "Only unpaid rental invoices without a checkout attempt can be updated.");
@@ -109,8 +109,8 @@ public sealed class NpgsqlRentalEditingRepository(NpgsqlDataSource dataSource) :
                 ? RentalEditingRules.Reprice(rental, command, unit ?? 0)
                 : new RentalEditingPrice(rental.TotalPrice, rental.VatPrice, rental.DepositPrice, unit ?? 0);
 
-            // Recreate our reservation through the detail trigger to avoid checking the replacement
-            // vehicle against this rental's old dates during the intermediate vehicle update.
+            // Tạo lại lượt giữ chỗ qua trigger chi tiết để tránh kiểm tra xe thay thế với ngày cũ
+            // của đơn thuê này trong bước cập nhật xe trung gian.
             await db.Set<VehicleBookingsRow>().Where(b => b.RentalId == id).ExecuteDeleteAsync(ct);
             await db.Set<RentalsRow>().Where(r => r.Id == id).ExecuteUpdateAsync(s => s
                 .SetProperty(r => r.VehicleId, command.VehicleId)
@@ -159,7 +159,7 @@ public sealed class NpgsqlRentalEditingRepository(NpgsqlDataSource dataSource) :
             throw new ArgumentException("Contract link must be an HTTP(S) URL of at most 255 characters.");
         if (signedAt == default || signedAt > DateTime.UtcNow)
             throw new ArgumentException("Signed date must be provided and cannot be in the future.");
-        // PostgreSQL timestamp precision is microseconds; API timestamps use UTC.
+        // Độ chính xác timestamp của PostgreSQL là micro giây; timestamp của API dùng UTC.
         if (signedAt.Kind == DateTimeKind.Local) signedAt = signedAt.ToUniversalTime();
         signedAt = new DateTime(signedAt.Ticks - signedAt.Ticks % 10, DateTimeKind.Unspecified);
         await using var cn = await dataSource.OpenConnectionAsync(ct);
@@ -179,9 +179,9 @@ public sealed class NpgsqlRentalEditingRepository(NpgsqlDataSource dataSource) :
         return rental with { ContractLink = contractLink, SignedAt = signedAt };
     }
 
-    // Private copies of the operations repository helpers, byte-identical to the originals once whitespace is
-    // normalised: the moved body keeps its exact SQL and its exact lock without widening a legacy type's surface.
-    // Separate namespace from vehicle/assignment locks.
+    // Bản sao riêng của các hàm hỗ trợ trong repository vận hành, giống hệt bản gốc khi bỏ qua khoảng trắng: phần
+    // thân chuyển sang giữ đúng SQL và đúng khóa mà không phải mở rộng bề mặt của kiểu cũ. Không gian tên tách
+    // biệt với khóa xe/phân công.
     private static Task LockOperationsAsync(VehicleRentalDbContext db, CancellationToken ct)
         => db.AdvisoryLockAsync(724232001L, ct);
 

@@ -5,7 +5,7 @@ public readonly record struct GeoPoint(double Latitude, double Longitude)
     public bool IsValid => Latitude is >= -90.0 and <= 90.0 && Longitude is >= -180.0 and <= 180.0;
 
     /// <summary>
-    /// Computes the great-circle distance between two geographical points in meters using the Haversine formula.
+    /// Tính khoảng cách đường tròn lớn (mét) giữa hai điểm địa lý bằng công thức Haversine.
     /// </summary>
     public double DistanceToMeters(GeoPoint other)
     {

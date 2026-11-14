@@ -3,7 +3,7 @@ using Npgsql;
 
 namespace Car_Rental_System_BE.Infrastructure.Persistence;
 
-// Separate from the application model: usable before any business tables exist.
+// Tách khỏi model của ứng dụng: dùng được trước khi có bất kỳ bảng nghiệp vụ nào.
 internal sealed class MigrationDbContext : DbContext
 {
     public MigrationDbContext(NpgsqlConnection connection, NpgsqlTransaction? transaction = null)

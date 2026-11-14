@@ -9,10 +9,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace Car_Rental_System_BE.WebApi.Features.Maintenances;
 
 /// <summary>
-/// The maintenance slice's HTTP surface. The three routes, verbs, policies and responses are the ones the
-/// operations controller served before the extraction: GET/POST <c>api/maintenance</c> and
-/// PUT <c>api/maintenance/{id}</c>. The paged GET still reads through the operations completion service, which
-/// owns pagination for every operational list.
+/// Bề mặt HTTP của slice bảo trì. Ba route, verb, policy và phản hồi là những gì controller vận hành phục vụ
+/// trước khi tách: GET/POST <c>api/maintenance</c> và PUT <c>api/maintenance/{id}</c>. GET phân trang vẫn đọc
+/// qua service hoàn tất vận hành, nơi sở hữu phân trang cho mọi danh sách vận hành.
 /// </summary>
 [ApiController]
 [Route("api")]
@@ -20,7 +19,7 @@ public sealed class MaintenanceController(
     IMaintenanceService maintenance,
     IOperationsCompletionService? completion = null) : ControllerBase
 {
-    /// <summary>List maintenance with optional createdAt range [from,to); page=1/pageSize=20, maximum 100.</summary>
+    /// <summary>Liệt kê phiếu bảo trì với khoảng createdAt tùy chọn [from,to); page=1/pageSize=20, tối đa 100.</summary>
     [OperationDescription(" Pagination for list operations defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Invalid values return 400 at HTTP and Application boundaries. data contains items/page/pageSize/totalCount, totalCount is after filters; out-of-range pages retain the count with empty items.", DocumentsPaginationParameters = true)]
     [SuccessMessage("maintenance list retrieved successfully.")]
     [Authorize(Policy=AuthorizationPolicies.Maintenance)] [HttpGet("maintenance")]

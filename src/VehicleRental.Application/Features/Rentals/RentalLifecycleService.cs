@@ -70,8 +70,8 @@ public sealed class RentalLifecycleService(
             throw new ConflictException("PRE_INSPECTION_REQUIRED", "A successful pre-rental inspection is required to start.");
         }
 
-        // Self-drive handover records the already selected vehicle atomically with start.
-        // A requested driver must have been explicitly assigned by dispatch beforehand.
+        // Bàn giao xe tự lái ghi nhận xe đã chọn một cách nguyên tử cùng lúc bắt đầu chuyến. Đơn có
+        // yêu cầu tài xế thì tài xế phải được điều phối gán rõ ràng từ trước.
         if (rental.HasDriver && !await repository.HasValidAssignmentAsync(id, true, ct))
         {
             throw new ConflictException("ASSIGNMENT_REQUIRED", "Vehicle and driver (if requested) must be assigned.");
@@ -118,7 +118,7 @@ public sealed class RentalLifecycleService(
         var now = timeProvider.GetUtcNow().UtcDateTime;
         var effectiveReturnedAt = returnedAt ?? now;
         var minTime = rental.StartedAt ?? rental.ScheduledStart;
-        if (effectiveReturnedAt < minTime || effectiveReturnedAt > now.AddMinutes(5)) // small tolerance for clock skew
+        if (effectiveReturnedAt < minTime || effectiveReturnedAt > now.AddMinutes(5)) // dung sai nhỏ cho lệch đồng hồ
         {
             throw new ConflictException("INVALID_RETURNED_AT", "Returned time must be between start time and current time.");
         }
@@ -158,7 +158,7 @@ public sealed class RentalLifecycleService(
         var now = timeProvider.GetUtcNow().UtcDateTime;
         var effectiveReturnedAt = rental.ReturnedAt ?? now;
 
-        // Overtime calculation
+        // Tính phí quá giờ
         var unitHourly = rental.RentalType == "hourly"
             ? rental.UnitHourlyPrice
             : MoneyRounding.RoundVnd(rental.MonthlyPriceSnapshot / 720m);
@@ -172,7 +172,7 @@ public sealed class RentalLifecycleService(
             graceMinutes: _options.GraceMinutes
         );
 
-        // Deposit held
+        // Tiền cọc đang giữ
         var depositHeld = await paymentGate.GetDepositHeldAsync(id, ct);
         var settlementCalc = SettlementCalculator.Calculate(depositHeld, overtime.OvertimeTotal);
 
@@ -180,16 +180,16 @@ public sealed class RentalLifecycleService(
             ? await paymentGate.GetPrimaryInvoiceIdAsync(id, ct)
             : null;
 
-        // The loyalty base is derived from the post-settlement price, exactly as before. Subscription
-        // rentals award no points, so the basis stays null for them.
+        // Mốc tính điểm thành viên lấy từ giá sau quyết toán, đúng như trước. Đơn thuê theo gói không
+        // được cộng điểm, nên mốc vẫn là null.
         var newVatPrice = rental.VatPrice + overtime.OvertimeVat;
         var newTotalPrice = rental.TotalPrice + overtime.OvertimeTotal;
         decimal? loyaltyBasis = rental.IsSubscription
             ? null
             : Math.Max(0m, newTotalPrice - newVatPrice - rental.DepositPrice);
 
-        // Everything below happens in ONE transaction inside the repository (Phase 2 / D-1): no invoice, no
-        // refund, no package hour and no loyalty point can be committed while the rental is not completed.
+        // Mọi thứ bên dưới diễn ra trong MỘT transaction bên trong repository (Phase 2 / D-1): không hóa
+        // đơn, khoản hoàn tiền, giờ gói hay điểm thành viên nào được commit khi đơn thuê chưa hoàn tất.
         var plan = new SettlementPlan(
             CompletedAt: now,
             ReturnedAt: effectiveReturnedAt,
@@ -256,7 +256,7 @@ public sealed class RentalLifecycleService(
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
         var paidAmount = await paymentGate.GetTotalPaidAmountAsync(id, ct);
-        var rentAndVat = rental.TotalPrice; // rental rent + VAT
+        var rentAndVat = rental.TotalPrice; // tiền thuê + VAT của đơn
 
         var preview = CancellationPolicy.Evaluate(
             now: now,

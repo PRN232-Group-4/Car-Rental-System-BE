@@ -58,7 +58,7 @@ public static class DriverEligibility
         if (!isDriver) reasons.Add(NotADriver);
         if (!isActive) reasons.Add(Inactive);
 
-        // Convert rental end to GMT+7 Date to ensure the driver's license covers the entire local calendar day
+        // Đổi thời điểm kết thúc thuê sang ngày GMT+7 để bảo đảm GPLX còn hiệu lực trọn ngày theo lịch địa phương
         var localEnd = DateOnly.FromDateTime(rentalEndUtc.AddHours(7));
         if (licenseExpiry is null || licenseExpiry.Value < localEnd)
             reasons.Add(LicenseExpiring);

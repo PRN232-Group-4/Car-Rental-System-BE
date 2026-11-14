@@ -37,7 +37,7 @@ public sealed class NpgsqlInspectionAssignmentRepository(NpgsqlDataSource dataSo
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(connection, transaction);
-        // Share the dispatcher lock with inspection creation and vehicle replacement.
+        // Dùng chung khóa điều phối với việc tạo biên bản kiểm tra và thay xe.
         await db.AdvisoryLockAsync(724232001L, ct);
         var post = inspectionType == "post_rental";
         var rental = await db.LockByKeyAsync<RentalsRow>(rentalId, ct)
@@ -48,7 +48,7 @@ public sealed class NpgsqlInspectionAssignmentRepository(NpgsqlDataSource dataSo
         var status = rental.Status;
         var approved = rental.ConfirmedAt is not null;
 
-        // FOR SHARE OF staffs, users: the technician cannot be deactivated or re-roled until commit.
+        // FOR SHARE OF staffs, users: không thể vô hiệu hóa hay đổi vai trò kỹ thuật viên cho tới khi commit.
         var staff = await db.LockByKeyAsync<StaffsRow>(technicianStaffId, ct, RowLock.Share);
         var user = staff is null ? null : await db.LockByKeyAsync<UsersRow>(staff.UserId, ct, RowLock.Share);
         if (user is null || !user.IsActive || !await (from ur in db.Set<UserRolesRow>() join r in db.Set<RolesRow>() on ur.RoleId equals r.Id
@@ -60,7 +60,7 @@ public sealed class NpgsqlInspectionAssignmentRepository(NpgsqlDataSource dataSo
                 i.InspectionType == inspectionType, ct))
             throw new ConflictException("INSPECTION_ALREADY_RECORDED", "Xe đã có biên bản ở giai đoạn kiểm tra này; không thể ghi đè hoặc đổi phân công.");
 
-        // Dispatcher + rental row locks serialize writers, so update-or-insert replaces ON CONFLICT DO UPDATE.
+        // Khóa điều phối + khóa dòng đơn thuê tuần tự hóa các luồng ghi, nên cập nhật-hoặc-chèn thay cho ON CONFLICT DO UPDATE.
         var utcNow = await db.DatabaseUtcNowAsync(ct);
         var assignment = db.Set<InspectionAssignmentsRow>().Where(a => a.RentalId == rentalId && a.VehicleId == vehicleId && a.InspectionType == inspectionType);
         if (await assignment.ExecuteUpdateAsync(s => s

@@ -8,9 +8,9 @@ using Npgsql;
 namespace Car_Rental_System_BE.Infrastructure.Features.Availability;
 
 /// <summary>
-/// Per-vehicle advisory lock, transaction scoped. Uses the two-int form <c>(1001, vehicleId)</c>, a key space disjoint from the
-/// single-bigint locks taken by <c>IAssignmentRepository.AssignDriverAsync</c>. Class 1002 is reserved for drivers (FR-014). When several vehicles must be
-/// locked (vehicle swap) acquire them in ascending <c>vehicle_id</c> order to avoid deadlocks.
+/// Advisory lock theo từng xe, trong phạm vi transaction. Dùng dạng hai số nguyên <c>(1001, vehicleId)</c>, không gian khóa tách biệt với các khóa một
+/// bigint do <c>IAssignmentRepository.AssignDriverAsync</c> lấy. Lớp 1002 dành cho tài xế (FR-014). Khi phải khóa nhiều xe (đổi xe), lấy khóa theo thứ tự
+/// <c>vehicle_id</c> tăng dần để tránh deadlock.
 /// </summary>
 public static class VehicleLock
 {

@@ -13,7 +13,7 @@ namespace Car_Rental_System_BE.WebApi.Features.Organization;
 [Authorize(Policy = AuthorizationPolicies.Management)]
 public sealed class FacilityMembersController(IStaffService staff) : ControllerBase
 {
-    /// <summary>Assign an employee to a facility. Only Admin may assign a Manager.</summary>
+    /// <summary>Xếp nhân viên vào cơ sở. Chỉ Admin được xếp Manager.</summary>
     [SuccessMessage("Employee assigned to facility successfully.")]
     [HttpPut("{userId:int}")]
     [ProducesResponseType<Staff>(StatusCodes.Status200OK)]

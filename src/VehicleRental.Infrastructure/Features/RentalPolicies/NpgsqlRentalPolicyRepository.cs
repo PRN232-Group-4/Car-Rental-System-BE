@@ -10,9 +10,9 @@ using Car_Rental_System_BE.Infrastructure.Persistence;
 namespace Car_Rental_System_BE.Infrastructure.Features.RentalPolicies;
 
 /// <summary>
-/// Rental policy versions. The members came from <c>NpgsqlOperationsRepository</c> (its <c>.Policies.cs</c>
-/// partial) with their SQL, their transactions and their advisory locks unchanged; the scope lock keeps its own
-/// namespace (720011) so it cannot collide with the vehicle/assignment lock.
+/// Các phiên bản chính sách thuê. Các thành viên lấy từ <c>NpgsqlOperationsRepository</c> (phần partial
+/// <c>.Policies.cs</c>) với SQL, transaction và advisory lock giữ nguyên; khóa phạm vi giữ không gian tên riêng
+/// (720011) để không đụng khóa xe/phân công.
 /// </summary>
 public sealed class NpgsqlRentalPolicyRepository(NpgsqlDataSource dataSource) : IRentalPolicyRepository
 {
@@ -70,7 +70,7 @@ public sealed class NpgsqlRentalPolicyRepository(NpgsqlDataSource dataSource) : 
             db.Set<VehicleTypesRow>().Where(t => t.Id == p.VehicleTypeId).Select(t => t.Name).FirstOrDefault(),
             p.ManagedBy, p.CreatedAt));
 
-    // Separate namespace from vehicle/assignment locks; 0 represents the global scope.
+    // Không gian tên tách biệt với khóa xe/phân công; 0 đại diện cho phạm vi toàn cục.
     private static Task LockPolicyScopeAsync(VehicleRentalDbContext db, int? typeId, CancellationToken ct) =>
         db.AdvisoryLockAsync(720011, typeId ?? 0, ct);
 
@@ -84,7 +84,7 @@ public sealed class NpgsqlRentalPolicyRepository(NpgsqlDataSource dataSource) : 
         await using var transaction = await connection.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(connection, transaction);
         if (await db.LockByKeyAsync<RentalPoliciesRow>(id, ct) is null) return false;
-        // Rentals snapshot the policy they were booked under, so a referenced version must stay for the contracts.
+        // Đơn thuê chụp lại chính sách lúc đặt, nên phiên bản đã được tham chiếu phải giữ lại cho hợp đồng.
         if (await db.Set<RentalsRow>().AnyAsync(r => r.PolicyId == id, ct))
             throw new ConflictException("RENTAL_POLICY_IN_USE", "Phiên bản chính sách đã được gắn với đơn thuê nên không thể xóa. Hãy tạm ngưng phiên bản này thay vì xóa.");
         await db.Set<RentalPoliciesRow>().Where(p => p.Id == id).ExecuteDeleteAsync(ct);

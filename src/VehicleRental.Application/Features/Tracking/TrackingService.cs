@@ -30,22 +30,22 @@ public sealed class TrackingService(
 
         TrackingValidators.ValidateIngestRequest(request);
 
-        // Fetch previous position to detect geofence enter/exit transitions
+        // Lấy vị trí trước đó để phát hiện chuyển đổi vào/ra vùng địa lý
         var lastKnown = await repository.GetLastPositionAsync(vehicleId, ct);
 
-        // Insert batch of positions
+        // Chèn lô vị trí
         await repository.InsertPositionsBatchAsync(deviceId, vehicleId, request.Positions, ct);
 
-        // Identify the latest point in this batch
+        // Xác định điểm mới nhất trong lô này
         var latest = request.Positions.OrderByDescending(p => p.RecordedAt).First();
 
-        // Update the last known position cache
+        // Cập nhật bộ đệm vị trí cuối cùng đã biết
         await repository.UpsertLastPositionAsync(vehicleId, deviceId, latest, null, ct);
         await repository.UpdateDeviceLastPingAsync(deviceId, latest.RecordedAt, ct);
 
         var triggeredAlerts = new List<TrackingAlertDto>();
 
-        // Check Geofences
+        // Kiểm tra vùng địa lý
         var activeGeofences = await repository.ListActiveGeofencesAsync(ct);
         if (activeGeofences.Count > 0)
         {
@@ -60,7 +60,7 @@ public sealed class TrackingService(
 
                 if (!wasInside && isInside)
                 {
-                    // Entered
+                    // Đi vào
                     await repository.RecordGeofenceEventAsync(vehicleId, rentalId, geofence.Id, "ENTER", latest.Lat, latest.Lng, latest.RecordedAt, ct);
 
                     if (geofence.ZoneType.Equals("prohibited", StringComparison.OrdinalIgnoreCase))
@@ -75,7 +75,7 @@ public sealed class TrackingService(
                 }
                 else if (wasInside && !isInside)
                 {
-                    // Exited
+                    // Đi ra
                     await repository.RecordGeofenceEventAsync(vehicleId, rentalId, geofence.Id, "EXIT", latest.Lat, latest.Lng, latest.RecordedAt, ct);
 
                     if (geofence.ZoneType.Equals("allowed", StringComparison.OrdinalIgnoreCase))
@@ -132,7 +132,7 @@ public sealed class TrackingService(
                 }
                 catch (BusinessRuleException)
                 {
-                    // Keep real Haversine distance; unavailable road distance/ETA remain null.
+                    // Giữ khoảng cách Haversine thực; khoảng cách đường bộ/ETA không có thì để null.
                 }
             }
 
@@ -219,7 +219,7 @@ public sealed class TrackingService(
             checkLng = lastPos.Lng;
         }
 
-        // Determine expected drop-off location
+        // Xác định vị trí trả xe dự kiến
         double? expectedLat = null;
         double? expectedLng = null;
         string expectedFacilityName = "Designated Facility";

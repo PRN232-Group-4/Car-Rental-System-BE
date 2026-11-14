@@ -84,7 +84,7 @@ public sealed class NpgsqlTrackingRepository(NpgsqlDataSource dataSource) : ITra
     public async Task UpsertLastPositionAsync(int vehicleId, string deviceId, PositionDto position, string? address, CancellationToken ct)
     {
         await using var db = VehicleRentalDbContext.Create(dataSource);
-        // ON CONFLICT (vehicle_id) DO UPDATE: update, else insert; a concurrent first insert falls back to update.
+        // ON CONFLICT (vehicle_id) DO UPDATE: cập nhật, nếu không có thì chèn; lần chèn đầu tiên bị tranh chấp sẽ quay về cập nhật.
         if (await UpdateLastPositionAsync(db, vehicleId, deviceId, position, address, ct) > 0) return;
         var inserted = await db.TryInsertAsync(new VehicleLastPositionsRow
         {

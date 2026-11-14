@@ -22,7 +22,7 @@ public sealed class LoyaltyController(
 ) : ControllerBase
 {
     /// <summary>
-    /// Retrieves loyalty summary (balance, tier, multiplier, lifetime earned, next tier) for the authenticated customer.
+    /// Lấy tổng quan điểm thành viên (số dư, hạng, hệ số nhân, tổng điểm trọn đời, hạng kế tiếp) của khách hàng đang đăng nhập.
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.Customer)]
     [HttpGet("api/loyalty/me")]
@@ -37,7 +37,7 @@ public sealed class LoyaltyController(
     }
 
     /// <summary>
-    /// Lists paginated loyalty ledger transactions for the authenticated customer.
+    /// Liệt kê phân trang các giao dịch sổ điểm thành viên của khách hàng đang đăng nhập.
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.Customer)]
     [HttpGet("api/loyalty/me/transactions")]
@@ -56,7 +56,7 @@ public sealed class LoyaltyController(
     }
 
     /// <summary>
-    /// Retrieves loyalty summary for a specific customer (Admin, Manager).
+    /// Lấy tổng quan điểm thành viên của một khách hàng cụ thể (Admin, Manager).
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.Management)]
     [HttpGet("api/customer/{id:int}/loyalty")]
@@ -71,7 +71,7 @@ public sealed class LoyaltyController(
     }
 
     /// <summary>
-    /// Adjusts loyalty points manually for a specific customer with an audit reason (Admin only).
+    /// Điều chỉnh thủ công điểm thành viên của một khách hàng cụ thể, kèm lý do kiểm toán (chỉ Admin).
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.Admin)]
     [HttpPost("api/customer/{id:int}/loyalty/adjustments")]
@@ -98,8 +98,8 @@ public sealed class LoyaltyController(
     }
 
     /// <summary>
-    /// Retrieves discount quote for points redemption against rental amount (Customer).
-    /// Returns 409 Conflict if redemption is currently disabled in phase 1.
+    /// Lấy báo giá giảm giá khi đổi điểm cho số tiền thuê (Customer). Trả về 409 Conflict nếu việc
+    /// đổi điểm đang bị tắt ở giai đoạn 1.
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.Customer)]
     [HttpGet("api/loyalty/redemption-quote")]
@@ -116,7 +116,7 @@ public sealed class LoyaltyController(
     }
 
     /// <summary>
-    /// Retrieves reconciliation discrepancies between cached loyalty points and ledger sums (Admin only).
+    /// Lấy các chênh lệch đối soát giữa điểm thành viên lưu đệm và tổng sổ cái (chỉ Admin).
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.Admin)]
     [HttpGet("api/admin/loyalty/reconciliation")]

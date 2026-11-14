@@ -10,10 +10,10 @@ public enum AvailabilityReason
 
 public static class BookingStatusRules
 {
-    /// <summary>Rental statuses that hold the vehicle; must stay in sync with <c>fn_rental_is_blocking</c> in migration 0011.</summary>
+    /// <summary>Các trạng thái đơn thuê đang giữ xe; phải đồng bộ với <c>fn_rental_is_blocking</c> trong migration 0011.</summary>
     public static bool IsBlocking(string? rentalStatus)
         => rentalStatus is "pending" or "pre_inspection" or "renting" or "post_inspection";
 
-    /// <summary>Vehicle statuses that can be offered to customers.</summary>
+    /// <summary>Các trạng thái xe có thể đưa ra cho khách đặt.</summary>
     public static bool IsBookableVehicleStatus(string? vehicleStatus) => vehicleStatus is "available" or "renting";
 }
