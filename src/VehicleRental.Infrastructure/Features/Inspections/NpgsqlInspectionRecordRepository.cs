@@ -151,7 +151,8 @@ public sealed class NpgsqlInspectionRecordRepository(NpgsqlDataSource dataSource
     /// <summary>
     /// A failed check puts the vehicle in maintenance, and only completing a maintenance ticket as safe releases it.
     /// Open that ticket here so the vehicle shows up in maintenance work instead of staying blocked with nothing to
-    /// close. The inspector is assigned when they are a Maintenance technician; otherwise a Manager assigns one.
+    /// close. It goes to the technician assigned to this inspection, else to the inspector when they are a Maintenance
+    /// technician; otherwise a Manager assigns one. Completing it as safe makes the vehicle bookable again.
     /// </summary>
     private static async Task OpenFailedInspectionMaintenanceAsync(VehicleRentalDbContext db, InspectionsRow inspection, CancellationToken ct)
     {
@@ -160,18 +161,28 @@ public sealed class NpgsqlInspectionRecordRepository(NpgsqlDataSource dataSource
                 && ((m.Status ?? "open") == "open" || m.Status == "scheduled" || m.Status == "in_progress"), ct))
             return; // an unfinished ticket already covers this vehicle
         var facilityId = await db.Set<VehiclesRow>().Where(v => v.Id == vehicleId).Select(v => v.FacilityId).FirstOrDefaultAsync(ct);
-        var inspectorIsTechnician = inspection.StaffId is int staffId && await (from s in db.Set<StaffsRow>()
-            join u in db.Set<UsersRow>() on s.UserId equals u.Id
-            join ur in db.Set<UserRolesRow>() on u.Id equals ur.UserId
-            join r in db.Set<RolesRow>() on ur.RoleId equals r.Id
-            where s.Id == staffId && u.IsActive && r.Name == "Maintenance" select s.Id).AnyAsync(ct);
+        // Prefer the technician assigned to this inspection; otherwise the inspector when they are a technician.
+        var assignedTechnician = await db.Set<InspectionAssignmentsRow>()
+            .Where(a => a.RentalId == inspection.RentalId && a.VehicleId == vehicleId && a.InspectionType == inspection.InspectionType)
+            .Select(a => (int?)a.TechnicianStaffId).FirstOrDefaultAsync(ct);
+        int? technician = null;
+        foreach (var candidate in new[] { assignedTechnician, inspection.StaffId })
+        {
+            if (candidate is not int staffId) continue;
+            if (await (from s in db.Set<StaffsRow>()
+                    join u in db.Set<UsersRow>() on s.UserId equals u.Id
+                    join ur in db.Set<UserRolesRow>() on u.Id equals ur.UserId
+                    join r in db.Set<RolesRow>() on ur.RoleId equals r.Id
+                    where s.Id == staffId && u.IsActive && r.Name == "Maintenance" select s.Id).AnyAsync(ct))
+            { technician = staffId; break; }
+        }
         var stage = inspection.InspectionType == "pre_rental" ? "trước" : "sau";
         var notes = string.IsNullOrWhiteSpace(inspection.DamageNotes) ? "Không có ghi chú hư hỏng." : inspection.DamageNotes.Trim();
         var description = $"Tự tạo từ biên bản kiểm tra {stage} thuê #{inspection.Id} (đơn #{inspection.RentalId}) không đạt. {notes}";
         await db.InsertAsync(new VehicleMaintenanceRow
         {
             VehicleId = vehicleId, FacilityId = facilityId, RentalId = inspection.RentalId, InspectionId = inspection.Id,
-            AssignedStaffId = inspectorIsTechnician ? inspection.StaffId : null, Status = "open",
+            AssignedStaffId = technician, Status = "open",
             MaintenanceType = $"Sửa chữa sau kiểm tra {stage} thuê không đạt",
             Description = description.Length > 255 ? description[..255] : description,
         }, ct);
