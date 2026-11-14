@@ -1,16 +1,15 @@
-using Car_Rental_System_BE.Application.Features.Availability;
 using Car_Rental_System_BE.Application.Common.Errors;
+using Car_Rental_System_BE.Application.Features.Availability;
 using Car_Rental_System_BE.Domain.Features.Availability;
-using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
-namespace Car_Rental_System_BE.Infrastructure.Features.Availability;
+namespace Car_Rental_System_BE.Infrastructure.Persistence;
 
 /// <summary>
-/// Advisory lock theo từng xe, trong phạm vi transaction. Dùng dạng hai số nguyên <c>(1001, vehicleId)</c>, không gian khóa tách biệt với các khóa một
+/// Khóa advisory theo từng xe, trong phạm vi transaction. Dùng dạng hai số nguyên <c>(1001, vehicleId)</c>, không gian khóa tách biệt với các khóa một
 /// bigint do <c>IAssignmentRepository.AssignDriverAsync</c> lấy. Lớp 1002 dành cho tài xế (FR-014). Khi phải khóa nhiều xe (đổi xe), lấy khóa theo thứ tự
-/// <c>vehicle_id</c> tăng dần để tránh deadlock.
+/// <c>vehicle_id</c> tăng dần để tránh deadlock. Helper dùng chung nên nằm cạnh các primitive khóa khác trong nhân Persistence.
 /// </summary>
 public static class VehicleLock
 {
@@ -34,7 +33,7 @@ internal static class VehicleAvailabilityChecks
         if (status == "maintenance") return AvailabilityResult.Blocked(AvailabilityReason.Maintenance);
         if (!BookingStatusRules.IsBookableVehicleStatus(status)) return AvailabilityResult.Blocked(AvailabilityReason.Inactive);
 
-        var bookingRange = NpgsqlVehicleSearchRepository.Range(window.From, window.To.AddMinutes(bufferMinutes));
+        var bookingRange = Sql.Range(window.From, window.To.AddMinutes(bufferMinutes));
         var booking = await db.Set<VehicleBookingsRow>()
             .Where(b => b.VehicleId == vehicleId && b.IsBlocking && (excludeRentalId == null || b.RentalId != excludeRentalId)
                 && b.Period!.Value.Overlaps(bookingRange))
@@ -42,7 +41,7 @@ internal static class VehicleAvailabilityChecks
         if (booking is not null)
             return AvailabilityResult.Blocked(AvailabilityReason.Booked, new(booking.StartsAt, booking.End));
 
-        var maintenanceRange = NpgsqlVehicleSearchRepository.Range(window.From, window.To);
+        var maintenanceRange = Sql.Range(window.From, window.To);
         var maintenance = await db.Set<VVehicleMaintenanceBlocksRow>()
             .Where(b => b.VehicleId == vehicleId && b.BlockedRange.Overlaps(maintenanceRange))
             .OrderBy(b => b.BlockedRange.LowerBound).Select(b => new { b.BlockedRange }).FirstOrDefaultAsync(ct);

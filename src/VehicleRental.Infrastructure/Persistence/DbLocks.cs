@@ -33,6 +33,16 @@ public static class DbLocks
     public static Task AdvisoryLockAsync(this DbContext db, int category, int key, CancellationToken ct) =>
         db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock({category}, {key})", ct);
 
+    /// <summary>
+    /// Khóa điều phối dùng chung trong phạm vi transaction: một khóa duy nhất bảo vệ các bất biến về tình trạng
+    /// trống giữa nhiều bảng (phân công, kiểm tra, sự cố, bảo trì, khôi phục, chỉnh sửa đơn). Mọi slice lấy đúng
+    /// khóa này, theo đúng thứ tự cũ.
+    /// </summary>
+    public const long DispatcherLockKey = 724232001L;
+
+    public static Task DispatcherLockAsync(this DbContext db, CancellationToken ct) =>
+        db.AdvisoryLockAsync(DispatcherLockKey, ct);
+
     /// <summary>Khóa các bảng được chỉ định (định danh lấy từ EF model, không bao giờ từ dữ liệu nhập).</summary>
     public static Task LockTablesAsync(this DbContext db, string mode, CancellationToken ct, params Type[] rows)
     {

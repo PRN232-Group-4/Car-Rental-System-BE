@@ -34,44 +34,19 @@ public sealed class FeaturePrivacyTests
     /// Exact and fully qualified; no wildcards. This rule is new, so this is a starting baseline, not a raised
     /// whitelist - and it may only shrink.
     /// </summary>
-    private static readonly string[] BaselineAtFeaturesMove =
-    [
-        // ---------------------------------------------------------------------------------------
-        // baseline at Features move (Task C2) - may only shrink
-        // ---------------------------------------------------------------------------------------
-        // Availability is the shared shelf of the move: its SQL helper, its vehicle lock and its availability
-        // checks are used by three other slices, and legacy Repositories still calls into two features.
-        "Car_Rental_System_BE.Infrastructure.Features.Assignments.NpgsqlAssignmentRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.NpgsqlVehicleSearchRepository",
-        "Car_Rental_System_BE.Infrastructure.Features.Assignments.NpgsqlAssignmentRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.VehicleLock",
-        "Car_Rental_System_BE.Infrastructure.Features.Rentals.NpgsqlRentalLifecycleRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.VehicleAvailabilityChecks",
-        "Car_Rental_System_BE.Infrastructure.Features.Rentals.NpgsqlRentalLifecycleRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.VehicleLock",
-        "Car_Rental_System_BE.Infrastructure.Features.Rentals.RentalPaymentGateAdapter -> Car_Rental_System_BE.Infrastructure.Features.Billing.RentalRefundWriter",
-        // ---------------------------------------------------------------------------------------
-        // added by the Rentals slice move (Task C7) - the same two calls, same arguments, same helpers as the
-        // two legacy entries removed below; only the owner of the code moved, so the edge moved with it.
-        // NpgsqlRentalBookingRepository evaluates the booking window and NpgsqlRentalEditingRepository
-        // re-evaluates the edited window, both inside their own transaction after taking the vehicle lock.
-        // ---------------------------------------------------------------------------------------
-        "Car_Rental_System_BE.Infrastructure.Features.Rentals.NpgsqlRentalBookingRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.VehicleAvailabilityChecks",
-        "Car_Rental_System_BE.Infrastructure.Features.Rentals.NpgsqlRentalBookingRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.VehicleLock",
-        "Car_Rental_System_BE.Infrastructure.Features.Rentals.NpgsqlRentalEditingRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.VehicleAvailabilityChecks",
-        "Car_Rental_System_BE.Infrastructure.Features.Rentals.NpgsqlRentalEditingRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.VehicleLock",
-        // The two legacy VehicleAvailabilityChecks/VehicleLock entries were deleted here: the code that called
-        // them (rental creation and rental editing) now lives in the Rentals slice, and both new owners are
-        // recorded above. The legacy NpgsqlVehicleSearchRepository entry went with ListDriverScheduleAsync, the
-        // unpaged duplicate of the driver schedule, when that queue moved to the Assignments slice: the paged
-        // query the slice serves normalises its timestamps inline and calls no Availability helper.
-        // ---------------------------------------------------------------------------------------
-        // added by the Fleet move (Task C2) - the only baseline entry that is new, not carried over
-        // ---------------------------------------------------------------------------------------
-        // SearchVehiclesAsync used to sit in the legacy Repositories.NpgsqlOperationsRepository and called
-        // NpgsqlVehicleSearchRepository.Timestamp (the one place that normalises a DateTime to the Unspecified
-        // kind Npgsql 8 requires for a timestamp parameter). The Fleet slice owns that code now, so the exact
-        // edge the entry moved owner: Fleet -> Availability, same call, same helper.
-        // Not fixed in C2 because handing that helper to a third owner is a design
-        // decision about Availability's internals, not part of moving Fleet.
-        "Car_Rental_System_BE.Infrastructure.Features.Fleet.NpgsqlFleetRepository -> Car_Rental_System_BE.Infrastructure.Features.Availability.NpgsqlVehicleSearchRepository",
-    ];
+    /// <remarks>
+    /// Empty by audit, not by omission. The ten entries of the starting baseline were all the same coupling: an
+    /// Availability helper (the vehicle lock, the availability checks, the timestamp/range normalisation), the
+    /// Billing refund writer and a shared rental read called by a slice that did not own them. Those helpers now
+    /// live in the shared persistence kernel, <c>Infrastructure.Persistence</c>, which is not a feature, so the
+    /// edges they created are gone and the entries with them. Keep this list empty rather than filling it with
+    /// anything but a proven violation.
+    /// </remarks>
+    private static readonly string[] BaselineAtFeaturesMove = [];
+
+    // ---------------------------------------------------------------------------------------------
+    // The rule.
+    // ---------------------------------------------------------------------------------------------
 
     [Fact]
     public void Infrastructure_feature_internals_are_private_to_their_feature()

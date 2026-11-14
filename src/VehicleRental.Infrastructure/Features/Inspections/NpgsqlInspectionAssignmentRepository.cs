@@ -39,7 +39,7 @@ public sealed class NpgsqlInspectionAssignmentRepository(NpgsqlDataSource dataSo
         await using var transaction = await connection.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(connection, transaction);
         // Dùng chung khóa điều phối với việc tạo biên bản kiểm tra và thay xe.
-        await db.AdvisoryLockAsync(724232001L, ct);
+        await db.DispatcherLockAsync(ct);
         var post = inspectionType == "post_rental";
         var rental = await db.LockByKeyAsync<RentalsRow>(rentalId, ct)
             ?? throw new NotFoundException("RENTAL_NOT_FOUND", "Không tìm thấy đơn thuê.");

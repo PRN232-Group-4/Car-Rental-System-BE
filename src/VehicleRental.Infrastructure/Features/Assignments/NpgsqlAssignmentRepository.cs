@@ -4,7 +4,6 @@ using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Assignments;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Domain.Features.Assignments;
-using Car_Rental_System_BE.Infrastructure.Features.Availability;
 using Npgsql;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using NpgsqlTypes;
@@ -277,7 +276,7 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
         DateTime windowStart, DateTime windowEnd, int bufferMinutes, int? excludeRentalId, CancellationToken ct)
     {
         await using var db = VehicleRentalDbContext.Create(dataSource);
-        var range = NpgsqlVehicleSearchRepository.Range(windowStart, windowEnd.AddMinutes(bufferMinutes));
+        var range = Sql.Range(windowStart, windowEnd.AddMinutes(bufferMinutes));
         return await (from st in db.Set<StaffsRow>().AsNoTracking()
             join u in db.Set<UsersRow>() on st.UserId equals u.Id
             where st.IsDriver
@@ -294,8 +293,8 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
         int bufferMinutes, int excludeVehicleId, CancellationToken ct)
     {
         await using var db = VehicleRentalDbContext.Create(dataSource);
-        var bookingRange = NpgsqlVehicleSearchRepository.Range(windowStart, windowEnd.AddMinutes(bufferMinutes));
-        var maintenanceRange = NpgsqlVehicleSearchRepository.Range(windowStart, windowEnd);
+        var bookingRange = Sql.Range(windowStart, windowEnd.AddMinutes(bufferMinutes));
+        var maintenanceRange = Sql.Range(windowStart, windowEnd);
         return await (from v in db.Set<VehiclesRow>().AsNoTracking()
             join t in db.Set<VehicleTypesRow>() on v.VehicleTypeId equals t.Id
             join f in db.Set<FacilitiesRow>() on v.FacilityId equals f.Id into facilities
@@ -381,26 +380,5 @@ public sealed class NpgsqlAssignmentRepository(NpgsqlDataSource dataSource) : IA
 
     private static DateTime Utc(DateTime stamp) => DateTime.SpecifyKind(stamp, DateTimeKind.Utc);
 
-    private static IQueryable<RentalWindow> RentalWindows(VehicleRentalDbContext db) =>
-        from r in db.Set<RentalsRow>()
-        join h in db.Set<HourRentalDetailRow>() on r.Id equals h.RentalId into hourly
-        from h in hourly.DefaultIfEmpty()
-        join l in db.Set<LongtermRentalContractRow>() on r.Id equals l.RentalId into longterm
-        from l in longterm.DefaultIfEmpty()
-        select new RentalWindow
-        {
-            RentalId = r.Id, VehicleId = r.VehicleId, Status = r.Status,
-            Start = (DateTime?)h.StartTime ?? l.StartTime, End = (DateTime?)h.EndTime ?? l.EndTime,
-        };
     private static readonly string[] ClosedRentalStatuses = ["completed", "cancelled", "expired"];
-
-    /// <summary>Đơn thuê kèm lịch thuê theo giờ/dài hạn, có thể ghép trong LINQ.</summary>
-    private sealed class RentalWindow
-    {
-        public int RentalId { get; init; }
-        public int VehicleId { get; init; }
-        public string Status { get; init; } = "";
-        public DateTime? Start { get; init; }
-        public DateTime? End { get; init; }
-    }
 }

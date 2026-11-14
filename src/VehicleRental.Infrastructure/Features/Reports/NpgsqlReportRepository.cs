@@ -14,31 +14,14 @@ namespace Car_Rental_System_BE.Infrastructure.Features.Reports;
 /// </summary>
 public sealed class NpgsqlReportRepository(NpgsqlDataSource dataSource) : IReportRepository
 {
-    // Một khóa điều phối trong phạm vi transaction bảo vệ các bất biến về tình trạng trống giữa nhiều bảng.
-    // Báo cáo có thể chuyển xe sang bảo trì và việc hoàn tất bảo trì có thể trả xe về, nên báo cáo vẫn lấy
-    // cùng khóa mà repository vận hành và bảo trì dùng.
-    private static Task LockOperationsAsync(VehicleRentalDbContext db, CancellationToken ct)
-        => db.AdvisoryLockAsync(724232001L, ct);
-
-    // Reports giữ bản sao riêng của phép đọc đơn thuê có khóa mà repository vận hành cũ giữ kín: phần thân
-    // chuyển sang phải giữ đúng SQL, và dùng lại hàm hỗ trợ đó nghĩa là phải mở rộng bề mặt của repository cũ
-    // chỉ vì một slice. Các slice Customers và Fleet cũng làm vậy với các hàm SQL một dòng; ở đây còn gồm cả
-    // ReadRentalAsync/ReadRental, mà luồng tạo báo cáo dùng chung với kiểm tra xe và khôi phục chuyến bằng xe
-    // thay thế còn ở lại. Đây là cùng một câu lệnh, nên hai bản sao khóa cùng một dòng.
-    private static async Task<Rental> ReadRentalAsync(VehicleRentalDbContext db, int id, CancellationToken ct)
-    {
-        if (await db.LockByKeyAsync<RentalsRow>(id, ct) is null) throw new KeyNotFoundException("Rental was not found.");
-        return await RentalQuery(db, db.Set<RentalsRow>().Where(r => r.Id == id)).FirstAsync(ct);
-    }
-
     public async Task<IncidentReport> CreateReportAsync(int rentalId, int staffId, bool driverOnly, string type, string description, string? images, CancellationToken ct)
     {
         if (type is not ("damage" or "breakdown") || string.IsNullOrWhiteSpace(description)) throw new ArgumentException("Report type and description are required.");
         await using var cn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await cn.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(cn, tx);
-        await LockOperationsAsync(db, ct);
-        var rental = await ReadRentalAsync(db, rentalId, ct);
+        await db.DispatcherLockAsync(ct);
+        var rental = await RentalReads.ReadLockedAsync(db, rentalId, ct);
         if (staffId > 0 && !await ActiveStaffAsync(db, staffId, ct))
             throw new InvalidOperationException("Reporter is not active.");
         if (driverOnly && !await db.Set<VehicleAssignmentsRow>().AnyAsync(a => a.RentalId == rentalId && a.DriverStaffId == staffId && a.Status == "assigned", ct))
@@ -74,7 +57,7 @@ public sealed class NpgsqlReportRepository(NpgsqlDataSource dataSource) : IRepor
         await using var cn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await cn.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(cn, tx);
-        await LockOperationsAsync(db, ct);
+        await db.DispatcherLockAsync(ct);
         var now = await db.DatabaseNowAsync(ct);
         // Báo cáo hỏng xe được giải quyết qua khôi phục xe/tài xế, không bao giờ bằng cách bỏ qua bước đó tại đây.
         if (await db.Set<ReportsRow>().Where(r => r.Id == id && r.Type == "damage" && OpenBreakdownStatuses.Contains(r.Status!)
@@ -142,7 +125,7 @@ public sealed class NpgsqlReportRepository(NpgsqlDataSource dataSource) : IRepor
         await using var tx=await cn.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(cn, tx);
         // Cùng khóa toàn cục như khôi phục chuyến/bảo trì để giữ nguyên các kiểm tra trạng thái của chúng.
-        await db.AdvisoryLockAsync(724232001L, ct);
+        await db.DispatcherLockAsync(ct);
         var report = await db.LockByKeyAsync<ReportsRow>(id, ct);
         if (report is not { ReporterStaffId: not null, Status: not null }) throw new KeyNotFoundException("Report was not found.");
         var current = report.Status;
@@ -168,22 +151,6 @@ public sealed class NpgsqlReportRepository(NpgsqlDataSource dataSource) : IRepor
         return row with { History = history, Notes = history.Where(h => !string.IsNullOrWhiteSpace(h.Reason))
             .Select(h => new ReportNote(h.Id, h.Reason!, h.By, h.At)).ToArray() };
     }
-
-    private static IQueryable<Rental> RentalQuery(VehicleRentalDbContext db, IQueryable<RentalsRow> rentals) =>
-        from r in rentals.AsNoTracking()
-        join h in db.Set<HourRentalDetailRow>() on r.Id equals h.RentalId into hourly
-        from h in hourly.DefaultIfEmpty()
-        join l in db.Set<LongtermRentalContractRow>() on r.Id equals l.RentalId into longterm
-        from l in longterm.DefaultIfEmpty()
-        select new Rental(r.Id, r.CustomerId, r.VehicleId, r.RentalType, r.Status, r.IsSubscription,
-            r.VatPrice, r.DepositPrice, r.OvertimePrice, r.TotalPrice,
-            (DateTime?)h.StartTime ?? l.StartTime, (DateTime?)h.EndTime ?? l.EndTime,
-            h.HourlyPriceSnapshot, l.MonthlyPriceSnapshot, (bool?)h.HasDriver ?? (bool?)l.HasDriver ?? false,
-            l.ContractLink == "/api/rentals/" + r.Id + "/contract/document"
-                ? "/api/rental/" + r.Id + "/contract/document" : l.ContractLink, l.SignedAt,
-            db.Set<RentalOrdersRow>().Where(o => o.RentalId == r.Id).Select(o => (int?)o.Id).FirstOrDefault(),
-            db.Set<InspectionsRow>().Any(i => i.RentalId == r.Id && i.VehicleId == r.VehicleId && i.InspectionType == "pre_rental" && i.IsOk == true),
-            db.Set<InspectionsRow>().Any(i => i.RentalId == r.Id && i.VehicleId == r.VehicleId && i.InspectionType == "post_rental"));
 
     private static Task<bool> ActiveStaffAsync(VehicleRentalDbContext db, int staffId, CancellationToken ct) =>
         (from s in db.Set<StaffsRow>() join u in db.Set<UsersRow>() on s.UserId equals u.Id

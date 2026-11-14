@@ -8,12 +8,6 @@ namespace Car_Rental_System_BE.Infrastructure.Features.Maintenances;
 
 public sealed class NpgsqlMaintenanceRepository(NpgsqlDataSource dataSource) : IMaintenanceRepository
 {
-    // Bảo trì được chuyển sang đây cùng slice riêng của nó. Vẫn lấy cùng khóa điều phối trong phạm vi
-    // transaction như repository vận hành: các thao tác ghi bảo trì bảo vệ bất biến về tình trạng trống của xe
-    // giữa nhiều bảng.
-    private static Task LockOperationsAsync(VehicleRentalDbContext db, CancellationToken ct)
-        => db.AdvisoryLockAsync(724232001L, ct);
-
     private static async Task ValidateMaintenanceAsync(VehicleRentalDbContext db, Maintenance x, CancellationToken ct)
     {
         if (x.Status is not ("open" or "scheduled" or "in_progress" or "completed" or "cancelled") || x.Cost < 0)
@@ -35,7 +29,7 @@ public sealed class NpgsqlMaintenanceRepository(NpgsqlDataSource dataSource) : I
         await using var cn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await cn.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(cn, tx);
-        await LockOperationsAsync(db, ct);
+        await db.DispatcherLockAsync(ct);
         if (maintenanceType is not null && (string.IsNullOrWhiteSpace(maintenanceType) || maintenanceType.Length>255)) throw new ArgumentException("Maintenance type must contain 1 to 255 characters.");
         if (description is not null && (string.IsNullOrWhiteSpace(description) || description.Length>4000)) throw new ArgumentException("Description must contain 1 to 4000 characters.");
         var report = await db.LockByKeyAsync<ReportsRow>(reportId, ct);
@@ -65,7 +59,7 @@ public sealed class NpgsqlMaintenanceRepository(NpgsqlDataSource dataSource) : I
         await using var cn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await cn.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(cn, tx);
-        await LockOperationsAsync(db, ct);
+        await db.DispatcherLockAsync(ct);
         if (actingTechnicianId is int technician && (id is null || x.AssignedStaffId != technician ||
             (await db.LockByKeyAsync<VehicleMaintenanceRow>(id.Value, ct))?.AssignedStaffId is not int assignee || assignee != technician))
             throw new UnauthorizedAccessException("Only the assigned technician may update this maintenance; Manager assigns technicians.");

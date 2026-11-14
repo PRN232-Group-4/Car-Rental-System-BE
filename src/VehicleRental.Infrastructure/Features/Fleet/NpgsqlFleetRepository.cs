@@ -30,8 +30,8 @@ public sealed class NpgsqlFleetRepository(NpgsqlDataSource dataSource) : IFleetR
     }
     public async Task<VehiclePage> SearchVehiclesAsync(int? type, int? facility, string? status, DateTime? from, DateTime? to, int page, int size, CancellationToken ct)
     {
-        from = from is { } fromValue ? NpgsqlVehicleSearchRepository.Timestamp(fromValue) : null;
-        to = to is { } toValue ? NpgsqlVehicleSearchRepository.Timestamp(toValue) : null;
+        from = from is { } fromValue ? Sql.Ts(fromValue) : null;
+        to = to is { } toValue ? Sql.Ts(toValue) : null;
         await using var db = VehicleRentalDbContext.Create(dataSource);
         var query = db.Set<VehiclesRow>().AsNoTracking().Where(v =>
             (type == null || v.VehicleTypeId == type) && (facility == null || v.FacilityId == facility) &&
@@ -101,7 +101,7 @@ public sealed class NpgsqlFleetRepository(NpgsqlDataSource dataSource) : IFleetR
         await using var cn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await cn.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(cn, tx);
-        await LockOperationsAsync(db, ct);
+        await db.DispatcherLockAsync(ct);
         if (id is not null && await db.LockByKeyAsync<VehiclesRow>(id.Value, ct) is null)
             throw new KeyNotFoundException("Vehicle was not found.");
         var category = await GetVehicleCategoryAsync(db, v.VehicleTypeId, ct);
@@ -192,7 +192,7 @@ public sealed class NpgsqlFleetRepository(NpgsqlDataSource dataSource) : IFleetR
         await using var cn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await cn.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(cn, tx);
-        await LockOperationsAsync(db, ct);
+        await db.DispatcherLockAsync(ct);
         if (await db.LockByKeyAsync<VehiclesRow>(id, ct) is null)
             throw new KeyNotFoundException("Vehicle was not found.");
         var used = await db.Set<RentalsRow>().AnyAsync(x => x.VehicleId == id, ct)
@@ -216,7 +216,7 @@ public sealed class NpgsqlFleetRepository(NpgsqlDataSource dataSource) : IFleetR
         await using var cn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await cn.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(cn, tx);
-        await LockOperationsAsync(db, ct);
+        await db.DispatcherLockAsync(ct);
         VehicleType saved;
         if (id is not null)
         {
@@ -288,13 +288,6 @@ public sealed class NpgsqlFleetRepository(NpgsqlDataSource dataSource) : IFleetR
             battery, chargingType, chargingHours, range, batteryType, images) : null;
     }
 
-    // Fleet giữ bản sao riêng của khóa điều phối: advisory key nằm trong phạm vi transaction và dùng
-    // chung cho mọi luồng ghi đụng tới tình trạng trống của xe, nên khóa và key giữ nguyên như dưới
-    // repository vận hành cũ. Một khóa điều phối trong phạm vi transaction bảo vệ các bất biến về
-    // tình trạng trống giữa nhiều bảng. Đặt xe, kiểm tra xe, sự cố, bảo trì và thay xe dùng chung
-    // khóa này.
-    private static Task LockOperationsAsync(VehicleRentalDbContext db, CancellationToken ct)
-        => db.AdvisoryLockAsync(724232001L, ct);
     private static async Task UpsertDetailAsync<T>(VehicleRentalDbContext db, T row, CancellationToken ct) where T : class
     {
         // Dòng xe đã bị khóa (hoặc là xe mới) trong transaction này, nên tìm-rồi-ghi thay cho ON CONFLICT(vehicle_id).

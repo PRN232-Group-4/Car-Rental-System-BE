@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Domain.Features.Availability;
-using Car_Rental_System_BE.Infrastructure.Features.Availability;
 using Npgsql;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Car_Rental_System_BE.Domain.Features.Rentals;
@@ -112,7 +111,7 @@ public sealed class NpgsqlRentalLifecycleRepository(NpgsqlDataSource dataSource)
 
         // Các thao tác điều phối lấy khóa này; phân công mới và đổi xe dùng VehicleLock. Lấy cả hai
         // trước khi khóa dòng đơn thuê và kiểm tra lại bằng chứng bên trong transaction này.
-        await db.AdvisoryLockAsync(724232001L, ct);
+        await db.DispatcherLockAsync(ct);
         await VehicleLock.AcquireAsync(conn, tx, vehicleId, ct);
 
         var rental = await LockRentalAsync(db, rentalId, ct) ?? throw new NotFoundException("RENTAL_NOT_FOUND", "Rental was not found.");

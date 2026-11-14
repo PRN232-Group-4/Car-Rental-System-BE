@@ -13,22 +13,6 @@ namespace Car_Rental_System_BE.Infrastructure.Features.Inspections;
 /// </summary>
 public sealed class NpgsqlInspectionRecordRepository(NpgsqlDataSource dataSource) : IInspectionRecordRepository
 {
-    // Một khóa điều phối trong phạm vi transaction bảo vệ các bất biến về tình trạng trống giữa nhiều bảng. Kiểm
-    // tra xe có thể chuyển xe sang bảo trì và đổi trạng thái đơn thuê, nên vẫn lấy cùng khóa mà repository vận
-    // hành và bảo trì dùng.
-    private static Task LockOperationsAsync(VehicleRentalDbContext db, CancellationToken ct)
-        => db.AdvisoryLockAsync(724232001L, ct);
-
-    // Inspections giữ bản sao riêng của phép đọc đơn thuê có khóa mà repository vận hành cũ giữ kín: phần thân
-    // chuyển sang phải giữ đúng SQL, và dùng lại hàm hỗ trợ đó nghĩa là phải mở rộng bề mặt của repository cũ
-    // chỉ vì một slice. Các slice Reports, Customers và Fleet cũng làm như vậy. Đây là cùng một câu lệnh, nên
-    // hai bản sao khóa cùng một dòng.
-    private static async Task<Rental> ReadRentalAsync(VehicleRentalDbContext db, int id, CancellationToken ct)
-    {
-        if (await db.LockByKeyAsync<RentalsRow>(id, ct) is null) throw new KeyNotFoundException("Rental was not found.");
-        return await RentalQuery(db, db.Set<RentalsRow>().Where(r => r.Id == id)).FirstAsync(ct);
-    }
-
     private static async Task RequireAvailableVehicleAsync(VehicleRentalDbContext db, int vehicle,
         DateTime start, DateTime end, int? rental, CancellationToken ct)
     {
@@ -37,7 +21,7 @@ public sealed class NpgsqlInspectionRecordRepository(NpgsqlDataSource dataSource
         var available = await db.Set<VehiclesRow>().AnyAsync(v => v.Id == vehicle && v.Status == "available"
             && !db.Set<VehicleMaintenanceRow>().Any(m => m.VehicleId == v.Id &&
                 ((m.Status ?? "open") != "completed" && (m.Status ?? "open") != "cancelled" || m.IsSafe == false))
-            && !RentalWindows(db).Any(w => w.VehicleId == v.Id && (rental == null || w.RentalId != rental)
+            && !RentalReads.Windows(db).Any(w => w.VehicleId == v.Id && (rental == null || w.RentalId != rental)
                 && !ClosedRentalStatuses.Contains(w.Status) && w.Start < end && w.End > start), ct);
         if (!available) throw new InvalidOperationException("Vehicle is unavailable or unsafe.");
     }
@@ -75,8 +59,8 @@ public sealed class NpgsqlInspectionRecordRepository(NpgsqlDataSource dataSource
         await using var cn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await cn.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(cn, tx);
-        await LockOperationsAsync(db, ct);
-        var rental = await ReadRentalAsync(db, rentalId, ct);
+        await db.DispatcherLockAsync(ct);
+        var rental = await RentalReads.ReadLockedAsync(db, rentalId, ct);
         if (!await ActiveStaffAsync(db, staff, ct))
             throw new InvalidOperationException("Inspection staff was not found or is inactive.");
         var vehicle = replacementVehicle ?? rental.VehicleId;
@@ -115,34 +99,6 @@ public sealed class NpgsqlInspectionRecordRepository(NpgsqlDataSource dataSource
         await tx.CommitAsync(ct);
         return new(row.Id, rentalId, type, ok, odo, fuel, notes, images, inspectedAt, staff, vehicle);
     }
-
-    private static IQueryable<Rental> RentalQuery(VehicleRentalDbContext db, IQueryable<RentalsRow> rentals) =>
-        from r in rentals.AsNoTracking()
-        join h in db.Set<HourRentalDetailRow>() on r.Id equals h.RentalId into hourly
-        from h in hourly.DefaultIfEmpty()
-        join l in db.Set<LongtermRentalContractRow>() on r.Id equals l.RentalId into longterm
-        from l in longterm.DefaultIfEmpty()
-        select new Rental(r.Id, r.CustomerId, r.VehicleId, r.RentalType, r.Status, r.IsSubscription,
-            r.VatPrice, r.DepositPrice, r.OvertimePrice, r.TotalPrice,
-            (DateTime?)h.StartTime ?? l.StartTime, (DateTime?)h.EndTime ?? l.EndTime,
-            h.HourlyPriceSnapshot, l.MonthlyPriceSnapshot, (bool?)h.HasDriver ?? (bool?)l.HasDriver ?? false,
-            l.ContractLink == "/api/rentals/" + r.Id + "/contract/document"
-                ? "/api/rental/" + r.Id + "/contract/document" : l.ContractLink, l.SignedAt,
-            db.Set<RentalOrdersRow>().Where(o => o.RentalId == r.Id).Select(o => (int?)o.Id).FirstOrDefault(),
-            db.Set<InspectionsRow>().Any(i => i.RentalId == r.Id && i.VehicleId == r.VehicleId && i.InspectionType == "pre_rental" && i.IsOk == true),
-            db.Set<InspectionsRow>().Any(i => i.RentalId == r.Id && i.VehicleId == r.VehicleId && i.InspectionType == "post_rental"));
-
-    private static IQueryable<RentalWindow> RentalWindows(VehicleRentalDbContext db) =>
-        from r in db.Set<RentalsRow>()
-        join h in db.Set<HourRentalDetailRow>() on r.Id equals h.RentalId into hourly
-        from h in hourly.DefaultIfEmpty()
-        join l in db.Set<LongtermRentalContractRow>() on r.Id equals l.RentalId into longterm
-        from l in longterm.DefaultIfEmpty()
-        select new RentalWindow
-        {
-            RentalId = r.Id, VehicleId = r.VehicleId, Status = r.Status,
-            Start = (DateTime?)h.StartTime ?? l.StartTime, End = (DateTime?)h.EndTime ?? l.EndTime,
-        };
 
     private static Task<bool> ActiveStaffAsync(VehicleRentalDbContext db, int staffId, CancellationToken ct) =>
         (from s in db.Set<StaffsRow>() join u in db.Set<UsersRow>() on s.UserId equals u.Id
@@ -191,14 +147,4 @@ public sealed class NpgsqlInspectionRecordRepository(NpgsqlDataSource dataSource
     private static Task SetVehicleStatusAsync(VehicleRentalDbContext db, int vehicleId, string status, CancellationToken ct) =>
         db.Set<VehiclesRow>().Where(v => v.Id == vehicleId).ExecuteUpdateAsync(s => s.SetProperty(v => v.Status, status), ct);
     private static readonly string[] ClosedRentalStatuses = ["completed", "cancelled", "expired"];
-
-    /// <summary>Đơn thuê kèm lịch thuê theo giờ/dài hạn, có thể ghép trong LINQ.</summary>
-    private sealed class RentalWindow
-    {
-        public int RentalId { get; init; }
-        public int VehicleId { get; init; }
-        public string Status { get; init; } = "";
-        public DateTime? Start { get; init; }
-        public DateTime? End { get; init; }
-    }
 }

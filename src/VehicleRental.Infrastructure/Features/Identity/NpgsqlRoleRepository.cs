@@ -80,7 +80,7 @@ public sealed class NpgsqlRoleRepository(NpgsqlDataSource dataSource) : IRoleRep
         // Khớp thứ tự khóa của quản trị tài khoản. Khóa bảng còn tuần tự hóa các luồng ghi nhân
         // viên/đăng ký cũ không lấy advisory lock quản trị. Không cập nhật/khóa dòng users nào ở
         // đây: đổi tên vai trò đang được gán sẽ bị từ chối.
-        await db.AdvisoryLockAsync(724232001L, ct);
+        await db.DispatcherLockAsync(ct);
         await db.AdvisoryLockAsync(379123220L, ct);
         await db.LockTablesAsync("SHARE ROW EXCLUSIVE", ct, typeof(RolesRow), typeof(UserRolesRow));
         var role = await mutate(db);

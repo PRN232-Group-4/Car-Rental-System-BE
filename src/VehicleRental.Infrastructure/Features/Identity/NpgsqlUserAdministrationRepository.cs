@@ -109,7 +109,7 @@ public sealed class NpgsqlUserAdministrationRepository(NpgsqlDataSource dataSour
         await using var db = VehicleRentalDbContext.Create(connection, transaction);
         // Lấy khóa điều phối trước khi khóa tài khoản: việc kích hoạt và đổi vai trò tài xế không
         // được tranh chấp với kiểm tra tài xế còn trống trong transaction phân công.
-        await db.AdvisoryLockAsync(724232001L, ct);
+        await db.DispatcherLockAsync(ct);
         // Mọi thao tác đổi vai trò/trạng thái của quản trị viên đều lấy cùng khóa này trước khi khóa dòng.
         await db.AdvisoryLockAsync(379123220L, ct);
         if (!await ActiveAdmins(db).AnyAsync(u => u.Id == actorUserId, ct))

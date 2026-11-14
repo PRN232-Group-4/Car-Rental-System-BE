@@ -61,7 +61,7 @@ public sealed class NpgsqlStaffRepository(NpgsqlDataSource dataSource) : IStaffR
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
         await using var db = VehicleRentalDbContext.Create(connection, transaction);
-        await db.AdvisoryLockAsync(724232001L, ct);
+        await db.DispatcherLockAsync(ct);
         if (await db.LockByKeyAsync<UsersRow>(command.UserId, ct) is not { IsActive: true }) throw new StaffNotFoundException();
         if (await db.Set<StaffsRow>().AnyAsync(staff => staff.UserId == command.UserId, ct))
             throw new StaffConflictException("Tài khoản đã có hồ sơ nhân viên. Hãy mở hồ sơ để cập nhật.");

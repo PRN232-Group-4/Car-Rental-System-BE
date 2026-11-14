@@ -1,10 +1,9 @@
-using Car_Rental_System_BE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
-namespace Car_Rental_System_BE.Infrastructure.Features.Billing;
+namespace Car_Rental_System_BE.Infrastructure.Persistence;
 
-/// <summary>Các khoản hoàn tiền tự động dùng chung một chốt chặn theo đơn thuê. Bên gọi phải giữ khóa dòng đơn thuê.</summary>
+/// <summary>Các khoản hoàn tiền tự động dùng chung một chốt chặn theo đơn thuê. Bên gọi phải giữ khóa dòng đơn thuê. Helper dùng chung nên nằm trong nhân Persistence.</summary>
 internal static class RentalRefundWriter
 {
     public static async Task<int?> EnsureRefundAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
