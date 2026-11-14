@@ -6,6 +6,7 @@ using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.RentalPolicies;
 using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.WebApi.Controllers;
+using Car_Rental_System_BE.WebApi.Features.Rentals;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authentication;
@@ -46,7 +47,7 @@ public sealed class RentalPolicyStatusApiTests : IAsyncLifetime
             .ConfigureApplicationPartManager(parts =>
             {
                 parts.ApplicationParts.Clear();
-                parts.ApplicationParts.Add(new AssemblyPart(typeof(OperationsController).Assembly));
+                parts.ApplicationParts.Add(new AssemblyPart(typeof(RentalStatusController).Assembly));
             });
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(options => options.OperationFilter<ApiSuccessResponseOperationFilter>());

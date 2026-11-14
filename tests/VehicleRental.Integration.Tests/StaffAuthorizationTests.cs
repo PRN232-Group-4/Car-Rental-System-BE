@@ -1,3 +1,4 @@
+using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Organization;
 using Car_Rental_System_BE.Application.Interfaces.Repositories;
@@ -78,19 +79,21 @@ public sealed class StaffAuthorizationTests(PostgresFixture db) : IClassFixture<
     [Fact]
     public async Task Lifecycle_confirmation_is_allowed_but_status_endpoint_cannot_bypass_inspections()
     {
-        var operations = new NpgsqlOperationsRepository(db.DataSource);
+        var lifecycle = Scenarios.Lifecycle(db.DataSource);
         var rental = await Scenarios.CreateDirectRentalAsync(db.DataSource);
         // FR-036 permits staff approval before payment or pre-inspection, but does not
         // issue a paid order or permit handover without the required inspection.
-        var confirmed = await operations.ChangeRentalStatusAsync(rental.RentalId, "pre_inspection", default);
-        Assert.Equal("pre_inspection", confirmed.Status);
+        var confirmed = await lifecycle.ConfirmAsync(rental.RentalId, Scenarios.StaffActor, default);
+        Assert.Equal("pre_inspection", confirmed.ToStatus);
         Assert.NotNull(await Seed.ScalarAsync(db.DataSource, "SELECT confirmed_at FROM rentals WHERE id=$1", rental.RentalId));
         Assert.Equal(0, await Seed.CountAsync(db.DataSource, "SELECT COUNT(*) FROM rental_orders WHERE rental_id=$1", rental.RentalId));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => operations.ChangeRentalStatusAsync(rental.RentalId, "renting", default));
-        await Seed.ScalarAsync(db.DataSource, "UPDATE rentals SET status='renting' WHERE id=$1", rental.RentalId);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => operations.ChangeRentalStatusAsync(rental.RentalId, "post_inspection", default));
+        var start = await Assert.ThrowsAsync<ConflictException>(() => lifecycle.StartAsync(rental.RentalId, Scenarios.StaffActor, default));
+        Assert.Equal("PRE_INSPECTION_REQUIRED", start.Code);
+        // FR-018 puts the post-rental inspection guard on complete (return only records returned_at),
+        // so the refusal is asserted where the guard lives.
         await Seed.ScalarAsync(db.DataSource, "UPDATE rentals SET status='post_inspection' WHERE id=$1", rental.RentalId);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => operations.ChangeRentalStatusAsync(rental.RentalId, "completed", default));
+        var complete = await Assert.ThrowsAsync<ConflictException>(() => lifecycle.CompleteAsync(rental.RentalId, Scenarios.StaffActor, default));
+        Assert.Equal("POST_INSPECTION_REQUIRED", complete.Code);
     }
 
     [Fact]

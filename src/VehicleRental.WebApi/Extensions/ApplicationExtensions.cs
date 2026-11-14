@@ -60,11 +60,9 @@ public static class ApplicationExtensions
         services.AddScoped<IStaffService, StaffService>();
         services.AddScoped<IOrganizationService, OrganizationService>();
         services.AddScoped<IFleetService, FleetService>();
-        services.AddScoped<IOperationsService, OperationsService>();
         services.AddScoped<ISubscriptionService, SubscriptionService>();
         services.AddScoped<IUserAdministrationService, UserAdministrationService>();
         services.AddScoped<IDashboardService, DashboardService>();
-        services.AddScoped<IOperationsCompletionService, OperationsCompletionService>();
         services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IRatingService, RatingService>();
         services.AddScoped<IRecoveryService, RecoveryService>();

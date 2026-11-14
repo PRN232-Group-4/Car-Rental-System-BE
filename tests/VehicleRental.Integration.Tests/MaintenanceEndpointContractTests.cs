@@ -11,6 +11,7 @@ using Car_Rental_System_BE.Application.Features.Maintenances;
 using Car_Rental_System_BE.Infrastructure.Features.Maintenances;
 using Car_Rental_System_BE.WebApi.Features.Maintenances;
 using Car_Rental_System_BE.WebApi.Controllers;
+using Car_Rental_System_BE.WebApi.Features.Rentals;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authentication;
@@ -42,7 +43,6 @@ public sealed class MaintenanceEndpointContractTests : IAsyncLifetime
     private WebApplication _app = null!;
     private HttpClient _client = null!;
     private readonly StubMaintenanceService _maintenance = new();
-    private readonly StubCompletionService _completion = new();
 
     public async Task InitializeAsync()
     {
@@ -53,7 +53,6 @@ public sealed class MaintenanceEndpointContractTests : IAsyncLifetime
         builder.Services.AddAuthentication("MaintenanceTest").AddScheme<AuthenticationSchemeOptions, RoleAuth>("MaintenanceTest", _ => { });
         builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
         builder.Services.AddSingleton<IMaintenanceService>(_maintenance);
-        builder.Services.AddSingleton<IOperationsCompletionService>(_completion);
         builder.Services.AddControllers(options => options.Filters.Add<ApiSuccessResponseFilter>())
             .AddApplicationPart(typeof(MaintenanceController).Assembly);
         _app = builder.Build();
@@ -120,19 +119,23 @@ public sealed class MaintenanceEndpointContractTests : IAsyncLifetime
     }
 
     [Fact]
-    public void OperationsController_no_longer_declares_any_maintenance_route()
+    public void No_other_controller_declares_a_maintenance_route()
     {
-        var operationsTemplates = _app.Services.GetRequiredService<IActionDescriptorCollectionProvider>()
+        // The legacy operations controller is gone; this keeps the guard that its maintenance actions did not
+        // reappear anywhere: every api/maintenance route is declared by the maintenance controller alone. The
+        // deprecated status controller is the only remnant of the legacy controller, so the reflection checks stay.
+        var maintenanceRouteOwners = _app.Services.GetRequiredService<IActionDescriptorCollectionProvider>()
             .ActionDescriptors.Items.OfType<ControllerActionDescriptor>()
-            .Where(descriptor => descriptor.ControllerName == "Operations")
-            .Select(descriptor => descriptor.AttributeRouteInfo?.Template ?? "")
+            .Where(descriptor => (descriptor.AttributeRouteInfo?.Template ?? "").StartsWith("api/maintenance", StringComparison.Ordinal))
+            .Select(descriptor => descriptor.ControllerName)
+            .Distinct()
             .ToList();
 
-        Assert.DoesNotContain(operationsTemplates, template => template.Contains("maintenance", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(new[] { "Maintenance" }, maintenanceRouteOwners);
         Assert.Equal(3, ActionDescriptors().Count);
-        Assert.Null(typeof(OperationsController).GetMethod("MaintenanceList"));
-        Assert.Null(typeof(OperationsController).GetMethod("AddMaintenance"));
-        Assert.Null(typeof(OperationsController).GetMethod("EditMaintenance"));
+        Assert.Null(typeof(RentalStatusController).GetMethod("MaintenanceList"));
+        Assert.Null(typeof(RentalStatusController).GetMethod("AddMaintenance"));
+        Assert.Null(typeof(RentalStatusController).GetMethod("EditMaintenance"));
     }
 
     // ---------------------------------------------------------------------------------------------------------
@@ -381,20 +384,11 @@ public sealed class MaintenanceEndpointContractTests : IAsyncLifetime
 
         public Task<IReadOnlyList<Maintenance>> ListMaintenanceAsync(int? vehicleId, string? status, CancellationToken ct)
             => Task.FromResult<IReadOnlyList<Maintenance>>([]);
-    }
 
-    private sealed class StubCompletionService : IOperationsCompletionService
-    {
+        // The paged queue now reads through this slice instead of the deleted operations completion service.
         public Task<OperationsPage<Maintenance>> MaintenanceAsync(int? vehicleId, string? status, DateTime? from, DateTime? to,
             OperationsPagination pagination, CancellationToken ct)
             => Task.FromResult(new OperationsPage<Maintenance>([], pagination.Page, pagination.PageSize, 0));
-
-        public Task<OperationsPage<DriverScheduleEntry>> DriverScheduleAsync(int? driverId, DateTime from, DateTime to, OperationsPagination pagination, CancellationToken ct) => throw new NotSupportedException();
-        public Task<OperationsPage<IncidentReport>> ReportsAsync(int? staffId, int? rentalId, string? status, OperationsPagination pagination, CancellationToken ct) => throw new NotSupportedException();
-        public Task<IncidentReport> SetReportStatusAsync(int id, ReportStatusRequest request, string actor, CancellationToken ct) => throw new NotSupportedException();
-        public Task<OperationsPage<StaffRating>> RatingsAsync(int staffId, OperationsPagination pagination, CancellationToken ct) => throw new NotSupportedException();
-        public Task<StaffRating> ModerateRatingAsync(int id, RatingModerationRequest request, string actor, CancellationToken ct) => throw new NotSupportedException();
-        public Task<StaffRating> ReplyRatingAsync(int id, RatingReplyRequest request, string actor, CancellationToken ct) => throw new NotSupportedException();
     }
 
     public sealed class RoleAuth(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)

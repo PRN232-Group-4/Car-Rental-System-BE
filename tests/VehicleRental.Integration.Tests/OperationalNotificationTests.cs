@@ -269,7 +269,6 @@ public sealed class OperationalNotificationTests
         var sender = new Sender();
         var notifications = Notifications(sender);
         var error = new InvalidOperationException("Business rule failed");
-        var operations = new OperationsService(Proxy<IOperationsRepository>((_, _) => throw error), notifications: notifications);
         var reports = new ReportService(Proxy<IReportRepository>((_, _) => throw error), notifications);
         var licenses = new CustomerLicenseService(Proxy<ICustomerLicenseRepository>((_, _) => throw error), notifications: notifications);
         var payment = new PaymentService(Proxy<IPaymentRepository>((_, _) => throw error), null!, new("https://test.local", "https://test.local"), notifications);

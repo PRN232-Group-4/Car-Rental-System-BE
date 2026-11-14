@@ -12,7 +12,6 @@ namespace VehicleRental.Tests;
 
 public sealed class DriverAssignmentTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
-    private readonly NpgsqlOperationsRepository _operations = new(db.DataSource);
     private readonly NpgsqlRentalBookingRepository _bookings = new(db.DataSource);
     private readonly NpgsqlInspectionRecordRepository _inspections = new(db.DataSource);
     private readonly NpgsqlAssignmentRepository _assignments = new(db.DataSource);
@@ -51,7 +50,8 @@ public sealed class DriverAssignmentTests(PostgresFixture db) : IClassFixture<Po
         await _assignments.SaveDriverShiftAsync(null,driverId,booked.StartTime!.Value,booked.EndTime!.Value,false,assignedBy,default);
         await service.AssignDriverAsync(new(rental.RentalId, driverId, "initial", null, assignedBy), CancellationToken.None);
 
-        var schedule = await _operations.ListDriverScheduleAsync(driverId, DateTime.UtcNow, DateTime.UtcNow.AddDays(1), CancellationToken.None);
+        // The unpaged duplicate query is gone: the paged queue the API serves is the one schedule read left.
+        var schedule = (await _assignments.DriverScheduleAsync(driverId, DateTime.UtcNow, DateTime.UtcNow.AddDays(1), new(), CancellationToken.None)).Items;
 
         Assert.Contains(schedule, item => item.RentalId == rental.RentalId && item.DriverStaffId == driverId);
         var entry=Assert.Single(schedule,x=>x.RentalId==rental.RentalId);

@@ -12,6 +12,7 @@ using Car_Rental_System_BE.Infrastructure.Features.Inspections;
 using Car_Rental_System_BE.Infrastructure.Features.Recovery;
 using Car_Rental_System_BE.Infrastructure.Repositories;
 using Car_Rental_System_BE.WebApi.Controllers;
+using Car_Rental_System_BE.WebApi.Features.Rentals;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authentication;
@@ -56,7 +57,6 @@ public sealed class InspectionAndRecoveryEndpointTests(PostgresFixture db) : ICl
         builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
 
         // The real composition, wired to the throwaway database instead of the production configuration.
-        builder.Services.AddSingleton<IOperationsService>(new OperationsService(new NpgsqlOperationsRepository(db.DataSource)));
         builder.Services.AddSingleton<IInspectionRecordService>(
             new InspectionRecordService(new NpgsqlInspectionRecordRepository(db.DataSource)));
         builder.Services.AddSingleton<IRecoveryService>(
@@ -67,7 +67,7 @@ public sealed class InspectionAndRecoveryEndpointTests(PostgresFixture db) : ICl
             .ConfigureApplicationPartManager(parts =>
             {
                 parts.ApplicationParts.Clear();
-                parts.ApplicationParts.Add(new AssemblyPart(typeof(OperationsController).Assembly));
+                parts.ApplicationParts.Add(new AssemblyPart(typeof(RentalStatusController).Assembly));
             });
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(options => options.OperationFilter<ApiSuccessResponseOperationFilter>());

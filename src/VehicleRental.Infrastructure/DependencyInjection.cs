@@ -114,7 +114,6 @@ public static class DependencyInjection
         services.AddScoped<IInspectionDirectoryRepository, NpgsqlInspectionDirectoryRepository>();
         services.AddScoped<IInspectionRecordRepository, NpgsqlInspectionRecordRepository>();
         services.AddScoped<IFleetRepository, NpgsqlFleetRepository>();
-        services.AddScoped<IOperationsRepository, NpgsqlOperationsRepository>();
         services.AddScoped<ISubscriptionRepository, NpgsqlSubscriptionRepository>();
         services.AddScoped<IMaintenanceRepository, NpgsqlMaintenanceRepository>();
         services.AddScoped<IUserAdministrationRepository, NpgsqlUserAdministrationRepository>();
@@ -122,7 +121,6 @@ public static class DependencyInjection
         services.AddScoped<IRoleRepository, NpgsqlRoleRepository>();
         services.AddScoped<IDashboardRepository, NpgsqlDashboardRepository>();
         services.AddScoped<INavigationCountsRepository, NpgsqlNavigationCountsRepository>();
-        services.AddScoped<IOperationsCompletionRepository, NpgsqlOperationsCompletionRepository>();
         services.AddScoped<IReportRepository, NpgsqlReportRepository>();
         services.AddScoped<IRatingRepository, NpgsqlRatingRepository>();
         services.AddScoped<IRecoveryRepository, NpgsqlRecoveryRepository>();

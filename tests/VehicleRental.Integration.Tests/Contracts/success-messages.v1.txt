@@ -104,8 +104,8 @@
 /api/devices | Devices.Register | POST | 200 | inspectionType=post_rental | Tracking device registered successfully.
 /api/devices | Devices.Register | POST | 201 | - | Tracking device registered successfully.
 /api/devices | Devices.Register | POST | 201 | inspectionType=post_rental | Tracking device registered successfully.
-/api/drivers/schedule | Operations.DriverSchedule | GET | 200 | - | Driver schedule retrieved successfully.
-/api/drivers/schedule | Operations.DriverSchedule | GET | 200 | inspectionType=post_rental | Driver schedule retrieved successfully.
+/api/drivers/schedule | DriverSchedule.DriverSchedule | GET | 200 | - | Driver schedule retrieved successfully.
+/api/drivers/schedule | DriverSchedule.DriverSchedule | GET | 200 | inspectionType=post_rental | Driver schedule retrieved successfully.
 /api/drivers/shift/{id:int} | DriverShifts.UpdateShift | PUT | 200 | - | Driver duty shift updated successfully.
 /api/drivers/shift/{id:int} | DriverShifts.UpdateShift | PUT | 200 | inspectionType=post_rental | Driver duty shift updated successfully.
 /api/drivers/shifts | DriverShifts.CreateShift | POST | 200 | - | Driver duty shift created successfully.
@@ -264,8 +264,8 @@
 /api/rental/{id:int}/return | RentalLifecycle.Return | POST | 200 | inspectionType=post_rental | Vehicle return recorded successfully.
 /api/rental/{id:int}/start | RentalLifecycle.Start | POST | 200 | - | Rental started successfully.
 /api/rental/{id:int}/start | RentalLifecycle.Start | POST | 200 | inspectionType=post_rental | Rental started successfully.
-/api/rental/{id:int}/status/{status} | Operations.Status | POST | 200 | - | Rental status updated successfully.
-/api/rental/{id:int}/status/{status} | Operations.Status | POST | 200 | inspectionType=post_rental | Rental status updated successfully.
+/api/rental/{id:int}/status/{status} | RentalStatus.Status | POST | 200 | - | Rental status updated successfully.
+/api/rental/{id:int}/status/{status} | RentalStatus.Status | POST | 200 | inspectionType=post_rental | Rental status updated successfully.
 /api/rental/{rentalId:int}/invoice | Invoices.CreateInvoice | POST | 200 | - | Invoice created successfully.
 /api/rental/{rentalId:int}/invoice | Invoices.CreateInvoice | POST | 200 | inspectionType=post_rental | Invoice created successfully.
 /api/rental/{rentalId:int}/invoice | Invoices.CreateInvoice | POST | 201 | - | Invoice created successfully.

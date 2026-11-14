@@ -4,10 +4,12 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Application.Features.Assignments;
 using Car_Rental_System_BE.Application.Features.Maintenances;
 using Car_Rental_System_BE.Application.Features.Subscriptions;
 using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.WebApi.Controllers;
+using Car_Rental_System_BE.WebApi.Features.Rentals;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Microsoft.AspNetCore.Authentication;
@@ -49,12 +51,12 @@ public sealed class OperationsEndpointContractTests : IAsyncLifetime
         builder.Services.AddAuthentication("OperationsContract").AddScheme<AuthenticationSchemeOptions, TestAuthentication>("OperationsContract", _ => { });
         builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
         builder.Services.AddSingleton(DispatchProxy.Create<ISubscriptionService, SubscriptionStore>());
-        builder.Services.AddSingleton(DispatchProxy.Create<IOperationsCompletionService, QueueStore>());
-        // MaintenanceController resolves the maintenance slice for its two commands; the paged queue goes
-        // through the completion service, which the same proxy answers.
+        // The two paged queues moved owner: the driver schedule is served by the assignments slice and the
+        // maintenance queue by the maintenances slice; the same proxy answers both by method name.
+        builder.Services.AddSingleton(DispatchProxy.Create<IAssignmentService, QueueStore>());
         builder.Services.AddSingleton(DispatchProxy.Create<IMaintenanceService, QueueStore>());
         builder.Services.AddControllers(options => options.Filters.Add<ApiSuccessResponseFilter>())
-            .AddApplicationPart(typeof(OperationsController).Assembly);
+            .AddApplicationPart(typeof(RentalStatusController).Assembly);
         _app = builder.Build();
         _app.UseApiResponseErrors();
         _app.UseAuthentication();

@@ -1,30 +1,28 @@
-using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.DTOs.Operations;
-using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Application.Features.Rentals;
 using Car_Rental_System_BE.Domain.Entities;
+using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Car_Rental_System_BE.WebApi.Controllers;
+namespace Car_Rental_System_BE.WebApi.Features.Rentals;
 
+/// <summary>
+/// The deprecated status endpoint that used to live on the dissolved operations controller. It keeps its original
+/// route, verb, CustomerService policy, Deprecation header and flat <see cref="Rental"/> response, and it does not
+/// run a state machine of its own: every accepted status delegates to <see cref="IRentalLifecycleService"/>.
+/// </summary>
 [ApiController]
 [Route("api")]
-public sealed class OperationsController(
-    IOperationsCompletionService? completion = null,
-    // Only the deprecated POST /api/rental/{id}/status/{status} needs these two; the runtime always registers
-    // them (Program.cs/Infrastructure) and they stay optional so hosts and tests that only exercise the other
-    // endpoints of this controller keep working unchanged.
+public sealed class RentalStatusController(
+    // The runtime always registers all three; they stay optional so hosts and tests that only map the other
+    // rental endpoints keep working unchanged.
     IRentalLifecycleService? lifecycle = null,
     ICurrentCustomer? currentCustomer = null,
-    // The deprecated status endpoint reloads its answer through the rental booking read; see above.
     IRentalBookingService? bookings = null) : ControllerBase
 {
-    [OperationDescription(" Pagination for list operations defaults to page=1/pageSize=20; page>=1, pageSize 1..100. Invalid values return 400 at HTTP and Application boundaries. data contains items/page/pageSize/totalCount, totalCount is after filters; out-of-range pages retain the count with empty items.", DocumentsPaginationParameters = true)]
-    [SuccessMessage("Driver schedule retrieved successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.DriverSchedule)] [HttpGet("drivers/schedule")] [ProducesResponseType<OperationsPage<DriverScheduleEntry>>(StatusCodes.Status200OK)] [ProducesResponseType(StatusCodes.Status400BadRequest)] public async Task<IActionResult> DriverSchedule([FromQuery]int? driverStaffId,[FromQuery]DateTime from,[FromQuery]DateTime to,[FromQuery]OperationsPagination pagination,CancellationToken ct){if(to<=from)return Problem("End time must be after start time.",statusCode:StatusCodes.Status400BadRequest);if(!AuthorizationPolicies.CanManage(User)){var own=AuthorizationPolicies.StaffId(User);if(own is null || (driverStaffId is not null && driverStaffId!=own))return Forbid();driverStaffId=own;}return Ok(await Completion.DriverScheduleAsync(driverStaffId,from,to,pagination,ct));}
     /// <summary>
     /// Deprecated. Kept at its original route, verb, policy and response shape, but it no longer runs a second
     /// state machine: every accepted status is delegated to the single lifecycle implementation
@@ -36,7 +34,7 @@ public sealed class OperationsController(
     [OperationDescription("Deprecated (Deprecation: true header). The route, the POST verb, the CustomerService policy and the flat Rental response shape are unchanged, but this endpoint no longer changes the status on its own: pre_inspection, renting, post_inspection, completed and cancelled delegate to the single rental lifecycle service (confirm, start, return, complete, cancel), which writes rental_status_history. completed therefore runs the full settlement (package hour deduction, overtime/supplementary invoice, deposit refund, loyalty points, formal rental order), cancelled applies the cancellation fee and refund policy, and renting requires an approved, unexpired customer licence for self-drive rentals. Lifecycle business-rule failures return 409 with the lifecycle code (ALREADY_IN_STATE, ILLEGAL_TRANSITION, PAYMENT_REQUIRED, PRE_INSPECTION_REQUIRED, ASSIGNMENT_REQUIRED, CUSTOMER_LICENSE_NOT_VALID, POST_INSPECTION_REQUIRED, SIGNED_CONTRACT_REQUIRED); any other status value returns 400 naming the accepted statuses.")]
     [SuccessMessage("Rental status updated successfully.")]
     [Obsolete("Use dedicated lifecycle endpoints: POST /api/rental/{id}/confirm, start, return, complete, cancel instead.")]
-    [Authorize(Policy=AuthorizationPolicies.CustomerService)]
+    [Authorize(Policy = AuthorizationPolicies.CustomerService)]
     [HttpPost("rental/{id:int}/status/{status}")]
     [ProducesResponseType<Rental>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -44,7 +42,7 @@ public sealed class OperationsController(
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Status(int id, string status, CancellationToken ct)
     {
-        Response.Headers.Append("Deprecation","true");
+        Response.Headers.Append("Deprecation", "true");
         var actor = await ResolveActorAsync(ct);
         switch (status?.Trim().ToLowerInvariant())
         {
@@ -67,8 +65,6 @@ public sealed class OperationsController(
             ? Ok(rental)
             : Problem("Rental was not found.", statusCode: StatusCodes.Status404NotFound);
     }
-
-    private IOperationsCompletionService Completion => completion ?? throw new InvalidOperationException("Operations completion service is not configured.");
 
     private IRentalBookingService Bookings => bookings ?? throw new InvalidOperationException("Rental booking service is not configured.");
 
@@ -99,5 +95,4 @@ public sealed class OperationsController(
 
         return new ActorContext(userId, email, role);
     }
-
 }

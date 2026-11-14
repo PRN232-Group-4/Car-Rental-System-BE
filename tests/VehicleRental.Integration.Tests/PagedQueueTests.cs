@@ -1,47 +1,52 @@
 using Car_Rental_System_BE.Application.DTOs.Operations;
+using Car_Rental_System_BE.Application.Features.Assignments;
+using Car_Rental_System_BE.Application.Features.Maintenances;
 using Car_Rental_System_BE.Application.Features.Ratings;
 using Car_Rental_System_BE.Application.Features.Reports;
-using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Infrastructure.Features.Assignments;
 using Car_Rental_System_BE.Infrastructure.Features.Inspections;
 using Car_Rental_System_BE.Infrastructure.Features.Maintenances;
 using Car_Rental_System_BE.Infrastructure.Features.Ratings;
 using Car_Rental_System_BE.Infrastructure.Features.Reports;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
-using Car_Rental_System_BE.Infrastructure.Repositories;
 using Xunit;
 
 namespace VehicleRental.Tests;
 
-public sealed class OperationsCompletionValidationTests
+/// <summary>
+/// The paged driver schedule moved to the assignments slice and the paged maintenance queue to the maintenances
+/// slice; both keep the validation the deleted operations completion service ran before it touched storage.
+/// </summary>
+public sealed class PagedQueueValidationTests
 {
     [Theory]
     [InlineData(0,20)] [InlineData(-1,20)] [InlineData(1,0)] [InlineData(1,101)]
     public void Rejects_invalid_pagination_before_io(int page,int size)
     {
-        var service=new OperationsCompletionService(null!);
+        var assignments=new AssignmentService(null!,null!,new AssignmentOptions(),TimeProvider.System);
+        var maintenances=new MaintenanceService(null!);
         var reports=new ReportService(null!);
         var ratings=new RatingService(null!);
         Assert.Throws<ArgumentException>(()=>{ _=reports.ReportsAsync(null,null,null,new(){Page=page,PageSize=size},default); });
         Assert.Throws<ArgumentException>(()=>{ _=ratings.RatingsAsync(1,new(){Page=page,PageSize=size},default); });
-        Assert.Throws<ArgumentException>(()=>{ _=service.MaintenanceAsync(null,null,null,null,new(){Page=page,PageSize=size},default); });
-        Assert.Throws<ArgumentException>(()=>{ _=service.DriverScheduleAsync(null,DateTime.UtcNow,DateTime.UtcNow.AddHours(1),new(){Page=page,PageSize=size},default); });
+        Assert.Throws<ArgumentException>(()=>{ _=maintenances.MaintenanceAsync(null,null,null,null,new(){Page=page,PageSize=size},default); });
+        Assert.Throws<ArgumentException>(()=>{ _=assignments.DriverScheduleAsync(null,DateTime.UtcNow,DateTime.UtcNow.AddHours(1),new(){Page=page,PageSize=size},default); });
     }
     [Fact]
     public async Task Rejects_blank_reason_and_invalid_transitions_before_io()
     {
-        var service=new OperationsCompletionService(null!);
+        var maintenances=new MaintenanceService(null!);
         var reports=new ReportService(null!);
         var ratings=new RatingService(null!);
         Assert.Throws<ArgumentException>(()=>{ _=ratings.ModerateRatingAsync(1,new("hidden"," "),"admin",default); });
         Assert.Throws<ArgumentException>(()=>{ _=ratings.ModerateRatingAsync(1,new("deleted","reason"),"admin",default); });
         Assert.Throws<ArgumentException>(()=>{ _=ratings.ReplyRatingAsync(1,new(" "),"admin",default); });
         await Assert.ThrowsAsync<ArgumentException>(()=>reports.SetReportStatusAsync(1,new("resolved","reason"),"admin",default));
-        Assert.Throws<ArgumentException>(()=>{ _=service.MaintenanceAsync(null,null,DateTime.Today,DateTime.Today,new(),default); });
+        Assert.Throws<ArgumentException>(()=>{ _=maintenances.MaintenanceAsync(null,null,DateTime.Today,DateTime.Today,new(),default); });
     }
 }
 
-public sealed class OperationsCompletionIntegrationTests(PostgresFixture db) : IClassFixture<PostgresFixture>
+public sealed class AssignmentScheduleAndMaintenanceQueueTests(PostgresFixture db) : IClassFixture<PostgresFixture>
 {
     private readonly NpgsqlRentalBookingRepository store=new(db.DataSource);
     private readonly NpgsqlInspectionRecordRepository inspectionsStore=new(db.DataSource);
@@ -50,7 +55,8 @@ public sealed class OperationsCompletionIntegrationTests(PostgresFixture db) : I
     private readonly NpgsqlReportRepository reportsStore=new(db.DataSource);
     private readonly ReportService reportsService=new(new NpgsqlReportRepository(db.DataSource));
     private readonly RatingService ratingService=new(new NpgsqlRatingRepository(db.DataSource));
-    private readonly OperationsCompletionService service=new(new NpgsqlOperationsCompletionRepository(db.DataSource));
+    private AssignmentService Assignments => new(assignments,null!,new AssignmentOptions(),TimeProvider.System);
+    private MaintenanceService Maintenances => new(maintenanceStore);
 
     private async Task<int> Staff(bool technician=false,bool driver=false)
     {
@@ -70,13 +76,13 @@ public sealed class OperationsCompletionIntegrationTests(PostgresFixture db) : I
         await inspectionsStore.AddInspectionAsync(rental.Id,driver,"pre_rental",true,null,null,null,null,default);
         // Same row the deleted lax AssignAsync wrote; the assignment is only this schedule read's precondition.
         await Seed.ScalarAsync(db.DataSource,"INSERT INTO vehicle_assignments(rental_id,vehicle_id,driver_staff_id,status,assigned_by) SELECT id,vehicle_id,$2,'assigned',$3 FROM rentals WHERE id=$1",rental.Id,driver,"manager@test.local");
-        var page=await service.DriverScheduleAsync(driver,rental.StartTime.Value,rental.EndTime.Value,new(){PageSize=1},default);
+        var page=await Assignments.DriverScheduleAsync(driver,rental.StartTime.Value,rental.EndTime.Value,new(){PageSize=1},default);
         var item=Assert.Single(page.Items);
         Assert.Equal(1,page.TotalCount);
         Assert.Equal(driver,item.DriverStaffId);
         Assert.Equal(rental.Id,item.RentalId);
         Assert.NotNull(item.VehicleName);
-        var empty=await service.DriverScheduleAsync(driver,rental.StartTime.Value,rental.EndTime.Value,new(){Page=int.MaxValue,PageSize=100},default);
+        var empty=await Assignments.DriverScheduleAsync(driver,rental.StartTime.Value,rental.EndTime.Value,new(){Page=int.MaxValue,PageSize=100},default);
         Assert.Empty(empty.Items);Assert.Equal(1,empty.TotalCount);
     }
 
@@ -107,7 +113,7 @@ public sealed class OperationsCompletionIntegrationTests(PostgresFixture db) : I
         Assert.Equal("assigned",Assert.Single((await reportsService.ReportsAsync(staff,scenario.RentalId,null,new(),default)).Items).Status);
         var empty=await reportsService.ReportsAsync(staff,scenario.RentalId,null,new(){Page=int.MaxValue,PageSize=100},default);
         Assert.Empty(empty.Items); Assert.Equal(1,empty.TotalCount);
-        var jobs=await service.MaintenanceAsync(maintenance.VehicleId,"scheduled",maintenance.CreatedAt!.Value.AddMinutes(-1),maintenance.CreatedAt.Value.AddMinutes(1),new(){PageSize=1},default);
+        var jobs=await Maintenances.MaintenanceAsync(maintenance.VehicleId,"scheduled",maintenance.CreatedAt!.Value.AddMinutes(-1),maintenance.CreatedAt.Value.AddMinutes(1),new(){PageSize=1},default);
         Assert.Equal(maintenance.Id,Assert.Single(jobs.Items).Id); Assert.Equal(1,jobs.TotalCount);
     }
 

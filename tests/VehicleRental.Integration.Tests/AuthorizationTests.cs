@@ -52,11 +52,17 @@ public sealed class AuthorizationTests
             Assert.Equal(allowed, await AuthorizeEndpoint<StaffController>(action, Principal(role)));
     }
 
+    /// <summary>
+    /// The driver schedule moved to DriverScheduleController and keeps the DriverSchedule policy it had on the
+    /// dissolved operations controller; the deprecated status endpoint lives on RentalStatusController.
+    /// </summary>
     [Theory]
-    [InlineData("DriverSchedule", "CustomerService", false)]
-    [InlineData("DriverSchedule", "Driver", true)]
-    public async Task Operations_enforce_capability_matrix(string action, string role, bool allowed) =>
-        Assert.Equal(allowed, await AuthorizeEndpoint<OperationsController>(action, Principal(role, 7)));
+    [InlineData("CustomerService", false)]
+    [InlineData("Driver", true)]
+    [InlineData("Manager", true)]
+    [InlineData("Maintenance", false)]
+    public async Task Driver_schedule_keeps_the_policy_it_moved_with(string role, bool allowed) =>
+        Assert.Equal(allowed, await AuthorizeEndpoint<DriverScheduleController>("DriverSchedule", Principal(role, 7)));
 
     /// <summary>
     /// The six subscription-plan actions moved to SubscriptionPlansController and keep the policies they had on
@@ -284,10 +290,11 @@ public sealed class AuthorizationTests
         Assert.Equal(7, calls.Calls.Single().Arguments[1]);
     }
 
+    /// <summary>The driver schedule moved to DriverScheduleController, which reads the assignments slice.</summary>
     [Fact]
     public async Task Driver_schedule_forces_own_staff_id_and_rejects_other_driver()
     {
-        var controller = Controller(Principal("Driver", 7), out var calls);
+        var controller = DriverScheduleController(Principal("Driver", 7), out var calls);
         var from = DateTime.UtcNow;
         Assert.IsType<ForbidResult>(await controller.DriverSchedule(8, from, from.AddDays(1), new(), default));
         Assert.Empty(calls.Calls);
@@ -348,13 +355,11 @@ public sealed class AuthorizationTests
         return new(new InspectionRecordService(records)) { ControllerContext = new() { HttpContext = new DefaultHttpContext { User = principal } } };
     }
 
-    private static OperationsController Controller(ClaimsPrincipal principal, out RepositorySpy spy)
+    private static DriverScheduleController DriverScheduleController(ClaimsPrincipal principal, out RepositorySpy spy)
     {
-        var store = DispatchProxy.Create<IOperationsRepository, RepositorySpy>();
-        spy = (RepositorySpy)store;
-        var completion = DispatchProxy.Create<IOperationsCompletionRepository, RepositorySpy>();
-        ((RepositorySpy)completion).Calls = spy.Calls;
-        return new(new Car_Rental_System_BE.Application.Services.OperationsCompletionService(completion)) { ControllerContext = new() { HttpContext = new DefaultHttpContext { User = principal } } };
+        var assignments = DispatchProxy.Create<Car_Rental_System_BE.Application.Features.Assignments.IAssignmentService, RepositorySpy>();
+        spy = (RepositorySpy)assignments;
+        return new(assignments) { ControllerContext = new() { HttpContext = new DefaultHttpContext { User = principal } } };
     }
 
     public class RepositorySpy : DispatchProxy
@@ -366,7 +371,6 @@ public sealed class AuthorizationTests
             return targetMethod.Name switch
             {
                 "AddInspectionAsync" => Task.FromResult(new Inspection(1, 1, "pre_rental", true, null, null, null, null, null)),
-                "ListDriverScheduleAsync" => Task.FromResult<IReadOnlyList<DriverScheduleEntry>>([]),
                 "DriverScheduleAsync" => Task.FromResult(new OperationsPage<DriverScheduleEntry>([],1,20,0)),
                 _ => throw new NotSupportedException(targetMethod.Name)
             };

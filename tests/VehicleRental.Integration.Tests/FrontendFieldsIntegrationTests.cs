@@ -16,7 +16,6 @@ public sealed class FrontendFieldsIntegrationTests(PostgresFixture db) : IClassF
     [Fact]
     public async Task Catalog_metadata_and_facility_contact_round_trip_without_fabricated_defaults()
     {
-        var repo = new NpgsqlOperationsRepository(db.DataSource);
         var fleet = new NpgsqlFleetRepository(db.DataSource);
         var organization = new NpgsqlOrganizationRepository(db.DataSource);
         var facility = await organization.SaveFacilityAsync(null,"Contact branch","Address",default,"0901234567");
@@ -47,7 +46,6 @@ public sealed class FrontendFieldsIntegrationTests(PostgresFixture db) : IClassF
     [Fact]
     public async Task My_rental_list_and_detail_share_actions_contact_and_subscription_usage()
     {
-        var repo=new NpgsqlOperationsRepository(db.DataSource);
         var bookings=new NpgsqlRentalBookingRepository(db.DataSource);
         var organization=new NpgsqlOrganizationRepository(db.DataSource);
         var (customer,email)=await Seed.CustomerAsync(db.DataSource);

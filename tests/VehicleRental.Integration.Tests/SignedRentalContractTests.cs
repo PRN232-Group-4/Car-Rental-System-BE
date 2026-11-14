@@ -32,7 +32,6 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
     private static readonly byte[] Pdf = Encoding.ASCII.GetBytes("%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
     private WebApplication _app = null!;
     private HttpClient _client = null!;
-    private NpgsqlOperationsRepository Operations => new(db.DataSource);
     private NpgsqlRentalEditingRepository Editing => new(db.DataSource);
     private NpgsqlRentalBookingRepository Bookings => new(db.DataSource);
     private NpgsqlRentalContractDocumentRepository Documents => new(db.DataSource);

@@ -170,7 +170,6 @@ public sealed class OperationalDirectoryTests(PostgresFixture db):IClassFixture<
         builder.Services.AddProblemDetails();builder.Services.AddAuthentication("directory").AddScheme<AuthenticationSchemeOptions,TestAuthentication>("directory",_=>{});
         builder.Services.AddAuthorization(AuthorizationPolicies.Configure);
         builder.Services.AddSingleton<IInspectionDirectoryService>(new InspectionDirectoryService(new NpgsqlInspectionDirectoryRepository(db.DataSource)));
-        builder.Services.AddSingleton<IOperationsService>(new OperationsService(new NpgsqlOperationsRepository(db.DataSource)));
         // The vehicle endpoints moved to the Fleet slice, so they resolve IFleetService: the directory test
         // reads /api/vehicle/{id} and /api/vehicles through it.
         builder.Services.AddSingleton<IFleetService>(new FleetService(new NpgsqlFleetRepository(db.DataSource)));

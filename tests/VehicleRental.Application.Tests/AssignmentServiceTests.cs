@@ -1,3 +1,4 @@
+using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Assignments;
 using Car_Rental_System_BE.Application.Features.Availability;
 using Car_Rental_System_BE.Application.Common.Errors;
@@ -230,6 +231,9 @@ public sealed class AssignmentServiceTests
             LastListedDriverId = driverId;
             return Task.FromResult<IReadOnlyList<DriverShift>>(Shifts.Where(x => driverId == null || x.DriverStaffId == driverId).ToList());
         }
+
+        public Task<OperationsPage<DriverScheduleEntry>> DriverScheduleAsync(int? driverId, DateTime from, DateTime to, OperationsPagination pagination, CancellationToken ct)
+            => Task.FromResult(new OperationsPage<DriverScheduleEntry>([], pagination.Page, pagination.PageSize, 0));
     }
 
     private sealed class StubAvailabilityService : IVehicleAvailabilityService

@@ -1,5 +1,6 @@
 using Car_Rental_System_BE.WebApi.Controllers;
 using Car_Rental_System_BE.WebApi.Features.RentalPolicies;
+using Car_Rental_System_BE.WebApi.Features.Rentals;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.WebApi.Middlewares.Responses;
 using Car_Rental_System_BE.Application.DTOs.Accounts;
@@ -94,13 +95,13 @@ public sealed class UnitTests
     {
         // "Assign" was the deprecated POST /api/rental/{id}/assignments action. It no longer exists: driver
         // assignment is owned by RentalAssignmentsController, which this matrix does not cover. The three
-        // policy actions moved to RentalPoliciesController and DriverSchedule stayed behind, so each endpoint
-        // is looked up on the controller that actually owns it now.
+        // policy actions moved to RentalPoliciesController and the driver schedule to DriverScheduleController,
+        // so each endpoint is looked up on the controller that actually owns it now.
         var endpoints = new[]
         {
             (Controller: typeof(RentalPoliciesController), Action: "Policies"),
             (Controller: typeof(RentalPoliciesController), Action: "AddPolicy"),
-            (Controller: typeof(OperationsController), Action: "DriverSchedule")
+            (Controller: typeof(Car_Rental_System_BE.WebApi.Features.Assignments.DriverScheduleController), Action: "DriverSchedule")
         };
 
         foreach (var (controller, endpoint) in endpoints)
@@ -118,7 +119,7 @@ public sealed class UnitTests
             Assert.Contains("Admin", roles);
         }
 
-        Assert.Null(typeof(OperationsController).GetMethod("EditPolicy", BindingFlags.Instance | BindingFlags.Public));
+        Assert.Null(typeof(RentalStatusController).GetMethod("EditPolicy", BindingFlags.Instance | BindingFlags.Public));
     }
 
     [Fact]
