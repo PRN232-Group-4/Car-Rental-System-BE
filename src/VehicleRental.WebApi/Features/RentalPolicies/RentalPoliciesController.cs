@@ -62,4 +62,18 @@ public sealed class RentalPoliciesController(IRentalPolicyService policies) : Co
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public Task<RentalPolicy> SetPolicyStatus([FromRoute, Range(1, int.MaxValue)] int id, PolicyStatusRequest request, CancellationToken ct) =>
         policies.SetPolicyStatusAsync(id, request.IsActive!.Value, ct);
+
+    [OperationSummary("Delete a rental policy version (Admin/Manager).")]
+    [OperationDescription("Deletes the version only when no rental references it (rentalCount=0); otherwise responds 409 RENTAL_POLICY_IN_USE and the version should be deactivated instead.")]
+    [SuccessMessage("Rental policy deleted successfully.")]
+    [Authorize(Policy = AuthorizationPolicies.Management)]
+    [HttpDelete("rental-policy/{id:int}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> DeletePolicy([FromRoute, Range(1, int.MaxValue)] int id, CancellationToken ct)
+    {
+        await policies.DeletePolicyAsync(id, ct);
+        return NoContent();
+    }
 }

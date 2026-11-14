@@ -1,3 +1,4 @@
+using Car_Rental_System_BE.Application.Common.Errors;
 using Car_Rental_System_BE.Application.Features.RentalPolicies;
 using Npgsql;
 using System.Data;
@@ -76,6 +77,20 @@ public sealed class NpgsqlRentalPolicyRepository(NpgsqlDataSource dataSource) : 
     private static Task<bool> HasActivePolicyInScopeAsync(VehicleRentalDbContext db, int? typeId, int? excludedId, CancellationToken ct) =>
         db.Set<RentalPoliciesRow>().AnyAsync(p => p.VehicleTypeId == typeId && p.IsActive &&
             (excludedId == null || p.Id != excludedId), ct);
+
+    public async Task<bool> DeletePolicyAsync(int id, CancellationToken ct)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        await using var db = VehicleRentalDbContext.Create(connection, transaction);
+        if (await db.LockByKeyAsync<RentalPoliciesRow>(id, ct) is null) return false;
+        // Rentals snapshot the policy they were booked under, so a referenced version must stay for the contracts.
+        if (await db.Set<RentalsRow>().AnyAsync(r => r.PolicyId == id, ct))
+            throw new ConflictException("RENTAL_POLICY_IN_USE", "Phiên bản chính sách đã được gắn với đơn thuê nên không thể xóa. Hãy tạm ngưng phiên bản này thay vì xóa.");
+        await db.Set<RentalPoliciesRow>().Where(p => p.Id == id).ExecuteDeleteAsync(ct);
+        await transaction.CommitAsync(ct);
+        return true;
+    }
 
     public async Task<RentalPolicy?> SetPolicyStatusAsync(int id, bool isActive, CancellationToken ct)
     {

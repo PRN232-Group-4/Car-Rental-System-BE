@@ -80,7 +80,8 @@ public sealed class RentalQueriesController(
     [OperationDescription(" Each item includes nullable orderId for the official paid rental order; id remains the booking request ID. Omit status (and tab for mine) to include all lifecycle states, including completed and cancelled.")]
     [OperationDescription(" status=overdue filters renting rentals with no returned_at and end time before the server clock, before count/pagination. status=expired is a valid lifecycle filter (FR-042). Summaries expose isOverdue; lifecycle status remains renting so return remains valid. Newest id first, defaults page=1/pageSize=20, maximum 100.")]
     [SuccessMessage("Rentals retrieved successfully.")]
-    [Authorize(Policy = AuthorizationPolicies.CustomerService)]
+    // Maintenance reads the list too: technicians pick rentals waiting for pre/post-rental inspection from it.
+    [Authorize(Roles = "Admin,Manager,CustomerService,Maintenance")]
     [HttpGet("")]
     [ProducesResponseType(typeof(PagedResult<OperationalRentalSummary>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]

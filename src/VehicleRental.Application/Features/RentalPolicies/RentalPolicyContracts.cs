@@ -14,11 +14,14 @@ public interface IRentalPolicyRepository
     Task<bool> HasActivePolicyAsync(int? vehicleTypeId, CancellationToken ct);
     Task<RentalPolicy?> SetPolicyStatusAsync(int id, bool isActive, CancellationToken ct);
     Task<RentalPolicyPage> ListPoliciesAsync(int page, int pageSize, CancellationToken ct);
+    /// <summary>Deletes a policy version nobody has rented under; returns false when the policy does not exist.</summary>
+    Task<bool> DeletePolicyAsync(int id, CancellationToken ct);
 }
 
 public interface IRentalPolicyService
 {
     Task<RentalPolicy> CreatePolicyAsync(RentalPolicy policy, CancellationToken ct);
     Task<RentalPolicy> SetPolicyStatusAsync(int id, bool isActive, CancellationToken ct);
+    Task DeletePolicyAsync(int id, CancellationToken ct);
     Task<RentalPolicyPage> ListPoliciesAsync(int page, int pageSize, CancellationToken ct);
 }
