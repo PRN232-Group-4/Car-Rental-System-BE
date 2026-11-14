@@ -16,7 +16,6 @@ public sealed class AssignmentOptions
 /// <summary>
 /// A driver's duty shift. Moved here with the shift behaviour itself: the operations slice no longer owns shifts.
 /// </summary>
-public sealed record DriverShift(int Id, int DriverStaffId, DateTime StartTime, DateTime EndTime, string Status);
 
 public sealed record DriverAssignmentCommand(
     int RentalId,
@@ -151,8 +150,6 @@ public interface IAssignmentRepository
 
     Task<bool> VehicleExistsAndActiveAsync(int vehicleId, int requiredTypeId, CancellationToken ct);
 
-    Task<DriverShift> SaveDriverShiftAsync(int? id, int driverId, DateTime start, DateTime end, bool cancelled, string actor, CancellationToken ct);
-    Task<IReadOnlyList<DriverShift>> ListDriverShiftsAsync(int? driverId, DateTime from, DateTime to, CancellationToken ct);
 }
 
 public interface IAssignmentService
@@ -162,6 +159,4 @@ public interface IAssignmentService
     Task<IReadOnlyList<AssignmentResponse>> GetAssignmentsAsync(int rentalId, CancellationToken ct);
     Task<IReadOnlyList<AssignableDriverItem>> ListAssignableDriversAsync(int rentalId, bool eligibleOnly, CancellationToken ct);
     Task<IReadOnlyList<AssignableVehicleItem>> ListAssignableVehiclesAsync(int rentalId, CancellationToken ct);
-    Task<DriverShift> SaveDriverShiftAsync(int? id, int driverId, DateTime start, DateTime end, bool cancelled, string actor, CancellationToken ct);
-    Task<IReadOnlyList<DriverShift>> ListDriverShiftsAsync(int? driverId, DateTime from, DateTime to, CancellationToken ct);
 }

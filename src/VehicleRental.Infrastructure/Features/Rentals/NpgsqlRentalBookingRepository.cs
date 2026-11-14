@@ -118,7 +118,11 @@ public sealed class NpgsqlRentalBookingRepository(NpgsqlDataSource dataSource, T
                 ? "/api/rental/" + r.Id + "/contract/document" : l.ContractLink, l.SignedAt,
             db.Set<RentalOrdersRow>().Where(o => o.RentalId == r.Id).Select(o => (int?)o.Id).FirstOrDefault(),
             db.Set<InspectionsRow>().Any(i => i.RentalId == r.Id && i.VehicleId == r.VehicleId && i.InspectionType == "pre_rental" && i.IsOk == true),
-            db.Set<InspectionsRow>().Any(i => i.RentalId == r.Id && i.VehicleId == r.VehicleId && i.InspectionType == "post_rental"));
+            db.Set<InspectionsRow>().Any(i => i.RentalId == r.Id && i.VehicleId == r.VehicleId && i.InspectionType == "post_rental"))
+        {
+            HasFailedPreInspection = db.Set<InspectionsRow>().Where(i => i.RentalId == r.Id && i.VehicleId == r.VehicleId && i.InspectionType == "pre_rental")
+                .OrderByDescending(i => i.Id).Select(i => i.IsOk).FirstOrDefault() == false
+        };
 
     public async Task<Rental?> GetRentalForUserAsync(int id, string email, bool readAll, bool customer, bool driver, CancellationToken ct)
     {

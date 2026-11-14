@@ -140,38 +140,6 @@ public sealed class RentalAssignmentsApiContractTests
         Assert.Equal(StatusCodes.Status405MethodNotAllowed, (int)postResponse.StatusCode);
     }
 
-    /// <summary>
-    /// The three shift actions moved to the assignments slice: they call <see cref="IAssignmentService"/> and live
-    /// on <see cref="DriverShiftsController"/>, while their routes, verbs and policies stay where they were.
-    /// </summary>
-    [Fact]
-    public async Task Dispatch_shift_actions_are_served_by_the_assignments_slice()
-    {
-        var assignments = new StubAssignmentService();
-        var controller = new DriverShiftsController(assignments)
-        {
-            ControllerContext = new ControllerContext
-            {
-                HttpContext = new DefaultHttpContext
-                {
-                    User = new ClaimsPrincipal(new ClaimsIdentity(
-                        [new Claim(ClaimTypes.Role, "Manager"), new Claim(ClaimTypes.Email, "manager@test.local")], "test"))
-                }
-            }
-        };
-        const int driver = 5;
-        var from = new DateTime(2032, 6, 1, 9, 0, 0, DateTimeKind.Unspecified);
-
-        var created = Assert.IsType<CreatedResult>(await controller.CreateShift(new DriverShiftRequest(driver, from, from.AddHours(4)), default));
-        await controller.UpdateShift(9, new DriverShiftRequest(driver, from, from.AddHours(4), true), default);
-        Assert.IsType<OkObjectResult>(await controller.Shifts(from, from.AddHours(4), driver, default));
-
-        Assert.Equal(new int?[] { null, 9 }, assignments.Saved.Select(x => x.Id).ToArray());
-        Assert.Equal(driver, assignments.LastListedDriver);
-        Assert.Equal("manager@test.local", assignments.Saved[0].Actor);
-        Assert.EndsWith("/api/drivers/shift/1", created.Location);
-    }
-
     private static WebApplication BuildApp(IAssignmentService assignments)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing" });
@@ -194,8 +162,6 @@ public sealed class RentalAssignmentsApiContractTests
 
     private sealed class StubAssignmentService : IAssignmentService
     {
-        public List<(int? Id, int Driver, DateTime Start, DateTime End, bool Cancelled, string Actor)> Saved { get; } = [];
-        public int? LastListedDriver { get; private set; }
 
         public Task<AssignmentResponse> AssignDriverAsync(DriverAssignmentCommand command, CancellationToken ct) => throw new NotSupportedException();
         public Task<VehicleReplacementResult> ReplaceVehicleAsync(VehicleReplacementCommand command, CancellationToken ct) => throw new NotSupportedException();
@@ -203,17 +169,6 @@ public sealed class RentalAssignmentsApiContractTests
         public Task<IReadOnlyList<AssignableDriverItem>> ListAssignableDriversAsync(int rentalId, bool eligibleOnly, CancellationToken ct) => throw new NotSupportedException();
         public Task<IReadOnlyList<AssignableVehicleItem>> ListAssignableVehiclesAsync(int rentalId, CancellationToken ct) => throw new NotSupportedException();
 
-        public Task<DriverShift> SaveDriverShiftAsync(int? id, int driverId, DateTime start, DateTime end, bool cancelled, string actor, CancellationToken ct)
-        {
-            Saved.Add((id, driverId, start, end, cancelled, actor));
-            return Task.FromResult(new DriverShift(id ?? 1, driverId, start, end, cancelled ? "cancelled" : "scheduled"));
-        }
-
-        public Task<IReadOnlyList<DriverShift>> ListDriverShiftsAsync(int? driverId, DateTime from, DateTime to, CancellationToken ct)
-        {
-            LastListedDriver = driverId;
-            return Task.FromResult<IReadOnlyList<DriverShift>>([]);
-        }
     }
 
     [Theory]

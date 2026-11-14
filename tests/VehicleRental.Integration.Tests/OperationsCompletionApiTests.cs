@@ -45,7 +45,6 @@ public sealed class OperationsCompletionApiTests : IAsyncLifetime
         // The departments and facilities endpoints moved to the Organization slice, so they resolve
         // IOrganizationService: the paged facility list is stubbed there now.
         builder.Services.AddSingleton(DispatchProxy.Create<IOrganizationService,OrganizationProxy>());
-        // DriverShiftsController takes the assignments slice; these endpoints never touch it.
         builder.Services.AddSingleton(DispatchProxy.Create<Car_Rental_System_BE.Application.Features.Assignments.IAssignmentService,UnusedProxy>());
         builder.Services.AddSingleton(DispatchProxy.Create<Car_Rental_System_BE.Application.Features.Maintenances.IMaintenanceService,UnusedProxy>());
         builder.Services.AddSingleton(DispatchProxy.Create<IMediaService,UnusedProxy>());

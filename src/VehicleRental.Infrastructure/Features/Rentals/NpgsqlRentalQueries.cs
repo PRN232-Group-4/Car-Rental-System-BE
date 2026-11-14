@@ -122,7 +122,7 @@ public sealed class NpgsqlRentalQueries(NpgsqlDataSource dataSource, TimeProvide
     // or the customer cancels and books another one.
     private static string? NextAction(string status, bool confirmed, string? invoiceStatus, bool subscription, bool vehicleFailedCheck = false) => status switch
     {
-        "pending" or "pre_inspection" when vehicleFailedCheck => "VEHICLE_CHANGE_REQUIRED",
+        "pending" or "pre_inspection" or "cancelled" when vehicleFailedCheck => "VEHICLE_CHANGE_REQUIRED",
         "pending" => "WAITING_CONFIRMATION",
         "pre_inspection" when !confirmed => "WAITING_CONFIRMATION",
         "pre_inspection" when invoiceStatus != "paid" && !subscription => "PAYMENT_REQUIRED",
