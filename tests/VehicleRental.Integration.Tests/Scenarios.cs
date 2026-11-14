@@ -1,6 +1,5 @@
 using Car_Rental_System_BE.Infrastructure.Features.Billing;
 using Car_Rental_System_BE.Infrastructure.Features.Rentals;
-using Car_Rental_System_BE.Infrastructure.Repositories;
 using Npgsql;
 
 namespace VehicleRental.Tests;
@@ -28,9 +27,8 @@ internal static class Scenarios
         var (_, email) = await Seed.CustomerAsync(db);
         var vehicle = await Seed.VehicleAsync(db);
         var plan = await Seed.PlanAsync(db);
-        var operations = new NpgsqlOperationsRepository(db);
         var bookings = new NpgsqlRentalBookingRepository(db);
-        var subscriptionId = await operations.BuyPlanAsync(email, plan, CancellationToken.None);
+        var subscriptionId = await Seed.SubscriptionAsync(db, email, plan);
         var start = DateTime.UtcNow.AddHours(1);
         var rental = await bookings.CreateRentalAsync(email, vehicle, null, "hourly", start, start.AddHours(2), true, subscriptionId, false, CancellationToken.None);
         return (rental.Id, subscriptionId);

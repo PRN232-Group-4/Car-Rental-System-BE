@@ -21,19 +21,4 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
         if (notifications is not null) await notifications.RentalStatusChangedAsync(id, rental.Status);
         return rental;
     }
-
-    public Task<IReadOnlyList<SubscriptionPlan>> ListPlansAsync(bool activeOnly, CancellationToken ct) =>
-        repository.ListPlansAsync(activeOnly, ct);
-
-    public Task<SubscriptionPlan?> GetPlanAsync(int id, CancellationToken ct) =>
-        repository.GetPlanAsync(id, ct);
-
-    public Task<SubscriptionPlan> SavePlanAsync(int? id, SubscriptionPlan plan, CancellationToken ct) =>
-        repository.SavePlanAsync(id, plan, ct);
-
-    public Task DeletePlanAsync(int id, CancellationToken ct) =>
-        repository.DeletePlanAsync(id, ct);
-
-    public Task<IReadOnlyList<CustomerSubscription>> ListCustomerSubscriptionsAsync(string email, CancellationToken ct) =>
-        repository.ListCustomerSubscriptionsAsync(email, ct);
 }

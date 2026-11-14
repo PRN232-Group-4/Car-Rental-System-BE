@@ -65,11 +65,10 @@ public sealed class StaffAuthorizationTests(PostgresFixture db) : IClassFixture<
     public async Task Customer_cannot_book_with_another_customers_subscription()
     {
         var bookings = new NpgsqlRentalBookingRepository(db.DataSource);
-        var operations = new NpgsqlOperationsRepository(db.DataSource);
         var (_, owner) = await Seed.CustomerAsync(db.DataSource);
         var (_, other) = await Seed.CustomerAsync(db.DataSource);
         var plan = await Seed.PlanAsync(db.DataSource);
-        var subscription = await operations.BuyPlanAsync(owner, plan, default);
+        var subscription = await Seed.SubscriptionAsync(db.DataSource, owner, plan);
         var vehicle = await Seed.VehicleAsync(db.DataSource);
         var start = DateTime.UtcNow.AddHours(1);
         await Assert.ThrowsAsync<KeyNotFoundException>(() => bookings.CreateRentalAsync(other, vehicle, null, "hourly", start,

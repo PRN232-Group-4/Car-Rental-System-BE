@@ -56,8 +56,8 @@
 /api/auth/refresh | Session.Refresh | POST | 200 | inspectionType=post_rental | refresh completed successfully.
 /api/auth/refresh | Session.Refresh | POST | 204 | - | refresh completed successfully.
 /api/auth/refresh | Session.Refresh | POST | 204 | inspectionType=post_rental | refresh completed successfully.
-/api/customer-subscriptions | Operations.CustomerSubscriptions | GET | 200 | - | Customer subscriptions retrieved successfully.
-/api/customer-subscriptions | Operations.CustomerSubscriptions | GET | 200 | inspectionType=post_rental | Customer subscriptions retrieved successfully.
+/api/customer-subscriptions | SubscriptionPlans.CustomerSubscriptions | GET | 200 | - | Customer subscriptions retrieved successfully.
+/api/customer-subscriptions | SubscriptionPlans.CustomerSubscriptions | GET | 200 | inspectionType=post_rental | Customer subscriptions retrieved successfully.
 /api/customer/license | CustomerLicenses.License | GET | 200 | - | Driver license retrieved successfully.
 /api/customer/license | CustomerLicenses.License | GET | 200 | inspectionType=post_rental | Driver license retrieved successfully.
 /api/customer/license | CustomerLicenses.SaveLicense | PUT | 200 | - | Driver license saved successfully.
@@ -330,18 +330,18 @@
 /api/staff/{id:int} | Staff.Update | PUT | 200 | inspectionType=post_rental | Staff member updated successfully.
 /api/staff/{staffId:int}/ratings | Ratings.StaffRatings | GET | 200 | - | staff ratings retrieved successfully.
 /api/staff/{staffId:int}/ratings | Ratings.StaffRatings | GET | 200 | inspectionType=post_rental | staff ratings retrieved successfully.
-/api/subscription-plan/{id:int} | Operations.DeletePlan | DELETE | 200 | - | Subscription plan deleted successfully.
-/api/subscription-plan/{id:int} | Operations.DeletePlan | DELETE | 200 | inspectionType=post_rental | Subscription plan deleted successfully.
-/api/subscription-plan/{id:int} | Operations.EditPlan | PUT | 200 | - | Subscription plan updated successfully.
-/api/subscription-plan/{id:int} | Operations.EditPlan | PUT | 200 | inspectionType=post_rental | Subscription plan updated successfully.
-/api/subscription-plan/{id:int} | Operations.Plan | GET | 200 | - | Subscription plan retrieved successfully.
-/api/subscription-plan/{id:int} | Operations.Plan | GET | 200 | inspectionType=post_rental | Subscription plan retrieved successfully.
+/api/subscription-plan/{id:int} | SubscriptionPlans.DeletePlan | DELETE | 200 | - | Subscription plan deleted successfully.
+/api/subscription-plan/{id:int} | SubscriptionPlans.DeletePlan | DELETE | 200 | inspectionType=post_rental | Subscription plan deleted successfully.
+/api/subscription-plan/{id:int} | SubscriptionPlans.EditPlan | PUT | 200 | - | Subscription plan updated successfully.
+/api/subscription-plan/{id:int} | SubscriptionPlans.EditPlan | PUT | 200 | inspectionType=post_rental | Subscription plan updated successfully.
+/api/subscription-plan/{id:int} | SubscriptionPlans.Plan | GET | 200 | - | Subscription plan retrieved successfully.
+/api/subscription-plan/{id:int} | SubscriptionPlans.Plan | GET | 200 | inspectionType=post_rental | Subscription plan retrieved successfully.
 /api/subscription-plan/{planId:int}/purchase | SubscriptionPayments.PurchasePlan | POST | 200 | - | Subscription plan checkout created successfully.
 /api/subscription-plan/{planId:int}/purchase | SubscriptionPayments.PurchasePlan | POST | 200 | inspectionType=post_rental | Subscription plan checkout created successfully.
-/api/subscription-plans | Operations.AddPlan | POST | 200 | - | Subscription plan created successfully.
-/api/subscription-plans | Operations.AddPlan | POST | 200 | inspectionType=post_rental | Subscription plan created successfully.
-/api/subscription-plans | Operations.Plans | GET | 200 | - | Subscription plans retrieved successfully.
-/api/subscription-plans | Operations.Plans | GET | 200 | inspectionType=post_rental | Subscription plans retrieved successfully.
+/api/subscription-plans | SubscriptionPlans.AddPlan | POST | 200 | - | Subscription plan created successfully.
+/api/subscription-plans | SubscriptionPlans.AddPlan | POST | 200 | inspectionType=post_rental | Subscription plan created successfully.
+/api/subscription-plans | SubscriptionPlans.Plans | GET | 200 | - | Subscription plans retrieved successfully.
+/api/subscription-plans | SubscriptionPlans.Plans | GET | 200 | inspectionType=post_rental | Subscription plans retrieved successfully.
 /api/subscription-plans/purchase/{orderCode:long} | SubscriptionPayments.PlanPurchase | GET | 200 | - | Subscription purchase retrieved successfully.
 /api/subscription-plans/purchase/{orderCode:long} | SubscriptionPayments.PlanPurchase | GET | 200 | inspectionType=post_rental | Subscription purchase retrieved successfully.
 /api/tracking/alert/{alertId:long}/resolve | Tracking.ResolveAlert | POST | 200 | - | Tracking alert resolved successfully.

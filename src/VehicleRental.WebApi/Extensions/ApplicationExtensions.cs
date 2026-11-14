@@ -18,6 +18,7 @@ using Car_Rental_System_BE.Application.Features.Ratings;
 using Car_Rental_System_BE.Application.Features.Recovery;
 using Car_Rental_System_BE.Application.Features.RentalPolicies;
 using Car_Rental_System_BE.Application.Features.Reports;
+using Car_Rental_System_BE.Application.Features.Subscriptions;
 using Car_Rental_System_BE.Application.Features.Tracking;
 using Car_Rental_System_BE.Application.Services;
 using Car_Rental_System_BE.Infrastructure.Services.Payments;
@@ -60,6 +61,7 @@ public static class ApplicationExtensions
         services.AddScoped<IOrganizationService, OrganizationService>();
         services.AddScoped<IFleetService, FleetService>();
         services.AddScoped<IOperationsService, OperationsService>();
+        services.AddScoped<ISubscriptionService, SubscriptionService>();
         services.AddScoped<IUserAdministrationService, UserAdministrationService>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IOperationsCompletionService, OperationsCompletionService>();

@@ -13,7 +13,6 @@ namespace Car_Rental_System_BE.WebApi.Controllers;
 [ApiController]
 [Route("api")]
 public sealed class OperationsController(
-    IOperationsService store,
     IOperationsCompletionService? completion = null,
     // Only the deprecated POST /api/rental/{id}/status/{status} needs these two; the runtime always registers
     // them (Program.cs/Infrastructure) and they stay optional so hosts and tests that only exercise the other
@@ -69,18 +68,6 @@ public sealed class OperationsController(
             : Problem("Rental was not found.", statusCode: StatusCodes.Status404NotFound);
     }
 
-    [SuccessMessage("Subscription plans retrieved successfully.")]
-    [HttpGet("subscription-plans")] public Task<IReadOnlyList<SubscriptionPlan>> Plans([FromQuery]bool all,CancellationToken ct)=>store.ListPlansAsync(!(all && AuthorizationPolicies.CanManage(User)),ct);
-    [SuccessMessage("Subscription plan retrieved successfully.")]
-    [HttpGet("subscription-plan/{id:int}")] public async Task<IActionResult> Plan(int id,CancellationToken ct)=>await store.GetPlanAsync(id,ct) is { } x?Ok(x):Problem("Subscription plan was not found.", statusCode: StatusCodes.Status404NotFound);
-    [SuccessMessage("Subscription plan created successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPost("subscription-plans")] public async Task<IActionResult> AddPlan(PlanRequest x,CancellationToken ct){var p=await store.SavePlanAsync(null,x.ToModel(),ct);return Created($"/api/subscription-plan/{p.Id}",p);}
-    [SuccessMessage("Subscription plan updated successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpPut("subscription-plan/{id:int}")] public Task<SubscriptionPlan> EditPlan(int id,PlanRequest x,CancellationToken ct)=>store.SavePlanAsync(id,x.ToModel(),ct);
-    [SuccessMessage("Subscription plan deleted successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Management)] [HttpDelete("subscription-plan/{id:int}")] public async Task<IActionResult> DeletePlan(int id,CancellationToken ct){await store.DeletePlanAsync(id,ct);return NoContent();}
-    [SuccessMessage("Customer subscriptions retrieved successfully.")]
-    [Authorize(Policy=AuthorizationPolicies.Customer)] [HttpGet("customer-subscriptions")] public Task<IReadOnlyList<CustomerSubscription>> CustomerSubscriptions(CancellationToken ct)=>store.ListCustomerSubscriptionsAsync(Email(),ct);
     private IOperationsCompletionService Completion => completion ?? throw new InvalidOperationException("Operations completion service is not configured.");
 
     private IRentalBookingService Bookings => bookings ?? throw new InvalidOperationException("Rental booking service is not configured.");
@@ -113,5 +100,4 @@ public sealed class OperationsController(
         return new ActorContext(userId, email, role);
     }
 
-    private string Email()=>User.FindFirstValue(ClaimTypes.Email)??throw new UnauthorizedAccessException();
 }

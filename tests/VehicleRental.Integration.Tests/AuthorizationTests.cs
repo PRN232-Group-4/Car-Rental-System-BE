@@ -11,6 +11,7 @@ using Car_Rental_System_BE.WebApi.Features.Recovery;
 using Car_Rental_System_BE.WebApi.Features.RentalPolicies;
 using Car_Rental_System_BE.WebApi.Features.Rentals;
 using Car_Rental_System_BE.WebApi.Features.Reports;
+using Car_Rental_System_BE.WebApi.Features.Subscriptions;
 using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
 using Car_Rental_System_BE.Application.DTOs.Accounts;
 using Car_Rental_System_BE.Application.DTOs.Operations;
@@ -54,10 +55,22 @@ public sealed class AuthorizationTests
     [Theory]
     [InlineData("DriverSchedule", "CustomerService", false)]
     [InlineData("DriverSchedule", "Driver", true)]
-    [InlineData("DeletePlan", "CustomerService", false)]
-    [InlineData("DeletePlan", "Manager", true)]
     public async Task Operations_enforce_capability_matrix(string action, string role, bool allowed) =>
         Assert.Equal(allowed, await AuthorizeEndpoint<OperationsController>(action, Principal(role, 7)));
+
+    /// <summary>
+    /// The six subscription-plan actions moved to SubscriptionPlansController and keep the policies they had on
+    /// OperationsController: management for the three commands, the customer policy for the caller's own list.
+    /// </summary>
+    [Theory]
+    [InlineData("DeletePlan", "CustomerService", false)]
+    [InlineData("DeletePlan", "Manager", true)]
+    [InlineData("AddPlan", "Customer", false)]
+    [InlineData("AddPlan", "Manager", true)]
+    [InlineData("CustomerSubscriptions", "Manager", false)]
+    [InlineData("CustomerSubscriptions", "Customer", true)]
+    public async Task Subscription_plan_endpoints_enforce_the_attributes_they_moved_with(string action, string role, bool allowed) =>
+        Assert.Equal(allowed, await AuthorizeEndpoint<SubscriptionPlansController>(action, Principal(role, 7)));
 
     /// <summary>
     /// The legacy contract recording moved to RentalContractsController and keeps the CustomerService policy it
@@ -341,7 +354,7 @@ public sealed class AuthorizationTests
         spy = (RepositorySpy)store;
         var completion = DispatchProxy.Create<IOperationsCompletionRepository, RepositorySpy>();
         ((RepositorySpy)completion).Calls = spy.Calls;
-        return new(new Car_Rental_System_BE.Application.Services.OperationsService(store), new Car_Rental_System_BE.Application.Services.OperationsCompletionService(completion)) { ControllerContext = new() { HttpContext = new DefaultHttpContext { User = principal } } };
+        return new(new Car_Rental_System_BE.Application.Services.OperationsCompletionService(completion)) { ControllerContext = new() { HttpContext = new DefaultHttpContext { User = principal } } };
     }
 
     public class RepositorySpy : DispatchProxy

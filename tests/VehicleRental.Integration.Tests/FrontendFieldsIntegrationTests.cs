@@ -55,7 +55,7 @@ public sealed class FrontendFieldsIntegrationTests(PostgresFixture db) : IClassF
         var vehicle=await Seed.VehicleAsync(db.DataSource);
         await Seed.ScalarAsync(db.DataSource,"UPDATE vehicles SET facility_id=$2,license_plate='51A-99999' WHERE id=$1",vehicle,facility.Id);
         var plan=await Seed.PlanAsync(db.DataSource);
-        var subscription=await repo.BuyPlanAsync(email,plan,default);
+        var subscription=await Seed.SubscriptionAsync(db.DataSource,email,plan);
         var start=DateTime.SpecifyKind(DateTime.UtcNow.AddDays(2),DateTimeKind.Unspecified);
         var rental=await bookings.CreateRentalAsync(email,vehicle,null,"hourly",start,start.AddHours(3.5),true,subscription,false,default);
         var queries=new NpgsqlRentalQueries(db.DataSource,TimeProvider.System);

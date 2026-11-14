@@ -12,9 +12,4 @@ public interface IOperationsService
     /// Kept only because several integration tests still call it directly; scheduled for removal.
     /// </summary>
     Task<Rental> ChangeRentalStatusAsync(int id, string status, CancellationToken ct);
-    Task<IReadOnlyList<SubscriptionPlan>> ListPlansAsync(bool activeOnly, CancellationToken ct);
-    Task<SubscriptionPlan?> GetPlanAsync(int id, CancellationToken ct);
-    Task<SubscriptionPlan> SavePlanAsync(int? id, SubscriptionPlan plan, CancellationToken ct);
-    Task DeletePlanAsync(int id, CancellationToken ct);
-    Task<IReadOnlyList<CustomerSubscription>> ListCustomerSubscriptionsAsync(string email, CancellationToken ct);
 }
