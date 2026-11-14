@@ -1,4 +1,4 @@
-namespace Car_Rental_System_BE.WebApi.Middlewares.Requests;
+namespace Car_Rental_System_BE.WebApi.Common.Requests;
 
 public static class ImageFileRules
 {

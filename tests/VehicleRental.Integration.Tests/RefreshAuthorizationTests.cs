@@ -1,5 +1,5 @@
 using Car_Rental_System_BE.WebApi.Controllers;
-using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.WebApi.Common.Authentication;
 using Car_Rental_System_BE.Application.Features.Organization;
 using Car_Rental_System_BE.Infrastructure.Features.Identity;
 using System.Reflection;

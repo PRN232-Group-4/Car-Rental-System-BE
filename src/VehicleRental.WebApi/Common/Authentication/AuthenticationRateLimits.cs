@@ -1,11 +1,11 @@
 using System.Globalization;
 using System.Threading.RateLimiting;
 using Car_Rental_System_BE.Application.DTOs.Options;
-using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.WebApi.Common.Responses;
 using Microsoft.AspNetCore.RateLimiting;
 using Car_Rental_System_BE.Application.Features.Identity;
 
-namespace Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+namespace Car_Rental_System_BE.WebApi.Common.Authentication;
 
 public static class AuthenticationRateLimits
 {

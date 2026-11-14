@@ -1,4 +1,4 @@
-namespace Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+namespace Car_Rental_System_BE.WebApi.Common.Authentication;
 
 public sealed class GoogleAuthOptions
 {

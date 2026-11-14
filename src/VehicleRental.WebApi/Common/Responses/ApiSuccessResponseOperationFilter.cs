@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using System.Reflection;
 
-namespace Car_Rental_System_BE.WebApi.Middlewares.Responses;
+namespace Car_Rental_System_BE.WebApi.Common.Responses;
 
 /// <summary>
 /// Ghi tài liệu cho lớp bọc JSON áp dụng lên phản hồi thành công và lỗi lúc chạy, và áp câu chữ mà mỗi action

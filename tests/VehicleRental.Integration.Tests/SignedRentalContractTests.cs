@@ -11,7 +11,7 @@ using Car_Rental_System_BE.Infrastructure.Features.Rentals;
 using Car_Rental_System_BE.Infrastructure.Persistence;
 using Car_Rental_System_BE.WebApi.Features.Rentals;
 using Car_Rental_System_BE.WebApi.Controllers;
-using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.WebApi.Common.Responses;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;

@@ -12,7 +12,7 @@ using Car_Rental_System_BE.WebApi.Features.RentalPolicies;
 using Car_Rental_System_BE.WebApi.Features.Rentals;
 using Car_Rental_System_BE.WebApi.Features.Reports;
 using Car_Rental_System_BE.WebApi.Features.Subscriptions;
-using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.WebApi.Common.Authentication;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Inspections;
 using Car_Rental_System_BE.Application.Features.Organization;

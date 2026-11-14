@@ -3,7 +3,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+namespace Car_Rental_System_BE.WebApi.Common.Authentication;
 
 public static class AuthCookies
 {

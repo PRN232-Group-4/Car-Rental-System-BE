@@ -1,4 +1,4 @@
-namespace Car_Rental_System_BE.WebApi.Middlewares.Responses;
+namespace Car_Rental_System_BE.WebApi.Common.Responses;
 
 /// <summary>
 /// Đánh dấu action có phản hồi thành công là tệp nhị phân đính kèm thay vì lớp bọc JSON: phản hồi được

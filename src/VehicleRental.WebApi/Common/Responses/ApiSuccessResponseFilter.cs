@@ -7,7 +7,7 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text.RegularExpressions;
 
-namespace Car_Rental_System_BE.WebApi.Middlewares.Responses;
+namespace Car_Rental_System_BE.WebApi.Common.Responses;
 
 /// <summary>
 /// Chuẩn hóa kết quả thành công và lỗi của controller, kể cả kết quả kiểm tra hợp lệ tự động.

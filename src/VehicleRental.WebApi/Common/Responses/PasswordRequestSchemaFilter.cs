@@ -4,7 +4,7 @@ using System.Text.Json;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
-namespace Car_Rental_System_BE.WebApi.Middlewares.Responses;
+namespace Car_Rental_System_BE.WebApi.Common.Responses;
 
 /// <summary>Swagger đọc property; MVC kiểm tra hợp lệ tham số constructor của record.</summary>
 public sealed class PasswordRequestSchemaFilter : ISchemaFilter

@@ -1,4 +1,4 @@
-namespace Car_Rental_System_BE.WebApi.Middlewares.Responses;
+namespace Car_Rental_System_BE.WebApi.Common.Responses;
 
 /// <summary>Ghi tài liệu tập giá trị đóng mà một tham số query của action này chấp nhận.</summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = true)]

@@ -4,7 +4,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Car_Rental_System_BE.Application.Features.Identity;
 
-namespace Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+namespace Car_Rental_System_BE.WebApi.Common.Authentication;
 
 public static class AuthorizationPolicies
 {

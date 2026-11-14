@@ -1,8 +1,8 @@
-using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.WebApi.Common.Authentication;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Media;
-using Car_Rental_System_BE.WebApi.Middlewares.Requests;
-using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.WebApi.Common.Requests;
+using Car_Rental_System_BE.WebApi.Common.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -31,7 +31,7 @@ public sealed class MediaController(IMediaService media) : ControllerBase
     }
 
     [SuccessMessage("Vehicle image uploaded successfully.")]
-    [Authorize(Policy = Car_Rental_System_BE.WebApi.Middlewares.Authentication.AuthorizationPolicies.Management)]
+    [Authorize(Policy = Car_Rental_System_BE.WebApi.Common.Authentication.AuthorizationPolicies.Management)]
     [HttpPost("vehicle")]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(StatusCodes.Status200OK)]

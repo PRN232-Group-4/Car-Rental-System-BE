@@ -1,8 +1,8 @@
-using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.WebApi.Common.Authentication;
 using Car_Rental_System_BE.Application.Features.Customers;
 using Car_Rental_System_BE.Application.Features.Media;
-using Car_Rental_System_BE.WebApi.Middlewares.Requests;
-using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.WebApi.Common.Requests;
+using Car_Rental_System_BE.WebApi.Common.Responses;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

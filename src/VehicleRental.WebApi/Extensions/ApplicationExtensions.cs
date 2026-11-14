@@ -21,7 +21,7 @@ using Car_Rental_System_BE.Application.Features.Subscriptions;
 using Car_Rental_System_BE.Application.Features.Tracking;
 using Car_Rental_System_BE.Infrastructure.Features.Billing;
 using Car_Rental_System_BE.Infrastructure.Features.Identity;
-using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.WebApi.Common.Authentication;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;

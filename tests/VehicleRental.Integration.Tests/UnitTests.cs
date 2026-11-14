@@ -1,8 +1,8 @@
 using Car_Rental_System_BE.WebApi.Controllers;
 using Car_Rental_System_BE.WebApi.Features.RentalPolicies;
 using Car_Rental_System_BE.WebApi.Features.Rentals;
-using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
-using Car_Rental_System_BE.WebApi.Middlewares.Responses;
+using Car_Rental_System_BE.WebApi.Common.Authentication;
+using Car_Rental_System_BE.WebApi.Common.Responses;
 using Car_Rental_System_BE.Application.DTOs.Operations;
 using Car_Rental_System_BE.Application.Features.Fleet;
 using Car_Rental_System_BE.Application.Features.Organization;
@@ -112,7 +112,7 @@ public sealed class UnitTests
             Assert.NotNull(authorization);
             Assert.NotNull(authorization!.Policy);
             var options = new AuthorizationOptions();
-            Car_Rental_System_BE.WebApi.Middlewares.Authentication.AuthorizationPolicies.Configure(options);
+            Car_Rental_System_BE.WebApi.Common.Authentication.AuthorizationPolicies.Configure(options);
             var policy = options.GetPolicy(authorization.Policy!);
             var roles = Assert.Single(policy!.Requirements.OfType<Microsoft.AspNetCore.Authorization.Infrastructure.RolesAuthorizationRequirement>()).AllowedRoles;
             Assert.Contains("Manager", roles);

@@ -1,4 +1,4 @@
-namespace Car_Rental_System_BE.WebApi.Middlewares.Responses;
+namespace Car_Rental_System_BE.WebApi.Common.Responses;
 
 /// <summary>Tóm tắt một dòng mà operation Swagger của action này mang.</summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = true)]

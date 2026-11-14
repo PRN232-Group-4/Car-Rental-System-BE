@@ -1,4 +1,4 @@
-namespace Car_Rental_System_BE.WebApi.Middlewares.Responses;
+namespace Car_Rental_System_BE.WebApi.Common.Responses;
 
 /// <summary>
 /// Ghi tài liệu cận dưới của một property trong schema request có tên mà action dùng, thay vì lặp lại

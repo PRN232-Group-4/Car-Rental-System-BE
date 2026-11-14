@@ -1,4 +1,4 @@
-namespace Car_Rental_System_BE.WebApi.Middlewares.Responses;
+namespace Car_Rental_System_BE.WebApi.Common.Responses;
 
 /// <summary>
 /// Câu chữ mà phản hồi thành công của action này mang trong trường <c>message</c> của lớp bọc.

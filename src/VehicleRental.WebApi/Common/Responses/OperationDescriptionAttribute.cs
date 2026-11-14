@@ -1,4 +1,4 @@
-namespace Car_Rental_System_BE.WebApi.Middlewares.Responses;
+namespace Car_Rental_System_BE.WebApi.Common.Responses;
 
 /// <summary>
 /// Một phần mô tả operation Swagger của action này. Nhiều attribute trên cùng action được nối theo thứ tự

@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Http;
 
-namespace Car_Rental_System_BE.WebApi.Middlewares.Responses;
+namespace Car_Rental_System_BE.WebApi.Common.Responses;
 
 /// <summary>
 /// Câu chữ mà phản hồi thành công của action này mang khi request chọn một biến thể cụ thể của operation

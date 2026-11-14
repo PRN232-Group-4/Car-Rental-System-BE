@@ -4,7 +4,7 @@ using System.Threading.RateLimiting;
 using Car_Rental_System_BE.Application.DTOs.Options;
 using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Infrastructure.Features.Identity;
-using Car_Rental_System_BE.WebApi.Middlewares.Authentication;
+using Car_Rental_System_BE.WebApi.Common.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
