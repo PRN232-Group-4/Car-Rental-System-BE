@@ -27,6 +27,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Car_Rental_System_BE.Application.Features.Identity;
+using Car_Rental_System_BE.Application.Features.Media;
 using Car_Rental_System_BE.Application.Features.Audit;
 
 namespace Car_Rental_System_BE.WebApi.Extensions;

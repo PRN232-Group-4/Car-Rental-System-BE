@@ -1,7 +1,6 @@
-using Car_Rental_System_BE.Application.DTOs.Registration;
 using Car_Rental_System_BE.Application.Features.Customers;
 
-namespace Car_Rental_System_BE.Application.Interfaces.Services;
+namespace Car_Rental_System_BE.Application.Features.Media;
 
 public interface IMediaService
 {

@@ -1,11 +1,9 @@
-using Car_Rental_System_BE.Application.DTOs.Registration;
-using Car_Rental_System_BE.Application.Interfaces.External;
-using Car_Rental_System_BE.Application.Services.Exceptions;
+using Car_Rental_System_BE.Application.Features.Media;
 using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
 using Microsoft.Extensions.Options;
 
-namespace Car_Rental_System_BE.Infrastructure.Services.Media;
+namespace Car_Rental_System_BE.Infrastructure.Features.Media;
 
 public sealed class CloudinaryOptions
 {
