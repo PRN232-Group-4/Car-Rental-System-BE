@@ -106,14 +106,6 @@
 /api/devices | Devices.Register | POST | 201 | inspectionType=post_rental | Tracking device registered successfully.
 /api/drivers/schedule | DriverSchedule.DriverSchedule | GET | 200 | - | Driver schedule retrieved successfully.
 /api/drivers/schedule | DriverSchedule.DriverSchedule | GET | 200 | inspectionType=post_rental | Driver schedule retrieved successfully.
-/api/drivers/shift/{id:int} | DriverShifts.UpdateShift | PUT | 200 | - | Driver duty shift updated successfully.
-/api/drivers/shift/{id:int} | DriverShifts.UpdateShift | PUT | 200 | inspectionType=post_rental | Driver duty shift updated successfully.
-/api/drivers/shifts | DriverShifts.CreateShift | POST | 200 | - | Driver duty shift created successfully.
-/api/drivers/shifts | DriverShifts.CreateShift | POST | 200 | inspectionType=post_rental | Driver duty shift created successfully.
-/api/drivers/shifts | DriverShifts.CreateShift | POST | 201 | - | Driver duty shift created successfully.
-/api/drivers/shifts | DriverShifts.CreateShift | POST | 201 | inspectionType=post_rental | Driver duty shift created successfully.
-/api/drivers/shifts | DriverShifts.Shifts | GET | 200 | - | Driver duty shifts retrieved successfully.
-/api/drivers/shifts | DriverShifts.Shifts | GET | 200 | inspectionType=post_rental | Driver duty shifts retrieved successfully.
 /api/facilities | Facilities.AddFacility | POST | 200 | - | Facility created successfully.
 /api/facilities | Facilities.AddFacility | POST | 200 | inspectionType=post_rental | Facility created successfully.
 /api/facilities | Facilities.Facilities | GET | 200 | - | Facilities retrieved successfully.
@@ -208,6 +200,10 @@
 /api/rental-policies | RentalPolicies.AddPolicy | POST | 201 | inspectionType=post_rental | Rental policy created successfully.
 /api/rental-policies | RentalPolicies.Policies | GET | 200 | - | Rental policies retrieved successfully.
 /api/rental-policies | RentalPolicies.Policies | GET | 200 | inspectionType=post_rental | Rental policies retrieved successfully.
+/api/rental-policy/{id:int} | RentalPolicies.DeletePolicy | DELETE | 200 | - | Rental policy deleted successfully.
+/api/rental-policy/{id:int} | RentalPolicies.DeletePolicy | DELETE | 200 | inspectionType=post_rental | Rental policy deleted successfully.
+/api/rental-policy/{id:int} | RentalPolicies.DeletePolicy | DELETE | 204 | - | Rental policy deleted successfully.
+/api/rental-policy/{id:int} | RentalPolicies.DeletePolicy | DELETE | 204 | inspectionType=post_rental | Rental policy deleted successfully.
 /api/rental-policy/{id:int}/status | RentalPolicies.SetPolicyStatus | PATCH | 200 | - | Rental policy status updated successfully.
 /api/rental-policy/{id:int}/status | RentalPolicies.SetPolicyStatus | PATCH | 200 | inspectionType=post_rental | Rental policy status updated successfully.
 /api/rental/mine/{id:int} | RentalQueries.MineDetail | GET | 200 | - | Your rental details retrieved successfully.

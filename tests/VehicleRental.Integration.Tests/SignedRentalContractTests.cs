@@ -28,6 +28,8 @@ namespace VehicleRental.Tests;
 public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixture<PostgresFixture>, IAsyncLifetime
 {
     private static readonly byte[] Pdf = Encoding.ASCII.GetBytes("%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
+    // Upload is staff-only now; the owner keeps the download side of every test.
+    private const string StaffEmail = "operator@test.local";
     private WebApplication _app = null!;
     private HttpClient _client = null!;
     private NpgsqlRentalEditingRepository Editing => new(db.DataSource);
@@ -86,6 +88,8 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
         _client.DefaultRequestHeaders.Add("X-Test-Email", email);
     }
 
+    private void Staff(string role = "CustomerService") => Authenticate(StaffEmail, role);
+
     private static MultipartFormDataContent Form(byte[]? bytes = null, string mime = "application/pdf", string name = "contract.pdf", string? signedAt = null, bool noFile = false, bool noDate = false)
     {
         var form = new MultipartFormDataContent();
@@ -128,12 +132,14 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
     [Fact]
     public async Task Owner_upload_download_roundtrip_and_atomic_replacement_before_start()
     {
-        var (rental, _) = await RentalAsync();
+        var (rental, email) = await RentalAsync();
+        Staff();
         using var body = await Upload(rental.Id, Form(name: "../../bad\".pdf"));
         var data = body.RootElement.GetProperty("data");
         Assert.True(data.GetProperty("hasUploadedContract").GetBoolean());
         Assert.Equal($"/api/rental/{rental.Id}/contract/document", data.GetProperty("contractLink").GetString());
         Assert.Equal("Signed rental contract uploaded successfully.", body.RootElement.GetProperty("message").GetString());
+        Authenticate(email);
         using var download = await _client.GetAsync($"/api/rental/{rental.Id}/contract/document");
         Assert.Equal(200, (int)download.StatusCode);
         Assert.Equal(Pdf, await download.Content.ReadAsByteArrayAsync());
@@ -143,6 +149,7 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
         Assert.Contains("no-store", download.Headers.CacheControl!.ToString());
         Assert.Equal("nosniff", download.Headers.GetValues("X-Content-Type-Options").Single());
         var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/a9sAAAAASUVORK5CYII=");
+        Staff();
         using var replacement = await Upload(rental.Id, Form(png, "image/png", "signed.png"));
         Assert.Equal(png, (await Documents.GetAsync(rental.Id, default))!.Content);
         Assert.Equal(1, await Seed.CountAsync(db.DataSource, "SELECT count(*) FROM rental_contract_documents WHERE rental_id=$1", rental.Id));
@@ -162,6 +169,15 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
         Assert.Equal(200, (int)response.StatusCode);
     }
 
+    [Fact]
+    public async Task Customer_upload_is_forbidden()
+    {
+        var (rental, email) = await RentalAsync();
+        Authenticate(email);
+        using var denied = await Upload(rental.Id, Form(), 403);
+        Assert.Null(await Documents.GetAsync(rental.Id, default));
+    }
+
     [Theory]
     [InlineData(null, 401)]
     [InlineData("Driver", 403)]
@@ -171,9 +187,12 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
     public async Task Anonymous_unrelated_roles_and_other_customer_cannot_access(string? role, int code)
     {
         var (rental, _) = await RentalAsync();
+        Staff();
         using var upload = await Upload(rental.Id, Form());
         Authenticate("outsider@test.local", role);
-        using var deniedUpload = await Upload(rental.Id, Form(), code);
+        // Upload refuses every non-staff role before ownership is resolved; only the download path still hides
+        // another customer's rental behind 404.
+        using var deniedUpload = await Upload(rental.Id, Form(), role is "Customer" ? 403 : code);
         using var response = await _client.GetAsync($"/api/rental/{rental.Id}/contract/document");
         using var deniedDownload = await Envelope(response, code);
         Assert.Equal(Pdf, (await Documents.GetAsync(rental.Id, default))!.Content);
@@ -192,6 +211,7 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
     public async Task Rejects_invalid_file_and_date_without_persisting(string invalid)
     {
         var (rental, _) = await RentalAsync();
+        Staff();
         using var body = await Upload(rental.Id, Form(
             invalid switch { "empty" => [], "oversize" => new byte[10 * 1024 * 1024 + 1], "fake-pdf" => Encoding.UTF8.GetBytes("<html>not a document</html>"), _ => Pdf },
             invalid == "wrong-mime" ? "text/html" : "application/pdf",
@@ -208,6 +228,7 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
     public async Task Accepts_supported_image_signatures(string mime, string name, string hex)
     {
         var (rental, _) = await RentalAsync();
+        Staff();
         using var body = await Upload(rental.Id, Form(Convert.FromHexString(hex), mime, name));
         Assert.True((await Bookings.GetRentalAsync(rental.Id, default))!.HasUploadedContract);
     }
@@ -215,12 +236,14 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
     [Fact]
     public async Task Stored_plural_contract_URL_projects_canonical_single_rental_URL()
     {
-        var (rental, _) = await RentalAsync();
+        var (rental, email) = await RentalAsync();
+        Staff();
         using var uploaded = await Upload(rental.Id, Form());
         await Seed.ScalarAsync(db.DataSource,
             "UPDATE longterm_rental_contract SET contract_link=$2 WHERE rental_id=$1",
             rental.Id, $"/api/rentals/{rental.Id}/contract/document");
 
+        Authenticate(email);
         var current = (await Bookings.GetRentalAsync(rental.Id, default))!;
         Assert.Equal($"/api/rental/{rental.Id}/contract/document", current.ContractLink);
         Assert.True(current.HasUploadedContract);
@@ -233,6 +256,7 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
     public async Task Exact_ten_MiB_is_accepted()
     {
         var (rental, _) = await RentalAsync();
+        Staff();
         var bytes = new byte[10 * 1024 * 1024];
         Pdf.CopyTo(bytes, 0);
         using var body = await Upload(rental.Id, Form(bytes));
@@ -247,6 +271,7 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
     public async Task Closed_rental_keeps_original_evidence(string status)
     {
         var (rental, email) = await RentalAsync();
+        Staff();
         using var uploaded = await Upload(rental.Id, Form());
         await Seed.ScalarAsync(db.DataSource, "UPDATE rentals SET status=$2 WHERE id=$1", rental.Id, status);
         using var body = await Upload(rental.Id, Form(), 409);
@@ -258,14 +283,17 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
     public async Task Hourly_missing_document_missing_rental_and_legacy_url_behave_correctly()
     {
         var (hourly, _) = await RentalAsync("hourly");
+        Staff();
         using var hourlyBody = await Upload(hourly.Id, Form(), 400);
         using var missingRental = await Upload(int.MaxValue, Form(), 404);
-        var (rental, _) = await RentalAsync();
+        var (rental, email) = await RentalAsync();
+        Authenticate(email);
         using var response = await _client.GetAsync($"/api/rental/{rental.Id}/contract/document");
         using var missing = await Envelope(response, 404);
         await Editing.SaveRentalContractAsync(rental.Id, "https://example.test/legacy.pdf", DateTime.UtcNow.AddMinutes(-2), default);
         Assert.False((await Bookings.GetRentalAsync(rental.Id, default))!.HasUploadedContract);
         Assert.False((await new NpgsqlRentalLifecycleRepository(db.DataSource).GetAsync(rental.Id, default))!.HasUploadedContract);
+        Staff();
         using var uploaded = await Upload(rental.Id, Form());
         Assert.True((await new NpgsqlRentalLifecycleRepository(db.DataSource).GetAsync(rental.Id, default))!.HasUploadedContract);
     }
@@ -286,6 +314,7 @@ public sealed class SignedRentalContractTests(PostgresFixture db) : IClassFixtur
         await Editing.SaveRentalContractAsync(rental.Id, "https://example.test/legacy.pdf", DateTime.UtcNow.AddMinutes(-2), default);
         var legacyFailure = await Assert.ThrowsAsync<ConflictException>(() => repository.UpdateToRentingAsync(rental.Id, rental.VehicleId, DateTime.UtcNow, actor, default));
         Assert.Equal("SIGNED_CONTRACT_REQUIRED", legacyFailure.Code);
+        Staff();
         using var uploaded = await Upload(rental.Id, Form());
         await repository.UpdateToRentingAsync(rental.Id, rental.VehicleId, DateTime.UtcNow, actor, default);
         Assert.Equal("renting", (await Bookings.GetRentalAsync(rental.Id, default))!.Status);

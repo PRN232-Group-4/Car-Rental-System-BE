@@ -68,7 +68,7 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
     }
 
     [Fact]
-    public async Task Failed_inspection_keeps_pending_and_blocks_vehicle_without_maintenance_or_money()
+    public async Task Failed_inspection_keeps_rental_pending_blocks_vehicle_and_opens_one_maintenance_ticket()
     {
         var scenario = await Scenarios.CreateDirectRentalAsync(db.DataSource);
         var inspector = await StaffAsync();
@@ -77,7 +77,10 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         var rental = (await bookings.GetRentalAsync(scenario.RentalId,default))!;
         Assert.Equal("pending",rental.Status);
         Assert.Equal("maintenance",(await fleet.GetVehicleAsync(rental.VehicleId,default))!.Status);
-        Assert.Empty(await maintenanceStore.ListMaintenanceAsync(rental.VehicleId,null,default));
+        var ticket=Assert.Single(await maintenanceStore.ListMaintenanceAsync(rental.VehicleId,null,default));
+        Assert.Equal("open",ticket.Status);
+        Assert.Null(ticket.AssignedStaffId);
+        Assert.Equal(rental.Id,await Seed.ScalarAsync(db.DataSource,"SELECT rental_id FROM vehicle_maintenance WHERE id=$1",ticket.Id));
         Assert.Equal(0,await Seed.CountAsync(db.DataSource,"SELECT COUNT(*) FROM payments WHERE rental_id=$1",rental.Id));
         // FR-036 permits approval before payment/inspection; approval must not bypass unsafe handover.
         var confirmed=await lifecycle.ConfirmAsync(rental.Id,Scenarios.StaffActor,default);
@@ -145,7 +148,11 @@ public sealed class RecoveryTests(PostgresFixture db) : IClassFixture<PostgresFi
         Assert.Equal("POST_INSPECTION_REQUIRED",unverified.Code);
         await inspections.AddInspectionAsync(rental.Id,inspector,"post_rental",false,null,null,"New damage",null,default);
         Assert.Single(await maintenanceStore.ListMaintenanceAsync(rental.VehicleId,null,default));
-        Assert.Empty(await maintenanceStore.ListMaintenanceAsync(candidate,null,default));
+        // The failed post-rental inspection opens exactly one open ticket for the vehicle it inspected, assigned to
+        // the inspector because they hold the Maintenance role.
+        var postInspection=Assert.Single(await maintenanceStore.ListMaintenanceAsync(candidate,"open",default));
+        Assert.Equal(inspector,postInspection.AssignedStaffId);
+        Assert.Equal(rental.Id,await Seed.ScalarAsync(db.DataSource,"SELECT rental_id FROM vehicle_maintenance WHERE id=$1",postInspection.Id));
         var damage=await reports.CreateReportAsync(rental.Id,inspector,false,"damage","New damage",null,default);
         Assert.Equal(candidate,damage.VehicleId);
         Assert.Equal("open",damage.Status);
