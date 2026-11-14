@@ -1,4 +1,3 @@
-using Car_Rental_System_BE.Application.DTOs.Accounts;
 using Car_Rental_System_BE.Application.Interfaces.External;
 using Car_Rental_System_BE.Infrastructure.Services.Authentication;
 using System.IdentityModel.Tokens.Jwt;

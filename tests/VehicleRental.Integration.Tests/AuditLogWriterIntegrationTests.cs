@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Car_Rental_System_BE.Infrastructure.Features.Identity;
+using Car_Rental_System_BE.Infrastructure.Features.Audit;
 
 namespace VehicleRental.Tests;
 

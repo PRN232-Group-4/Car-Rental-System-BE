@@ -3,7 +3,6 @@ using System.Reflection;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using Car_Rental_System_BE.Application.DTOs.Accounts;
 using Car_Rental_System_BE.Application.Features.Inspections;
 using Car_Rental_System_BE.Application.Interfaces.Services;
 using Car_Rental_System_BE.Application.Services;
