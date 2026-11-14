@@ -41,9 +41,8 @@ public sealed partial class NpgsqlOperationsRepository
         var through = DateOnly.FromDateTime(end) > today ? DateOnly.FromDateTime(end) : today;
         var qualified = await (from s in db.Set<StaffsRow>() join u in db.Set<UsersRow>() on s.UserId equals u.Id
             where s.Id == driver && s.IsDriver && u.IsActive && s.LicenseExpiryDate >= through
-                && db.Set<DriverShiftsRow>().Any(ds => ds.DriverStaffId == s.Id && ds.Status == "scheduled" && ds.StartTime <= start && ds.EndTime >= end)
             select s.Id).AnyAsync(ct);
-        if (!qualified) throw new InvalidOperationException("Driver must be qualified and on duty for the entire assignment.");
+        if (!qualified) throw new InvalidOperationException("Driver must be an active driver with a license valid for the entire assignment.");
         var conflict = await (from a in db.Set<VehicleAssignmentsRow>()
             join w in RentalWindows(db) on a.RentalId equals w.RentalId
             where a.DriverStaffId == driver && a.RentalId != rental && a.Status == "assigned"

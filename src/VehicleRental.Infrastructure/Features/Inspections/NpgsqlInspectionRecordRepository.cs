@@ -100,7 +100,11 @@ public sealed class NpgsqlInspectionRecordRepository(NpgsqlDataSource dataSource
             FuelBatteryLevel = fuel, DamageNotes = notes, ImgUrls = images, InspectedAt = Sql.Ts(inspectedAt),
         };
         await db.InsertAsync(row, ct);
-        if (!ok) await SetVehicleStatusAsync(db, vehicle, "maintenance", ct);
+        if (!ok)
+        {
+            await SetVehicleStatusAsync(db, vehicle, "maintenance", ct);
+            await OpenFailedInspectionMaintenanceAsync(db, row, ct);
+        }
         if (replacementVehicle is null &&
             ((type == "pre_rental" && ok && rental.Status == "pending") ||
              (type == "post_rental" && rental.Status == "renting")))
@@ -143,6 +147,35 @@ public sealed class NpgsqlInspectionRecordRepository(NpgsqlDataSource dataSource
     private static Task<bool> ActiveStaffAsync(VehicleRentalDbContext db, int staffId, CancellationToken ct) =>
         (from s in db.Set<StaffsRow>() join u in db.Set<UsersRow>() on s.UserId equals u.Id
          where s.Id == staffId && u.IsActive select s.Id).AnyAsync(ct);
+
+    /// <summary>
+    /// A failed check puts the vehicle in maintenance, and only completing a maintenance ticket as safe releases it.
+    /// Open that ticket here so the vehicle shows up in maintenance work instead of staying blocked with nothing to
+    /// close. The inspector is assigned when they are a Maintenance technician; otherwise a Manager assigns one.
+    /// </summary>
+    private static async Task OpenFailedInspectionMaintenanceAsync(VehicleRentalDbContext db, InspectionsRow inspection, CancellationToken ct)
+    {
+        var vehicleId = inspection.VehicleId;
+        if (await db.Set<VehicleMaintenanceRow>().AnyAsync(m => m.VehicleId == vehicleId
+                && ((m.Status ?? "open") == "open" || m.Status == "scheduled" || m.Status == "in_progress"), ct))
+            return; // an unfinished ticket already covers this vehicle
+        var facilityId = await db.Set<VehiclesRow>().Where(v => v.Id == vehicleId).Select(v => v.FacilityId).FirstOrDefaultAsync(ct);
+        var inspectorIsTechnician = inspection.StaffId is int staffId && await (from s in db.Set<StaffsRow>()
+            join u in db.Set<UsersRow>() on s.UserId equals u.Id
+            join ur in db.Set<UserRolesRow>() on u.Id equals ur.UserId
+            join r in db.Set<RolesRow>() on ur.RoleId equals r.Id
+            where s.Id == staffId && u.IsActive && r.Name == "Maintenance" select s.Id).AnyAsync(ct);
+        var stage = inspection.InspectionType == "pre_rental" ? "trước" : "sau";
+        var notes = string.IsNullOrWhiteSpace(inspection.DamageNotes) ? "Không có ghi chú hư hỏng." : inspection.DamageNotes.Trim();
+        var description = $"Tự tạo từ biên bản kiểm tra {stage} thuê #{inspection.Id} (đơn #{inspection.RentalId}) không đạt. {notes}";
+        await db.InsertAsync(new VehicleMaintenanceRow
+        {
+            VehicleId = vehicleId, FacilityId = facilityId, RentalId = inspection.RentalId, InspectionId = inspection.Id,
+            AssignedStaffId = inspectorIsTechnician ? inspection.StaffId : null, Status = "open",
+            MaintenanceType = $"Sửa chữa sau kiểm tra {stage} thuê không đạt",
+            Description = description.Length > 255 ? description[..255] : description,
+        }, ct);
+    }
 
     private static Task SetVehicleStatusAsync(VehicleRentalDbContext db, int vehicleId, string status, CancellationToken ct) =>
         db.Set<VehiclesRow>().Where(v => v.Id == vehicleId).ExecuteUpdateAsync(s => s.SetProperty(v => v.Status, status), ct);

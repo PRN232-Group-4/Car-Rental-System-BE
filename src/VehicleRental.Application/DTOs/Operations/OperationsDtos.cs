@@ -6,6 +6,8 @@ public sealed record Rental(int Id, int CustomerId, int VehicleId, string Rental
 {
     // Only the atomic upload writer records this relative URL; the legacy endpoint accepts absolute HTTP(S) URLs.
     // The handover invariant independently checks the persisted private evidence under the rental lock.
+    /// <summary>The newest pre-rental check of the current vehicle failed; the rental is auto-cancelled and the customer must book another vehicle.</summary>
+    public bool HasFailedPreInspection { get; init; }
     public bool HasUploadedContract => RentalType == "longterm" && SignedAt is not null && ContractLink == $"/api/rental/{Id}/contract/document";
 }
 public sealed record DriverScheduleEntry(int AssignmentId, int RentalId, int VehicleId, int DriverStaffId, string DriverName, DateTime StartTime, DateTime EndTime, string RentalStatus, string? VehicleName = null, string? LicensePlate = null, int BufferMinutes = 0);
